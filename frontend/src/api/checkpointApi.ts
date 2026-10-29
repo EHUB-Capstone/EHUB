@@ -123,6 +123,11 @@ export const checkpointApi = {
       `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback`,
       payload
     ),
+  updateFeedback: (teamId, checkpointNumber, feedbackId, payload) =>
+    axiosClient.put(
+      `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback/${feedbackId}`,
+      payload,
+    ),
   deleteFeedback: (teamId, checkpointNumber, feedbackId) =>
     axiosClient.delete(`/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/feedback/${feedbackId}`),
   exportTechnicalReview: async (teamId, checkpointNumber, feedbackId) => {

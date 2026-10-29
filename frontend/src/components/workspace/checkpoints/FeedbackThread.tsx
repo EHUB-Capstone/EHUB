@@ -1,7 +1,8 @@
 // @ts-nocheck
 // src/components/workspace/checkpoints/FeedbackThread.jsx
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, CornerDownRight, Calendar, ClipboardCheck, Download, Send, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, ChevronUp, CornerDownRight, Calendar, ClipboardCheck, Download, Pencil, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { checkpointApi } from '../../../api/checkpointApi';
 import { useAuth } from '../../../hooks/useAuth';
@@ -18,6 +19,13 @@ const TECHNICAL_REVIEW_CRITERIA = [
   { key: 'security', label: 'Data and basic security', evidence: 'Data handling and access-control demo', description: 'Input validation, appropriate permissions, and protection for passwords and API keys.' },
   { key: 'testing', label: 'Testing and improvement', evidence: 'Test checklist and issue list', description: 'Core functions are tested; issues are logged and verified after fixes.' },
 ];
+
+function FeedbackModeSwitch({ value, onChange }) {
+  return <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 p-1" role="group" aria-label="Feedback type">
+    <button type="button" onClick={() => onChange('regular')} aria-pressed={value === 'regular'} className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${value === 'regular' ? 'bg-secondary text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Regular feedback</button>
+    <button type="button" onClick={() => onChange('technical')} aria-pressed={value === 'technical'} className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${value === 'technical' ? 'bg-secondary text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Technical review</button>
+  </div>;
+}
 
 function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyCollapsed = false }) {
   const { user } = useAuth();
@@ -58,7 +66,7 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
           </span>
           <div>
             <h4 className="text-body-sm font-bold text-slate-900">Technical review form</h4>
-            <p className="mt-0.5 text-caption text-slate-600">For IT mentors.</p>
+            <p className="mt-0.5 text-caption text-slate-600">Use this when this checkpoint needs a structured technical review.</p>
           </div>
         </div>
         <span className="inline-flex items-center gap-1 text-caption font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> {new Intl.DateTimeFormat('en-US').format(new Date())} {expanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}</span>
@@ -98,6 +106,34 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
   );
 }
 
+function FeedbackEditor({ feedback, teamId, checkpointNumber, onSaved, onCancel, framed = true }) {
+  const [value, setValue] = useState(feedback.comment);
+  const [saving, setSaving] = useState(false);
+  const save = async (event) => {
+    event.preventDefault();
+    if (!value.trim() || saving) return;
+    setSaving(true);
+    try {
+      const response = await checkpointApi.updateFeedback(teamId, checkpointNumber, feedback._id, { comment: value.trim() });
+      toast.success('Feedback updated.');
+      onSaved?.(response?.data);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Unable to update feedback.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <form onSubmit={save} className={framed ? 'mt-2 rounded-xl border border-primary-200 bg-primary-50/40 p-3' : 'mt-2'}>
+    <label className="block text-caption font-semibold text-slate-700" htmlFor={`feedback-edit-${feedback._id}`}>Edit feedback</label>
+    <AutoSizeTextarea id={`feedback-edit-${feedback._id}`} autoFocus minRows={3} maxRows={18} value={value} onChange={(event) => setValue(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-body-sm leading-5 text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary-100" />
+    <div className="mt-2 flex justify-end gap-2">
+      <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+      <button type="submit" disabled={!value.trim() || saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
+    </div>
+  </form>;
+}
+
 // ─── Helper badges ────────────────────────────────────────────────────────────
 const ROLE_COLORS = {
   ADMIN:    'bg-red-50    text-red-700    border-red-200',
@@ -116,6 +152,7 @@ function TechnicalReviewDisplay({ content }) {
   if (!content?.startsWith('TECHNICAL REVIEW\n')) return <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap break-words">{content}</p>;
   const lines = content.split('\n');
   const metadata = lines.slice(1, 3);
+  const overallNote = lines[3]?.replace(/^Overall note:\s*/, '').trim();
   const rows = lines.slice(4).reduce((items, line) => {
     const match = line.match(/^• (.+?) \((.+?)\): ([\s\S]*)$/);
     if (match) items.push({ label: match[1], evidence: match[2], review: match[3] });
@@ -123,9 +160,46 @@ function TechnicalReviewDisplay({ content }) {
     return items;
   }, []);
   return <div className="overflow-hidden rounded-lg border border-primary-100 bg-white">
-    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p></div>
+    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p>{overallNote && <p className="mt-1 text-caption text-slate-700"><span className="font-semibold">Overall note:</span> {overallNote}</p>}</div>
     <div className="divide-y divide-slate-100">{rows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><p className="text-caption whitespace-pre-wrap break-words text-slate-600">{row.review}</p></div>; })}</div>
   </div>;
+}
+
+function TechnicalReviewEditor({ feedback, teamId, checkpointNumber, onSaved, onCancel }) {
+  const lines = feedback.comment.split('\n');
+  const contentStart = lines.findIndex((line, index) => index >= 3 && line === '');
+  const headerLines = lines.slice(0, contentStart === -1 ? 3 : contentStart);
+  const metadata = headerLines.slice(1);
+  const parsedRows = lines.slice(contentStart === -1 ? 4 : contentStart + 1).reduce((items, line) => {
+    const match = line.match(/^• (.+?) \((.+?)\): ([\s\S]*)$/);
+    if (match) items.push({ label: match[1], evidence: match[2], review: match[3] });
+    else if (items.length) items.at(-1).review += `\n${line}`;
+    return items;
+  }, []);
+  const [reviews, setReviews] = useState(() => Object.fromEntries(parsedRows.map((row) => [row.label, row.review])));
+  const [saving, setSaving] = useState(false);
+  const save = async (event) => {
+    event.preventDefault();
+    if (saving || parsedRows.some((row) => !reviews[row.label]?.trim())) return;
+    const rows = parsedRows.map((row) => `• ${row.label} (${row.evidence}): ${reviews[row.label].trim()}`).join('\n');
+    const comment = `${headerLines.join('\n')}\n\n${rows}`;
+    setSaving(true);
+    try {
+      const response = await checkpointApi.updateFeedback(teamId, checkpointNumber, feedback._id, { comment });
+      toast.success('Technical review updated.');
+      onSaved?.(response?.data);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Unable to update technical review.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <form onSubmit={save} className="overflow-hidden rounded-lg border border-primary-100 bg-white">
+    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p></div>
+    <div className="divide-y divide-slate-100">{parsedRows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><textarea value={reviews[row.label] || ''} onChange={(event) => setReviews((current) => ({ ...current, [row.label]: event.target.value }))} minLength={3} required rows={3} aria-label={`Feedback for ${row.label}`} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-caption leading-5 text-slate-700 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary-100" /></div>; })}</div>
+    <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-3 py-2"><button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="submit" disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button></div>
+  </form>;
 }
 
 // ─── Avatar initial ───────────────────────────────────────────────────────────
@@ -141,15 +215,42 @@ const Avatar = ({ name, avatarUrl, size = 'md' }) => {
   );
 };
 
+function ReplyItem({ reply, teamId, checkpointNumber, onPosted, onRequestDelete }) {
+  const { user } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const canEdit = ['MENTOR', 'LECTURER', 'STUDENT'].includes(user?.role?.toUpperCase()) && reply.user?._id === user?._id;
+  const canDelete = user?.role?.toUpperCase() === 'ADMIN' || reply.user?._id === user?._id;
+  const isTechnicalReview = reply.comment?.startsWith('TECHNICAL REVIEW\n');
+  return <div className="flex gap-2.5">
+    <CornerDownRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-300" />
+    <Avatar name={reply.user?.name} avatarUrl={reply.user?.avatarUrl} size="sm" />
+    <div className="min-w-0 flex-1 space-y-1 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-caption font-bold text-slate-800">{reply.user?.name}</span>
+        <span className={`text-[8px] font-bold px-1.5 py-px border rounded-md ${roleBadge(reply.user?.role)}`}>{roleLabel(reply.user?.role)}</span>
+        <span className="text-[9px] text-slate-400">{new Date(reply.createdAt).toLocaleString()}</span>
+        {canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-white hover:text-primary-700" aria-label="Edit feedback" title="Edit feedback"><Pencil className="h-3 w-3" /></button>}
+      </div>
+      {editing ? (isTechnicalReview ? <TechnicalReviewEditor feedback={reply} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} /> : <FeedbackEditor feedback={reply} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} framed={false} />) : <TechnicalReviewDisplay content={reply.comment} />}
+      <div className="flex items-center gap-2">
+        {canDelete && <button onClick={() => onRequestDelete(reply)} className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-red-600"><Trash2 className="h-3 w-3" />Delete</button>}
+      </div>
+    </div>
+  </div>;
+}
+
 // ─── Single comment with optional reply thread ────────────────────────────────
 function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, onRequestDelete }) {
   const { user } = useAuth();
   const [open,    setOpen]    = useState(false);
   const [text,    setText]    = useState('');
   const [sending, setSending] = useState(false);
+  const [editing, setEditing] = useState(false);
   const canDelete = user?.role?.toUpperCase() === 'ADMIN' || comment.user?._id === user?._id;
+  const canEdit = ['MENTOR', 'LECTURER', 'STUDENT'].includes(user?.role?.toUpperCase()) && comment.user?._id === user?._id;
+  const isTechnicalReview = comment.comment?.startsWith('TECHNICAL REVIEW\n');
   const canExport = (['ADMIN', 'LECTURER'].includes(user?.role?.toUpperCase()) ||
-    (user?.role?.toUpperCase() === 'MENTOR' && ['ACADEMIC', 'IT'].includes(String(user?.mentorType || '').toUpperCase()) && comment.user?._id === user?._id)) &&
+    (user?.role?.toUpperCase() === 'MENTOR' && comment.user?._id === user?._id)) &&
     comment.comment?.startsWith('TECHNICAL REVIEW\n');
   const exportReview = async () => {
     try {
@@ -193,8 +294,9 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
               <Calendar className="w-3 h-3" />
               {new Date(comment.createdAt).toLocaleString()}
             </span>
+            {canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-primary-700" aria-label="Edit feedback" title="Edit feedback"><Pencil className="h-3.5 w-3.5" /></button>}
           </div>
-          <TechnicalReviewDisplay content={comment.comment} />
+          {editing ? (isTechnicalReview ? <TechnicalReviewEditor feedback={comment} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} /> : <FeedbackEditor feedback={comment} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} framed={false} />) : <TechnicalReviewDisplay content={comment.comment} />}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {canExport && <button type="button" onClick={exportReview} className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-overline font-bold text-white shadow-sm transition hover:bg-primary-600"><Download className="h-3 w-3" />Export Excel</button>}
             <button onClick={() => { setOpen((o) => !o); setText(''); }} className="inline-flex rounded-md bg-secondary px-2.5 py-1 text-overline font-bold text-white shadow-sm transition hover:bg-secondary-700">{open ? 'Cancel' : 'Reply'}</button>
@@ -206,25 +308,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
       {/* Nested replies */}
       {replies.length > 0 && (
         <div className="pl-11 space-y-3">
-          {replies.map((r) => (
-            <div key={r._id} className="flex gap-2.5">
-              <CornerDownRight className="w-3.5 h-3.5 text-slate-300 mt-1 shrink-0" />
-              <Avatar name={r.user?.name} avatarUrl={r.user?.avatarUrl} size="sm" />
-              <div className="min-w-0 flex-1 bg-slate-50/60 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-caption font-bold text-slate-800">{r.user?.name}</span>
-                  <span className={`text-[8px] font-bold px-1.5 py-px border rounded-md ${roleBadge(r.user?.role)}`}>
-                    {roleLabel(r.user?.role)}
-                  </span>
-                  <span className="text-[9px] text-slate-400">
-                    {new Date(r.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <TechnicalReviewDisplay content={r.comment} />
-                {(user?.role?.toUpperCase() === 'ADMIN' || r.user?._id === user?._id) && <button onClick={() => onRequestDelete(r)} className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-red-600"><Trash2 className="w-3 h-3" />Delete</button>}
-              </div>
-            </div>
-          ))}
+          {replies.map((reply) => <ReplyItem key={reply._id} reply={reply} teamId={teamId} checkpointNumber={checkpointNumber} onPosted={onPosted} onRequestDelete={onRequestDelete} />)}
         </div>
       )}
 
@@ -263,11 +347,19 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
   const [sending, setSending] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const isTechnicalMentor = user?.role?.toUpperCase() === 'MENTOR' &&
-    ['ACADEMIC', 'IT'].includes(String(user?.mentorType || '').toUpperCase());
+  const [feedbackType, setFeedbackType] = useState('regular');
+  const feedbackListRef = useRef(null);
+  const isMentor = user?.role?.toUpperCase() === 'MENTOR';
 
   const roots   = feedbacks.filter((f) => !f.parentFeedbackId || !feedbacks.some((parent) => parent._id === f.parentFeedbackId));
   const replies = (parentId) => feedbacks.filter((f) => f.parentFeedbackId === parentId);
+
+  const handlePosted = (feedback) => {
+    onPosted?.(feedback);
+    window.setTimeout(() => {
+      if (feedbackListRef.current) feedbackListRef.current.scrollTop = feedbackListRef.current.scrollHeight;
+    }, 0);
+  };
 
   const handlePost = async (e) => {
     e.preventDefault();
@@ -277,7 +369,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
       const res = await checkpointApi.addFeedback(teamId, checkpointNumber, { comment: text.trim() });
       toast.success('Feedback posted!');
       setText('');
-      onPosted?.(res?.data);
+      handlePosted(res?.data);
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to post feedback.');
     } finally {
@@ -310,7 +402,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
           No feedback yet. Be the first to comment!
         </div>
       ) : (
-        <div className={`space-y-5 overflow-y-auto pr-1 scrollbar-thin ${fullHeight ? 'max-h-[min(50vh,480px)]' : 'max-h-[340px]'}`}>
+        <div ref={feedbackListRef} className={`space-y-5 overflow-y-auto pr-1 scrollbar-thin ${fullHeight ? 'max-h-[min(50vh,480px)]' : 'max-h-[340px]'}`}>
           {roots.map((root) => (
             <div key={root._id} className="pb-4 border-b border-slate-100 last:border-b-0">
               <FeedbackItem
@@ -318,7 +410,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
                 replies={replies(root._id)}
                 teamId={teamId}
                 checkpointNumber={checkpointNumber}
-                onPosted={onPosted}
+                onPosted={handlePosted}
                 onRequestDelete={setDeleteTarget}
               />
             </div>
@@ -326,31 +418,39 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
         </div>
       )}
 
-      {/* IT mentors use the structured technical review; enterprise mentors keep the existing discussion flow. */}
-      {isTechnicalMentor ? (
-        <TechnicalReviewForm teamId={teamId} checkpointNumber={checkpointNumber} onPosted={onPosted} initiallyCollapsed={feedbacks.some((item) => item.user?._id === user?._id && item.comment?.startsWith('TECHNICAL REVIEW\n'))} />
+      {isMentor && feedbackType === 'technical' ? (
+        createPortal(
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Technical review form">
+            <button type="button" className="absolute inset-0 cursor-default" aria-label="Close technical review form" onClick={() => setFeedbackType('regular')} />
+            <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div><h3 className="text-subheading font-bold text-slate-900">Technical review form</h3><p className="mt-0.5 text-caption text-slate-500">Complete the review for this checkpoint.</p></div>
+                <button type="button" onClick={() => setFeedbackType('regular')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close technical review form"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="overflow-y-auto p-5"><TechnicalReviewForm teamId={teamId} checkpointNumber={checkpointNumber} onPosted={(feedback) => { handlePosted(feedback); setFeedbackType('regular'); }} /></div>
+            </div>
+          </div>,
+          document.body,
+        )
       ) : <form onSubmit={handlePost} className="flex gap-3 items-start pt-1">
         <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} />
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <label className="block text-caption font-semibold text-slate-700" htmlFor="regular-feedback">Your feedback</label>
           <AutoSizeTextarea
+            id="regular-feedback"
             minRows={2}
             maxRows={10}
             value={text}
             onChange={(e) => setText(e.target.value)}
             submitOnEnter={submitForm}
-            aria-label="Share feedback"
+            aria-label="Your feedback"
             placeholder="Share feedback or ask a question about this checkpoint…"
-            className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 bg-slate-50/50 leading-relaxed"
+            className="mt-1 w-full resize-none border-0 bg-transparent px-0 py-1 text-body-sm leading-relaxed outline-none placeholder:text-slate-400 focus:ring-0"
           />
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-caption text-slate-400">Enter to send · Shift+Enter for a new line</span>
-            <button
-              type="submit"
-              disabled={!text.trim() || sending}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 disabled:opacity-40 transition-colors shadow-sm"
-            >
-              <Send className="w-3 h-3" />
-              Post Feedback
+          <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
+            {isMentor ? <FeedbackModeSwitch value="regular" onChange={setFeedbackType} /> : <span className="text-caption text-slate-400"></span>}
+            <button type="submit" disabled={!text.trim() || sending} aria-label="Post feedback" title="Post feedback" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-sm transition hover:bg-primary-600 disabled:opacity-40">
+              <Send className="h-4 w-4" />
             </button>
           </div>
         </div>
