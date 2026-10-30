@@ -1195,7 +1195,11 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
             };
             for (var index = 0; index < students; index++)
             {
-                var roll = $"{suffix}{@class.ClassIndex}{name.GetHashCode() & 0xff:x2}{index}";
+                // Do not derive a database-unique roll number from GetHashCode(): its low byte can collide
+                // for different team names (and string hashes are randomized between processes). Keep the
+                // deterministic key compact because Student.RollNumber is capped at 20 characters.
+                var teamOrdinal = Context.Teams.Local.Count + 1;
+                var roll = $"{suffix}{@class.ClassIndex:D2}{teamOrdinal:D2}{index:D2}";
                 var student = new Student
                 {
                     RollNumber = roll, NormalizedRollNumber = roll, FullName = $"Student {roll}", Email = $"{roll}@example.com".ToLowerInvariant(),

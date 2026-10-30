@@ -107,7 +107,7 @@ export default function CheckpointPanel({
   const addFeedback = useCallback((feedback) => {
     if (!feedback?._id) return;
     setFeedbacks((current) => current.some((item) => item._id === feedback._id)
-      ? current
+      ? current.map((item) => item._id === feedback._id ? feedback : item)
       : [...current, feedback]);
     // Re-read the persisted source of truth after the optimistic/realtime update.
     // This prevents a delayed overview request from leaving the mentor with a stale thread.
@@ -344,7 +344,7 @@ export default function CheckpointPanel({
 
           {/* Main column */}
           <main className="flex-1 overflow-y-auto scrollbar-thin bg-orange-50/20">
-            <div className="p-5 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
+            <div className="p-5 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
               <CheckpointSubmissionCard
                 checkpoint={checkpoint}
                 status={submissionMeta.status}

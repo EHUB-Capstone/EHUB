@@ -258,7 +258,7 @@ export default function TeamWorkspace() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">
         <div className="flex items-center gap-4">

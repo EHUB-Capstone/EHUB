@@ -69,6 +69,42 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
         return Result.Success();
     }
 
+    public async Task<Result<WorkspaceCheckpointFeedbackResponse>> UpdateAsync(Guid teamId, int checkpointNumber, Guid feedbackId, UpdateWorkspaceCheckpointFeedbackRequest request, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var content = request.Comment?.Trim() ?? string.Empty;
+        if (content.Length is < 1 or > 20_000) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceValidationError, "A comment must contain between 1 and 20,000 characters.");
+
+        var team = await context.Teams.Include(item => item.Class).ThenInclude(item => item.ClassLecturers)
+            .Include(item => item.TeamMembers).ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
+            .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
+            .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
+        if (team is null || !CanAccess(team, userId, role) ||
+            (Is(role, SystemRoles.Student) && !await ProjectWorkspaceApprovalRules.IsApprovedAsync(context, teamId, cancellationToken))) return Denied();
+
+        var feedback = await context.SubmissionFeedbacks.Include(item => item.Creator).Include(item => item.Submission).ThenInclude(item => item.Checkpoint)
+            .FirstOrDefaultAsync(item => item.Id == feedbackId && item.Submission.TeamId == teamId && item.Submission.Checkpoint.CheckpointNumber == checkpointNumber, cancellationToken);
+        if (feedback is null) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.CommonNotFoundError, "Feedback was not found.");
+        if (!Is(role, SystemRoles.Mentor) && !Is(role, SystemRoles.Lecturer) && !Is(role, SystemRoles.Student)) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceAccessDenied, "Only mentors, lecturers, and students can edit feedback.");
+        if (feedback.CreatedById != userId) return Result.Failure<WorkspaceCheckpointFeedbackResponse>(ErrorCodes.WorkspaceAccessDenied, "You can only edit your own feedback.");
+
+        feedback.Content = content;
+        feedback.UpdatedAt = DateTime.UtcNow;
+        feedback.UpdatedBy = userId;
+        await context.SaveChangesAsync(cancellationToken);
+
+        var response = new WorkspaceCheckpointFeedbackResponse
+        {
+            Id = feedback.Id,
+            CheckpointNumber = checkpointNumber,
+            Comment = feedback.Content,
+            ParentFeedbackId = feedback.ParentFeedbackId,
+            CreatedAt = feedback.CreatedAt,
+            User = new WorkspaceCheckpointUserResponse { Id = feedback.Creator.Id, Name = feedback.Creator.FullName, Role = ResolveRole(feedback.Creator), AvatarUrl = feedback.Creator.AvatarUrl }
+        };
+        await realtimePublisher.PublishAsync(await RecipientUserIdsAsync(team, cancellationToken), teamId, response, cancellationToken);
+        return Result.Success(response);
+    }
+
     public async Task<Result<(byte[] FileBytes, string ContentType, string FileName)>> ExportAsync(Guid teamId, int checkpointNumber, Guid feedbackId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
         var isAdmin = Is(role, SystemRoles.Admin);
@@ -80,12 +116,12 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
             .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
             .FirstOrDefaultAsync(item => item.Id == teamId && (isAdmin ||
                 (isLecturer && (item.Class.PrimaryLecturerId == userId || item.Class.ClassLecturers.Any(link => link.LecturerId == userId))) ||
-                (isMentor && item.MentorAssignments.Any(link => link.Status == MentorAssignmentStatus.Active && link.EndedAt == null && link.MentorProfile.UserId == userId && link.MentorProfile.Type == MentorType.Academic))), cancellationToken);
+                (isMentor && item.MentorAssignments.Any(link => link.Status == MentorAssignmentStatus.Active && link.EndedAt == null && link.MentorProfile.UserId == userId))), cancellationToken);
         if (team is null) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to this team workspace.");
         var feedback = await context.SubmissionFeedbacks.AsNoTracking().Include(item => item.Creator)
             .FirstOrDefaultAsync(item => item.Id == feedbackId && item.Submission.TeamId == teamId && item.Submission.Checkpoint.CheckpointNumber == checkpointNumber, cancellationToken);
         if (feedback is null || !feedback.Content.StartsWith("TECHNICAL REVIEW\n", StringComparison.Ordinal)) return Result.Failure<(byte[], string, string)>(ErrorCodes.CommonNotFoundError, "Technical review was not found.");
-        if (isMentor && feedback.CreatedById != userId) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "IT mentors can export only their own technical reviews.");
+        if (isMentor && feedback.CreatedById != userId) return Result.Failure<(byte[], string, string)>(ErrorCodes.WorkspaceAccessDenied, "Mentors can export only their own technical reviews.");
         var lines = feedback.Content.Split('\n');
         var rows = new List<string[]>();
         foreach (var line in lines.Skip(4))
