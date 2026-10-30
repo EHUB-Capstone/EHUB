@@ -1,5 +1,6 @@
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Mentoring;
+using EHub.Api.Models.Common;
 using EHub.Application.Features.Mentoring.ManageProfiles;
 using EHub.Application.Features.Mentoring.UploadCv;
 using EHub.Contracts.Common;
@@ -41,8 +42,9 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
     [Authorize(Policy = SystemPolicies.MentorOnly)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(11 * 1024 * 1024)]
-    public async Task<IActionResult> UploadDocument(string kind, [FromForm] IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> UploadDocument(string kind, [FromForm] FileUploadForm request, CancellationToken ct)
     {
+        var file = request?.File;
         if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
         await using var stream = file.OpenReadStream();
         return Respond(await profiles.UploadDocumentAsync(UserId, kind, stream, file.FileName, file.Length, ct));
@@ -52,9 +54,10 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(11 * 1024 * 1024)]
-    public async Task<IActionResult> UploadManagedCv(Guid mentorId, [FromForm] IFormFile file,
+    public async Task<IActionResult> UploadManagedCv(Guid mentorId, [FromForm] FileUploadForm request,
         [FromForm] bool replaceExisting = false, CancellationToken ct = default)
     {
+        var file = request?.File;
         if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
         await using var stream = file.OpenReadStream();
         return Respond(await adminCvUploads.UploadAsync(mentorId, stream, file.FileName, file.Length, replaceExisting, ct));
@@ -64,8 +67,9 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(11 * 1024 * 1024)]
-    public async Task<IActionResult> MatchManagedCv([FromForm] IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> MatchManagedCv([FromForm] FileUploadForm request, CancellationToken ct)
     {
+        var file = request?.File;
         if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
         await using var stream = file.OpenReadStream();
         return Respond(await adminCvMatches.MatchAsync(stream, file.FileName, file.Length, ct));

@@ -57,10 +57,10 @@ Không thay đổi schema database, không cần migration. API cũ Balanced/Ran
 
 ## Kết quả kiểm tra ngày 30/10/2026
 
-- `dotnet build EHub.slnx --no-restore`: thành công, 0 lỗi; còn cảnh báo dependency/test sẵn có.
+- `dotnet build EHub.slnx`: thành công sau merge `develop`, 0 lỗi; còn cảnh báo sẵn có.
 - `dotnet test EHub.slnx --no-build --no-restore --filter "FullyQualifiedName!~IntegrationTests"`: 141 UnitTests và 725 ApplicationTests đạt.
-- `dotnet test tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj --no-build --no-restore`: 517 đạt, 2 test model cục bộ bỏ qua, không thất bại. Luồng AI gửi đúng một request chốt với `sessionId`, giữ Outbox/assignment cùng transaction và ghi admin/thời điểm chốt vào audit.
-- Frontend: `npm run lint`, `npm run type-check`, `npm run build` đạt; `npm test` có 507 test đạt.
+- `dotnet test tests/EHub.IntegrationTests/EHub.IntegrationTests.csproj --no-build --no-restore`: 518 đạt, 2 test model cục bộ bỏ qua, không thất bại. Luồng AI gửi đúng một request chốt với `sessionId`, giữ Outbox/assignment cùng transaction và ghi admin/thời điểm chốt vào audit. Các endpoint CV dùng form upload chung từ `develop`; có kiểm tra sinh Swagger cho cả hai endpoint admin.
+- Frontend: `npm run lint`, `npm run type-check`, `npm run build` đạt; `npm test` có 522 test đạt, gồm test AI/CV và các test mới từ `develop`.
 - `git diff --check`: sạch.
 
 Thử UI riêng tại `http://127.0.0.1:5175` với API thật ở 5227, PostgreSQL mới và toàn bộ danh sách mentor/dự án giả lập. AI tạo 200 đề xuất cho 100 nhóm, không còn vị trí Enterprise/Academic trống. Ví dụ M001 có 4 buổi hoàn tất, 2 nhóm và 2 dự án có thành tích: điểm gốc 81, lịch sử +4, thành tích +4, điểm cuối 89. Nút **Accept and assign mentors** dùng được ngay, không có checkbox xác minh; bản đề xuất được để mở, chưa chốt. Các đề xuất không có bằng chứng vẫn có điểm 0/cảnh báo theo quy tắc đã nêu, nên số vị trí được lấp không phải độ chính xác ghép mentor. Bản demo import cũ ở 5174/5226 được giữ nguyên. Bằng chứng ở `artifacts/mentor-ui-demo/history-ranking/` được Git ignore.

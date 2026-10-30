@@ -11,3 +11,8 @@ public sealed class CreateWorkspaceCheckpointFeedbackRequest
     public string Comment { get; init; } = string.Empty;
     public Guid? ParentFeedbackId { get; init; }
 }
+
+public sealed class UpdateWorkspaceCheckpointFeedbackRequest
+{
+    public string Comment { get; init; } = string.Empty;
+}

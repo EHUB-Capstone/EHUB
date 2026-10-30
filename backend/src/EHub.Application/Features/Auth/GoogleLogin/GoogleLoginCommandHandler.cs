@@ -232,7 +232,8 @@ public class GoogleLoginCommandHandler : IGoogleLoginCommandHandler
                 Email = user.Email,
                 Roles = roles,
                 Status = user.Status.ToString(),
-                MajorCode = majorCode
+                MajorCode = majorCode,
+                MentorType = user.MentorProfile?.Type.ToString()
             }
         };
 

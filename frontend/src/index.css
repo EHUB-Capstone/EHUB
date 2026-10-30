@@ -528,6 +528,7 @@ body {
 .dark :where(.focus\:ring-blue-200):focus { --tw-ring-color: rgba(96, 165, 250, 0.4); }
 .dark :where(.focus\:ring-emerald-200):focus { --tw-ring-color: rgba(74, 222, 128, 0.4); }
 .dark :where(.focus\:ring-red-100):focus { --tw-ring-color: rgba(248, 113, 113, 0.35); }
+.dark :where(.focus\:ring-primary-100):focus { --tw-ring-color: rgba(245, 106, 42, 0.3); }
 
 /* Hover/group-hover text: the base text rules above do not cover state variants. */
 .dark :where(.hover\:text-slate-600, .hover\:text-slate-700, .hover\:text-gray-600):hover { color: #e2e8f0; }
@@ -585,6 +586,10 @@ body {
 /* ─── Animations ─── */
 .animate-scale-in {
   animation: scaleIn 0.15s ease-out;
+}
+
+.animate-fade-in-fast {
+  animation: fadeIn 0.15s ease-out;
 }
 
 .animate-slide-down {

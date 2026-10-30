@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Swashbuckle.AspNetCore.Swagger;
 
 namespace EHub.IntegrationTests.Mentoring;
 
@@ -26,6 +27,14 @@ namespace EHub.IntegrationTests.Mentoring;
 public sealed class AdminMentorCvMatchIntegrationTests(CustomWebApplicationFactory factory)
 {
     private const string MatchUrl = "/api/mentoring/profiles/cv-match";
+
+    [Fact]
+    public void AdminCvEndpointsDoNotBreakSwaggerGeneration()
+    {
+        var document = factory.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
+
+        document.Paths.Should().ContainKeys(MatchUrl, "/api/mentoring/profiles/{mentorId}/documents/cv");
+    }
 
     [Fact]
     public async Task AdminMatchesTheContactEmailFromAnArbitrarilyNamedCvWithoutSavingOrExposingItsOtherContents()
