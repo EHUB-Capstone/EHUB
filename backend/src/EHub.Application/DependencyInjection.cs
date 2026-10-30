@@ -106,6 +106,11 @@ public static class DependencyInjection
         services.AddScoped<ISubjectRubricHandler, SubjectRubricHandler>();
         services.AddScoped<IStartupIndustryManagementHandler, StartupIndustryManagementHandler>();
         services.AddScoped<IMentorProfileHandler, MentorProfileHandler>();
+        services.AddScoped<EHub.Application.Features.Mentoring.UploadCv.IAdminMentorCvUploadHandler,
+            EHub.Application.Features.Mentoring.UploadCv.AdminMentorCvUploadHandler>();
+        services.AddScoped<EHub.Application.Features.Mentoring.UploadCv.IAdminMentorCvMatchHandler,
+            EHub.Application.Features.Mentoring.UploadCv.AdminMentorCvMatchHandler>();
+        services.AddScoped<EHub.Application.Common.Interfaces.Services.IMentorRecommendationRanker, MentorRecommendationRanker>();
         services.AddScoped<EHub.Application.Features.Mentoring.ManageProfiles.IAdminMentorProfileHandler,
             EHub.Application.Features.Mentoring.ManageProfiles.AdminMentorProfileHandler>();
         services.AddScoped<IMentoringSessionHandler, MentoringSessionHandler>();

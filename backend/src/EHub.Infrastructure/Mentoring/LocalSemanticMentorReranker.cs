@@ -19,10 +19,16 @@ public sealed class LocalSemanticMentorReranker(HttpClient client, IConfiguratio
     private readonly Lazy<MentorRankingModel> policyModel = new(() =>
         FileMentorFitRanker.ReadModel(configuration["Mentoring:TrainedModelPath"]));
 
+    public Task<IReadOnlyDictionary<Guid, MentorFitRanking>> RerankAsync(string projectText,
+        IReadOnlyCollection<MentorProfile> mentors, IReadOnlyDictionary<Guid, MentorFitRanking> baseline,
+        CancellationToken cancellationToken) =>
+        RerankAsync(projectText, mentors, baseline, MentorRankingScope.MentorRole, cancellationToken);
+
     public async Task<IReadOnlyDictionary<Guid, MentorFitRanking>> RerankAsync(string projectText,
         IReadOnlyCollection<MentorProfile> mentors, IReadOnlyDictionary<Guid, MentorFitRanking> baseline,
-        CancellationToken cancellationToken)
+        MentorRankingScope scope, CancellationToken cancellationToken)
     {
+        if (!Enum.IsDefined(scope)) throw new ArgumentOutOfRangeException(nameof(scope));
         var output = baseline.ToDictionary();
         if (mentors.Count == 0) return output;
         var threshold = configuration.GetValue("Mentoring:Semantic:PromotionThreshold", 0.50);
@@ -78,7 +84,7 @@ public sealed class LocalSemanticMentorReranker(HttpClient client, IConfiguratio
                 // specialties. Ambiguous generic similarity must abstain.
                 var semanticMatch = item.EvidenceIndex >= 0 && item.Similarity >= threshold &&
                                     item.Similarity - runnerUp >= margin &&
-                                    MentorSemanticEvidence.CanPromote(policyModel.Value, projectText, mentor);
+                                    MentorSemanticEvidence.CanPromote(policyModel.Value, projectText, mentor, scope);
                 if (!original.HasEvidence && !semanticMatch) continue;
                 // This blend is an experimental policy, not learned weights or a probability.
                 var originalValue = original.RankingValue ?? original.Score;

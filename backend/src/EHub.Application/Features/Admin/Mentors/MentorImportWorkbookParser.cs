@@ -85,6 +85,8 @@ internal static class MentorImportWorkbookParser
             if (academic.IsFailure) return Result.Failure<ParsedMentorWorkbook>(academic.Error);
 
             var rows = enterprise.Value.Concat(academic.Value).ToList();
+            if (rows.Count == 0)
+                return Result.Failure<ParsedMentorWorkbook>(new Error(ErrorCodes.MentorImportFileInvalid, "The workbook contains no mentor rows."));
             var duplicateEmails = rows
                 .Where(item => !string.IsNullOrWhiteSpace(item.Email))
                 .GroupBy(item => item.Email, StringComparer.OrdinalIgnoreCase)
@@ -193,7 +195,7 @@ internal static class MentorImportWorkbookParser
         }
         if (loginFromFpt > 0)
             warnings.Add($"Sheet '{EnterpriseSheetName}': {loginFromFpt} mentor(s) have no Email value, so their FPT email is used as the login email.");
-        return result.Count == 0 ? Failure($"Sheet '{EnterpriseSheetName}' contains no mentor rows.") : Result.Success(result);
+        return Result.Success(result);
     }
 
     private static Result<List<MentorImportCandidate>> ParseAcademic(IReadOnlyList<SpreadsheetRow> rows, List<string> warnings)
@@ -227,7 +229,7 @@ internal static class MentorImportWorkbookParser
             ValidateCommon(candidate, email, rawEmail, null);
             result.Add(candidate);
         }
-        return result.Count == 0 ? Failure($"Sheet '{AcademicSheetName}' contains no mentor rows.") : Result.Success(result);
+        return Result.Success(result);
     }
 
     private static void ValidateCommon(MentorImportCandidate row, string? validEmail, string? rawEmail, string? rawDate)

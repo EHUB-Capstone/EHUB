@@ -1,0 +1,506 @@
+{
+  "isSynthetic": true,
+  "description": "100 dự án khởi nghiệp hoàn toàn hư cấu để thử phân công mentor trên giao diện E-HUB. Tên, nhu cầu và bối cảnh đều do assistant tạo; không chứa đáp án, điểm phù hợp hoặc thông tin cá nhân. Bộ này dùng để chạy demo, không dùng để huấn luyện hay chứng minh độ chính xác thực tế của model.",
+  "projects": [
+    {
+      "id": "UI100-P001",
+      "title": "Gốm Mộc kể chuyện sản phẩm",
+      "description": "Nhóm làm đồ gốm thủ công đã bán thử ở hai phiên chợ nhưng khách chưa hiểu vì sao giá cao hơn hàng công nghiệp. Nhóm cần mentor giúp xây thông điệp thương hiệu, chọn câu chuyện truyền thông và thử nội dung marketing trước khi chạy quảng cáo lớn."
+    },
+    {
+      "id": "UI100-P002",
+      "title": "Tủ Đổi kiểm chứng nhu cầu thuê đồ",
+      "description": "Tủ Đổi dự định cho sinh viên thuê trang phục dự tiệc theo ngày. Nhóm mới có bản phác thảo dịch vụ và muốn phỏng vấn khách hàng để biết tần suất thuê, điều họ lo ngại và cách chọn phân khúc đầu tiên."
+    },
+    {
+      "id": "UI100-P003",
+      "title": "Chậu Ban Công tìm người mua đầu tiên",
+      "description": "Nhóm bán bộ trồng rau cho căn hộ nhưng các bài đăng hiện thu hút nhiều lượt xem hơn đơn hàng. Cần người có kinh nghiệm digital marketing giúp phân tích hành trình khách mua, chọn kênh tiếp cận và đo thử hiệu quả từng thông điệp."
+    },
+    {
+      "id": "UI100-P004",
+      "title": "Dòng Mực chọn thị trường ngách",
+      "description": "Dịch vụ vẽ minh họa cho quán ăn đang nhận mọi loại yêu cầu nên khó xây gói dịch vụ rõ ràng. Nhóm cần nghiên cứu thị trường và khảo sát chủ quán để chọn một nhóm khách hàng có nhu cầu thường xuyên."
+    },
+    {
+      "id": "UI100-P005",
+      "title": "Len Lá ra mắt bộ quà tặng",
+      "description": "Len Lá chuẩn bị bán bộ quà tặng làm từ sợi tái sử dụng vào mùa lễ. Nhóm cần lập kế hoạch truyền thông thương hiệu, phối hợp nội dung giữa các kênh và xác định số liệu cần theo dõi trong tháng ra mắt."
+    },
+    {
+      "id": "UI100-P006",
+      "title": "Góc Sửa nghiên cứu dịch vụ tại nhà",
+      "description": "Nhóm muốn kết nối thợ sửa đồ gia dụng với cư dân trong một khu đô thị. Trước khi đầu tư nền tảng, nhóm cần khám phá nhu cầu và phỏng vấn khách hàng về mức độ tin tưởng, thời gian chờ và cách họ chọn người sửa."
+    },
+    {
+      "id": "UI100-P007",
+      "title": "Bánh Hạt tối ưu chiến dịch quảng bá",
+      "description": "Nhóm đã thử bán bánh dinh dưỡng qua mạng trong ba tuần nhưng chưa biết quảng cáo nào mang lại khách mua thật. Mentor cần giúp thiết kế thử nghiệm digital marketing nhỏ, đọc báo cáo và điều chỉnh nội dung theo kết quả."
+    },
+    {
+      "id": "UI100-P008",
+      "title": "Đèn Nếp làm rõ khác biệt thương hiệu",
+      "description": "Dự án làm đèn bàn từ vật liệu tre, hướng tới người thích không gian sống tối giản. Nhóm cần rà soát định vị thương hiệu và xây thông điệp marketing giải thích công năng, thiết kế và giá trị sản phẩm bằng ngôn ngữ dễ hiểu."
+    },
+    {
+      "id": "UI100-P009",
+      "title": "Mở Cửa kiểm chứng dịch vụ dọn nhà",
+      "description": "Nhóm nhận thấy người mới chuyển trọ phải tự tìm nhiều dịch vụ khác nhau. Cần mentor hướng dẫn nghiên cứu khách hàng, kiểm chứng nhu cầu đối với gói dọn nhà trọn buổi và tránh kết luận từ một vài ý kiến quen biết."
+    },
+    {
+      "id": "UI100-P010",
+      "title": "Sổ Tay Bản Địa xây kênh nội dung",
+      "description": "Nhóm biên soạn sổ tay giới thiệu các nghề thủ công địa phương nhưng chưa có cộng đồng theo dõi. Cần người góp ý chiến lược nội dung, cách làm việc với đối tác truyền thông và đo hiệu quả quảng bá trước khi in lô đầu."
+    },
+    {
+      "id": "UI100-P011",
+      "title": "Hộp Gọn mở kênh bán cho văn phòng",
+      "description": "Nhóm làm hộp đựng tài liệu tái sử dụng muốn chuyển từ bán lẻ sang cung cấp cho văn phòng nhỏ. Cần mentor phát triển kinh doanh, tìm khách hàng doanh nghiệp và xây quy trình chào bán giải pháp qua các buổi gặp thử."
+    },
+    {
+      "id": "UI100-P012",
+      "title": "Sợi Nắng kết nối cửa hàng đại lý",
+      "description": "Thương hiệu khăn dệt nhỏ muốn đưa sản phẩm vào các cửa hàng quà tặng thay vì chỉ bán qua tin nhắn. Nhóm cần phát triển kênh phân phối, thương lượng hợp tác và quản lý quan hệ với đại lý đầu tiên."
+    },
+    {
+      "id": "UI100-P013",
+      "title": "Bản Thử bán gói thiết kế cho doanh nghiệp",
+      "description": "Nhóm cung cấp dịch vụ dựng mẫu bao bì cho các cơ sở sản xuất nhỏ. Nhóm cần người từng bán hàng B2B góp ý cách xác định người quyết định mua, chuẩn bị buổi tư vấn và theo dõi cơ hội bán hàng."
+    },
+    {
+      "id": "UI100-P014",
+      "title": "Bàn Chung tăng khách đăng ký theo tháng",
+      "description": "Không gian làm việc chung đã có khách thuê theo ngày nhưng ít người quay lại. Nhóm cần chiến lược tăng trưởng và phát triển kinh doanh để thử gói thành viên, cải thiện cách chăm sóc khách cũ và tìm đối tác giới thiệu."
+    },
+    {
+      "id": "UI100-P015",
+      "title": "Mầm Quà phát triển đối tác nhân sự",
+      "description": "Dự án bán bộ quà chào đón nhân viên mới cho doanh nghiệp vừa và nhỏ. Nhóm cần xây quan hệ đối tác với bộ phận nhân sự, xác định quy trình chào bán và chuẩn bị cách phản hồi yêu cầu tùy biến."
+    },
+    {
+      "id": "UI100-P016",
+      "title": "Nút Vải thử chiến lược bán sỉ",
+      "description": "Nhóm làm phụ kiện từ vải dư đã có các đơn lẻ nhưng chi phí xử lý đơn cao. Cần mentor giúp đánh giá mô hình bán sỉ, lựa chọn kênh phát triển thị trường và tổ chức thử nghiệm với một số cửa hàng."
+    },
+    {
+      "id": "UI100-P017",
+      "title": "Khung Xanh chào bán dịch vụ cây văn phòng",
+      "description": "Nhóm cung cấp cây và lịch chăm sóc định kỳ cho các văn phòng. Cần người hướng dẫn bán hàng doanh nghiệp, đàm phán phạm vi dịch vụ và chuyển phản hồi của khách thử thành đề xuất thương mại rõ ràng."
+    },
+    {
+      "id": "UI100-P018",
+      "title": "Chuyển Nhẹ phát triển mạng lưới giới thiệu",
+      "description": "Dịch vụ chuyển đồ quy mô nhỏ muốn hợp tác với chủ nhà trọ và cửa hàng nội thất. Nhóm cần chiến lược phát triển đối tác, cách thiết kế chương trình giới thiệu và quy trình theo dõi nguồn khách mới."
+    },
+    {
+      "id": "UI100-P019",
+      "title": "Gói Sạch kiểm tra mô hình kinh doanh",
+      "description": "Nhóm muốn cho các quán ăn thuê bao bì dùng lại thay vì mua hộp dùng một lần. Nhóm đã thử với ba quán và cần mentor rà soát mô hình kinh doanh, lựa chọn phân khúc và chiến lược mở rộng hợp tác."
+    },
+    {
+      "id": "UI100-P020",
+      "title": "Phố Dụng Cụ xây cộng đồng đối tác",
+      "description": "Nhóm kết nối các xưởng nhỏ có máy móc nhàn rỗi với người cần thuê theo giờ. Cần mentor phát triển cộng đồng doanh nghiệp, tạo niềm tin giữa các bên và tổ chức hoạt động hợp tác khi mạng lưới còn ít thành viên."
+    },
+    {
+      "id": "UI100-P021",
+      "title": "Bếp Theo Ca chuẩn hóa vận hành",
+      "description": "Bếp phục vụ suất ăn theo ca thường lệch thời gian chuẩn bị giữa các đội. Nhóm cần mentor thiết kế quy trình vận hành, phân công trách nhiệm và kiểm soát chất lượng phục vụ trước khi nhận thêm khách."
+    },
+    {
+      "id": "UI100-P022",
+      "title": "Trạm Sửa Đồng Hành quản lý lịch hẹn",
+      "description": "Nhóm sửa xe đạp tại nhà đã có khách nhưng lịch hẹn thường bị trùng hoặc giao nhầm thợ. Cần người có kinh nghiệm vận hành dịch vụ giúp thiết kế quy trình nhận việc, điều phối và xử lý khiếu nại."
+    },
+    {
+      "id": "UI100-P023",
+      "title": "Phòng Vừa cải thiện chăm sóc khách",
+      "description": "Dịch vụ quản lý phòng lưu trú nhỏ đang nhận phản hồi chậm khi khách cần hỗ trợ. Nhóm cần mentor về chăm sóc khách hàng để xây cách tiếp nhận yêu cầu, phối hợp các bộ phận và theo dõi việc giải quyết đến cùng."
+    },
+    {
+      "id": "UI100-P024",
+      "title": "Kho Chung tổ chức nhập xuất hàng",
+      "description": "Nhóm cho các cửa hàng nhỏ dùng chung một điểm lưu hàng và đang ghi nhận tồn kho bằng bảng rời. Cần mentor logistics rà soát quy trình nhập xuất, giao nhận và đối soát để giảm thất lạc khi số đơn tăng."
+    },
+    {
+      "id": "UI100-P025",
+      "title": "Giặt Theo Túi ổn định chất lượng",
+      "description": "Dịch vụ giặt nhận đồ theo túi muốn mở thêm điểm thu nhưng chất lượng giữa các ca chưa đồng đều. Cần mentor xây quy trình vận hành, kiểm tra chất lượng và phản hồi khi khách báo đồ giao thiếu."
+    },
+    {
+      "id": "UI100-P026",
+      "title": "Giao Cùng Tuyến giảm chuyến rỗng",
+      "description": "Nhóm thử gom đơn giao hàng từ các cửa hàng trong cùng khu vực. Cần người có kinh nghiệm logistics và điều phối dịch vụ giúp sắp xếp lịch nhận hàng, phân tuyến và đánh giá hiệu quả vận hành thử."
+    },
+    {
+      "id": "UI100-P027",
+      "title": "Tủ Dụng Cụ xây quy trình cho mượn",
+      "description": "Nhóm cho cư dân mượn máy khoan và dụng cụ sửa chữa theo ngày. Cần mentor tổ chức quy trình bàn giao, kiểm tra thiết bị, chăm sóc khách hàng và giải quyết những trường hợp hoàn trả trễ."
+    },
+    {
+      "id": "UI100-P028",
+      "title": "Quầy Tươi phối hợp điểm bán",
+      "description": "Dự án bán trái cây sơ chế tại nhiều quầy nhỏ nhưng các điểm chưa thống nhất cách đặt hàng và xử lý hàng cuối ngày. Nhóm cần mentor quản lý vận hành giúp xây quy trình phối hợp và theo dõi chất lượng theo ca."
+    },
+    {
+      "id": "UI100-P029",
+      "title": "Đồ Chơi Luân Chuyển quản lý vòng thuê",
+      "description": "Nhóm cho phụ huynh thuê bộ đồ chơi theo tháng đang gặp khó khi thu hồi, kiểm tra và đưa bộ mới đến khách. Cần mentor về quy trình dịch vụ và chăm sóc khách hàng để thử mô hình vận hành ít nhầm lẫn."
+    },
+    {
+      "id": "UI100-P030",
+      "title": "Tổ Phục Vụ cải thiện bàn giao ca",
+      "description": "Nhóm cung cấp nhân sự phục vụ cho các quán cà phê theo khung giờ. Cần người có kinh nghiệm điều hành dịch vụ giúp chuẩn hóa bàn giao ca, xử lý thay đổi lịch và thiết lập đầu mối phản hồi cho khách hàng."
+    },
+    {
+      "id": "UI100-P031",
+      "title": "Xưởng In Nhỏ lập kế hoạch dòng tiền",
+      "description": "Xưởng nhận nhiều đơn thanh toán chậm trong khi phải mua nguyên liệu trước. Nhóm cần mentor từng phân tích tài chính giúp dự phóng dòng tiền và rà soát số vốn lưu động cần cho ba tháng tới."
+    },
+    {
+      "id": "UI100-P032",
+      "title": "Tiệm Vá đối chiếu số liệu thu chi",
+      "description": "Tiệm sửa quần áo nhỏ chưa tách rõ tiền chủ góp và doanh thu dịch vụ. Nhóm cần người có kinh nghiệm kế toán hoặc phân tích tài chính giúp tổ chức sổ thu chi và đọc báo cáo quản trị đơn giản."
+    },
+    {
+      "id": "UI100-P033",
+      "title": "Cốc Quay Vòng chuẩn bị gọi vốn",
+      "description": "Nhóm cho thuê cốc dùng lại đã thử vận hành trong một khu văn phòng và muốn tìm nhà đầu tư thiên thần. Cần mentor rà soát kế hoạch tăng trưởng, nhu cầu vốn và cách trình bày pitch deck từ kết quả thử hiện có."
+    },
+    {
+      "id": "UI100-P034",
+      "title": "Lưới Đỡ tìm chương trình ươm tạo",
+      "description": "Dự án phát triển túi đỡ nông sản tái sử dụng có mẫu đầu tiên nhưng chưa biết chọn chương trình hỗ trợ nào. Nhóm cần người hiểu hoạt động ươm tạo giúp chuẩn bị hồ sơ và xác định các giả thuyết cần kiểm chứng tiếp."
+    },
+    {
+      "id": "UI100-P035",
+      "title": "Hình Gốc rà soát quyền sử dụng thiết kế",
+      "description": "Nhóm muốn bán quyền sử dụng bộ minh họa cho các xưởng in. Cần mentor pháp lý góp ý cách quản lý bản quyền và các điểm cần làm rõ trong hợp đồng thương mại trước khi ký với đối tác đầu tiên."
+    },
+    {
+      "id": "UI100-P036",
+      "title": "Xưởng Chung kiểm tra rủi ro hợp tác",
+      "description": "Nhóm chuẩn bị hợp tác sản xuất hàng thủ công với một cơ sở bên ngoài. Cần người có kinh nghiệm rà soát pháp lý và hồ sơ đối tác giúp làm rõ trách nhiệm, quy trình nghiệm thu và rủi ro trước khi ký kết."
+    },
+    {
+      "id": "UI100-P037",
+      "title": "Bữa Nhẹ kiểm tra ngân sách mở quầy",
+      "description": "Nhóm muốn mở quầy ăn thứ hai nhưng chưa tách được chi phí cố định và chi phí theo đơn. Cần mentor tài chính giúp xây ngân sách, xem các kịch bản doanh thu và nhận biết thời điểm dễ thiếu dòng tiền."
+    },
+    {
+      "id": "UI100-P038",
+      "title": "Mảnh Vải đánh giá giá bán",
+      "description": "Nhóm may túi từ vải thừa hiện đặt giá dựa trên giá của đối thủ. Cần mentor định giá sản phẩm giúp tính lại cấu trúc chi phí, thử các gói bán và kiểm tra phản ứng của khách với giá mới."
+    },
+    {
+      "id": "UI100-P039",
+      "title": "Phụ Kiện Gần chuẩn bị hồ sơ đầu tư",
+      "description": "Startup làm phụ kiện cho người đi xe đạp cần thêm vốn để thực hiện lô sản xuất tiếp theo. Nhóm cần mentor về gọi vốn và chương trình hỗ trợ khởi nghiệp để rà soát câu chuyện kinh doanh, số liệu và kế hoạch dùng vốn."
+    },
+    {
+      "id": "UI100-P040",
+      "title": "Hợp Tác Vườn kiểm tra thỏa thuận phân phối",
+      "description": "Nhóm làm sản phẩm chăm cây chuẩn bị ký thỏa thuận phân phối độc quyền theo khu vực. Cần người có kinh nghiệm pháp chế giúp phân tích nghĩa vụ của hai bên và những rủi ro cần trao đổi trước khi chốt hợp tác."
+    },
+    {
+      "id": "UI100-P041",
+      "title": "Đổi Ca xác định lộ trình sản phẩm",
+      "description": "Nhóm xây công cụ đổi ca cho cửa hàng nhưng mỗi khách thử yêu cầu một bộ tính năng khác nhau. Cần mentor quản lý sản phẩm giúp ưu tiên vấn đề, xác định phiên bản đầu và lập lộ trình ra mắt từng đợt."
+    },
+    {
+      "id": "UI100-P042",
+      "title": "Lịch Chăm Cây chuyển phản hồi thành yêu cầu",
+      "description": "Ứng dụng nhắc chăm cây đã có bản thử nhưng nhóm chưa thống nhất cách ghi nhận nhu cầu người dùng. Cần mentor phân tích nghiệp vụ giúp chuyển phản hồi thành yêu cầu rõ ràng và phối hợp với đội triển khai."
+    },
+    {
+      "id": "UI100-P043",
+      "title": "Bản Vẽ Chung điều phối dự án thiết kế",
+      "description": "Nhóm làm dịch vụ thiết kế bao bì với các cộng tác viên ở nhiều nơi và thường chậm ở bước duyệt. Cần người hướng dẫn quản lý dự án, xác định phạm vi công việc và tổ chức lịch phản hồi giữa khách với nhóm."
+    },
+    {
+      "id": "UI100-P044",
+      "title": "Phiếu Gọn kiểm chứng trải nghiệm sử dụng",
+      "description": "Nhóm làm sản phẩm số giúp quán nhỏ ghi yêu cầu của khách nhưng màn hình thử đang có quá nhiều thao tác. Cần mentor khám phá sản phẩm và trải nghiệm người dùng để chọn nhiệm vụ quan trọng và tổ chức buổi thử với chủ quán."
+    },
+    {
+      "id": "UI100-P045",
+      "title": "Mốc Hẹn kiểm soát phạm vi triển khai",
+      "description": "Nhóm nhận xây công cụ đặt lịch cho một đơn vị dịch vụ nhưng yêu cầu thay đổi sau mỗi buổi họp. Cần mentor quản lý dự án phần mềm giúp làm rõ phạm vi, quản lý thay đổi và thống nhất cách nghiệm thu."
+    },
+    {
+      "id": "UI100-P046",
+      "title": "Kho Ý Tưởng chọn vấn đề ưu tiên",
+      "description": "Nhóm có nhiều ý tưởng cho nền tảng lưu phản hồi của cửa hàng nhưng chưa xác định vấn đề đủ quan trọng. Cần mentor quản lý sản phẩm giúp phân tích nhu cầu, chọn mục tiêu thử nghiệm và tránh xây đồng thời quá nhiều chức năng."
+    },
+    {
+      "id": "UI100-P047",
+      "title": "Cầu Nối Nhật chuẩn hóa trao đổi yêu cầu",
+      "description": "Nhóm nhỏ muốn nhận dự án dịch vụ số từ khách hàng Nhật và làm việc với đội triển khai trong nước. Cần mentor có kinh nghiệm BrSE hoặc quản lý dự án giúp tổ chức trao đổi yêu cầu, xác nhận thay đổi và theo dõi tiến độ."
+    },
+    {
+      "id": "UI100-P048",
+      "title": "Giao Diện Nhỏ lập kế hoạch sản phẩm",
+      "description": "Nhóm phát triển công cụ tra cứu thông tin dịch vụ cho người cao tuổi và mới có mẫu tương tác. Cần người quản lý sản phẩm góp ý cách thử trải nghiệm, đo mức dễ sử dụng và chọn các tính năng cho phiên bản đầu."
+    },
+    {
+      "id": "UI100-P049",
+      "title": "Sổ Bảo Hành phân tích quy trình nghiệp vụ",
+      "description": "Nhóm muốn số hóa việc tiếp nhận bảo hành tại cửa hàng điện máy nhỏ. Cần mentor phân tích nghiệp vụ giúp mô tả luồng hiện tại, xác định trách nhiệm từng bước và chuyển thành yêu cầu sản phẩm trước khi thuê lập trình."
+    },
+    {
+      "id": "UI100-P050",
+      "title": "Mùa Trưng Bày phối hợp nhóm đa chuyên môn",
+      "description": "Nhóm đang xây một gói trưng bày sản phẩm có cả phần thiết kế, nội dung và thi công. Cần mentor quản lý dự án giúp điều phối các nhóm, xác định phụ thuộc công việc và xử lý rủi ro trễ lịch ra mắt."
+    },
+    {
+      "id": "UI100-P051",
+      "title": "Từng Bước xây dịch vụ học kỹ năng",
+      "description": "Nhóm tổ chức lớp kỹ năng làm việc cho người mới đi làm và đang thử học theo nhóm nhỏ. Cần mentor vận hành dịch vụ giáo dục giúp phối hợp giảng viên, tiếp nhận phản hồi học viên và xây quy trình tổ chức lớp ổn định."
+    },
+    {
+      "id": "UI100-P052",
+      "title": "Lớp Đọc Vui tìm phụ huynh phù hợp",
+      "description": "Nhóm phát triển chương trình đọc sách tương tác cho trẻ nhưng chưa rõ ai sẵn sàng trả tiền. Cần mentor nghiên cứu thị trường giáo dục, phỏng vấn phụ huynh và kiểm chứng nhu cầu trước khi mở thêm lớp."
+    },
+    {
+      "id": "UI100-P053",
+      "title": "Cùng Học Xưởng thiết kế mô hình đào tạo",
+      "description": "Dự án muốn tổ chức các buổi học làm đồ thủ công tại xưởng của nghệ nhân. Nhóm cần người góp ý mô hình kinh doanh, cách hợp tác với người dạy và quy trình phục vụ học viên trong buổi thử đầu tiên."
+    },
+    {
+      "id": "UI100-P054",
+      "title": "Bản Tin Sinh Viên phát triển cộng đồng",
+      "description": "Nhóm muốn xây cộng đồng chia sẻ cơ hội thực tập có nội dung được kiểm chứng. Cần mentor về truyền thông và phát triển cộng đồng giúp xác định đối tượng, lập lịch nội dung và thử mô hình hợp tác với doanh nghiệp."
+    },
+    {
+      "id": "UI100-P055",
+      "title": "Người Bán Mới tổ chức chương trình tập huấn",
+      "description": "Nhóm hỗ trợ hộ kinh doanh nhỏ học cách bán hàng trực tuyến qua các buổi thực hành. Cần mentor từng đào tạo đội ngũ sale và marketing góp ý chương trình, cách hướng dẫn và theo dõi mức ứng dụng sau buổi học."
+    },
+    {
+      "id": "UI100-P056",
+      "title": "Cộng Đồng Tái Dùng kết nối doanh nghiệp",
+      "description": "Nhóm muốn đưa vật dụng văn phòng còn tốt từ đơn vị dư thừa đến đơn vị cần dùng lại. Cần mentor phát triển quan hệ đối tác và cộng đồng doanh nghiệp để tạo quy trình hợp tác và tổ chức các đợt trao đổi thử."
+    },
+    {
+      "id": "UI100-P057",
+      "title": "Xưởng Mở Đồng Hành chuẩn bị ươm tạo",
+      "description": "Nhóm sinh viên có ý tưởng cho thuê chỗ làm thủ công nhưng chưa biết tổ chức các bước kiểm chứng. Cần mentor hiểu chương trình ươm tạo giúp chọn giả thuyết kinh doanh, lập kế hoạch thử và chuẩn bị hồ sơ tham gia."
+    },
+    {
+      "id": "UI100-P058",
+      "title": "Giờ Thực Hành vận hành khóa học trực tuyến",
+      "description": "Nhóm bán khóa học thực hành cho nhân viên văn phòng nhưng nhiều học viên bỏ sau buổi đầu. Cần mentor về vận hành giáo dục và chăm sóc khách hàng giúp rà soát trải nghiệm học, hỗ trợ học viên và quy trình phản hồi."
+    },
+    {
+      "id": "UI100-P059",
+      "title": "Bạn Đọc Nhỏ phát triển sản phẩm giáo dục",
+      "description": "Nhóm có bản thử bộ thẻ đọc cho trẻ và đang phân vân giữa bán cho trường hay bán cho phụ huynh. Cần mentor về phát triển sản phẩm và kinh doanh giáo dục giúp chọn nhóm thử, ghi nhận phản hồi và xây cách đưa sản phẩm ra thị trường."
+    },
+    {
+      "id": "UI100-P060",
+      "title": "Mở Nghề kết nối người dạy và học viên",
+      "description": "Dự án muốn tổ chức lớp trải nghiệm nghề ngắn hạn với các chủ xưởng địa phương. Nhóm cần người có kinh nghiệm phát triển đối tác và tổ chức dịch vụ đào tạo giúp thống nhất trách nhiệm, lịch học và cách tiếp nhận học viên."
+    },
+    {
+      "id": "UI100-P061",
+      "title": "Chuyến Đi Ngõ Nhỏ hoàn thiện dịch vụ tour",
+      "description": "Nhóm đã tổ chức thử chuyến đi bộ qua các ngõ có nghề truyền thống nhưng thời lượng mỗi điểm chưa ổn định. Cần mentor từng làm du lịch hoặc chăm sóc khách hàng để thiết kế lịch trình và xử lý yêu cầu của du khách."
+    },
+    {
+      "id": "UI100-P062",
+      "title": "Bến Kể tìm kênh phân phối trải nghiệm",
+      "description": "Nhóm kết nối du khách với người kể chuyện văn hóa địa phương và hiện chỉ có khách từ bạn bè. Cần mentor phát triển kinh doanh du lịch giúp chọn kênh bán tour, hợp tác với điểm lưu trú và thử gói trải nghiệm phù hợp."
+    },
+    {
+      "id": "UI100-P063",
+      "title": "Ngày Hội Đổi Sách điều phối sự kiện",
+      "description": "Nhóm muốn tổ chức ngày hội đổi sách có các gian hàng và hoạt động dành cho gia đình. Cần mentor quản lý sự kiện giúp lập kế hoạch, phối hợp nhà cung cấp, bố trí nhân sự và giữ liên lạc với khách tham gia."
+    },
+    {
+      "id": "UI100-P064",
+      "title": "Phiên Chợ Ban Mai tổ chức trải nghiệm",
+      "description": "Dự án thử tổ chức chợ cuối tuần cho người làm đồ thủ công nhưng các gian hàng chưa phối hợp tốt. Cần người có kinh nghiệm vận hành sự kiện giúp thiết kế lịch chuẩn bị, luồng khách và cách xử lý phát sinh trong ngày diễn ra."
+    },
+    {
+      "id": "UI100-P065",
+      "title": "Nhà Khách Gần cải thiện hành trình lưu trú",
+      "description": "Nhóm quản lý nhà khách nhỏ thường nhận cùng một loại thắc mắc trước và sau khi khách đến. Cần mentor chăm sóc khách hàng và vận hành dịch vụ để tổ chức thông tin, bàn giao phòng và ghi nhận phản hồi có hệ thống."
+    },
+    {
+      "id": "UI100-P066",
+      "title": "Đêm Kể Chuyện xây kế hoạch truyền thông",
+      "description": "Nhóm tổ chức đêm kể chuyện theo chủ đề tại một không gian nhỏ nhưng vé bán chậm. Cần mentor truyền thông sự kiện giúp xác định khách phù hợp, xây nội dung quảng bá và thử các kênh bán vé."
+    },
+    {
+      "id": "UI100-P067",
+      "title": "Vòng Xe Bản Địa phát triển dịch vụ du lịch",
+      "description": "Nhóm thử tour xe đạp qua các điểm sinh hoạt địa phương và cần làm rõ trải nghiệm khác biệt. Cần mentor có kinh nghiệm du lịch góp ý mô hình kinh doanh, cách làm việc với đối tác và quy trình phục vụ khách theo nhóm."
+    },
+    {
+      "id": "UI100-P068",
+      "title": "Buổi Gặp Xưởng kết nối nhà cung cấp",
+      "description": "Nhóm muốn cung cấp dịch vụ tổ chức buổi gặp giữa thương hiệu nhỏ với các xưởng sản xuất. Cần mentor phát triển đối tác và quản lý sự kiện để chọn khách mời, tổ chức lịch trao đổi và chăm sóc khách sau chương trình."
+    },
+    {
+      "id": "UI100-P069",
+      "title": "Bản Đồ Vị Quê thử gói trải nghiệm ẩm thực",
+      "description": "Dự án giới thiệu bữa ăn và câu chuyện món địa phương cho nhóm khách nhỏ. Cần mentor vận hành du lịch hoặc dịch vụ nhà hàng giúp thiết kế quy trình đón khách, phân công các điểm phục vụ và thu phản hồi sau chuyến."
+    },
+    {
+      "id": "UI100-P070",
+      "title": "Không Gian Chia Sẻ quản lý lịch sự kiện",
+      "description": "Nhóm cho thuê không gian để tổ chức lớp học và các buổi ra mắt sản phẩm. Cần người hướng dẫn quản lý dự án và chăm sóc khách hàng để phối hợp lịch, xác nhận yêu cầu và bàn giao địa điểm đúng cam kết."
+    },
+    {
+      "id": "UI100-P071",
+      "title": "Hạt Rang Theo Mẻ chuẩn bị mở rộng bán hàng",
+      "description": "Nhóm bán hạt rang theo mẻ nhỏ đã có khách mua lặp lại và muốn hợp tác với các quán cà phê. Cần mentor phát triển thị trường giúp xây đề xuất bán sỉ, thử kênh phân phối và phối hợp nhịp sản xuất với đơn hàng."
+    },
+    {
+      "id": "UI100-P072",
+      "title": "Rau Đúng Chuyến tổ chức chuỗi cung ứng",
+      "description": "Nhóm thu mua rau từ nhiều vườn để giao cho bếp nhỏ nhưng thường khó chốt số lượng trước ngày giao. Cần mentor logistics và vận hành chuỗi cung ứng giúp tổ chức thu mua, giao nhận và xử lý hàng dư."
+    },
+    {
+      "id": "UI100-P073",
+      "title": "Máy Sấy Vừa đưa mẫu thử ra thị trường",
+      "description": "Nhóm đã làm mẫu máy sấy quy mô hộ gia đình và muốn tìm các cơ sở thử sử dụng. Cần mentor từng điều hành doanh nghiệp cơ khí hoặc phát triển sản phẩm giúp chọn đối tác thử, ghi nhận phản hồi và tổ chức bước thương mại tiếp theo."
+    },
+    {
+      "id": "UI100-P074",
+      "title": "Xưởng Tre Lắp tối ưu quy trình sản xuất",
+      "description": "Nhóm làm kệ tre lắp ráp thường phải sửa lại nhiều sản phẩm khi các công đoạn không thống nhất. Cần mentor quản lý chất lượng và vận hành giúp mô tả quy trình, kiểm soát điểm bàn giao và giảm lãng phí trong lô thử."
+    },
+    {
+      "id": "UI100-P075",
+      "title": "Vườn Theo Hộ xây mô hình đăng ký rau",
+      "description": "Nhóm muốn bán gói rau theo tuần từ các vườn nhỏ nhưng khách lo ngại sự thay đổi của sản phẩm. Cần mentor rà soát mô hình kinh doanh, nghiên cứu nhu cầu hộ gia đình và thiết kế cách chăm sóc khách khi giao hàng định kỳ."
+    },
+    {
+      "id": "UI100-P076",
+      "title": "Bếp Hôm Nay chuẩn hóa dịch vụ bữa trưa",
+      "description": "Nhóm đã thử bán bữa trưa tại một khu văn phòng và muốn tăng số suất mà vẫn phục vụ đúng giờ. Cần mentor có kinh nghiệm nhà hàng và vận hành giúp thiết kế lịch chuẩn bị, phân công ca và xử lý phản hồi của khách."
+    },
+    {
+      "id": "UI100-P077",
+      "title": "Phụ Tùng Vòng phát triển khách hàng xưởng",
+      "description": "Dự án thu gom phụ tùng còn sử dụng được để cung cấp cho các xưởng sửa chữa nhỏ. Cần mentor bán hàng doanh nghiệp giúp tìm đối tác, xây cách chào bán và tổ chức quy trình kiểm tra chất lượng trước khi giao."
+    },
+    {
+      "id": "UI100-P078",
+      "title": "Nấm Của Mùa kiểm chứng chiến lược bán",
+      "description": "Nhóm trồng nấm có lượng thu hoạch theo đợt và đang phân vân giữa bán cho quán ăn hay hộ gia đình. Cần mentor nghiên cứu thị trường và chiến lược kinh doanh để kiểm chứng phân khúc, kênh bán và cách phối hợp sản lượng."
+    },
+    {
+      "id": "UI100-P079",
+      "title": "Bao Dùng Lại quản lý chương trình thử",
+      "description": "Nhóm đang thử bao vận chuyển nông sản dùng lại tại nhiều điểm thu mua. Cần mentor quản lý dự án giúp thống nhất cách ghi nhận kết quả, điều phối các đối tác và tổ chức vòng thử tiếp theo mà không mở rộng quá nhanh."
+    },
+    {
+      "id": "UI100-P080",
+      "title": "Mộc Ghép Xưởng xây kế hoạch tăng trưởng",
+      "description": "Nhóm làm đồ nội thất ghép từ gỗ dư muốn chuyển từ đơn đặt riêng sang các mẫu tiêu chuẩn. Cần mentor về chiến lược và quản lý sản phẩm giúp lựa chọn dòng sản phẩm, kiểm tra mô hình kinh doanh và tổ chức bước phát triển thị trường."
+    },
+    {
+      "id": "UI100-P081",
+      "title": "Đặt Suất Nhỏ xây backend đơn hàng",
+      "description": "Nhóm đã có giao diện đặt suất ăn và cần xây phần xử lý đơn ở phía máy chủ. Cần mentor có kinh nghiệm backend C#/.NET và PostgreSQL để góp ý thiết kế API, giao dịch dữ liệu và xử lý đơn trùng."
+    },
+    {
+      "id": "UI100-P082",
+      "title": "Đi Cùng Lịch hoàn thiện ứng dụng di động",
+      "description": "Nhóm xây ứng dụng giúp người đi chung xe thống nhất lịch trình và đang thử trên thiết bị thật. Cần mentor từng phát triển Flutter cho Android và iOS để rà soát quản lý trạng thái, thông báo và cách phát hành bản thử."
+    },
+    {
+      "id": "UI100-P083",
+      "title": "Quầy Trực Tuyến cải thiện frontend",
+      "description": "Nhóm làm trang quản lý bán hàng bằng React và TypeScript nhưng giao diện khó dùng trên điện thoại. Cần mentor frontend góp ý cấu trúc component, biểu mẫu và cách xử lý trạng thái tải hoặc lỗi khi gọi API."
+    },
+    {
+      "id": "UI100-P084",
+      "title": "Mắt Phân Loại kiểm tra computer vision",
+      "description": "Nhóm có bản thử nhận diện lỗi bề mặt sản phẩm từ ảnh và kết quả giảm mạnh khi đổi ánh sáng. Cần mentor có kinh nghiệm AI và computer vision giúp đánh giá dữ liệu, cách chia tập kiểm tra và nguồn sai lệch của mô hình."
+    },
+    {
+      "id": "UI100-P085",
+      "title": "Trợ Lý Tài Liệu đánh giá mô hình ngôn ngữ",
+      "description": "Nhóm xây công cụ hỏi đáp từ tài liệu nội bộ hư cấu và muốn kiểm tra khả năng trả lời đúng nguồn. Cần mentor từng xây AI Search hoặc LLM Evaluation để thiết kế bộ đánh giá, phát hiện câu trả lời sai và phân tích lỗi truy xuất."
+    },
+    {
+      "id": "UI100-P086",
+      "title": "Kho Chạy Bền triển khai cloud",
+      "description": "Nhóm có hệ thống quản lý kho chạy trên máy cá nhân và muốn đưa lên môi trường thử riêng. Cần mentor Cloud/DevOps có kinh nghiệm Docker giúp xây quy trình triển khai, quản lý cấu hình và giám sát dịch vụ."
+    },
+    {
+      "id": "UI100-P087",
+      "title": "Quyền Đúng rà soát an toàn ứng dụng",
+      "description": "Nhóm xây cổng quản lý hồ sơ hư cấu có nhiều vai trò và muốn kiểm tra quyền trước khi cho người dùng thử. Cần mentor an toàn thông tin để rà soát phân quyền truy cập, chống truy cập chéo tài nguyên và bảo vệ dữ liệu."
+    },
+    {
+      "id": "UI100-P088",
+      "title": "Số Liệu Theo Ngày xây báo cáo phân tích",
+      "description": "Nhóm tổng hợp dữ liệu bán hàng mẫu từ nhiều cửa hàng nhưng các báo cáo đang cho kết quả khác nhau. Cần mentor phân tích dữ liệu giúp chuẩn hóa định nghĩa chỉ số, kiểm tra chất lượng dữ liệu và tổ chức quy trình báo cáo."
+    },
+    {
+      "id": "UI100-P089",
+      "title": "Lịch Kho Node thiết kế dịch vụ máy chủ",
+      "description": "Nhóm chọn Node.js và PostgreSQL cho hệ thống đặt lịch lấy hàng. Cần mentor backend giúp rà soát thiết kế dữ liệu, cách xử lý yêu cầu đồng thời và việc ghi nhận trạng thái công việc có thể thử lại an toàn."
+    },
+    {
+      "id": "UI100-P090",
+      "title": "Bản Đồ Dịch Vụ tối ưu ứng dụng React Native",
+      "description": "Nhóm phát triển ứng dụng React Native để tìm điểm dịch vụ gần người dùng và gặp tình trạng cuộn bản đồ chậm. Cần mentor có kinh nghiệm ứng dụng di động để phân tích hiệu năng, quản lý quyền vị trí và thử trên nhiều loại thiết bị."
+    },
+    {
+      "id": "UI100-P091",
+      "title": "Màng Sáng thử vật liệu quang điện",
+      "description": "Nhóm đang chế tạo màng dẫn điện trong suốt và cần cải thiện độ bền của lớp phủ. Cần chuyên gia trực tiếp làm lắng đọng chân không, đo tính chất quang điện và tối ưu quy trình trong phòng sạch; giai đoạn này chưa đặt nhu cầu phần mềm hay thương mại."
+    },
+    {
+      "id": "UI100-P092",
+      "title": "Mẫu Nước kiểm chứng xét nghiệm vi sinh",
+      "description": "Nhóm có quy trình thử nhận diện vi sinh trong nước và cần đánh giá tính lặp lại của kết quả. Cần chuyên gia thực nghiệm PCR, chuẩn bị mẫu và thẩm định xét nghiệm trong phòng thí nghiệm, không chỉ cố vấn kinh doanh chung."
+    },
+    {
+      "id": "UI100-P093",
+      "title": "Sóng Xa thiết kế mạch vô tuyến",
+      "description": "Nhóm thử thiết bị liên lạc năng lượng thấp ở khu vực không có mạng di động. Cần chuyên gia điện tử vô tuyến từng thiết kế bộ thu phát, đo phổ và tinh chỉnh anten cho phần cứng thực tế."
+    },
+    {
+      "id": "UI100-P094",
+      "title": "Mẻ Men nghiên cứu vật liệu sinh học",
+      "description": "Nhóm tạo tấm vật liệu từ quá trình lên men và cần tăng độ đồng đều khi nâng dung tích mẻ. Cần chuyên gia công nghệ sinh học có kinh nghiệm thiết bị lên men, kiểm soát nhiễm và mở rộng quy trình thực nghiệm."
+    },
+    {
+      "id": "UI100-P095",
+      "title": "Bề Mặt Lạnh phát triển lớp phủ chống bám",
+      "description": "Nhóm đang khảo sát lớp phủ giảm bám bẩn trên bề mặt kim loại. Cần chuyên gia hóa học bề mặt từng đo độ bám dính, phân tích cấu trúc lớp phủ và thiết kế thử nghiệm độ bền trong phòng thí nghiệm."
+    },
+    {
+      "id": "UI100-P096",
+      "title": "Ống Nhìn thiết kế hệ quang học",
+      "description": "Nhóm làm bộ quan sát quang học nhỏ và gặp sai lệch hình ảnh khi thay khoảng cách lấy nét. Cần chuyên gia thiết kế thấu kính, quang sai và hiệu chuẩn hệ quang học; nhu cầu hiện tại chỉ liên quan đến nguyên lý và phần cứng quang học."
+    },
+    {
+      "id": "UI100-P097",
+      "title": "Pin Thử đánh giá tế bào điện hóa",
+      "description": "Nhóm nghiên cứu tế bào pin mẫu có hiện tượng suy giảm dung lượng nhanh sau nhiều chu kỳ. Cần chuyên gia điện hóa trực tiếp làm đo trở kháng, phân tích cơ chế lão hóa và thiết kế quy trình thử nghiệm an toàn."
+    },
+    {
+      "id": "UI100-P098",
+      "title": "Nền Đất kiểm tra sức chịu tải",
+      "description": "Nhóm chế tạo bộ thiết bị đo nền đất ở quy mô thử nghiệm và cần đối chiếu cách diễn giải kết quả. Cần chuyên gia địa kỹ thuật từng làm thí nghiệm đất, khảo sát hiện trường và tính toán sức chịu tải của nền móng."
+    },
+    {
+      "id": "UI100-P099",
+      "title": "Âm Tĩnh phát triển cấu trúc cách âm",
+      "description": "Nhóm thử cấu trúc vật liệu giảm truyền âm ở tần số thấp nhưng các phép đo chưa thống nhất. Cần chuyên gia âm học thực nghiệm để thiết kế buồng đo, phân tích dao động và đánh giá khả năng cách âm của cấu trúc."
+    },
+    {
+      "id": "UI100-P100",
+      "title": "Tảo Nhỏ tối ưu quang sinh học",
+      "description": "Nhóm nuôi vi tảo trong thiết bị phản ứng mẫu và muốn hiểu ảnh hưởng của ánh sáng tới mật độ sinh khối. Cần chuyên gia quang sinh học có kinh nghiệm nuôi cấy, kiểm soát môi trường và thiết kế thí nghiệm, chưa cần mở kênh bán hàng."
+    }
+  ]
+}

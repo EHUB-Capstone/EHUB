@@ -5,24 +5,47 @@ import { allocateId, asString, failure, getMockState, ok, parseBody, requestPara
 
 const profiles = new Map<string, MentorProfile>();
 const sessions: MentoringSession[] = [];
+const sessionOwners = new Map<string, { userId: string; assignedAtUtc: string; endedAtUtc: string | null }>();
 const feedback = new Map<string, MentoringFeedback[]>();
 const feedbackOwners = new Map<string, string>();
 let profileState = getMockState();
 
-function currentUser() {
+function syncState() {
   const state = getMockState();
-  if (profileState !== state) { profiles.clear(); profileState = state; }
+  if (profileState !== state) {
+    profiles.clear(); sessions.length = 0; sessionOwners.clear(); feedback.clear(); feedbackOwners.clear();
+    profileState = state;
+  }
+  return state;
+}
+
+function currentUser() {
+  const state = syncState();
   return state.users.find(user => user.id === state.sessionUserId);
 }
 
 function mentorProfile(userId: string): MentorProfile | undefined {
-  const user = getMockState().users.find(item => item.id === userId && item.role === 'MENTOR');
+  const user = syncState().users.find(item => item.id === userId && item.role === 'MENTOR');
   if (!user) return undefined;
-  return profiles.get(userId) ?? { id: userId, userId, fullName: user.name, email: user.email, mentorType: 'Business',
+  const profile: MentorProfile = profiles.get(userId) ?? { id: userId, userId, fullName: user.name, email: user.email, mentorType: 'Business',
     startupDomains: [], technologySkills: [], tags: [], experiences: [],
     expertise: [], bio: null, experience: null, organization: null, linkedInUrl: null, portfolioUrl: null,
     cvFileName: null, portfolioFileName: null, maxTeams: null, status: 'Active', activeTeamCount: 0,
     totalAssignments: 0, totalSessions: 0, averageFeedbackRating: null };
+  const now = Date.now();
+  const completed = sessions.filter(session => {
+    const owner = sessionOwners.get(session.id);
+    const start = Date.parse(session.startAt); const end = Date.parse(session.endAt);
+    return owner?.userId === userId && session.status === 'Completed' && Number.isFinite(start) &&
+      Number.isFinite(end) && end >= start && end <= now && start >= Date.parse(owner.assignedAtUtc) &&
+      (owner.endedAtUtc === null || end <= Date.parse(owner.endedAtUtc));
+  });
+  return { ...profile, history: {
+    completedSessionCount: completed.length,
+    mentoredTeamCount: new Set(completed.map(session => session.teamId)).size,
+    // Mock projects have no dated, linked mentor achievement records to attribute.
+    achievementCount: 0,
+  } };
 }
 
 function accessibleTeam(teamId: string) {
@@ -119,6 +142,49 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     profiles.set(user!.id, updated);
     return ok(updated);
   });
+  mock.onPost('/mentoring/profiles/cv-match').reply(async config => {
+    const admin = currentUser();
+    if (!admin) return failure(401, 'COMMON_UNAUTHORIZED', 'Authentication required.');
+    if (admin.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Administrator role required.');
+    const file = config.data instanceof FormData ? config.data.get('file') : null;
+    if (!(file instanceof File) || file.size === 0 || file.size > 10 * 1024 * 1024 || !/\.(pdf|doc|docx)$/i.test(file.name))
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Choose a non-empty PDF, DOC or DOCX up to 10 MB.');
+    // Mock text fixtures simulate extraction. Actual PDF/Word parsing and signature checks stay in the backend.
+    const text = await file.text();
+    if (text.length > 60_000) return failure(400, 'COMMON_VALIDATION_ERROR', 'The CV contains too much text.');
+    const emails = [...new Set((text.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) ?? [])
+      .map(email => email.toLowerCase()))];
+    const detectedEmails = emails.slice(0, 20);
+    const matches = getMockState().users.filter(user => user.role === 'MENTOR' && emails.includes(user.email.trim().toLowerCase()))
+      .map(user => mentorProfile(user.id)).filter((profile): profile is MentorProfile => Boolean(profile));
+    const status = emails.length > 20 || matches.length > 1 ? 'Ambiguous' :
+      emails.length === 0 ? 'NoEmail' : matches.length === 1 ? 'Matched' : 'NoMatch';
+    return ok({ status, mentorProfileId: status === 'Matched' ? matches[0].id : null, detectedEmails });
+  });
+  mock.onPost(/^\/mentoring\/profiles\/[^/]+\/documents\/cv$/).reply(config => {
+    const admin = currentUser();
+    if (!admin) return failure(401, 'COMMON_UNAUTHORIZED', 'Authentication required.');
+    if (admin.role !== 'ADMIN') return failure(403, 'CLASS_ACCESS_DENIED', 'Administrator role required.');
+    const mentorId = routeId(config, /^\/mentoring\/profiles\/([^/]+)\/documents\/cv$/);
+    const existing = [...profiles.values()].find(profile => profile.id === mentorId) ?? mentorProfile(mentorId);
+    if (!existing) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Mentor profile was not found.');
+    const form = config.data instanceof FormData ? config.data : null;
+    const file = form?.get('file');
+    if (!(file instanceof File)) return failure(400, 'COMMON_VALIDATION_ERROR', 'File is required.');
+    if (file.size === 0 || file.size > 10 * 1024 * 1024 || !/\.(pdf|doc|docx)$/i.test(file.name))
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Choose a non-empty PDF, DOC or DOCX up to 10 MB.');
+    const replace = form?.get('replaceExisting');
+    if (replace != null && replace !== 'true' && replace !== 'false')
+      return failure(400, 'COMMON_VALIDATION_ERROR', 'Replacement confirmation is invalid.');
+    if (existing.cvFileName && replace !== 'true')
+      return failure(409, 'MENTOR_PROFILE_CONFLICT', 'This mentor already has a CV. Confirm replacement before uploading.');
+    // Simulate extraction only; the backend validates signatures and parses the actual document.
+    const updated: MentorProfile = { ...existing, cvFileName: file.name,
+      bio: 'Mock CV: education and professional background.', experience: 'Mock CV: work experience in marketing.',
+      expertise: [...new Set([...existing.expertise, 'Marketing'])].slice(0, 20) };
+    profiles.set(existing.userId, updated);
+    return ok(updated);
+  });
   mock.onGet(/^\/mentoring\/profiles\/[^/]+\/documents\/(cv|portfolio)$/).reply(config => {
     const user = currentUser();
     const mentorId = routeId(config, /^\/mentoring\/profiles\/([^/]+)\/documents\/(?:cv|portfolio)$/);
@@ -156,6 +222,7 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     return ok(items.filter(item => item.hasCapacity).sort((a, b) => b.fitScore - a.fitScore));
   });
   mock.onGet('/mentoring/sessions').reply(config => {
+    syncState();
     const teamId = asString(requestParams(config).teamId);
     return ok(sessions.filter(item => (!teamId || item.teamId === teamId) && accessibleTeam(item.teamId)));
   });
@@ -163,18 +230,27 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     const body = parseBody(config);
     const teamId = asString(body.teamId);
     if (!accessibleTeam(teamId) || currentUser()?.role === 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');
-    const item: MentoringSession = { id: allocateId(), teamId, mentorAssignmentId: asString(body.mentorAssignmentId) || teamId, title: asString(body.title),
+    const team = getMockState().teams.find(value => value.id === teamId);
+    const assignmentId = asString(body.mentorAssignmentId);
+    const assignment = (team?.currentMentorAssignments ?? []).find(value =>
+      assignmentId ? value.assignmentId === assignmentId : currentUser()?.role === 'MENTOR'
+        ? value.mentor.userId === currentUser()?.id : true) ?? (!assignmentId ? team?.currentMentorAssignment : undefined);
+    const item: MentoringSession = { id: allocateId(), teamId, mentorAssignmentId: assignmentId || assignment?.assignmentId || teamId, title: asString(body.title),
       description: asString(body.description), startAt: asString(body.startAt), endAt: asString(body.endAt),
       location: asString(body.location), meetingUrl: asString(body.meetingUrl), status: 'Scheduled', notes: null, actionItems: [] };
+    if (assignment) sessionOwners.set(item.id, { userId: assignment.mentor.userId,
+      assignedAtUtc: assignment.assignedAtUtc, endedAtUtc: assignment.endedAtUtc });
     sessions.push(item); return ok(item);
   });
   mock.onPut(/^\/mentoring\/sessions\/[^/]+$/).reply(config => {
+    syncState();
     const item = sessions.find(value => value.id === routeId(config, /^\/mentoring\/sessions\/([^/]+)$/));
     if (!item) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Session not found.');
     if (!accessibleTeam(item.teamId) || currentUser()?.role === 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');
     Object.assign(item, parseBody(config)); return ok(item);
   });
   mock.onPost(/^\/mentoring\/sessions\/[^/]+\/(complete|cancel)$/).reply(config => {
+    syncState();
     const id = routeId(config, /^\/mentoring\/sessions\/([^/]+)\/(?:complete|cancel)$/);
     const item = sessions.find(value => value.id === id);
     if (!item) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Session not found.');
@@ -184,6 +260,7 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     return ok(item);
   });
   mock.onPost(/^\/mentoring\/sessions\/[^/]+\/action-items$/).reply(config => {
+    syncState();
     const item = sessions.find(value => value.id === routeId(config, /^\/mentoring\/sessions\/([^/]+)\/action-items$/));
     if (!item) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Session not found.');
     if (!accessibleTeam(item.teamId) || currentUser()?.role === 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');
@@ -191,6 +268,7 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     item.actionItems.push(action); return ok(action);
   });
   mock.onPut(/^\/mentoring\/sessions\/[^/]+\/feedback$/).reply(config => {
+    syncState();
     const item = sessions.find(value => value.id === routeId(config, /^\/mentoring\/sessions\/([^/]+)\/feedback$/));
     if (!item) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Session not found.');
     if (!accessibleTeam(item.teamId) || currentUser()?.role !== 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');
@@ -202,6 +280,7 @@ export function registerMentoringMockHandlers(mock: MockAdapter): void {
     feedback.set(item.id, [...(feedback.get(item.id) ?? []).filter(value => value.id !== entry.id), entry]); return ok(entry);
   });
   mock.onGet(/^\/mentoring\/sessions\/[^/]+\/feedback$/).reply(config => {
+    syncState();
     const item = sessions.find(value => value.id === routeId(config, /^\/mentoring\/sessions\/([^/]+)\/feedback$/));
     if (!item) return failure(404, 'COMMON_NOT_FOUND_ERROR', 'Session not found.');
     if (!accessibleTeam(item.teamId) || currentUser()?.role === 'STUDENT') return failure(403, 'CLASS_ACCESS_DENIED', 'Access denied.');

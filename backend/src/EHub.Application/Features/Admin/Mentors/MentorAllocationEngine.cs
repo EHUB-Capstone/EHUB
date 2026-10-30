@@ -1,3 +1,4 @@
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Enums;
 
 namespace EHub.Application.Features.Admin.Mentors;
@@ -8,7 +9,8 @@ internal sealed record AllocationMentor(Guid Id, string Name, string Email, Ment
 
 internal sealed record AllocationExistingAssignment(Guid TeamId, Guid MentorProfileId, MentorType Slot);
 
-internal sealed record AllocationProposal(AllocationTeam Team, AllocationMentor Mentor, int ResultingLoad);
+internal sealed record AllocationProposal(AllocationTeam Team, AllocationMentor Mentor, int ResultingLoad,
+    MentorFitRanking? Ranking = null);
 
 internal sealed record AllocationOutcome(
     IReadOnlyList<AllocationProposal> Proposals,
@@ -17,7 +19,8 @@ internal sealed record AllocationOutcome(
 internal enum AllocationStrategy
 {
     Balanced,
-    Random
+    Random,
+    Ai
 }
 
 /// <summary>
@@ -26,13 +29,13 @@ internal enum AllocationStrategy
 /// </summary>
 internal interface IMentorSelector
 {
-    AllocationMentor Pick(AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random);
+    AllocationMentor? Pick(AllocationTeam team, AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random);
 }
 
 /// <summary>Prefers the mentors with the fewest teams; ties are broken at random.</summary>
 internal sealed class BalancedMentorSelector : IMentorSelector
 {
-    public AllocationMentor Pick(AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random)
+    public AllocationMentor Pick(AllocationTeam team, AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random)
     {
         var minimum = loads.Values.Min();
         var candidates = pool
@@ -46,8 +49,38 @@ internal sealed class BalancedMentorSelector : IMentorSelector
 /// <summary>Picks any eligible mentor with equal probability, ignoring the current load.</summary>
 internal sealed class RandomMentorSelector : IMentorSelector
 {
-    public AllocationMentor Pick(AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random) =>
+    public AllocationMentor Pick(AllocationTeam team, AllocationMentor[] pool, IReadOnlyDictionary<Guid, int> loads, Random random) =>
         pool[random.Next(pool.Length)];
+}
+
+/// <summary>Prefers relevant evidence; otherwise proposes the least-loaded eligible profile for review.</summary>
+internal sealed class AiMentorSelector(
+    IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> rankings) : IMentorSelector
+{
+    public AllocationMentor? Pick(AllocationTeam team, AllocationMentor[] pool,
+        IReadOnlyDictionary<Guid, int> loads, Random random)
+    {
+        if (!rankings.TryGetValue(team.Id, out var teamRankings)) return null;
+        var persistent = pool.Where(mentor => !mentor.IsTemporary).ToArray();
+        var evidenced = persistent.Where(mentor => teamRankings.TryGetValue(mentor.Id, out var fit)
+                && fit.HasEvidence && IsValid(fit))
+            .OrderByDescending(mentor => teamRankings[mentor.Id].RankingValue ?? teamRankings[mentor.Id].Score)
+            .ThenBy(mentor => loads[mentor.Id])
+            .ThenBy(_ => random.Next())
+            .FirstOrDefault();
+        if (evidenced is not null) return evidenced;
+
+        // A model response with missing or invalid entries is not a no-match result.
+        // Only a complete successful response may produce review-needed proposals.
+        if (persistent.Length == 0 || persistent.Any(mentor =>
+                !teamRankings.TryGetValue(mentor.Id, out var fit) || !IsValid(fit))) return null;
+        return persistent.OrderBy(mentor => loads[mentor.Id])
+            .ThenBy(_ => random.Next())
+            .First();
+    }
+
+    private static bool IsValid(MentorFitRanking fit) => fit.Score is >= 0 and <= 100 &&
+        fit.Reasons is not null && double.IsFinite(fit.RankingValue ?? fit.Score);
 }
 
 /// <summary>
@@ -65,9 +98,10 @@ internal static class MentorAllocationEngine
         IReadOnlyCollection<AllocationMentor> mentors,
         IReadOnlyCollection<AllocationExistingAssignment> existingAssignments,
         int seed,
-        AllocationStrategy strategy = AllocationStrategy.Balanced)
+        AllocationStrategy strategy = AllocationStrategy.Balanced,
+        IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>? rankings = null)
     {
-        var selector = CreateSelector(strategy);
+        var selector = CreateSelector(strategy, rankings);
         var random = new Random(seed);
         var proposals = new List<AllocationProposal>();
         var warnings = new List<string>();
@@ -91,9 +125,25 @@ internal static class MentorAllocationEngine
 
             foreach (var team in missing)
             {
-                var mentor = selector.Pick(pool, loads, random);
+                var mentor = selector.Pick(team, pool, loads, random);
+                if (mentor is null)
+                {
+                    warnings.Add($"Nhóm {team.Code}: chưa có kết quả AI hợp lệ để đề xuất mentor {slot}. Cần kiểm tra mô tả dự án hoặc hồ sơ mentor.");
+                    continue;
+                }
                 loads[mentor.Id]++;
-                proposals.Add(new AllocationProposal(team, mentor, loads[mentor.Id]));
+                var ranking = strategy == AllocationStrategy.Ai ? rankings![team.Id][mentor.Id] : null;
+                if (ranking is { HasEvidence: false })
+                {
+                    ranking = ranking with
+                    {
+                        Score = 0, RankingValue = 0,
+                        Reasons = ranking.Reasons.Append("Đề xuất theo tải hiện tại vì chưa có bằng chứng chuyên môn phù hợp; cần admin rà soát.")
+                            .Distinct(StringComparer.Ordinal).ToArray()
+                    };
+                    warnings.Add($"Nhóm {team.Code}: đã đề xuất mentor {slot} theo tải hiện tại do chưa có bằng chứng chuyên môn phù hợp; admin cần rà soát trước khi chấp nhận.");
+                }
+                proposals.Add(new AllocationProposal(team, mentor, loads[mentor.Id], ranking));
             }
         }
 
@@ -109,10 +159,12 @@ internal static class MentorAllocationEngine
         MentorType slot) =>
         teams.Where(team => existingAssignments.All(assignment => assignment.TeamId != team.Id || assignment.Slot != slot));
 
-    private static IMentorSelector CreateSelector(AllocationStrategy strategy) => strategy switch
+    private static IMentorSelector CreateSelector(AllocationStrategy strategy,
+        IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>? rankings) => strategy switch
     {
         AllocationStrategy.Balanced => new BalancedMentorSelector(),
         AllocationStrategy.Random => new RandomMentorSelector(),
+        AllocationStrategy.Ai => new AiMentorSelector(rankings ?? new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>()),
         _ => throw new ArgumentOutOfRangeException(nameof(strategy), strategy, "Unknown allocation strategy.")
     };
 }

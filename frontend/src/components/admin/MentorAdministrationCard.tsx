@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { FileSpreadsheet, Shuffle, UserCog, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { FileSpreadsheet, Shuffle, Sparkles, UserCog, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import type {
   MentorAllocationEdit,
   MentorAllocationPreview,
   MentorAllocationStrategy,
+  MentorSemesterClass,
   MentorType,
 } from '../../types/mentorAdmin';
 import { parseApiError } from '../../utils/apiError';
@@ -23,9 +24,17 @@ interface MentorAdministrationCardProps {
   onImportCommitted: () => Promise<void> | void;
 }
 
+interface AllocationScope {
+  classIds: string[];
+  label: string;
+  strategy: MentorAllocationStrategy;
+}
+
 export default function MentorAdministrationCard({ semesterId, semesterLabel, temporaryMentorCount = 0, onImportCommitted }: MentorAdministrationCardProps) {
   const [allocationPreview, setAllocationPreview] = useState<MentorAllocationPreview | null>(null);
-  const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Balanced');
+  const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Ai');
+  const [previewScope, setPreviewScope] = useState<AllocationScope | null>(null);
+  const [previewFailure, setPreviewFailure] = useState<{ scope: AllocationScope; message: string } | null>(null);
   const [includeTemporary, setIncludeTemporary] = useState(true);
   const [edits, setEdits] = useState<MentorAllocationEdit[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -33,6 +42,9 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   const [previewStale, setPreviewStale] = useState(false);
   const [confirmReplacement, setConfirmReplacement] = useState(false);
   const [busy, setBusy] = useState<'export' | 'preview-allocation' | 'refresh-allocation' | 'commit-allocation' | null>(null);
+  const previewRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => { previewRequest.current?.abort(); }, [semesterId]);
 
   const exportAssignments = async () => {
     if (!semesterId) return;
@@ -53,35 +65,48 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   };
 
   // Generates a preview. Re-using the seed and strategy keeps the proposal stable while the admin edits it by hand.
-  const loadPreview = async (nextEdits: MentorAllocationEdit[], seed?: number) => {
+  const loadPreview = async (scope: AllocationScope, nextEdits: MentorAllocationEdit[], seed?: number) => {
     if (!semesterId) return null;
-    const response = await mentorAdminApi.previewAllocation(semesterId, seed, strategy, nextEdits, includeTemporary);
+    previewRequest.current?.abort();
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    const response = await mentorAdminApi.previewAllocation(semesterId, seed, scope.strategy, nextEdits, includeTemporary, scope.classIds, controller.signal);
+    if (controller.signal.aborted) return null;
     return response.data;
   };
 
-  const previewAllocation = async () => {
-    if (!semesterId) return;
+  const previewAllocation = async (scope: AllocationScope = { classIds: [], label: semesterLabel, strategy }) => {
+    if (!semesterId || busy !== null) return;
     setBusy('preview-allocation');
+    setPreviewFailure(null);
     try {
-      const preview = await loadPreview([]);
+      const preview = await loadPreview(scope, []);
       if (!preview) return;
+      setPreviewScope(scope);
       setAllocationPreview(preview);
       setEdits([]);
       setPreviewStale(false);
       setPreviewOpen(true);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to preview mentor assignment').message);
+      if (!previewRequest.current?.signal.aborted) {
+        setPreviewFailure({ scope, message: parseApiError(error, 'Failed to preview mentor assignment').message });
+      }
     } finally {
       setBusy(null);
     }
   };
 
+  const previewClass = (item: MentorSemesterClass) => {
+    setManagerOpen(false);
+    void previewAllocation({ classIds: [item.classId], label: `${item.classCode} · ${item.subjectCode}`, strategy: 'Ai' });
+  };
+
   const applyEdit = async (edit: MentorAllocationEdit) => {
-    if (!allocationPreview) return;
+    if (!allocationPreview || !previewScope || busy !== null) return;
     const requested = upsertEdit(edits, edit);
     setBusy('refresh-allocation');
     try {
-      const preview = await loadPreview(requested, allocationPreview.seed);
+      const preview = await loadPreview(previewScope, requested, allocationPreview.seed);
       if (!preview) return;
       setAllocationPreview(preview);
       setEdits(keepAppliedEdits(requested, preview));
@@ -89,23 +114,23 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       const notApplied = (preview.conflicts ?? []).find(conflict => conflict.teamId === edit.teamId && conflict.mentorType === edit.mentorType);
       if (notApplied) toast.error(notApplied.message);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to apply the edit').message);
+      if (!previewRequest.current?.signal.aborted) toast.error(parseApiError(error, 'Failed to apply the edit').message);
     } finally {
       setBusy(null);
     }
   };
 
   const undoEdit = async (teamId: string, mentorType: MentorType) => {
-    if (!allocationPreview) return;
+    if (!allocationPreview || !previewScope || busy !== null) return;
     const remaining = removeEdit(edits, teamId, mentorType);
     setBusy('refresh-allocation');
     try {
-      const preview = await loadPreview(remaining, allocationPreview.seed);
+      const preview = await loadPreview(previewScope, remaining, allocationPreview.seed);
       if (!preview) return;
       setAllocationPreview(preview);
       setEdits(keepAppliedEdits(remaining, preview));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to undo the edit').message);
+      if (!previewRequest.current?.signal.aborted) toast.error(parseApiError(error, 'Failed to undo the edit').message);
     } finally {
       setBusy(null);
     }
@@ -114,6 +139,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   const closePreview = () => {
     setPreviewOpen(false);
     setAllocationPreview(null);
+    setPreviewScope(null);
     setEdits([]);
     setPreviewStale(false);
   };
@@ -125,7 +151,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   };
 
   const commitAllocation = async () => {
-    if (!allocationPreview?.canCommit) return;
+    if (!allocationPreview?.canCommit || previewStale || busy !== null) return;
     setConfirmReplacement(false);
     setBusy('commit-allocation');
     try {
@@ -143,7 +169,9 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
     }
   };
 
-  const strategyHint = strategy === 'Balanced'
+  const strategyHint = strategy === 'Ai'
+    ? 'AI proposes mentors using skills, experience, achievements, mentoring history and current workload. Continuing EXE201 teams keep eligible EXE101 mentors. Review the reasons and accept to save.'
+    : strategy === 'Balanced'
     ? 'Balanced gives each missing slot to the mentor with the fewest teams this semester.'
     : 'Random picks any eligible mentor for each missing slot, whatever their current load.';
 
@@ -166,22 +194,22 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
         {semesterId && (
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label="Assignment method" title={strategyHint} className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-              {(['Balanced', 'Random'] as const).map(option => (
+              {(['Ai', 'Balanced', 'Random'] as const).map(option => (
                 <button
                   key={option}
                   type="button"
                   aria-pressed={strategy === option}
-                  disabled={busy !== null}
+                  disabled={busy !== null || previewOpen}
                   onClick={() => setStrategy(option)}
-                  className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors ${strategy === option ? 'bg-primary text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                  className={`whitespace-nowrap rounded-md px-3 py-1 text-caption font-semibold transition-colors ${strategy === option ? 'bg-slate-100 text-secondary' : 'text-slate-600 hover:text-slate-900'}`}
                 >
-                  {option}
+                  {option === 'Ai' ? 'AI' : option}
                 </button>
               ))}
             </div>
-            <Button size="sm" className="whitespace-nowrap" icon={Shuffle} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>Preview assignment</Button>
-            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} onClick={() => setManagerOpen(true)}>Manage mentors</Button>
-            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export</Button>
+            <Button size="sm" className="whitespace-nowrap" icon={strategy === 'Ai' ? Sparkles : Shuffle} disabled={busy !== null || previewOpen} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>{strategy === 'Ai' ? 'AI preview · all classes' : 'Preview assignment'}</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} disabled={busy !== null || previewOpen} onClick={() => setManagerOpen(true)}>Manage by class</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} disabled={busy !== null || previewOpen} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export</Button>
           </div>
         )}
       </div>
@@ -203,6 +231,13 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
             </label>
           )}
           <p className="mt-2 text-caption text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
+          {busy === 'preview-allocation' && <p role="status" className="mt-2 text-body-sm text-slate-600">Preparing the proposed assignments…</p>}
+          {previewFailure && (
+            <div role="alert" className="mt-3 rounded-xl bg-danger-50 px-3 py-2 text-body-sm text-danger-dark">
+              <p>{previewFailure.scope.label}: {previewFailure.message}</p>
+              <Button size="sm" variant="outline" className="mt-2" disabled={busy !== null} onClick={() => void previewAllocation(previewFailure.scope)}>Try again</Button>
+            </div>
+          )}
 
           <SemesterMentorManager
             isOpen={managerOpen}
@@ -210,18 +245,22 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
             semesterLabel={semesterLabel}
             onClose={() => setManagerOpen(false)}
             onChanged={onImportCommitted}
+            onAiPreview={previewClass}
           />
           <MentorAllocationPreviewModal
+            key={previewOpen ? previewScope?.classIds.join(',') || 'semester' : 'closed'}
             isOpen={previewOpen}
             preview={allocationPreview}
+            scopeLabel={previewScope?.label}
+            errorMessage={previewFailure?.message}
             edits={edits}
-            isRefreshing={busy === 'refresh-allocation'}
+            isRefreshing={busy === 'refresh-allocation' || busy === 'preview-allocation'}
             isCommitting={busy === 'commit-allocation'}
             isStale={previewStale}
             onClose={closePreview}
             onApplyEdit={edit => void applyEdit(edit)}
             onRemoveEdit={(teamId, mentorType) => void undoEdit(teamId, mentorType)}
-            onRegenerate={() => void previewAllocation()}
+            onRegenerate={() => previewScope && void previewAllocation(previewScope)}
             onConfirm={requestCommit}
           />
           <ConfirmDialog

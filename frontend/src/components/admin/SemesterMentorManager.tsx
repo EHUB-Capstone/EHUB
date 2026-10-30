@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import type { MentorSemesterClass } from '../../types/mentorAdmin';
 import { parseApiError } from '../../utils/apiError';
@@ -18,10 +18,12 @@ interface SemesterMentorManagerProps {
   onClose: () => void;
   /** Called after any mentor change so the parent can refresh the semester data. */
   onChanged?: () => Promise<void> | void;
+  /** Opens an AI proposal scoped to this class, for admin review before saving. */
+  onAiPreview?: (item: MentorSemesterClass) => void;
 }
 
 /** Lets an admin pick any active class of the semester and edit its team mentors without opening the class page. */
-export default function SemesterMentorManager({ isOpen, semesterId, semesterLabel, onClose, onChanged }: SemesterMentorManagerProps) {
+export default function SemesterMentorManager({ isOpen, semesterId, semesterLabel, onClose, onChanged, onAiPreview }: SemesterMentorManagerProps) {
   const [classes, setClasses] = useState<MentorSemesterClass[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -81,6 +83,7 @@ export default function SemesterMentorManager({ isOpen, semesterId, semesterLabe
       <div className="space-y-3">
         <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
           Pick a class to assign, replace or end the mentors of its teams. Closing a class returns here with updated numbers.
+          {onAiPreview && ' AI preview proposes mentors only for the selected class; review and accept before saving.'}
         </p>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -132,7 +135,7 @@ export default function SemesterMentorManager({ isOpen, semesterId, semesterLabe
               ) : visible.map(item => {
                 const missing = missingSlots(item);
                 return (
-                  <div key={item.classId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/60 bg-white p-2.5">
+                  <div key={item.classId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/60 bg-white p-2.5">
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                         {item.classCode}
@@ -152,6 +155,11 @@ export default function SemesterMentorManager({ isOpen, semesterId, semesterLabe
                         </span>
                       ) : (
                         <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-caption font-semibold text-green-700">Complete</span>
+                      )}
+                      {onAiPreview && (
+                        <Button size="sm" variant="outline" icon={Sparkles} disabled={item.teamCount === 0 || missing === 0} onClick={() => onAiPreview(item)} aria-label={`AI preview for ${item.classCode}`}>
+                          AI preview
+                        </Button>
                       )}
                       <Button size="sm" variant="outline" disabled={item.teamCount === 0} onClick={() => setSelected(item)}>Manage</Button>
                     </div>

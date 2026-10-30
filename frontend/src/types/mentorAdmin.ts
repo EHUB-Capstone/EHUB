@@ -85,6 +85,15 @@ export interface MentorImportCommitResult {
   temporarySemestersConverted?: number;
 }
 
+export interface MentorAllocationHistory {
+  baseFitScore: number;
+  completedSessionCount: number;
+  mentoredTeamCount: number;
+  achievementCount: number;
+  historyBonus: number;
+  achievementBonus: number;
+}
+
 export interface MentorAllocationRowPreview {
   teamId: string;
   teamCode: string;
@@ -106,6 +115,11 @@ export interface MentorAllocationRowPreview {
   replacesMentorName?: string | null;
   replaceReason?: string | null;
   mentorLoadBefore?: number | null;
+  /** Relative fit score used to rank AI suggestions; not a probability. */
+  fitScore?: number | null;
+  history?: MentorAllocationHistory | null;
+  /** Evidence from skills, mentoring history, achievements and workload. */
+  reasons?: string[];
 }
 
 /** A hand edit of one team slot. A null mentorProfileId leaves the slot empty. */
@@ -168,7 +182,7 @@ export interface MentorAllocationSkipped {
   message: string;
 }
 
-export type MentorAllocationStrategy = 'Balanced' | 'Random';
+export type MentorAllocationStrategy = 'Balanced' | 'Random' | 'Ai';
 
 /** A team slot that still has no mentor after the proposed allocation. */
 export interface MentorAllocationUnfilled {

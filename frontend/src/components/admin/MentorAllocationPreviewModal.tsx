@@ -10,6 +10,7 @@ import {
   ALL_CLASSES,
   buildTeamGrid,
   filterTeamGrid,
+  getAiReviewAssignments,
   resolveClassFilter,
   teamClassOptions,
   getMentorCandidates,
@@ -39,6 +40,8 @@ interface EditorTarget {
 interface MentorAllocationPreviewModalProps {
   isOpen: boolean;
   preview: MentorAllocationPreview | null;
+  scopeLabel?: string;
+  errorMessage?: string;
   edits: MentorAllocationEdit[];
   isRefreshing: boolean;
   isCommitting: boolean;
@@ -65,6 +68,8 @@ const replacedTone: BadgeTone = 'warning';
 export default function MentorAllocationPreviewModal({
   isOpen,
   preview,
+  scopeLabel,
+  errorMessage,
   edits,
   isRefreshing,
   isCommitting,
@@ -94,7 +99,8 @@ export default function MentorAllocationPreviewModal({
   const conflicts = preview.conflicts ?? [];
   const skipped = preview.skipped ?? [];
   const unfilled = preview.unfilled ?? [];
-  const attentionCount = conflicts.length + skipped.length + unfilled.length;
+  const reviewAssignments = getAiReviewAssignments(preview);
+  const attentionCount = conflicts.length + skipped.length + unfilled.length + reviewAssignments.length;
 
   const openEditor = (target: EditorTarget) => {
     setTab('teams');
@@ -113,9 +119,9 @@ export default function MentorAllocationPreviewModal({
     <Modal
       isOpen={isOpen}
       onClose={busy ? () => undefined : onClose}
-      title="Mentor assignment preview"
+      title={`${preview.strategy === 'Ai' ? 'AI mentor assignment preview' : 'Mentor assignment preview'}${scopeLabel ? ` · ${scopeLabel}` : ''}`}
       size="2xl"
-      submitText="Confirm and save"
+      submitText={preview.strategy === 'Ai' ? 'Accept and assign mentors' : 'Confirm and save'}
       onSubmit={onConfirm}
       isSubmitting={isCommitting}
       submitDisabled={!preview.canCommit || isStale || isRefreshing}
@@ -124,12 +130,25 @@ export default function MentorAllocationPreviewModal({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-slate-500">
             Nothing is saved until you confirm. Existing mentors are never replaced unless you choose to replace them.
-            {' '}Strategy: <strong className="text-slate-700">{preview.strategy ?? 'Balanced'}</strong>.
+            {' '}Strategy: <strong className="text-slate-700">{preview.strategy === 'Ai' ? 'AI' : preview.strategy ?? 'Balanced'}</strong>.
           </p>
           <Button size="sm" variant="outline" icon={RefreshCw} onClick={onRegenerate} disabled={busy}>
             Regenerate{edits.length > 0 ? ' (clears edits)' : ''}
           </Button>
         </div>
+        {preview.strategy === 'Ai' && (
+          <p className="rounded-xl bg-info-50 px-3 py-2 text-body-sm text-info-dark">
+            AI fills open slots whenever an eligible mentor is available, using skills, experience, achievements, mentoring history and workload.
+            {' '}Review suggestions with a fit score of 0 closely. When matching evidence is missing, AI proposes a mentor by workload.
+            {' '}Eligible mentors stay with continuing teams from EXE101 to EXE201. Fit scores are not probabilities.
+          </p>
+        )}
+        {errorMessage && (
+          <div role="alert" className="rounded-xl bg-danger-50 px-3 py-2 text-body-sm text-danger-dark">
+            <p>{errorMessage}</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={onRegenerate} disabled={busy}>Try again</Button>
+          </div>
+        )}
 
         {isStale && (
           <div role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -138,7 +157,7 @@ export default function MentorAllocationPreviewModal({
           </div>
         )}
         {preview.warnings.length > 0 && (
-          <ul className="space-y-1 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <ul aria-label="Allocation warnings" className="max-h-28 space-y-1 overflow-y-auto rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {preview.warnings.map(message => <li key={message}>{message}</li>)}
           </ul>
         )}
@@ -189,11 +208,11 @@ export default function MentorAllocationPreviewModal({
                 >
                   <option value="all">All teams</option>
                   <option value="changed">Changed by this preview</option>
-                  <option value="attention">Missing a mentor</option>
+                  <option value="attention">Needs attention</option>
                 </select>
               </div>
               {visibleRows.length === 0 ? (
-                <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No team matches the current filters.</p>
+                <p className="rounded-xl bg-slate-50 px-3 py-6 text-center text-body-sm text-slate-500">{grid.length === 0 ? 'There are no active teams in this allocation scope.' : 'No team matches the current filters.'}</p>
               ) : (
                 <div className="max-h-[48vh] overflow-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full min-w-[820px] text-left text-xs">
@@ -237,6 +256,7 @@ export default function MentorAllocationPreviewModal({
               conflicts={activeClass === ALL_CLASSES ? conflicts : conflicts.filter(item => item.teamId && classOfTeam.get(item.teamId) === activeClass)}
               skipped={activeClass === ALL_CLASSES ? skipped : skipped.filter(item => item.classCode === activeClass)}
               unfilled={activeClass === ALL_CLASSES ? unfilled : unfilled.filter(item => item.classCode === activeClass)}
+              reviewAssignments={activeClass === ALL_CLASSES ? reviewAssignments : reviewAssignments.filter(item => item.classCode === activeClass)}
               onReplace={(conflict) => conflict.teamId && openEditor({
                 teamId: conflict.teamId,
                 mentorType: conflict.mentorType,
@@ -313,10 +333,25 @@ function SlotCell({ slot }: { slot: SlotView }) {
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant={style.tone} className="rounded-full text-overline">{style.label}</Badge>
+        {slot.needsReview && <Badge variant="warning" className="rounded-full text-overline">Needs review</Badge>}
         {slot.mentorName
           ? <span className="font-medium text-slate-800">{slot.mentorName}</span>
           : <span className="text-slate-400">No mentor</span>}
       </div>
+      {(slot.fitScore != null || (slot.reasons?.length ?? 0) > 0) && (
+        <div className="mt-2 space-y-1 text-caption text-slate-600">
+          {slot.fitScore != null && <p className="font-semibold">Fit score: {slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>}
+          {slot.history && <div role="group" aria-label={`Mentoring history for ${slot.mentorName ?? 'mentor'}`} className="space-y-1">
+            <p>{slot.history.completedSessionCount} completed sessions · {slot.history.mentoredTeamCount} mentored teams · {slot.history.achievementCount} projects with achievements</p>
+            <p>Base fit: {slot.history.baseFitScore} · History: +{slot.history.historyBonus} · Achievements: +{slot.history.achievementBonus} · Final score capped at 100</p>
+          </div>}
+          {(slot.reasons?.length ?? 0) > 0 && (
+            <ul className="list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${slot.mentorName ?? 'mentor'}`}>
+              {slot.reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
       {slot.replacesCurrent && slot.currentMentorName && (
         <p className="mt-1 text-caption text-amber-700">Replaces <span className="line-through">{slot.currentMentorName}</span> (assignment ends on save)</p>
       )}
@@ -388,7 +423,7 @@ function SlotEditor({
       )}
       <div className="flex justify-end gap-1.5">
         <Button size="xs" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button size="xs" disabled={!canApply} onClick={apply}>{needsReason ? 'Replace' : mentorId === '' && !occupied ? 'Leave empty' : occupied ? 'Replace' : 'Apply'}</Button>
+        <Button size="xs" variant="outline" disabled={!canApply} onClick={apply}>{needsReason ? 'Replace' : mentorId === '' && !occupied ? 'Leave empty' : occupied ? 'Replace' : 'Apply'}</Button>
       </div>
     </div>
   );
@@ -441,18 +476,38 @@ function formatChange(before: number, added: number, removed: number) {
 }
 
 function AttentionPanel({
-  conflicts, skipped, unfilled, onReplace,
+  conflicts, skipped, unfilled, reviewAssignments, onReplace,
 }: {
   conflicts: MentorAllocationConflict[];
   skipped: NonNullable<MentorAllocationPreview['skipped']>;
   unfilled: NonNullable<MentorAllocationPreview['unfilled']>;
+  reviewAssignments: MentorAllocationPreview['assignments'];
   onReplace: (conflict: MentorAllocationConflict) => void;
 }) {
-  if (conflicts.length + skipped.length + unfilled.length === 0) {
+  if (conflicts.length + skipped.length + unfilled.length + reviewAssignments.length === 0) {
     return <p className="rounded-xl bg-green-50 px-3 py-6 text-center text-sm text-green-700">Every slot has a mentor and nothing needs a decision.</p>;
   }
   return (
     <div className="max-h-[52vh] space-y-4 overflow-auto">
+      {reviewAssignments.length > 0 && (
+        <section aria-label="AI suggestions needing review" className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-800">AI suggestions needing review ({reviewAssignments.length})</h3>
+          <p className="text-body-sm text-slate-600">These slots have a mentor with a fit score of 0. Review their experience, project needs and the reasons for each suggestion before accepting.</p>
+          <ul className="space-y-2">
+            {reviewAssignments.map(item => (
+              <li key={`${item.teamId}-${item.mentorType}`} className="rounded-lg border border-warning-light bg-warning-50 px-3 py-2 text-body-sm text-warning-dark">
+                <strong>{item.teamName}</strong> · {item.classCode} · {slotLabel[item.mentorType]}
+                <p>{item.mentorName} · Fit score: 0 <Badge variant="warning">Needs review</Badge></p>
+                {(item.reasons?.length ?? 0) > 0 && (
+                  <ul className="mt-1 list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${item.mentorName}`}>
+                    {item.reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {conflicts.length > 0 && (
         <section aria-label="Conflicts" className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-800">Conflicts ({conflicts.length})</h3>

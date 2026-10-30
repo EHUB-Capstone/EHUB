@@ -261,6 +261,46 @@ test('mentor matching mock returns ranked candidates for an accessible team', as
     item.reasons.length > 0 && item.fitScore >= 0));
 });
 
+test('mentor history mock counts completed past sessions, keeps notes private, and resets its history', async () => {
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  const state = getMockState();
+  const team = state.teams.find(item => item.currentMentorAssignment?.mentor.userId === state.sessionUserId);
+  assert.ok(team?.currentMentorAssignment);
+  const initial = (await axiosClient.get('/mentoring/profile')).data;
+  await axiosClient.put('/mentoring/profile', { ...initial, experience: 'Declared professional experience' });
+  const emptyHistory = { completedSessionCount: 0, mentoredTeamCount: 0, achievementCount: 0 };
+  assert.deepEqual(initial.history, emptyHistory);
+
+  const now = Date.now();
+  const create = async (offset: number) => (await axiosClient.post('/mentoring/sessions', {
+    teamId: team.id, mentorAssignmentId: team.currentMentorAssignment?.assignmentId, title: 'Coaching review',
+    description: '', startAt: new Date(now + offset).toISOString(), endAt: new Date(now + offset + 3600000).toISOString(),
+    location: '', meetingUrl: '',
+  })).data;
+  const scheduled = await create(-86400000);
+  const future = await create(86400000);
+  await axiosClient.post(`/mentoring/sessions/${future.id}/complete`, { notes: 'FUTURE_MARKER' });
+  const cancelled = await create(-172800000);
+  await axiosClient.post(`/mentoring/sessions/${cancelled.id}/cancel`);
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.history, emptyHistory);
+
+  await axiosClient.post(`/mentoring/sessions/${scheduled.id}/complete`, { notes: 'Marketing skills PRIVATE_TEAM_NOTES' });
+  const profile = (await axiosClient.get('/mentoring/profile')).data;
+  assert.deepEqual(profile.history, { completedSessionCount: 1, mentoredTeamCount: 1, achievementCount: 0 });
+  assert.equal(profile.experience, 'Declared professional experience');
+  assert.equal(JSON.stringify(profile).includes('PRIVATE_TEAM_NOTES'), false);
+  // Attribution belongs to the original session assignment, even when the team later changes mentor.
+  team.currentMentorAssignment = null;
+  team.currentMentorAssignments = [];
+  assert.equal((await axiosClient.get('/mentoring/profile')).data.history.completedSessionCount, 1);
+
+  resetMockState();
+  await axiosClient.post('/auth/login', { email: 'khoa.mentor@ehub.local', password: 'Mock123!' });
+  assert.deepEqual((await axiosClient.get('/mentoring/profile')).data.history, emptyHistory);
+  assert.deepEqual((await axiosClient.get('/mentoring/sessions')).data, []);
+});
+
 test('student cannot open the mentor directory mock', async () => {
   resetMockState();
   const student = getMockState().users.find(user => user.role === 'STUDENT' && user.status === 'APPROVED');

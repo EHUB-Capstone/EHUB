@@ -1,13 +1,15 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Entities;
 
 namespace EHub.Application.Features.Mentoring.TrainedRanking;
 
 /// <summary>
 /// Feature schema v2. Keep clause filtering, role selection and clipping in sync with the trainer.
-/// Mentor type selects relevant requested topics; identity, employer and workload are not features.
+/// The default recommendation view selects topics by mentor type. Allocation can evaluate all specialties;
+/// identity, employer and workload are not features.
 /// </summary>
 public static class MentorRankingFeatures
 {
@@ -19,15 +21,20 @@ public static class MentorRankingFeatures
     public static double[] Extract(MentorRankingModel model, string projectText, MentorProfile mentor) =>
         ExtractEvidence(model, PrepareProject(model, projectText, mentor.MentorType), mentor).Values;
 
-    internal static ProjectEvidence PrepareProject(MentorRankingModel model, string projectText, string role)
+    internal static ProjectEvidence PrepareProject(MentorRankingModel model, string projectText, string role,
+        MentorRankingScope scope = MentorRankingScope.MentorRole)
     {
         var bounded = Clip(projectText, MaximumTextLength);
         var normalized = MentorEvidenceText.Positive(bounded);
         var excluded = FindTopics(model, MentorEvidenceText.Excluded(bounded)).Keys.ToHashSet();
-        var allowed = model.Topics.Where(x => x.Role == role || x.Role is "Both" or "Domain").Select(x => x.Id).ToHashSet();
+        // Allocation slot/type remains a hard rule in the allocation engine. It is
+        // independent of the specialties documented in an eligible mentor's profile.
+        var allSpecialties = scope == MentorRankingScope.AllSpecialties;
+        var allowed = model.Topics.Where(x => allSpecialties || x.Role == role || x.Role is "Both" or "Domain")
+            .Select(x => x.Id).ToHashSet();
         var topics = FindTopics(model, normalized).Where(x => allowed.Contains(x.Key) && !excluded.Contains(x.Key)).ToDictionary();
         var core = topics.Keys.Where(id => model.Topics.Single(x => x.Id == id).Role != "Domain").ToHashSet();
-        if (core.Count == 0 && role == "Business") core.UnionWith(topics.Keys);
+        if (core.Count == 0 && (allSpecialties || role == "Business")) core.UnionWith(topics.Keys);
         return new ProjectEvidence(topics, Tokens(model, WithoutExcludedTopics(model, normalized, excluded)), core);
     }
 

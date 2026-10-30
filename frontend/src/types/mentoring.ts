@@ -22,6 +22,19 @@ export interface MentorProfile {
   totalAssignments: number;
   totalSessions: number;
   averageFeedbackRating: number | null;
+  history?: MentorHistorySummary | null;
+}
+
+export interface MentorCvMatchResponse {
+  status: 'Matched' | 'NoEmail' | 'NoMatch' | 'Ambiguous';
+  mentorProfileId: string | null;
+  detectedEmails: string[];
+}
+
+export interface MentorHistorySummary {
+  completedSessionCount: number;
+  mentoredTeamCount: number;
+  achievementCount: number;
 }
 
 export interface MentorExperience {
