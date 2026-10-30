@@ -6,11 +6,16 @@ namespace EHub.Application.Features.Mentoring.TrainedRanking;
 public sealed class TrainedMentorFitScorer(MentorRankingModel model) : IMentorFitRanker
 {
     public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
-        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken)
+        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken) =>
+        Rank(projectText, mentors, MentorRankingScope.MentorRole, cancellationToken);
+
+    public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
+        IReadOnlyCollection<MentorProfile> mentors, MentorRankingScope scope, CancellationToken cancellationToken)
     {
+        if (!Enum.IsDefined(scope)) throw new ArgumentOutOfRangeException(nameof(scope));
         cancellationToken.ThrowIfCancellationRequested();
         var projects = mentors.Select(x => x.MentorType).Distinct().ToDictionary(role => role,
-            role => MentorRankingFeatures.PrepareProject(model, projectText, role));
+            role => MentorRankingFeatures.PrepareProject(model, projectText, role, scope));
         var output = new Dictionary<Guid, MentorFitRanking>(mentors.Count);
         foreach (var mentor in mentors)
         {

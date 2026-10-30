@@ -20,10 +20,14 @@ public sealed class FileMentorFitRanker : IMentorFitRanker
     }
 
     public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
-        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken)
+        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken) =>
+        Rank(projectText, mentors, MentorRankingScope.MentorRole, cancellationToken);
+
+    public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
+        IReadOnlyCollection<MentorProfile> mentors, MentorRankingScope scope, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _scorer.Value.Rank(projectText, mentors, cancellationToken);
+        return _scorer.Value.Rank(projectText, mentors, scope, cancellationToken);
     }
 
     internal static MentorRankingModel ReadModel(string? path)

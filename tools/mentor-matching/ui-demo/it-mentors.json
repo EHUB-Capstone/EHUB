@@ -1,0 +1,132 @@
+[
+  {
+    "mentorRef": "IT001",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư backend, tập trung thiết kế dịch vụ và chất lượng phần mềm.",
+      "experience": "Có 8 năm phát triển backend bằng C# và ASP.NET Core. Thiết kế REST API cho hệ thống đơn hàng, quản lý giao dịch và kiểm soát đồng thời; sử dụng PostgreSQL, Entity Framework Core và kiểm thử tích hợp. Từng hướng dẫn nhóm mới về thiết kế hệ thống, phân quyền và xử lý lỗi trong dịch vụ .NET.",
+      "expertise": ["Backend", "Thiết kế hệ thống", "Kiểm thử tích hợp"],
+      "startupDomains": [],
+      "technologySkills": ["C#", ".NET", "ASP.NET Core", "PostgreSQL", "Entity Framework Core"],
+      "tags": ["API design", "Code review"]
+    }
+  },
+  {
+    "mentorRef": "IT002",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư frontend, xây dựng giao diện web có khả năng truy cập và dễ bảo trì.",
+      "experience": "Có 6 năm phát triển frontend bằng React và TypeScript. Xây dựng màn hình quản trị, biểu mẫu nhiều bước và thư viện thành phần dùng chung; xử lý trạng thái tải, lỗi và bộ nhớ đệm dữ liệu. Đào tạo nhóm về kiểm thử giao diện, accessibility, tối ưu hiệu năng và bàn giao thiết kế thành website responsive.",
+      "expertise": ["Frontend", "Web accessibility", "Thiết kế thành phần giao diện"],
+      "startupDomains": [],
+      "technologySkills": ["React", "TypeScript", "HTML", "CSS", "Playwright"],
+      "tags": ["Responsive web", "Frontend testing"]
+    }
+  },
+  {
+    "mentorRef": "IT003",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư ứng dụng di động đa nền tảng.",
+      "experience": "Có 7 năm phát triển ứng dụng di động cho Android và iOS; 4 năm làm Flutter và 3 năm tham gia sản phẩm React Native. Triển khai lưu dữ liệu offline, đồng bộ khi có mạng và thông báo nhắc lịch. Hướng dẫn nhóm kiểm thử trên thiết bị thật, theo dõi crash và chuẩn bị bản phát hành lên kho ứng dụng.",
+      "expertise": ["Ứng dụng di động", "Đồng bộ offline", "Kiểm thử thiết bị"],
+      "startupDomains": [],
+      "technologySkills": ["Flutter", "Dart", "React Native", "Android", "iOS"],
+      "tags": ["Mobile release", "Push notification"]
+    }
+  },
+  {
+    "mentorRef": "IT004",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư dữ liệu và cơ sở dữ liệu, có kinh nghiệm xây báo cáo phân tích.",
+      "experience": "Có 9 năm thiết kế cơ sở dữ liệu PostgreSQL và xử lý dữ liệu bằng SQL, Python. Xây quy trình ETL, kiểm tra chất lượng dữ liệu và mô hình dữ liệu phục vụ báo cáo; tối ưu truy vấn, index và phân quyền truy cập. Từng hướng dẫn nhóm phân tích dữ liệu cách định nghĩa chỉ số, đối chiếu số liệu nguồn và viết báo cáo có thể tái lập.",
+      "expertise": ["Cơ sở dữ liệu", "Phân tích dữ liệu", "Data engineering"],
+      "startupDomains": [],
+      "technologySkills": ["PostgreSQL", "SQL", "Python", "ETL", "Power BI"],
+      "tags": ["Data quality", "Query optimization"]
+    }
+  },
+  {
+    "mentorRef": "IT005",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư AI, chuyên hệ thống tìm kiếm và đánh giá mô hình ngôn ngữ.",
+      "experience": "Có 6 năm làm machine learning, trong đó 3 năm xây trợ lý tra cứu tài liệu bằng retrieval augmented generation. Triển khai AI Search, embedding, vector search và bộ đánh giá LLM Evaluation. Hướng dẫn nhóm tạo bộ câu hỏi kiểm thử, đo chất lượng truy hồi, kiểm tra câu trả lời có dẫn chứng và phân tích lỗi hallucination trước khi phát hành.",
+      "expertise": ["AI", "AI Search", "LLM Evaluation", "Retrieval augmented generation"],
+      "startupDomains": [],
+      "technologySkills": ["Python", "Machine learning", "Embeddings", "Vector search", "LLM"],
+      "tags": ["RAG", "Evaluation datasets"]
+    }
+  },
+  {
+    "mentorRef": "IT006",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư thị giác máy tính, làm việc với dữ liệu hình ảnh và kiểm tra mô hình.",
+      "experience": "Có 5 năm phát triển computer vision bằng Python và PyTorch. Thực hiện phân loại ảnh, phát hiện đối tượng và nhận diện lỗi từ hình ảnh; tổ chức gán nhãn, chia tập dữ liệu tránh rò rỉ và đánh giá độ chính xác theo từng loại lỗi. Từng hướng dẫn nhóm triển khai mô hình AI, kiểm tra ảnh chụp thiếu sáng và theo dõi sai lệch dữ liệu sau khi chạy thử.",
+      "expertise": ["Thị giác máy tính", "Phân loại ảnh", "Đánh giá mô hình AI"],
+      "startupDomains": [],
+      "technologySkills": ["Python", "PyTorch", "OpenCV", "Computer vision"],
+      "tags": ["Image annotation", "Model validation"]
+    }
+  },
+  {
+    "mentorRef": "IT007",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư cloud và DevOps, tập trung hạ tầng và triển khai dịch vụ.",
+      "experience": "Có 8 năm triển khai ứng dụng trên cloud AWS và Azure. Xây pipeline CI/CD, đóng gói Docker, quản lý Kubernetes và cấu hình hạ tầng bằng Terraform. Hướng dẫn nhóm thiết lập logging, monitoring, sao lưu, cảnh báo và quy trình rollback khi phát hành dịch vụ web; tối ưu tài nguyên theo mức sử dụng thực tế.",
+      "expertise": ["Cloud", "DevOps", "Hạ tầng và triển khai", "Site reliability"],
+      "startupDomains": [],
+      "technologySkills": ["AWS", "Azure", "Docker", "Kubernetes", "Terraform"],
+      "tags": ["CI/CD", "Monitoring", "Disaster recovery"]
+    }
+  },
+  {
+    "mentorRef": "IT008",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư bảo mật ứng dụng và kiểm thử an toàn phần mềm.",
+      "experience": "Có 7 năm làm application security và rà soát bảo mật ứng dụng web. Thực hiện threat modeling, kiểm thử phân quyền, kiểm tra IDOR, SQL injection và XSS trong phạm vi được phép. Đào tạo lập trình viên về OWASP, quản lý secret, xác thực OAuth và JWT; phối hợp sửa lỗ hổng, kiểm thử lại và theo dõi dependency có rủi ro.",
+      "expertise": ["Security", "Bảo mật ứng dụng", "Threat modeling", "Kiểm thử phân quyền"],
+      "startupDomains": [],
+      "technologySkills": ["OWASP", "OAuth", "JWT", "SAST", "DAST"],
+      "tags": ["Secure coding", "Security review"]
+    }
+  },
+  {
+    "mentorRef": "IT009",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: chuyên viên UX và phát triển sản phẩm số, phối hợp giữa thiết kế và kỹ thuật.",
+      "experience": "Có 6 năm thiết kế UX/UI cho phần mềm dịch vụ. Thực hiện phỏng vấn người dùng, lập hành trình sử dụng, tạo prototype trên Figma và kiểm thử usability. Hướng dẫn nhóm xác định phạm vi MVP, viết tiêu chí nghiệm thu và chuyển thiết kế thành frontend; theo dõi lỗi thao tác và cải thiện khả năng truy cập của biểu mẫu trên web.",
+      "expertise": ["UX/UI", "Product discovery", "Usability testing", "MVP"],
+      "startupDomains": [],
+      "technologySkills": ["Figma", "HTML", "CSS", "Frontend"],
+      "tags": ["Prototyping", "Accessibility", "User research"]
+    }
+  },
+  {
+    "mentorRef": "IT010",
+    "mentorType": "Academic",
+    "profile": {
+      "mentorType": "IT",
+      "bio": "Hồ sơ IT giả lập: kỹ sư hệ thống nhúng và kết nối thiết bị IoT.",
+      "experience": "Có 8 năm phát triển firmware C/C++ cho thiết bị nhúng và cảm biến. Xây kết nối IoT qua MQTT, xử lý mất mạng, hàng đợi dữ liệu và cập nhật firmware có kiểm tra phiên bản. Hướng dẫn nhóm kiểm thử thiết bị, ghi log chẩn đoán và xây backend Node.js tiếp nhận dữ liệu đo; đối chiếu số liệu thiết bị với cơ sở dữ liệu PostgreSQL.",
+      "expertise": ["Embedded systems", "IoT", "Firmware", "Backend"],
+      "startupDomains": [],
+      "technologySkills": ["C", "C++", "MQTT", "Node.js", "PostgreSQL"],
+      "tags": ["Sensor integration", "Device testing"]
+    }
+  }
+]

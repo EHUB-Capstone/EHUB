@@ -2,6 +2,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Mentoring;
 using EHub.Api.Models.Common;
 using EHub.Application.Features.Mentoring.ManageProfiles;
+using EHub.Application.Features.Mentoring.UploadCv;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentoring;
 using EHub.Shared.Constants;
@@ -16,7 +17,8 @@ namespace EHub.Api.Controllers;
 [Authorize]
 [Route("api/mentoring")]
 public sealed class MentoringController(ICurrentUserService currentUser, IMentorProfileHandler profiles,
-    IMentoringSessionHandler sessions, IAdminMentorProfileHandler adminProfiles) : ControllerBase
+    IMentoringSessionHandler sessions, IAdminMentorProfileHandler adminProfiles,
+    IAdminMentorCvUploadHandler adminCvUploads, IAdminMentorCvMatchHandler adminCvMatches) : ControllerBase
 {
     [HttpPost("profiles")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
@@ -46,6 +48,31 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
         if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
         await using var stream = file.OpenReadStream();
         return Respond(await profiles.UploadDocumentAsync(UserId, kind, stream, file.FileName, file.Length, ct));
+    }
+
+    [HttpPost("profiles/{mentorId:guid}/documents/cv")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<IActionResult> UploadManagedCv(Guid mentorId, [FromForm] FileUploadForm request,
+        [FromForm] bool replaceExisting = false, CancellationToken ct = default)
+    {
+        var file = request?.File;
+        if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
+        await using var stream = file.OpenReadStream();
+        return Respond(await adminCvUploads.UploadAsync(mentorId, stream, file.FileName, file.Length, replaceExisting, ct));
+    }
+
+    [HttpPost("profiles/cv-match")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<IActionResult> MatchManagedCv([FromForm] FileUploadForm request, CancellationToken ct)
+    {
+        var file = request?.File;
+        if (file is null) return BadRequest(ApiResponse<object>.FailureResponse("File is required.", ErrorCodes.CommonValidationError));
+        await using var stream = file.OpenReadStream();
+        return Respond(await adminCvMatches.MatchAsync(stream, file.FileName, file.Length, ct));
     }
 
     [HttpGet("profile/cv/preview")]
@@ -113,11 +140,15 @@ public sealed class MentoringController(ICurrentUserService currentUser, IMentor
         currentUser.Roles.Contains(SystemRoles.Student) ? SystemRoles.Student : string.Empty;
     private IActionResult Respond<T>(Result<T> result) => result.IsSuccess
         ? Ok(ApiResponse<T>.SuccessResponse(result.Value!))
+        : result.Error.Code == ErrorCodes.CommonUnauthorizedError
+            ? Unauthorized(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
         : result.Error.Code == ErrorCodes.ClassAccessDenied
             ? StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             : result.Error.Code is ErrorCodes.MentorMatchingUnavailable or ErrorCodes.MentorCvExtractionUnavailable
                 ? StatusCode(StatusCodes.Status503ServiceUnavailable, ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
             : result.Error.Code.EndsWith("NOT_FOUND", StringComparison.OrdinalIgnoreCase)
                 ? NotFound(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
+                : result.Error.Code.Contains("CONFLICT", StringComparison.OrdinalIgnoreCase)
+                    ? Conflict(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code))
                 : BadRequest(ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code));
 }

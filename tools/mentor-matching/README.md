@@ -66,6 +66,8 @@ Artifact hiện dùng `ehub-mentor-fit-v2`. Model v1 riêng không tương thíc
 
 ## Kiểm tra chất lượng
 
+Bộ [đánh giá offline](evaluate/README.md) có thể so cùng các snapshot hồ sơ và dự án cục bộ giữa hai artifact bằng scorer .NET thật, kèm hash, thứ hạng, NDCG@5, Recall@3 và ca từ chối gợi ý. Nhãn mô phỏng của assistant vẫn phải ghi rõ nguồn; không diễn giải chỉ số này thành độ chính xác thực tế. Giữ hồ sơ, nhãn và báo cáo cục bộ ngoài Git.
+
 Bộ [demo tên đề tài + mô tả](demo/README.md) có 14 CV hư cấu, 12 tình huống hồi quy và 10 mô tả mới ngoài curriculum. Báo cáo giữ lỗi/thứ hạng thực tế, có baseline v1 và hash đầu vào/model/mã nguồn. Trainer chỉ đọc curriculum hoặc JSONL được chỉ định, không đọc bộ demo. Các kỳ vọng demo vẫn do tác giả đặt ra, không phải đánh giá độc lập.
 
 Báo cáo có NDCG@5 và Recall@3; relevance từ 2 trở lên được coi là phù hợp trong phép đo. Các chỉ số trên bootstrap chỉ đo mức tái hiện tình huống giả lập. Không diễn giải chúng thành phần trăm độ chính xác trên dự án thật. Chưa có phép so sánh với BGE-M3/công thức 70/30 trên cùng dữ liệu thực tế.

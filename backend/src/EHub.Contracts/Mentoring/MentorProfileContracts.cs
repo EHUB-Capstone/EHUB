@@ -25,6 +25,14 @@ public sealed class MentorProfileResponse
     public int TotalAssignments { get; init; }
     public int TotalSessions { get; init; }
     public double? AverageFeedbackRating { get; init; }
+    public MentorHistorySummaryResponse? History { get; init; }
+}
+
+public sealed class MentorHistorySummaryResponse
+{
+    public int CompletedSessionCount { get; init; }
+    public int MentoredTeamCount { get; init; }
+    public int AchievementCount { get; init; }
 }
 
 public sealed class UpdateMentorProfileRequest
