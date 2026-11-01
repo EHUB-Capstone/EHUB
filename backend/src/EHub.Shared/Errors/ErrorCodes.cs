@@ -187,6 +187,11 @@ public static class ErrorCodes
     public const string WorkspaceUploadSessionExpired = "WORKSPACE_UPLOAD_SESSION_EXPIRED";
     public const string WorkspaceUploadObjectMissing = "WORKSPACE_UPLOAD_OBJECT_MISSING";
     public const string WorkspaceUploadTooManyPending = "WORKSPACE_UPLOAD_TOO_MANY_PENDING";
+    public const string WorkspaceSummaryDisabled = "WORKSPACE_SUMMARY_DISABLED";
+    public const string WorkspaceSummaryUnavailable = "WORKSPACE_SUMMARY_UNAVAILABLE";
+    public const string WorkspaceSummaryQueueFull = "WORKSPACE_SUMMARY_QUEUE_FULL";
+    public const string WorkspaceSummaryNoContent = "WORKSPACE_SUMMARY_NO_CONTENT";
+    public const string WorkspaceSummaryUnreadable = "WORKSPACE_SUMMARY_UNREADABLE";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

@@ -56,6 +56,7 @@ public static class DependencyInjection
         }
         else if (!string.Equals(matchingProvider, "Ollama", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Mentoring:MatchingProvider must be Ollama, Trained or Hybrid.");
+        AddCheckpointSummaries(services, configuration);
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
@@ -170,5 +171,43 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         return services;
+    }
+
+    /// <summary>
+    /// AI checkpoint summaries run on a local Ollama model only. <c>Summarization:Provider</c> is Disabled by default;
+    /// the queue worker is registered only when it is Ollama.
+    /// </summary>
+    private static void AddCheckpointSummaries(IServiceCollection services, IConfiguration configuration)
+    {
+        var provider = configuration["Summarization:Provider"] ?? "Disabled";
+        var enabled = string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase);
+        if (!enabled && !string.Equals(provider, "Disabled", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Summarization:Provider must be Disabled or Ollama.");
+        var maxInput = configuration.GetValue("Summarization:MaxInputCharacters", 20_000);
+        var timeoutMinutes = configuration.GetValue("Summarization:JobTimeoutMinutes", 10);
+        if (maxInput is < 1_000 or > 100_000)
+            throw new InvalidOperationException("Summarization:MaxInputCharacters must be between 1000 and 100000.");
+        if (timeoutMinutes is < 1 or > 14)
+            throw new InvalidOperationException("Summarization:JobTimeoutMinutes must be between 1 and 14 (the processing lease is 15).");
+
+        services.AddSingleton(new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummarySettings
+        {
+            Enabled = enabled, MaxInputCharacters = maxInput, JobTimeout = TimeSpan.FromMinutes(timeoutMinutes)
+        });
+        services.AddSingleton<ISubmissionTextExtractor, EHub.Infrastructure.Summarization.SubmissionTextExtractor>();
+        if (!enabled)
+        {
+            services.AddSingleton<ICheckpointSummarizer, EHub.Infrastructure.Summarization.DisabledCheckpointSummarizer>();
+            return;
+        }
+
+        var baseUrl = configuration["Summarization:BaseUrl"] ?? "http://localhost:11434";
+        services.AddHttpClient<ICheckpointSummarizer, EHub.Infrastructure.Summarization.OllamaCheckpointSummarizer>(client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/", UriKind.Absolute);
+            // The job timeout bounds a whole summary; this only stops a single stuck call.
+            client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
+        services.AddHostedService<CheckpointSummaryGenerationService>();
     }
 }

@@ -5,6 +5,7 @@ using EHub.Application.Features.Workspaces.CheckpointLinks;
 using EHub.Application.Features.Workspaces.CheckpointFeedback;
 using EHub.Application.Features.Workspaces.CheckpointEvaluations;
 using EHub.Application.Features.Workspaces.CheckpointRequirements;
+using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using EHub.Application.Features.Workspaces.CourseAssessmentEvaluations;
 using EHub.Application.Features.Workspaces.EvaluationReportExport;
 using EHub.Contracts.Common;
@@ -12,6 +13,8 @@ using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
+using EHub.Api.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -222,6 +225,31 @@ public sealed class WorkspaceCheckpointsController(
         var result = await handler.GetSummaryAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
         return result.IsSuccess
             ? Ok(ApiResponse<WorkspaceCheckpointEvaluationSummaryResponse>.SuccessResponse(result.Value, "Checkpoint evaluation retrieved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> GetAiSummary(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointSummaryHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        // The screen polls while a summary is queued; never serve a cached status.
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceCheckpointSummaryResponse>.SuccessResponse(result.Value, "AI summary retrieved."));
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    [EnableRateLimiting(CheckpointSummaryRateLimitPolicies.Request)]
+    public async Task<IActionResult> RequestAiSummary(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointSummaryHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.RequestAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? StatusCode(StatusCodes.Status202Accepted,
+                ApiResponse<WorkspaceCheckpointSummaryResponse>.SuccessResponse(result.Value, "AI summary queued."))
             : ToErrorResponse(result.Error);
     }
 
@@ -437,8 +465,11 @@ public sealed class WorkspaceCheckpointsController(
                         ? new ObjectResult(response) { StatusCode = StatusCodes.Status429TooManyRequests }
                     : error.Code == ErrorCodes.WorkspaceFilePreviewConversionFailed
                         ? new ObjectResult(response) { StatusCode = StatusCodes.Status422UnprocessableEntity }
-                        : error.Code == ErrorCodes.WorkspaceFilePreviewUnavailable
+                        : error.Code is ErrorCodes.WorkspaceFilePreviewUnavailable or ErrorCodes.WorkspaceSummaryDisabled
+                                or ErrorCodes.WorkspaceSummaryUnavailable or ErrorCodes.WorkspaceSummaryQueueFull
                             ? new ObjectResult(response) { StatusCode = StatusCodes.Status503ServiceUnavailable }
+                        : error.Code == ErrorCodes.WorkspaceSummaryNoContent
+                            ? new ObjectResult(response) { StatusCode = StatusCodes.Status422UnprocessableEntity }
                 : new BadRequestObjectResult(response);
     }
 
