@@ -749,9 +749,9 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             {
                 groupError = $"Team '{group.Key}' contains conflicting Project names.";
             }
-            else if (projectNames[0].Length is < 3 or > 200)
+            else if (projectNames[0].Length is < 3 or > 100)
             {
-                groupError = $"Project name for team '{group.Key}' must be between 3 and 200 characters.";
+                groupError = $"Project name for team '{group.Key}' must be between 3 and 100 characters.";
             }
             else if (zaloUrls.Length > 1)
             {
@@ -765,9 +765,9 @@ public sealed class PreviewImportStudentsCommandHandler : IPreviewImportStudents
             {
                 groupError = $"Team '{group.Key}' contains conflicting project descriptions.";
             }
-            else if (descriptions.Length == 1 && descriptions[0].Length is < 20 or > 2_000)
+            else if (descriptions.Length == 1 && descriptions[0].Length is < 20 or > 300)
             {
-                groupError = $"Project description for team '{group.Key}' must be between 20 and 2000 characters when provided.";
+                groupError = $"Project description for team '{group.Key}' must be between 20 and 300 characters when provided.";
             }
 
             if (groupError == null)

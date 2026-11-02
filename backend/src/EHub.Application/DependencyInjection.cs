@@ -171,6 +171,9 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.EvaluationReportExport.IEvaluationReportExportHandler, EHub.Application.Features.Workspaces.EvaluationReportExport.EvaluationReportExportHandler>();
 
         services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Manage.IShowcaseManageHandler, EHub.Application.Features.Showcase.Manage.ShowcaseManageHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Moderation.IShowcaseModerationHandler, EHub.Application.Features.Showcase.Moderation.ShowcaseModerationHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Query.IShowcaseQueryHandler, EHub.Application.Features.Showcase.Query.ShowcaseQueryHandler>();
 
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();

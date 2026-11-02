@@ -1,3 +1,4 @@
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_DESCRIPTION_MIN_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_NAME_MIN_LENGTH } from '../constants/projectProfile.ts';
 export interface ProjectWorkspaceDraft {
   teamName: string;
   projectName: string;
@@ -90,8 +91,8 @@ export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectW
   const descriptionLength = draft.description.trim().length;
   const zaloGroupUrl = draft.zaloGroupUrl.trim();
   if (teamNameLength < 3 || teamNameLength > 100) errors.teamName = 'Team name must be 3–100 characters.';
-  if (nameLength < 3 || nameLength > 200) errors.projectName = 'Project name must be 3–200 characters.';
-  if (descriptionLength < 20 || descriptionLength > 2_000) errors.description = 'Description must be 20–2000 characters.';
+  if (nameLength < PROJECT_NAME_MIN_LENGTH || nameLength > PROJECT_NAME_MAX_LENGTH) errors.projectName = `Project name must be ${PROJECT_NAME_MIN_LENGTH}–${PROJECT_NAME_MAX_LENGTH} characters.`;
+  if (descriptionLength < PROJECT_DESCRIPTION_MIN_LENGTH || descriptionLength > PROJECT_DESCRIPTION_MAX_LENGTH) errors.description = `Description must be ${PROJECT_DESCRIPTION_MIN_LENGTH}–${PROJECT_DESCRIPTION_MAX_LENGTH} characters.`;
   if (!zaloGroupUrl) {
     errors.zaloGroupUrl = 'Zalo group link is required.';
   } else {
@@ -164,8 +165,8 @@ export const validateProjectProfile = (draft: ProjectProfileDraft): ProjectProfi
     targetUsers: draft.targetUsers.trim().length,
     zaloGroupUrl: draft.zaloGroupUrl.trim().length,
   };
-  if (lengths.projectName < 3 || lengths.projectName > 200) errors.projectName = 'Project name must be 3–200 characters.';
-  if (lengths.description < 20 || lengths.description > 2_000) errors.description = 'Description must be 20–2000 characters.';
+  if (lengths.projectName < PROJECT_NAME_MIN_LENGTH || lengths.projectName > PROJECT_NAME_MAX_LENGTH) errors.projectName = `Project name must be ${PROJECT_NAME_MIN_LENGTH}–${PROJECT_NAME_MAX_LENGTH} characters.`;
+  if (lengths.description < PROJECT_DESCRIPTION_MIN_LENGTH || lengths.description > PROJECT_DESCRIPTION_MAX_LENGTH) errors.description = `Description must be ${PROJECT_DESCRIPTION_MIN_LENGTH}–${PROJECT_DESCRIPTION_MAX_LENGTH} characters.`;
   if (lengths.problem > 0 && (lengths.problem < 20 || lengths.problem > 2_000)) {
     errors.problem = 'Problem must be 20–2000 characters when provided.';
   }

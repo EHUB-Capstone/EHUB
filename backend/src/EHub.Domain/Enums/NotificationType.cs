@@ -17,5 +17,6 @@ public enum NotificationType
     DeadlineReminder,
     DeadlineOverdue,
     AccountApprovalRequested,
-    SystemAnnouncement
+    SystemAnnouncement,
+    ShowcaseReview
 }

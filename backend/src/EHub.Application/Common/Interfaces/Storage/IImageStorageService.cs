@@ -10,6 +10,12 @@ public interface IImageStorageService
         string contentType,
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    Task<Result<ImageUploadResult>> UploadShowcaseImageAsync(
+        Stream content,
+        string fileName,
+        Guid showcaseId,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record ImageUploadResult(string SecureUrl);

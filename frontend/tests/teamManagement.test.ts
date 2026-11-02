@@ -387,8 +387,8 @@ test('validates required project workspace information', () => {
     startupIndustryIds: [],
   });
   assert.equal(errors.teamName, 'Team name must be 3–100 characters.');
-  assert.equal(errors.projectName, 'Project name must be 3–200 characters.');
-  assert.equal(errors.description, 'Description must be 20–2000 characters.');
+  assert.equal(errors.projectName, 'Project name must be 3–100 characters.');
+  assert.equal(errors.description, 'Description must be 20–300 characters.');
   assert.equal(errors.zaloGroupUrl, 'Zalo group link is required.');
   assert.equal(errors.startupIndustryIds, 'Select between 1 and 3 startup industries.');
 });
