@@ -16,8 +16,10 @@ public sealed class LocalSemanticMentorReranker(HttpClient client, IConfiguratio
     private const int MaximumResponseBytes = 128 * 1024;
     public const string ModelId = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
     public const string ModelRevision = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42";
+    // PublicationOnly: a failed read is retried on the next request instead of being cached.
     private readonly Lazy<MentorRankingModel> policyModel = new(() =>
-        FileMentorFitRanker.ReadModel(configuration["Mentoring:TrainedModelPath"]));
+        FileMentorFitRanker.ReadModel(configuration["Mentoring:TrainedModelPath"]),
+        LazyThreadSafetyMode.PublicationOnly);
 
     public Task<IReadOnlyDictionary<Guid, MentorFitRanking>> RerankAsync(string projectText,
         IReadOnlyCollection<MentorProfile> mentors, IReadOnlyDictionary<Guid, MentorFitRanking> baseline,

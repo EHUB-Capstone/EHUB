@@ -54,6 +54,7 @@ readonly COMPOSE_PROJECT="ehub-production"
 # Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
 readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
 readonly TRAINED_OVERRIDE="${APP_DIR}/docker-compose.trained.yml"
+readonly TRAINED_MODEL_SOURCE="${APP_DIR}/backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json"
 readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
 readonly SEMANTIC_HEALTH_ATTEMPTS=24
 readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
@@ -401,6 +402,32 @@ check_semantic() {
     return 1
 }
 
+# /health/ready does not load the mentor model. A checkout under umask 077 once produced an image in
+# which only root could read it: every health check passed while AI allocation failed. This check runs
+# as the backend's own unprivileged user and compares the model with the one in the reviewed commit.
+check_trained_model() {
+    local expected model_path actual
+    if [[ ! -f "${TRAINED_MODEL_SOURCE}" ]]; then
+        echo "This commit has no packaged mentor model (${TRAINED_MODEL_SOURCE})." >&2
+        return 1
+    fi
+    expected="$(sha256sum "${TRAINED_MODEL_SOURCE}" | cut -d' ' -f1)"
+    if ! model_path="$("${compose[@]}" exec -T backend printenv Mentoring__TrainedModelPath)" \
+            || [[ -z "${model_path}" ]]; then
+        echo "The backend has no Mentoring__TrainedModelPath; the Trained override is not applied." >&2
+        return 1
+    fi
+    if ! actual="$("${compose[@]}" exec -T backend sha256sum "${model_path}" | cut -d' ' -f1)"; then
+        echo "The backend user cannot read the mentor model ${model_path}; AI allocation would fail." >&2
+        return 1
+    fi
+    if [[ "${actual}" != "${expected}" ]]; then
+        echo "The mentor model in the backend (${actual:0:12}) differs from the commit (${expected:0:12})." >&2
+        return 1
+    fi
+    echo "ok mentor model (sha256 ${expected:0:12})"
+}
+
 stage "health-check"
 check_endpoint /healthz
 check_endpoint /health/live
@@ -422,6 +449,11 @@ for service in "${services_to_verify[@]}"; do
         false
     fi
 done
+
+if [[ "${PROVIDER}" == "Trained" ]]; then
+    stage "verify-ai-model"
+    check_trained_model
+fi
 
 trap - ERR
 record "SUCCESS sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"

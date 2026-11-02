@@ -30,29 +30,46 @@ và dữ liệu demo không được mang lên production qua gói này. Model d
 1. Review thay đổi trên nhánh `AI`, đưa vào `develop` để deploy staging; release vào
    `main` để deploy production theo [quy trình hiện có](RELEASE_PROCESS.md).
    Script giữ kiểm tra nhánh, backup và staging gate; không deploy trực tiếp SHA chỉ có trên `AI`.
-2. **Cài lại hai script deploy đã review trên VPS.** Bản root-owned ở
-   `/opt/ehub/deploy/` không tự đổi khi pull Git. Gửi hai file mới tới `/tmp/`, rồi chạy:
+2. **Cài lại script deploy đã review trên VPS, trước khi đổi provider.** Bản root-owned ở
+   `/opt/ehub/deploy/` không tự đổi khi pull Git. Script cũ chỉ nhận `Ollama|Hybrid`: nếu đổi
+   `.env` trước, deploy dừng ở bước `preconditions` (an toàn, chưa backup/checkout, nhưng thất bại).
+   Kiểm tra bản đang cài, kết quả `0` là bản cũ:
 
    ```bash
-   bash -n /tmp/deploy-staging.sh
-   bash -n /tmp/deploy-production.sh
-   sudo install -m 0755 -o root -g root /tmp/deploy-staging.sh /opt/ehub/deploy/deploy-staging.sh
-   sudo install -m 0755 -o root -g root /tmp/deploy-production.sh /opt/ehub/deploy/deploy-production.sh
+   grep -c -i trained /opt/ehub/deploy/deploy-staging.sh
+   grep -c verify-ai-model /opt/ehub/deploy/deploy-staging.sh
    ```
 
-   Xem cách gửi file trong [STAGING_CD.md](STAGING_CD.md) và [PRODUCTION_CD.md](PRODUCTION_CD.md).
-   Entry script và sudoers không cần đổi cho lần này.
-3. Trong `.env.staging` hoặc `.env.production` **chỉ trên VPS**, đặt đúng một dòng:
+   Khi commit đã nằm trong checkout staging (đã merge vào `develop` và staging đã deploy),
+   cài thẳng từ checkout đó; tree production phải bằng staging nên dùng cùng nguồn:
 
-   ```dotenv
-   MENTOR_MATCHING_PROVIDER=Trained
+   ```bash
+   bash -n /opt/ehub/staging/app/scripts/staging/deploy-staging.sh
+   bash -n /opt/ehub/staging/app/scripts/production/deploy-production.sh
+   sudo install -m 0755 -o root -g root /opt/ehub/staging/app/scripts/staging/deploy-staging.sh /opt/ehub/deploy/deploy-staging.sh
+   sudo install -m 0755 -o root -g root /opt/ehub/staging/app/scripts/production/deploy-production.sh /opt/ehub/deploy/deploy-production.sh
    ```
 
+   Khi chưa merge, gửi file đã review tới `/tmp/` như [STAGING_CD.md](STAGING_CD.md) và
+   [PRODUCTION_CD.md](PRODUCTION_CD.md). Entry script và sudoers không cần đổi.
+3. Trong `.env.staging` hoặc `.env.production` **chỉ trên VPS**, **sửa** dòng provider đang có
+   (file đã có `MENTOR_MATCHING_PROVIDER=Ollama`; thêm dòng thứ hai làm deploy thất bại):
+
+   ```bash
+   sudo sed -i 's/^MENTOR_MATCHING_PROVIDER=.*/MENTOR_MATCHING_PROVIDER=Trained/' /opt/ehub/staging/app/.env.staging
+   sudo grep -c '^MENTOR_MATCHING_PROVIDER=' /opt/ehub/staging/app/.env.staging
+   ```
+
+   Lệnh thứ hai phải in `1`. Với production thay đường dẫn bằng `/opt/ehub/app/.env.production`.
    Giữ nguyên các cấu hình database, storage, email và xác thực đang dùng.
    File `.env.*.example` giữ mặc định Ollama cho các môi trường chưa chuyển provider.
-4. Deploy qua workflow hiện có. Backend/frontend được build từ commit release,
-   model đi cùng image backend. Thay đổi AI lần này không thêm migration;
-   script vẫn chạy các migration khác thuộc release theo quy trình hiện có.
+4. **Chạy deploy thủ công.** Sửa `.env` không phải là push nên không kích hoạt workflow:
+   GitHub Actions → **Deploy Staging** → **Run workflow** trên `develop` (để trống SHA);
+   production dùng **Deploy Production** với SHA đang chạy. Backend/frontend được build từ
+   commit release, model đi cùng image backend. Không có migration cho thay đổi AI.
+
+Với production, nên tách hai lần: release code khi vẫn để `Ollama`, kiểm tra ổn định,
+sau đó mới đổi dòng provider và deploy lại cùng SHA.
 
 Khi chạy Compose thủ công, `MENTOR_MATCHING_PROVIDER` là lựa chọn của **script deploy**,
 không tự kích hoạt override. Các lệnh cho backend phải thêm
@@ -60,20 +77,52 @@ không tự kích hoạt override. Các lệnh cho backend phải thêm
 
 ## 3. Kiểm tra sau deploy
 
-Log deploy phải có `AI provider: Trained`. Ví dụ kiểm tra trên production:
+Log deploy phải có `AI provider: Trained` và `ok mentor model (sha256 de1e87462b7a)` ở bước
+`verify-ai-model`. Bước này chạy bằng user không phải root của backend và so checksum với commit;
+nếu thất bại, Discord báo `Failed at stage: verify-ai-model` trong khi site vẫn chạy.
+
+Kiểm tra thủ công trên staging:
+
+```bash
+cd /opt/ehub/staging/app
+sudo docker compose --project-name ehub-staging --env-file .env.staging \
+  -f docker-compose.staging.yml -f docker-compose.trained.yml \
+  exec -T backend sh -c 'printenv Mentoring__MatchingProvider Mentoring__TrainedModelPath; ls -ln /app/Mentoring/Models/; sha256sum /app/Mentoring/Models/allocation-model.json'
+```
+
+Trên production:
 
 ```bash
 cd /opt/ehub/app
 sudo docker compose --project-name ehub-production --env-file .env.production \
   -f docker-compose.production.yml -f docker-compose.trained.yml \
-  exec -T backend printenv Mentoring__MatchingProvider Mentoring__TrainedModelPath
-sudo docker compose --project-name ehub-production --env-file .env.production \
-  -f docker-compose.production.yml -f docker-compose.trained.yml \
-  exec -T backend sha256sum /app/Mentoring/Models/allocation-model.json
+  exec -T backend sh -c 'printenv Mentoring__MatchingProvider Mentoring__TrainedModelPath; ls -ln /app/Mentoring/Models/; sha256sum /app/Mentoring/Models/allocation-model.json'
 ```
 
-Kết quả phải là `Trained`, đúng đường dẫn và checksum ở mục 1. Chỉ kiểm tra hai
-biến trên; không xuất toàn bộ environment hoặc cấu hình Compose chứa secret.
+Kết quả phải là `Trained`, đúng đường dẫn, file `-rw-r--r--` và checksum ở mục 1. **Không** thêm
+`-u 0`: lệnh phải chạy bằng đúng user của ứng dụng thì mới phát hiện lỗi quyền đọc. Chỉ kiểm tra
+hai biến trên; không xuất toàn bộ environment hoặc cấu hình Compose chứa secret.
+
+### Chẩn đoán nhanh
+
+| Thông báo trên giao diện | Nguyên nhân thường gặp |
+|---|---|
+| *Dịch vụ AI phân bổ mentor tạm thời chưa sẵn sàng* | Backend không nạp được model (sai đường dẫn, không đọc được file) hoặc Ollama không phản hồi khi đang ở chế độ `Ollama`. Log backend có dòng `The mentor ranking model could not be loaded` kèm nguyên nhân. |
+| *AI chưa hoàn tất phân bổ trong thời gian cho phép* | Quá 45 giây, thường gặp ở chế độ `Ollama` trên CPU khi phải tính lại embedding. |
+| Preview chạy nhưng điểm 0 | Thiếu dữ liệu: hồ sơ/CV mentor, tên/mô tả dự án của team. |
+
+```bash
+sudo docker compose --project-name ehub-staging --env-file .env.staging \
+  -f docker-compose.staging.yml -f docker-compose.trained.yml \
+  logs --since 30m backend | grep -A 3 'mentor ranking model'
+```
+
+Lỗi nạp model không bị lưu lại: sửa xong file thì yêu cầu kế tiếp nạp lại, không cần restart backend.
+
+**Sự cố 02/11/2026 trên staging:** script deploy đặt `umask 077`, nên file model mới trong checkout
+có quyền `0600` và image chép nguyên quyền đó. Backend (user không phải root) không đọc được model.
+Từ bản sửa này Dockerfile chạy `chmod -R a+rX` trên output publish, CI build lại image với model
+`0600` để kiểm tra, và script deploy có bước `verify-ai-model`.
 
 Đăng nhập admin, bảo đảm mentor có tài khoản/hồ sơ hoạt động và tham gia kỳ đang chọn,
 sau đó vào **Subject Management → Lecturers & Mentors → AI preview**. Tên/mô tả dự án,
@@ -82,9 +131,17 @@ Preview không ghi phân công; admin bấm chốt mới lưu. Điểm 0 vẫn c
 `/health/ready` không kiểm tra chất lượng hoặc nạp model, nên phải thử AI preview thực tế.
 
 Script không tự dừng container Ollama đã chạy từ trước; việc đổi provider không
-giải phóng RAM của container đó. Nếu Ollama còn phục vụ chức năng khác, giữ nó theo nhu cầu.
-Quay lại `Ollama`/`Hybrid` bằng cách đổi một dòng provider rồi deploy lại; không sửa
-database hoặc xóa volume. Model tùy chỉnh sau này có thể dùng `Mentoring__TrainedModelPath`
+giải phóng RAM của container đó (tối đa 3 GB mỗi môi trường). Ở chế độ `Trained` không chức năng
+nào gọi Ollama, nên có thể dừng nó mà vẫn giữ volume để rollback:
+
+```bash
+cd /opt/ehub/staging/app
+sudo docker compose --project-name ehub-staging --env-file .env.staging \
+  -f docker-compose.staging.yml stop ollama
+```
+
+Quay lại `Ollama`/`Hybrid` bằng cách đổi một dòng provider rồi deploy lại; script tự khởi động
+Ollama và `bge-m3` vẫn còn trong volume. Không sửa database hoặc xóa volume. Model tùy chỉnh sau này có thể dùng `Mentoring__TrainedModelPath`
 với file và mount riêng; cần tạo lại backend khi thay artifact.
 
 ## 4. Kiểm tra gói ngày 02/11/2026
