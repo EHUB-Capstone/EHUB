@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Mentoring.TrainedRanking;
@@ -11,6 +12,31 @@ namespace EHub.ApplicationTests.Features.Mentoring;
 
 public sealed class MentorTrainedRankerTests
 {
+    [Fact]
+    public void PackagedAllocationArtifactMatchesTheDemoAndRanksItsExpandedTopics()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Mentoring", "Models", "allocation-model.json");
+        var bytes = File.ReadAllBytes(path);
+        Convert.ToHexString(SHA256.HashData(bytes)).Should()
+            .Be("DE1E87462B7A49487D4EEBE847FF429F79831AD77E33BF81773456394349679B");
+        var model = MentorRankingModel.FromJson(File.ReadAllText(path));
+        model.SuitabilityValidated.Should().BeFalse();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Mentoring:TrainedModelPath"] = path
+        }).Build();
+        var relevant = new MentorProfile { Experience = "Quản lý sự kiện và tổ chức sự kiện" };
+        var unrelated = new MentorProfile { Experience = "PostgreSQL database" };
+
+        var result = new FileMentorFitRanker(configuration).Rank(
+            "Dịch vụ tổ chức sự kiện, cần cố vấn lập kế hoạch sự kiện",
+            [relevant, unrelated], MentorRankingScope.AllSpecialties, default);
+
+        result[relevant.Id].HasEvidence.Should().BeTrue();
+        result[relevant.Id].Score.Should().BeGreaterThan(result[unrelated.Id].Score);
+        result[unrelated.Id].HasEvidence.Should().BeFalse();
+    }
+
     [Fact]
     public void OfflineTrainerAndRuntimeProduceTheSameFeatureVectors()
     {

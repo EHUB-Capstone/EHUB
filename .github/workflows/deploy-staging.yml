@@ -20,6 +20,7 @@ on:
       - docker/**
       - docker-compose.staging.yml
       - docker-compose.hybrid.yml
+      - docker-compose.trained.yml
       - tools/mentor-matching/semantic/**
       - scripts/staging/backup-postgres.sh
   workflow_dispatch:

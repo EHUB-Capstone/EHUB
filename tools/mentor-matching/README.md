@@ -45,6 +45,8 @@ Seed mặc định là 17. Cùng dữ liệu/seed sinh cùng hệ số; thời g
 
 ## Chạy trong E-HUB
 
+Để triển khai đúng model đã dùng trong demo từ Git, xem [Trained trên VPS](../../docs/deployment/TRAINED_MENTOR_VPS.md). Artifact `allocation-model.json` được đóng gói cùng backend; script staging/production hỗ trợ `MENTOR_MATCHING_PROVIDER=Trained` và không cần copy model riêng lên VPS.
+
 Mặc định vẫn là provider `Ollama` để tránh tự thay hành vi môi trường đang chạy. Để thử chế độ đã train khi chạy backend local:
 
 ```powershell
