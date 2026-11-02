@@ -94,8 +94,9 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         using var response = await client.SendAsync(request);
         var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
 
+        // The global ValidationFilter rejects a structurally invalid body before the handler runs.
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body!.Code.Should().Be(ErrorCodes.ShowcaseValidationError);
+        body!.Code.Should().Be(ErrorCodes.CommonValidationError);
     }
 
     private static SaveShowcaseRequest Payload(Guid lineageId) => new()
