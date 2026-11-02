@@ -1,4 +1,4 @@
-import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_DESCRIPTION_MIN_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_NAME_MIN_LENGTH } from '../constants/projectProfile';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_DESCRIPTION_MIN_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_NAME_MIN_LENGTH } from '../constants/projectProfile.ts';
 export interface ProjectWorkspaceDraft {
   teamName: string;
   projectName: string;
