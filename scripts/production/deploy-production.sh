@@ -17,10 +17,11 @@
 # There is no automatic rollback: a migration may already have been applied, and rolling back
 # code onto a newer schema is unsafe (see docs/deployment/PRODUCTION_VPS.md section 8).
 #
-# AI provider switch: the line MENTOR_MATCHING_PROVIDER=Ollama|Hybrid in .env.production (a missing
+# AI provider switch: MENTOR_MATCHING_PROVIDER=Ollama|Trained|Hybrid in .env.production (a missing
 # line means Ollama). Hybrid adds docker-compose.hybrid.yml and the mentor-semantic container,
 # which shares the backend's network namespace and is therefore recreated with the backend.
-# Switching back to Ollama removes a leftover mentor-semantic container.
+# Trained adds docker-compose.trained.yml with a model packaged in the backend image; it does
+# not start Ollama or pull an embedding model. Leaving Hybrid removes mentor-semantic.
 # Exit codes: 0 success, 64 bad usage/SHA, 75 another deployment held the lock too long,
 #             77 not root, anything else = failed stage (see EHUB_DEPLOY_RESULT).
 set -Eeuo pipefail
@@ -52,6 +53,7 @@ readonly MIN_FREE_GB=8
 readonly COMPOSE_PROJECT="ehub-production"
 # Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
 readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
+readonly TRAINED_OVERRIDE="${APP_DIR}/docker-compose.trained.yml"
 readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
 readonly SEMANTIC_HEALTH_ATTEMPTS=24
 readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
@@ -194,9 +196,10 @@ else
 fi
 case "${provider_value,,}" in
     ""|ollama) PROVIDER="Ollama" ;;
+    trained) PROVIDER="Trained" ;;
     hybrid) PROVIDER="Hybrid" ;;
     *)
-        echo "MENTOR_MATCHING_PROVIDER must be Ollama or Hybrid." >&2
+        echo "MENTOR_MATCHING_PROVIDER must be Ollama, Trained or Hybrid." >&2
         false
         ;;
 esac
@@ -297,6 +300,12 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
         false
     fi
     compose+=(-f "${SEMANTIC_OVERRIDE}")
+elif [[ "${PROVIDER}" == "Trained" ]]; then
+    if [[ ! -f "${TRAINED_OVERRIDE}" ]]; then
+        echo "This commit has no Trained support file (docker-compose.trained.yml)." >&2
+        false
+    fi
+    compose+=(-f "${TRAINED_OVERRIDE}")
 fi
 
 stage "validate-compose"
@@ -312,12 +321,18 @@ fi
 # --no-recreate: a running database or model server is left alone even if its Compose
 # definition changed; changing those is a deliberate manual operation.
 stage "start-dependencies"
-"${compose[@]}" up -d --no-recreate --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" postgres ollama
+dependencies=(postgres)
+if [[ "${PROVIDER}" != "Trained" ]]; then
+    dependencies+=(ollama)
+fi
+"${compose[@]}" up -d --no-recreate --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" "${dependencies[@]}"
 
-stage "embedding-model"
-models="$("${compose[@]}" exec -T ollama ollama list)"
-if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
-    "${compose[@]}" exec -T ollama ollama pull bge-m3
+if [[ "${PROVIDER}" != "Trained" ]]; then
+    stage "embedding-model"
+    models="$("${compose[@]}" exec -T ollama ollama list)"
+    if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
+        "${compose[@]}" exec -T ollama ollama pull bge-m3
+    fi
 fi
 
 # One-time initializer: applies committed EF Core migrations and idempotent seeders, then exits.

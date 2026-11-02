@@ -11,6 +11,7 @@ on:
       - docker-compose.production.yml
       - docker-compose.staging.yml
       - docker-compose.hybrid.yml
+      - docker-compose.trained.yml
       - backend/**
       - frontend/**
       - deploy/**
@@ -30,6 +31,7 @@ on:
       - docker-compose.production.yml
       - docker-compose.staging.yml
       - docker-compose.hybrid.yml
+      - docker-compose.trained.yml
       - backend/**
       - frontend/**
       - deploy/**
@@ -122,6 +124,12 @@ jobs:
 
       - name: Validate staging configuration with the Hybrid override
         run: docker compose --project-name ehub-staging --env-file .env.staging.example -f docker-compose.staging.yml -f docker-compose.hybrid.yml config --quiet
+
+      - name: Validate production configuration with the Trained override
+        run: docker compose --env-file .env.production.example -f docker-compose.production.yml -f docker-compose.trained.yml config --quiet
+
+      - name: Validate staging configuration with the Trained override
+        run: docker compose --project-name ehub-staging --env-file .env.staging.example -f docker-compose.staging.yml -f docker-compose.trained.yml config --quiet
 
   build-images:
     name: Build ${{ matrix.component }} image
