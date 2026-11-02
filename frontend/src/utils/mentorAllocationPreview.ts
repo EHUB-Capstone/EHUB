@@ -19,6 +19,10 @@ export interface SlotView {
   currentMentorName: string | null;
   /** True when a manual row in this slot ends the current assignment. */
   replacesCurrent: boolean;
+  fitScore?: number | null;
+  reasons?: string[];
+  history?: MentorAllocationRowPreview['history'];
+  needsReview?: boolean;
 }
 
 export interface TeamGridRow {
@@ -62,6 +66,14 @@ const stateOfRow = (row: MentorAllocationRowPreview): SlotState => {
 
 const compareNatural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+
+const isAiSuggestionNeedingReview = (preview: MentorAllocationPreview, row: MentorAllocationRowPreview) =>
+  preview.strategy === 'Ai' && (row.source ?? 'Allocated') === 'Allocated' && row.fitScore === 0;
+
+/** Filled AI suggestions without matching evidence still need an administrator's review. */
+export function getAiReviewAssignments(preview: MentorAllocationPreview): MentorAllocationRowPreview[] {
+  return preview.assignments.filter(row => isAiSuggestionNeedingReview(preview, row));
+}
 
 /**
  * One row per team with the final state of its two mentor slots: a mentor that is already there, one kept from the
@@ -109,6 +121,10 @@ export function buildTeamGrid(preview: MentorAllocationPreview): TeamGridRow[] {
       currentMentorProfileId: row.replacesMentorProfileId ?? current.currentMentorProfileId,
       currentMentorName: row.replacesMentorName ?? current.currentMentorName,
       replacesCurrent: Boolean(row.replacesAssignmentId),
+      fitScore: row.fitScore,
+      reasons: row.reasons,
+      history: row.history,
+      needsReview: isAiSuggestionNeedingReview(preview, row),
     });
   }
 
@@ -216,7 +232,7 @@ export function filterTeamGrid(
   const term = filters.search.trim().toLowerCase();
   return grid.filter(row => {
     if (filters.classCode !== ALL_CLASSES && row.classCode !== filters.classCode) return false;
-    const needsAttention = row.enterprise.state === 'unfilled' || row.academic.state === 'unfilled';
+    const needsAttention = [row.enterprise, row.academic].some(slot => slot.state === 'unfilled' || slot.needsReview);
     const changed = [row.enterprise, row.academic].some(slot => slot.state !== 'existing');
     if (filters.filter === 'attention' && !needsAttention) return false;
     if (filters.filter === 'changed' && !changed) return false;

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AutoSizeTextarea from '../ui/AutoSizeTextarea';
 import { ChevronDown, ChevronUp, RotateCcw, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -464,14 +465,15 @@ export default function RubricForm({
 
       <div className="mt-3">
         <label htmlFor={`overall-feedback-${checkpointNumber}`} className="mb-1 block text-xs font-semibold text-slate-600">Overall feedback (optional)</label>
-        <textarea
+        <AutoSizeTextarea
           id={`overall-feedback-${checkpointNumber}`}
-          rows={compact ? 2 : 3}
+          minRows={compact ? 2 : 3}
+          maxRows={12}
           value={overallFeedback}
           onChange={(event) => setOverallFeedback(event.target.value)}
           disabled={readOnly}
           placeholder="General feedback for the team..."
-          className="block w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary disabled:bg-slate-50"
+          className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50"
         />
       </div>
 
@@ -482,12 +484,13 @@ export default function RubricForm({
             {rubricScores.map((item, index) => (
               <label key={item.criterionKey} className="block">
                 <span className="mb-1 block">{item.criterionName}</span>
-                <input
-                  type="text"
+                <AutoSizeTextarea
+                  minRows={1}
+                  maxRows={6}
                   value={item.comment}
                   onChange={(event) => updateRow(index, { comment: event.target.value })}
                   disabled={readOnly}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm leading-6"
                 />
               </label>
             ))}

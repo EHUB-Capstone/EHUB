@@ -106,6 +106,7 @@ public sealed class GetCurrentUserQueryHandler : IGetCurrentUserQueryHandler
             Roles = roles,
             Status = user.Status.ToString(),
             MajorCode = majorCode,
+            MentorType = user.MentorProfile?.Type.ToString(),
             AvatarUrl = user.AvatarUrl
         };
 

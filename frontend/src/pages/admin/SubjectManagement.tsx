@@ -905,6 +905,7 @@ const SubjectManagement = () => {
           </div>
 
           <MentorAdministrationCard
+            key={`${selectedSemester} ${selectedYear}`}
             semesterId={selectedSemesterRecord?.id}
             semesterLabel={`${selectedSemester} ${selectedYear}`}
             temporaryMentorCount={staff.filter(member => member.isTemporary && member.status === 'Active').length}

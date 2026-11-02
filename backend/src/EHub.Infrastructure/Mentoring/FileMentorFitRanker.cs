@@ -4,6 +4,7 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Mentoring.TrainedRanking;
 using EHub.Domain.Entities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.Infrastructure.Mentoring;
 
@@ -12,18 +13,38 @@ public sealed class FileMentorFitRanker : IMentorFitRanker
 {
     private readonly Lazy<TrainedMentorFitScorer> _scorer;
 
-    public FileMentorFitRanker(IConfiguration configuration)
+    public FileMentorFitRanker(IConfiguration configuration, ILogger<FileMentorFitRanker>? logger = null)
     {
         var path = configuration["Mentoring:TrainedModelPath"];
-        _scorer = new Lazy<TrainedMentorFitScorer>(() => new TrainedMentorFitScorer(ReadModel(path)),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+        // PublicationOnly does not cache a failed load: once the file is fixed, the next request
+        // succeeds without restarting the backend. A second concurrent load is cheap.
+        _scorer = new Lazy<TrainedMentorFitScorer>(() => Load(path, logger),
+            LazyThreadSafetyMode.PublicationOnly);
     }
 
     public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
-        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken)
+        IReadOnlyCollection<MentorProfile> mentors, CancellationToken cancellationToken) =>
+        Rank(projectText, mentors, MentorRankingScope.MentorRole, cancellationToken);
+
+    public IReadOnlyDictionary<Guid, MentorFitRanking> Rank(string projectText,
+        IReadOnlyCollection<MentorProfile> mentors, MentorRankingScope scope, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _scorer.Value.Rank(projectText, mentors, cancellationToken);
+        return _scorer.Value.Rank(projectText, mentors, scope, cancellationToken);
+    }
+
+    private static TrainedMentorFitScorer Load(string? path, ILogger? logger)
+    {
+        try
+        {
+            return new TrainedMentorFitScorer(ReadModel(path));
+        }
+        catch (MentorFitRankerUnavailableException exception)
+        {
+            // Operators need the cause (e.g. a model only root can read); the API never sees it.
+            logger?.LogError(exception, "The mentor ranking model could not be loaded. AI mentor allocation is unavailable.");
+            throw;
+        }
     }
 
     internal static MentorRankingModel ReadModel(string? path)
@@ -49,7 +70,7 @@ public sealed class FileMentorFitRanker : IMentorFitRanker
             InvalidDataException or ArgumentException or SecurityException)
         {
             // Do not expose configured paths or artifact content in an API error.
-            throw new MentorFitRankerUnavailableException();
+            throw new MentorFitRankerUnavailableException(exception);
         }
     }
 }

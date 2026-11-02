@@ -36,6 +36,14 @@ public sealed class WorkspaceCheckpointsController(
             Role,
             cancellationToken);
 
+        // Checkpoint feedback can change while this screen is open. Never let a cached overview
+        // replace a newly submitted mentor comment after a refresh or a realtime reconnect.
+        if (result.IsSuccess)
+        {
+            Response.Headers.CacheControl = "private, no-store";
+            Response.Headers.Pragma = "no-cache";
+        }
+
         return ToResponse(result);
     }
 
@@ -184,11 +192,27 @@ public sealed class WorkspaceCheckpointsController(
         return ToFeedbackResponse(result);
     }
 
+    [HttpPut("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/feedback/{feedbackId:guid}")]
+    public async Task<IActionResult> UpdateFeedback(Guid teamId, int checkpointNumber, Guid feedbackId, [FromBody] UpdateWorkspaceCheckpointFeedbackRequest request, [FromServices] ICheckpointFeedbackHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.UpdateAsync(teamId, checkpointNumber, feedbackId, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointFeedbackResponse>.SuccessResponse(result.Value, "Feedback updated."))
+            : ToErrorResponse(result.Error);
+    }
+
     [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/feedback/{feedbackId:guid}")]
     public async Task<IActionResult> DeleteFeedback(Guid teamId, int checkpointNumber, Guid feedbackId, [FromServices] ICheckpointFeedbackHandler handler, CancellationToken cancellationToken)
     {
         var result = await handler.DeleteAsync(teamId, checkpointNumber, feedbackId, UserId, Role, cancellationToken);
         return result.IsSuccess ? Ok(ApiResponse<object>.SuccessResponse(new { }, "Feedback deleted.")) : ToErrorResponse(result.Error);
+    }
+
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/feedback/{feedbackId:guid}/export")]
+    public async Task<IActionResult> ExportFeedback(Guid teamId, int checkpointNumber, Guid feedbackId, [FromServices] ICheckpointFeedbackHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.ExportAsync(teamId, checkpointNumber, feedbackId, UserId, Role, cancellationToken);
+        return result.IsSuccess ? File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName) : ToErrorResponse(result.Error);
     }
 
     [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/evaluation-summary")]

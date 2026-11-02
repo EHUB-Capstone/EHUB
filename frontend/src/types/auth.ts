@@ -7,6 +7,8 @@ export interface UserSummary {
   roles: string[];
   status: string;
   majorCode: string | null;
+  /** Enterprise is a business mentor; Academic is the IT/technical mentor slot. */
+  mentorType?: 'Enterprise' | 'Academic' | null;
   avatarUrl?: string | null;
 }
 
@@ -37,6 +39,7 @@ export interface CurrentUser {
   roles: string[];
   status: string;
   majorCode: string | null;
+  mentorType?: 'Enterprise' | 'Academic' | null;
   avatarUrl?: string | null;
 }
 

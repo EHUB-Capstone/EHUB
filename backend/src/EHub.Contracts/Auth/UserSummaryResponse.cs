@@ -11,5 +11,6 @@ public sealed class UserSummaryResponse
     public IReadOnlyCollection<string> Roles { get; init; } = [];
     public string Status { get; init; } = string.Empty;
     public string? MajorCode { get; init; }
+    public string? MentorType { get; init; }
     public string? AvatarUrl { get; init; }
 }

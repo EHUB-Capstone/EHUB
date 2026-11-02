@@ -45,6 +45,8 @@ Seed mặc định là 17. Cùng dữ liệu/seed sinh cùng hệ số; thời g
 
 ## Chạy trong E-HUB
 
+Để triển khai đúng model đã dùng trong demo từ Git, xem [Trained trên VPS](../../docs/deployment/TRAINED_MENTOR_VPS.md). Artifact `allocation-model.json` được đóng gói cùng backend; script staging/production hỗ trợ `MENTOR_MATCHING_PROVIDER=Trained` và không cần copy model riêng lên VPS.
+
 Mặc định vẫn là provider `Ollama` để tránh tự thay hành vi môi trường đang chạy. Để thử chế độ đã train khi chạy backend local:
 
 ```powershell
@@ -65,6 +67,8 @@ Loader kiểm tra phiên bản, thứ tự đặc trưng, kích thước tối �
 Artifact hiện dùng `ehub-mentor-fit-v2`. Model v1 riêng không tương thích với cách trích bằng chứng mới: train lại bằng trainer hiện tại hoặc dùng model v2 nhúng sẵn. Không đổi tên schema trong file v1 để bỏ qua kiểm tra, vì hệ số được học với cách xử lý đầu vào khác.
 
 ## Kiểm tra chất lượng
+
+Bộ [đánh giá offline](evaluate/README.md) có thể so cùng các snapshot hồ sơ và dự án cục bộ giữa hai artifact bằng scorer .NET thật, kèm hash, thứ hạng, NDCG@5, Recall@3 và ca từ chối gợi ý. Nhãn mô phỏng của assistant vẫn phải ghi rõ nguồn; không diễn giải chỉ số này thành độ chính xác thực tế. Giữ hồ sơ, nhãn và báo cáo cục bộ ngoài Git.
 
 Bộ [demo tên đề tài + mô tả](demo/README.md) có 14 CV hư cấu, 12 tình huống hồi quy và 10 mô tả mới ngoài curriculum. Báo cáo giữ lỗi/thứ hạng thực tế, có baseline v1 và hash đầu vào/model/mã nguồn. Trainer chỉ đọc curriculum hoặc JSONL được chỉ định, không đọc bộ demo. Các kỳ vọng demo vẫn do tác giả đặt ra, không phải đánh giá độc lập.
 

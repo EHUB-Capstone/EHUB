@@ -11,10 +11,11 @@
 #             77 not root, anything else = failed stage (see EHUB_DEPLOY_RESULT).
 # A failure never rolls back automatically: a migration may already have been applied.
 #
-# AI provider switch: the line MENTOR_MATCHING_PROVIDER=Ollama|Hybrid in .env.staging (a missing
+# AI provider switch: MENTOR_MATCHING_PROVIDER=Ollama|Trained|Hybrid in .env.staging (a missing
 # line means Ollama). Hybrid adds docker-compose.hybrid.yml and the mentor-semantic container,
 # which shares the backend's network namespace and is therefore recreated with the backend.
-# Switching back to Ollama removes a leftover mentor-semantic container.
+# Trained adds docker-compose.trained.yml with a model packaged in the backend image; it does
+# not start Ollama or pull an embedding model. Leaving Hybrid removes mentor-semantic.
 set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -41,6 +42,8 @@ readonly MIN_FREE_GB=8
 readonly COMPOSE_PROJECT="ehub-staging"
 # Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
 readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
+readonly TRAINED_OVERRIDE="${APP_DIR}/docker-compose.trained.yml"
+readonly TRAINED_MODEL_SOURCE="${APP_DIR}/backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json"
 readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
 readonly SEMANTIC_HEALTH_ATTEMPTS=24
 readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
@@ -166,9 +169,10 @@ else
 fi
 case "${provider_value,,}" in
     ""|ollama) PROVIDER="Ollama" ;;
+    trained) PROVIDER="Trained" ;;
     hybrid) PROVIDER="Hybrid" ;;
     *)
-        echo "MENTOR_MATCHING_PROVIDER must be Ollama or Hybrid." >&2
+        echo "MENTOR_MATCHING_PROVIDER must be Ollama, Trained or Hybrid." >&2
         false
         ;;
 esac
@@ -230,6 +234,12 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
         false
     fi
     compose+=(-f "${SEMANTIC_OVERRIDE}")
+elif [[ "${PROVIDER}" == "Trained" ]]; then
+    if [[ ! -f "${TRAINED_OVERRIDE}" ]]; then
+        echo "This commit has no Trained support file (docker-compose.trained.yml)." >&2
+        false
+    fi
+    compose+=(-f "${TRAINED_OVERRIDE}")
 fi
 
 stage "validate-compose"
@@ -244,12 +254,18 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
 fi
 
 stage "start-dependencies"
-"${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" postgres ollama
+dependencies=(postgres)
+if [[ "${PROVIDER}" != "Trained" ]]; then
+    dependencies+=(ollama)
+fi
+"${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" "${dependencies[@]}"
 
-stage "embedding-model"
-models="$("${compose[@]}" exec -T ollama ollama list)"
-if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
-    "${compose[@]}" exec -T ollama ollama pull bge-m3
+if [[ "${PROVIDER}" != "Trained" ]]; then
+    stage "embedding-model"
+    models="$("${compose[@]}" exec -T ollama ollama list)"
+    if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
+        "${compose[@]}" exec -T ollama ollama pull bge-m3
+    fi
 fi
 
 # One-time initializer: applies committed EF Core migrations and idempotent seeders, then exits.
@@ -318,6 +334,32 @@ check_semantic() {
     return 1
 }
 
+# /health/ready does not load the mentor model. A checkout under umask 077 once produced an image in
+# which only root could read it: every health check passed while AI allocation failed. This check runs
+# as the backend's own unprivileged user and compares the model with the one in the reviewed commit.
+check_trained_model() {
+    local expected model_path actual
+    if [[ ! -f "${TRAINED_MODEL_SOURCE}" ]]; then
+        echo "This commit has no packaged mentor model (${TRAINED_MODEL_SOURCE})." >&2
+        return 1
+    fi
+    expected="$(sha256sum "${TRAINED_MODEL_SOURCE}" | cut -d' ' -f1)"
+    if ! model_path="$("${compose[@]}" exec -T backend printenv Mentoring__TrainedModelPath)" \
+            || [[ -z "${model_path}" ]]; then
+        echo "The backend has no Mentoring__TrainedModelPath; the Trained override is not applied." >&2
+        return 1
+    fi
+    if ! actual="$("${compose[@]}" exec -T backend sha256sum "${model_path}" | cut -d' ' -f1)"; then
+        echo "The backend user cannot read the mentor model ${model_path}; AI allocation would fail." >&2
+        return 1
+    fi
+    if [[ "${actual}" != "${expected}" ]]; then
+        echo "The mentor model in the backend (${actual:0:12}) differs from the commit (${expected:0:12})." >&2
+        return 1
+    fi
+    echo "ok mentor model (sha256 ${expected:0:12})"
+}
+
 stage "health-check"
 check_endpoint /healthz
 check_endpoint /health/live
@@ -342,6 +384,11 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
         echo "Running mentor-semantic image is ${running_image}, expected the requested commit." >&2
         false
     fi
+fi
+
+if [[ "${PROVIDER}" == "Trained" ]]; then
+    stage "verify-ai-model"
+    check_trained_model
 fi
 
 trap - ERR

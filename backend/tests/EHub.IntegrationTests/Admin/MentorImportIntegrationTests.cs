@@ -1074,6 +1074,53 @@ public sealed class MentorImportIntegrationTests(CustomWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task MasterImport_ShouldCreateThirtyEnterpriseMentors_WhenAcademicSheetHasOnlyHeaders()
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var emails = Enumerable.Range(1, 30).Select(index => $"enterprise-only-{suffix}-{index}@example.test").ToArray();
+        byte[] bytes;
+        using (var workbook = new XLWorkbook())
+        {
+            var enterprise = workbook.Worksheets.Add("DS Mentor_FA26");
+            enterprise.Cell(1, 1).Value = "STT";
+            enterprise.Cell(1, 2).Value = "Họ và tên";
+            enterprise.Cell(1, 8).Value = "Email";
+            for (var index = 0; index < emails.Length; index++)
+            {
+                enterprise.Cell(index + 2, 1).Value = index + 1;
+                enterprise.Cell(index + 2, 2).Value = $"Synthetic Enterprise Only {index + 1}";
+                enterprise.Cell(index + 2, 8).Value = emails[index];
+            }
+            var academic = workbook.Worksheets.Add("Mentor IT_FA26");
+            academic.Cell(1, 1).Value = "STT";
+            academic.Cell(1, 2).Value = "Họ tên";
+            academic.Cell(1, 3).Value = "Email công việc";
+            using var content = new MemoryStream();
+            workbook.SaveAs(content);
+            bytes = content.ToArray();
+        }
+        var token = await GetAdminTokenAsync();
+        using var previewRequest = CreateMasterPreviewRequest(bytes, token);
+        using var previewResponse = await _client.SendAsync(previewRequest);
+        previewResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = (await previewResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportPreviewResponse>>())!.Data!;
+        preview.TotalRows.Should().Be(30);
+        preview.ErrorCount.Should().Be(0);
+        preview.CreateCount.Should().Be(30);
+        preview.Rows.Should().OnlyContain(row => row.MentorType == nameof(MentorType.Enterprise));
+
+        using var commitResponse = await CommitImportAsync(token, preview.SessionId);
+        commitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var commit = (await commitResponse.Content.ReadFromJsonAsync<ApiResponse<MentorImportCommitResponse>>())!.Data!;
+        commit.CreatedCount.Should().Be(30);
+        commit.DraftSavedCount.Should().Be(0);
+        using var scope = factory.Services.CreateScope();
+        var profiles = await scope.ServiceProvider.GetRequiredService<AppDbContext>().MentorProfiles.AsNoTracking()
+            .Where(profile => emails.Contains(profile.User.Email)).ToListAsync();
+        profiles.Should().HaveCount(30).And.OnlyContain(profile => profile.Type == MentorType.Enterprise);
+    }
+
+    [Fact]
     public async Task MasterImportPreview_ShouldIgnoreLeftoverRows_BelowTheMentorList()
     {
         // Empty but formatted rows far below the data, as left by a re-saved Excel file or a Google Sheets export.

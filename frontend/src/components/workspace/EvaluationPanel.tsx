@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardCheck, Loader2, Sparkles, History, Layers3 } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, ClipboardCheck, Loader2, Sparkles, History, Layers3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { evaluationApi } from '../../api/evaluationApi';
 import RubricForm from './RubricForm';
@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { MentorEvaluationCard } from '../evaluation/PerformanceLevelBadge';
 import PerformanceLevelBadge from '../evaluation/PerformanceLevelBadge';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import { createRequestGate } from '../../utils/requestGate';
 
 const CHECKPOINTS = [1, 2, 3, 4];
 const EMPTY_EVALUATION = {};
@@ -84,6 +85,36 @@ function EvaluationHistoryEntries({ history, compact = false }) {
   );
 }
 
+// History is long and rarely needed while grading, so it starts collapsed. The whole title row is the toggle.
+function CollapsibleHistory({ history, compact = false }) {
+  const [open, setOpen] = useState(false);
+  const contentId = useId();
+  return (
+    <section className={compact
+      ? 'mt-3 rounded-xl border border-slate-200 bg-white text-xs text-slate-600'
+      : 'rounded-2xl border border-slate-200 bg-white shadow-sm'}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls={contentId}
+        className={`flex w-full items-center justify-between gap-3 text-left ${compact ? 'rounded-xl p-3' : 'rounded-2xl p-4'}`}
+      >
+        <span className="flex items-center gap-2">
+          <History className="h-4 w-4 text-primary" />
+          <span className="font-bold text-slate-900">Evaluation history ({history.length})</span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
+      </button>
+      {open && (
+        <div id={contentId} className={compact ? 'px-3 pb-3' : 'px-4 pb-4'}>
+          <EvaluationHistoryEntries history={history} compact={compact} />
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function EvaluationPanel({
   teamId,
   proposalId,
@@ -120,45 +151,59 @@ export default function EvaluationPanel({
     setSelectedCheckpoint(Number(checkpointNumber));
   }, [checkpointNumber]);
 
-  // Only the latest request may update state, so a slow background refresh cannot overwrite a newer checkpoint.
-  const latestRequestRef = useRef(0);
+  // A response may only update the screen while it still belongs to the team/checkpoint on display, and never
+  // after a newer response was applied. Older same-checkpoint responses are still shown as they arrive, so a slow
+  // duplicate request cannot keep the loading placeholder up.
+  const [gate] = useState(createRequestGate);
   const hasDataRef = useRef(false);
 
   // Silent refreshes (realtime events, reconnects, after saving) keep the form mounted. Showing the loading
   // placeholder would unmount RubricForm and discard whatever the lecturer has typed but not saved yet.
-  const fetchCheckpointData = useCallback(async ({ silent = false } = {}) => {
-    if (!teamId) return;
-    const requestId = ++latestRequestRef.current;
-    try {
-      if (!silent) {
-        hasDataRef.current = false;
-        setLoading(true);
-        setError(null);
-      }
-      const res = await evaluationApi.getCheckpointSummary(teamId, selectedCheckpoint);
-      if (requestId !== latestRequestRef.current) return;
-      if (res.success) {
-        hasDataRef.current = true;
-        setCheckpointData(res.data.checkpoint || null);
-        setEvaluations(res.data.evaluations || []);
-        setHistory(res.data.history || []);
-        setSummary(res.data.summary || null);
-      }
-    } catch (err) {
-      if (requestId !== latestRequestRef.current) return;
-      // A failed background refresh keeps what is already on screen instead of replacing the form with an error.
-      if (silent && hasDataRef.current) return;
-      const message = err.response?.data?.message || err.response?.data?.error || 'Failed to load evaluations';
-      setError(message);
-    } finally {
-      if (requestId === latestRequestRef.current) setLoading(false);
+  // `reuseInFlight` lets the redundant calls made while the panel opens (strict-mode remount, the immediate
+  // "connected" callback) share one request: the evaluation summary is an expensive query on the server.
+  const fetchCheckpointData = useCallback(({ silent = false, reuseInFlight = false } = {}) => {
+    if (!teamId) return Promise.resolve();
+    const key = `${teamId}:${selectedCheckpoint}`;
+    const shared = reuseInFlight ? gate.reuse(key) : null;
+    if (shared) return shared;
+
+    const requestSeq = gate.begin(key);
+    if (!silent) {
+      hasDataRef.current = false;
+      setLoading(true);
+      setError(null);
     }
-  }, [selectedCheckpoint, teamId]);
+    const promise = (async () => {
+      try {
+        const res = await evaluationApi.getCheckpointSummary(teamId, selectedCheckpoint);
+        if (!gate.accepts(key, requestSeq)) return;
+        if (res.success) {
+          gate.markApplied(requestSeq);
+          hasDataRef.current = true;
+          setCheckpointData(res.data.checkpoint || null);
+          setEvaluations(res.data.evaluations || []);
+          setHistory(res.data.history || []);
+          setSummary(res.data.summary || null);
+        }
+      } catch (err) {
+        if (!gate.isActive(key)) return;
+        // A failed background refresh keeps what is already on screen instead of replacing the form with an error.
+        if (silent && hasDataRef.current) return;
+        const message = err.response?.data?.message || err.response?.data?.error || 'Failed to load evaluations';
+        setError(message);
+      } finally {
+        gate.release(promise);
+        if (gate.isActive(key)) setLoading(false);
+      }
+    })();
+    gate.track(key, promise);
+    return promise;
+  }, [gate, selectedCheckpoint, teamId]);
 
   useEffect(() => {
     // Fetching checkpoint data is the side effect owned by this panel.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchCheckpointData();
+    void fetchCheckpointData({ reuseInFlight: true });
   }, [fetchCheckpointData]);
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
@@ -168,7 +213,7 @@ export default function EvaluationPanel({
       void fetchCheckpointData({ silent: true });
     }
   }, (reconnected) => {
-    if (reconnected) void fetchCheckpointData({ silent: true });
+    if (reconnected) void fetchCheckpointData({ silent: true, reuseInFlight: true });
   }), [fetchCheckpointData, selectedCheckpoint, teamId]);
 
   const saveEvaluation = async (formData) => {
@@ -240,10 +285,7 @@ export default function EvaluationPanel({
           checkpointTitle={checkpointTitle}
           compact
         />
-        <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
-          <div className="mb-2 flex items-center gap-2"><History className="h-4 w-4 text-primary" /><h3 className="font-bold text-slate-900">Evaluation history ({history.length})</h3></div>
-          <EvaluationHistoryEntries history={history} compact />
-        </section>
+        <CollapsibleHistory history={history} compact />
       </div>
     );
   }
@@ -347,17 +389,7 @@ export default function EvaluationPanel({
           </section>
         )}
 
-        {canViewHistory && <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
-            <h3 className="font-bold text-slate-900">Evaluation history</h3>
-          </div>
-          {history.length === 0 ? (
-            <EvaluationHistoryEntries history={history} />
-          ) : (
-            <EvaluationHistoryEntries history={history} />
-          )}
-        </section>}
+        {canViewHistory && <CollapsibleHistory history={history} />}
       </div>
     );
   }

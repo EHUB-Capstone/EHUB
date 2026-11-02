@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Domain.Entities;
 
 namespace EHub.Application.Features.Mentoring.TrainedRanking;
@@ -49,11 +50,12 @@ public static class MentorSemanticEvidence
         if (text.Length >= 12) yield return text;
     }
 
-    public static bool CanPromote(MentorRankingModel model, string projectText, MentorProfile mentor)
+    public static bool CanPromote(MentorRankingModel model, string projectText, MentorProfile mentor,
+        MentorRankingScope scope = MentorRankingScope.MentorRole)
     {
-        var project = MentorRankingFeatures.PrepareProject(model, projectText, mentor.MentorType);
+        var project = MentorRankingFeatures.PrepareProject(model, projectText, mentor.MentorType, scope);
         // Domain similarity alone must never invent a need for a technical mentor.
-        if (mentor.MentorType == "IT" && project.CoreTopics.Count == 0) return false;
+        if (scope == MentorRankingScope.MentorRole && mentor.MentorType == "IT" && project.CoreTopics.Count == 0) return false;
         var denied = MentorEvidenceText.Excluded(mentor.Experience + "\n" + mentor.Bio);
         // Excluded() still has the denial words. Read topic aliases without treating the
         // clause itself as a request, so an old declared tag cannot override the denial.
@@ -63,7 +65,7 @@ public static class MentorSemanticEvidence
                 RegexOptions.CultureInvariant, Timeout)))) return false;
         var excludedProject = MentorEvidenceText.Excluded(projectText);
         // Explicitly excluding the entire business slot takes priority over semantic similarity.
-        return mentor.MentorType != "Business" || !Regex.IsMatch(excludedProject,
+        return scope == MentorRankingScope.AllSpecialties || mentor.MentorType != "Business" || !Regex.IsMatch(excludedProject,
             @"\b(?:kinh doanh|business|thuong mai)\b", RegexOptions.CultureInvariant, Timeout);
     }
 }

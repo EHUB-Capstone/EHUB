@@ -110,6 +110,7 @@ public static class MentorAllocationStrategies
 {
     public const string Balanced = "Balanced";
     public const string Random = "Random";
+    public const string Ai = "Ai";
 }
 
 // A hand edit of one team slot in the allocation preview.
@@ -131,7 +132,7 @@ public sealed class PreviewMentorAllocationRequest
     public int? Seed { get; init; }
     // Mentors without an account that take part in the semester can be proposed too. Turn off to use registered mentors only.
     public bool IncludeTemporaryMentors { get; init; } = true;
-    // "Balanced" (default) or "Random".
+    // "Balanced" (default), "Random" or "Ai".
     public string Strategy { get; init; } = MentorAllocationStrategies.Balanced;
     public IReadOnlyCollection<MentorAllocationEdit> Edits { get; init; } = Array.Empty<MentorAllocationEdit>();
 }
@@ -139,6 +140,16 @@ public sealed class PreviewMentorAllocationRequest
 public sealed class CommitMentorAllocationRequest
 {
     public Guid SessionId { get; init; }
+}
+
+public sealed class MentorAllocationHistoryResponse
+{
+    public int BaseFitScore { get; init; }
+    public int CompletedSessionCount { get; init; }
+    public int MentoredTeamCount { get; init; }
+    public int AchievementCount { get; init; }
+    public int HistoryBonus { get; init; }
+    public int AchievementBonus { get; init; }
 }
 
 public sealed class MentorAllocationRowPreview
@@ -155,6 +166,10 @@ public sealed class MentorAllocationRowPreview
     public string MentorName { get; init; } = string.Empty;
     public string MentorEmail { get; init; } = string.Empty;
     public int ResultingSemesterLoad { get; init; }
+    // Relative AI fit score, not a probability. Manual and retained rows have no score.
+    public int? FitScore { get; init; }
+    public MentorAllocationHistoryResponse? History { get; init; }
+    public IReadOnlyCollection<string> Reasons { get; init; } = Array.Empty<string>();
     // "Retained" keeps the mentor of the previous semester's team; "Allocated" is a newly chosen mentor.
     public string Source { get; init; } = MentorAllocationSources.Allocated;
     // Set when this row replaces the mentor currently in the slot. The old assignment is ended when the preview is confirmed.

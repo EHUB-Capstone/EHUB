@@ -212,6 +212,8 @@ function authUser(user: MockUser) {
     roles: [backendRole(user.role)],
     status: backendStatus[user.status],
     majorCode: user.major,
+    mentorType: user.mentorType ?? null,
+    avatarUrl: user.avatar,
   };
 }
 

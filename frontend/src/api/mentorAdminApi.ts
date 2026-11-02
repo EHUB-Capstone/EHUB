@@ -1,4 +1,4 @@
-import axiosClient from './axiosClient';
+import axiosClient from './axiosClient.ts';
 import type {
   IncompleteMentor,
   IncompleteMentorList,
@@ -56,15 +56,17 @@ export const mentorAdminApi = {
     strategy: MentorAllocationStrategy = 'Balanced',
     edits: MentorAllocationEdit[] = [],
     includeTemporaryMentors = true,
+    classIds: string[] = [],
+    signal?: AbortSignal,
   ): Promise<ApiEnvelope<MentorAllocationPreview>> =>
     axiosClient.post('/admin/mentors/allocations/preview', {
       semesterId,
-      classIds: [],
+      classIds,
       strategy,
       edits,
       includeTemporaryMentors,
       ...(seed === undefined ? {} : { seed }),
-    }),
+    }, { signal, ...(strategy === 'Ai' ? { timeout: 60_000 } : {}) }),
 
   /** Downloads the semester assignment workbook: sheets EXE101, EXE201 and a mentor summary. */
   exportAssignments: (semesterId: string): Promise<Blob> =>

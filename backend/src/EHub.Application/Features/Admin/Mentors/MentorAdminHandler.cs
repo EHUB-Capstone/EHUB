@@ -25,7 +25,8 @@ public sealed class MentorAdminHandler(
     IPasswordHasher passwordHasher,
     IDateTimeProvider dateTimeProvider,
     IUnitOfWork unitOfWork,
-    ILogger<MentorAdminHandler> logger) : IMentorAdminHandler
+    ILogger<MentorAdminHandler> logger,
+    IMentorRecommendationRanker? recommendationRanker = null) : IMentorAdminHandler
 {
     private const long MaximumFileSize = 5 * 1024 * 1024;
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
@@ -425,7 +426,7 @@ public sealed class MentorAdminHandler(
     {
         if (!TryGetAdminId(out var adminId)) return Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
         if (!TryParseStrategy(request.Strategy, out var strategy))
-            return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorAllocationInvalid, $"The allocation strategy must be {MentorAllocationStrategies.Balanced} or {MentorAllocationStrategies.Random}.");
+            return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorAllocationInvalid, $"The allocation strategy must be {MentorAllocationStrategies.Balanced}, {MentorAllocationStrategies.Random} or {MentorAllocationStrategies.Ai}.");
         if (request.SemesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == request.SemesterId, cancellationToken))
             return Failure<MentorAllocationPreviewResponse>(ErrorCodes.SemesterNotFound, "The selected semester was not found.");
 
@@ -502,8 +503,31 @@ public sealed class MentorAdminHandler(
             .Concat(retainedKept.Select(item => new AllocationExistingAssignment(item.Team.Id, item.Mentor.Id, item.Slot)))
             .Concat(excluded.Select(item => new AllocationExistingAssignment(item.TeamId, Guid.Empty, item.Slot)))
             .ToArray();
-        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy);
-        var warnings = outcome.Warnings;
+        IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>? rankings = null;
+        if (strategy == AllocationStrategy.Ai)
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(45));
+            try
+            {
+                rankings = await RankAllocationAsync(teams, mentors, engineExisting, deadline.Token);
+                deadline.Token.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
+                    "AI chưa hoàn tất phân bổ trong thời gian cho phép. Vui lòng thử lại với phạm vi lớp nhỏ hơn.");
+            }
+            catch (Exception exception) when (exception is MentorEmbeddingUnavailableException or MentorFitRankerUnavailableException)
+            {
+                return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
+                    "Dịch vụ AI phân bổ mentor tạm thời chưa sẵn sàng. Vui lòng thử lại.");
+            }
+        }
+        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings);
+        var warnings = outcome.Warnings.ToList();
+        if (strategy == AllocationStrategy.Ai && mentors.Any(mentor => mentor.IsTemporary))
+            warnings.Add("AI chỉ đề xuất mentor có hồ sơ chuyên môn. Mentor chưa có tài khoản vẫn có thể được chọn thủ công.");
 
         var loadBefore = active.GroupBy(item => item.MentorProfileId).ToDictionary(group => group.Key, group => group.Count());
         var runningLoads = remaining.GroupBy(item => item.MentorProfileId).ToDictionary(group => group.Key, group => group.Count());
@@ -542,6 +566,13 @@ public sealed class MentorAdminHandler(
             MentorType = proposal.Mentor.Type.ToString(), MentorProfileId = proposal.Mentor.Id, IsTemporary = proposal.Mentor.IsTemporary,
             MentorName = proposal.Mentor.Name, MentorEmail = proposal.Mentor.Email,
             ResultingSemesterLoad = proposal.ResultingLoad, Source = MentorAllocationSources.Allocated,
+            FitScore = proposal.Ranking?.Score, Reasons = proposal.Ranking?.Reasons ?? [],
+            History = proposal.Ranking?.History is { } history ? new MentorAllocationHistoryResponse
+            {
+                BaseFitScore = history.BaseFitScore, CompletedSessionCount = history.CompletedSessionCount,
+                MentoredTeamCount = history.MentoredTeamCount, AchievementCount = history.AchievementCount,
+                HistoryBonus = history.HistoryBonus, AchievementBonus = history.AchievementBonus
+            } : null,
             MentorLoadBefore = loadBefore.GetValueOrDefault(proposal.Mentor.Id)
         }));
         var skipped = retention.Skipped.Select(ToSkippedPreview).ToList();
@@ -621,9 +652,56 @@ public sealed class MentorAdminHandler(
     {
         strategy = AllocationStrategy.Balanced;
         if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), MentorAllocationStrategies.Balanced, StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(value.Trim(), MentorAllocationStrategies.Ai, StringComparison.OrdinalIgnoreCase))
+        {
+            strategy = AllocationStrategy.Ai;
+            return true;
+        }
         if (!string.Equals(value.Trim(), MentorAllocationStrategies.Random, StringComparison.OrdinalIgnoreCase)) return false;
         strategy = AllocationStrategy.Random;
         return true;
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankAllocationAsync(
+        IReadOnlyCollection<AllocationTeam> teams, IReadOnlyCollection<AllocationMentor> mentors,
+        IReadOnlyCollection<AllocationExistingAssignment> existing, CancellationToken cancellationToken)
+    {
+        var occupied = existing.Select(item => (item.TeamId, item.Slot)).ToHashSet();
+        var candidateTypes = mentors.Where(mentor => !mentor.IsTemporary).Select(mentor => mentor.Type).Distinct().ToArray();
+        var pendingTeamIds = teams.Where(team => candidateTypes.Any(slot => !occupied.Contains((team.Id, slot))))
+            .Select(team => team.Id).ToArray();
+        var mentorIds = mentors.Where(mentor => !mentor.IsTemporary).Select(mentor => mentor.Id).ToArray();
+        var rankings = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
+        if (pendingTeamIds.Length == 0 || mentorIds.Length == 0) return rankings;
+
+        var projects = await context.Teams.AsNoTracking().Where(team => pendingTeamIds.Contains(team.Id))
+            .Select(team => new
+            {
+                team.Id,
+                Title = team.Project != null && !string.IsNullOrWhiteSpace(team.Project.Name) ? team.Project.Name
+                    : team.ProjectDirection != null && !string.IsNullOrWhiteSpace(team.ProjectDirection.Title)
+                        ? team.ProjectDirection.Title : team.TeamName,
+                Description = team.Project != null && !string.IsNullOrWhiteSpace(team.Project.Description)
+                    ? team.Project.Description : team.Description
+            }).ToListAsync(cancellationToken);
+        if (projects.Count == 0) return rankings;
+        if (recommendationRanker is null) throw new MentorFitRankerUnavailableException();
+
+        var profiles = await context.MentorProfiles.AsNoTracking().Include(profile => profile.User).Include(profile => profile.Experiences)
+            .Where(profile => mentorIds.Contains(profile.Id)).ToListAsync(cancellationToken);
+        var cache = new Dictionary<string, IReadOnlyDictionary<Guid, MentorFitRanking>>(StringComparer.Ordinal);
+        foreach (var project in projects)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var projectText = project.Description + "\n" + project.Title;
+            if (!cache.TryGetValue(projectText, out var scores))
+            {
+                scores = await recommendationRanker.RankForAllocationAsync(projectText, profiles, cancellationToken);
+                cache[projectText] = scores;
+            }
+            rankings[project.Id] = scores;
+        }
+        return rankings;
     }
 
     private static MentorAllocationConflictPreview ToConflictPreview(ManualConflict conflict, Guid? currentAssignmentId) => new()
@@ -664,6 +742,7 @@ public sealed class MentorAdminHandler(
         catch (JsonException) { return await ReleaseAllocationFailure(session, ErrorCodes.MentorAllocationSessionInvalid, "The allocation session is damaged. Generate a new preview.", cancellationToken); }
         if (rows.Length == 0)
             return await ReleaseAllocationFailure(session, ErrorCodes.MentorAllocationSessionInvalid, "The allocation session contains no assignments. Generate a new preview.", cancellationToken);
+        var hasAiSuggestions = rows.Any(row => row.FitScore.HasValue);
         try
         {
             var response = await unitOfWork.ExecuteInSerializableTransactionAsync(async token =>
@@ -671,7 +750,8 @@ public sealed class MentorAdminHandler(
                 var teamIds = rows.Select(item => item.TeamId).Distinct().ToArray();
                 var mentorIds = rows.Where(item => !item.IsTemporary).Select(item => item.MentorProfileId).Distinct().ToArray();
                 var draftIds = rows.Where(item => item.IsTemporary).Select(item => item.MentorProfileId).Distinct().ToArray();
-                var teams = await context.Teams.Include(item => item.Class).Where(item => teamIds.Contains(item.Id)).ToListAsync(token);
+                var teams = await context.Teams.Include(item => item.Class).Include(item => item.Project)
+                    .Where(item => teamIds.Contains(item.Id)).ToListAsync(token);
                 var mentors = await context.MentorProfiles.Include(item => item.User).Where(item => mentorIds.Contains(item.Id)).ToListAsync(token);
                 var drafts = await context.MentorImportDrafts.Where(item => draftIds.Contains(item.Id)).ToListAsync(token);
                 var participantDraftIds = await context.SemesterTemporaryMentors.AsNoTracking()
@@ -710,7 +790,8 @@ public sealed class MentorAdminHandler(
                     var staleMentor = row.IsTemporary
                         ? temporaryDraft is null || temporaryDraft.Status != MentorImportDraftStatus.NeedsCompletion || temporaryDraft.Type != type || !participantDraftIds.Contains(temporaryDraft.Id)
                         : mentor is null || mentor.Type != type || mentor.Status != MentorProfileStatus.Active || mentor.User.Status != UserStatus.Active || !staffUserIds.Contains(mentor.UserId);
-                    if (team is null || team.Status != TeamStatus.Active || team.Class.SemesterId != session.SemesterId || staleMentor)
+                    if (team is null || team.Status != TeamStatus.Active || team.ClassId != row.ClassId ||
+                        team.Class.Status != ClassStatus.Active || team.Class.SemesterId != session.SemesterId || staleMentor)
                         throw new MentorAdminConflictException("The allocation preview is stale.");
 
                     var occupant = active.FirstOrDefault(item => item.TeamId == row.TeamId && item.Slot == type);
@@ -783,6 +864,7 @@ public sealed class MentorAdminHandler(
                         MentorAllocationSources.Retained => "Retained from the previous semester's team",
                         MentorAllocationSources.Manual when row.ReplacesAssignmentId is not null => $"Replaced {row.ReplacesMentorName}: {row.ReplaceReason!.Trim()}",
                         MentorAllocationSources.Manual => "Assigned manually from the allocation preview",
+                        _ when row.FitScore is not null => "AI-assisted semester allocation",
                         _ => "Balanced semester allocation"
                     };
                     if (row.IsTemporary)
@@ -796,7 +878,8 @@ public sealed class MentorAdminHandler(
                     }
                     context.MentorAssignments.Add(new MentorAssignment
                     {
-                        TeamId = row.TeamId, MentorProfileId = row.MentorProfileId, AssignedById = adminId,
+                        TeamId = row.TeamId, ProjectId = teams.First(team => team.Id == row.TeamId).Project?.Id,
+                        MentorProfileId = row.MentorProfileId, AssignedById = adminId,
                         AssignedAt = now, Status = MentorAssignmentStatus.Active, Slot = type, Note = assignmentNote,
                         CreatedBy = adminId
                     });
@@ -809,6 +892,9 @@ public sealed class MentorAdminHandler(
                         OccurredAtUtc = now, DetailsJson = JsonSerializer.Serialize(new
                         {
                             session.Id, session.Seed, AssignmentCount = group.Count(),
+                            AiAcceptedBy = hasAiSuggestions ? (Guid?)adminId : null,
+                            AiAcceptedAtUtc = hasAiSuggestions ? (DateTime?)now : null,
+                            AiAssignmentCount = group.Count(item => item.FitScore.HasValue),
                             RetainedCount = group.Count(item => item.Source == MentorAllocationSources.Retained),
                             ManualCount = group.Count(item => item.Source == MentorAllocationSources.Manual),
                             ReplacedCount = group.Count(item => item.ReplacesAssignmentId is not null)

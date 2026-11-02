@@ -187,7 +187,8 @@ public sealed class RefreshTokenCommandHandler : IRefreshTokenCommandHandler
                 Email = user.Email,
                 Roles = roles,
                 Status = user.Status.ToString(),
-                MajorCode = majorCode
+                MajorCode = majorCode,
+                MentorType = user.MentorProfile?.Type.ToString()
             }
         };
 

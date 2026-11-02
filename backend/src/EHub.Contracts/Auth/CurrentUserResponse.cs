@@ -11,5 +11,7 @@ public sealed class CurrentUserResponse
     public IReadOnlyCollection<string> Roles { get; init; } = [];
     public string Status { get; init; } = string.Empty;
     public string? MajorCode { get; init; }
+    /// <summary>Set for mentors so role-specific workspace tools can be selected by the client.</summary>
+    public string? MentorType { get; init; }
     public string? AvatarUrl { get; init; }
 }

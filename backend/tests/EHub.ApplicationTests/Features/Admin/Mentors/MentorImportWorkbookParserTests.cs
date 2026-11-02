@@ -118,6 +118,48 @@ public sealed class MentorImportWorkbookParserTests
         result.Error.Message.Should().Contain(MentorImportWorkbookParser.AcademicSheetName);
     }
 
+    [Theory]
+    [InlineData(MentorType.Enterprise)]
+    [InlineData(MentorType.Academic)]
+    public void Parse_OneMentorTypeWithOtherSheetHeadersOnly_ReadsExactlyTheProvidedMentors(MentorType type)
+    {
+        var file = CreateWorkbook((enterprise, academic) =>
+        {
+            WriteEnterpriseHeader(enterprise);
+            WriteAcademicHeader(academic);
+            for (var index = 0; index < 30; index++)
+            {
+                var email = $"synthetic-mentor-{index}@example.test";
+                if (type == MentorType.Enterprise)
+                    WriteEnterpriseRow(enterprise, index + 2, $"Synthetic Enterprise {index}", "", email, "");
+                else
+                    WriteAcademicRow(academic, index + 2, email, $"Synthetic Academic {index}");
+            }
+        });
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : string.Empty);
+        result.Value.Rows.Should().HaveCount(30).And.OnlyContain(row => row.IsValid && row.MentorType == type);
+    }
+
+    [Fact]
+    public void Parse_BothSheetsContainOnlyHeaders_RejectsTheEmptyWorkbook()
+    {
+        var file = CreateWorkbook((enterprise, academic) =>
+        {
+            WriteEnterpriseHeader(enterprise);
+            WriteAcademicHeader(academic);
+            enterprise.Cell(2, 1).Value = 1;
+            academic.Cell(2, 1).Value = 1;
+        });
+
+        var result = MentorImportWorkbookParser.Parse(file);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Message.Should().Contain("no mentor rows");
+    }
+
     // A workbook whose mentor sheets carry the given header titles; each sheet gets one mentor row with the given cells.
     private static IFormFile CreateTitledWorkbook(string[] enterpriseHeaders, string[] enterpriseCells, string[] academicHeaders, string[] academicCells) =>
         CreateWorkbook((enterprise, academic) =>

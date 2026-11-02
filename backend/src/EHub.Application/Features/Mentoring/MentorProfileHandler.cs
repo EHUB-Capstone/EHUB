@@ -3,6 +3,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Mentoring.ExtractCv;
+using EHub.Application.Features.Mentoring.History;
 using EHub.Contracts.Mentoring;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -15,12 +16,15 @@ namespace EHub.Application.Features.Mentoring;
 
 public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorDocumentStorageService storage,
     IMentorEmbeddingSearch embeddingSearch, IMentorCvTextReader cvTextReader,
-    IMentorFitRanker? trainedRanker = null, IMentorSemanticReranker? semanticReranker = null) : IMentorProfileHandler
+    IMentorFitRanker? trainedRanker = null, IMentorSemanticReranker? semanticReranker = null,
+    IMentorRecommendationRanker? recommendationRanker = null, IDateTimeProvider? dateTimeProvider = null) : IMentorProfileHandler
 {
+    private const int MaximumDocumentBytes = 10 * 1024 * 1024;
+
     public async Task<Result<MentorProfileResponse>> UploadDocumentAsync(Guid userId, string kind, Stream content,
-        string fileName, long length, CancellationToken cancellationToken)
+        string fileName, long length, CancellationToken cancellationToken, bool replaceExisting = true)
     {
-        if (kind is not ("cv" or "portfolio") || length is <= 0 or > 10 * 1024 * 1024)
+        if (kind is not ("cv" or "portfolio") || length is <= 0 or > MaximumDocumentBytes)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Document must be a CV or portfolio under 10 MB.");
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         if (extension is not (".pdf" or ".doc" or ".docx"))
@@ -29,8 +33,20 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
         if (profile is null)
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
+        if (!replaceExisting && kind == "cv" && (!string.IsNullOrWhiteSpace(profile.CvPublicId) ||
+            !string.IsNullOrWhiteSpace(profile.CvStorageUrl) || !string.IsNullOrWhiteSpace(profile.CvFileName)))
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.MentorProfileConflict,
+                "This mentor already has a CV. Confirm replacement before uploading another file.");
         await using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, cancellationToken);
+        var chunk = new byte[81_920];
+        int read;
+        while ((read = await content.ReadAsync(chunk.AsMemory(0,
+                   (int)Math.Min(chunk.Length, MaximumDocumentBytes - buffer.Length + 1)), cancellationToken)) > 0)
+        {
+            if (buffer.Length + read > MaximumDocumentBytes)
+                return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Document must be under 10 MB.");
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+        }
         if (buffer.Length != length || !ValidDocument(buffer.ToArray(), extension))
             return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonValidationError, "Document content does not match its format.");
         MentorCvProfileData? extracted = null;
@@ -62,13 +78,21 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             profile.PortfolioFileName = safeName;
         }
         try { await context.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ClearChanges();
+            await storage.DeleteAsync(uploaded.Value.PublicId, CancellationToken.None);
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.MentorProfileConflict,
+                "The mentor profile was changed by someone else. Reload it and try again.");
+        }
         catch
         {
-            await storage.DeleteAsync(uploaded.Value.PublicId, cancellationToken);
+            context.ClearChanges();
+            await storage.DeleteAsync(uploaded.Value.PublicId, CancellationToken.None);
             throw;
         }
         if (!string.IsNullOrWhiteSpace(previousId)) await storage.DeleteAsync(previousId, cancellationToken);
-        return Result.Success(Map(profile));
+        return await GetMineAsync(userId, cancellationToken);
     }
 
     public async Task<Result<(byte[] Content, string FileName, string ContentType)>> DownloadDocumentAsync(Guid mentorId,
@@ -124,9 +148,11 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
     {
         var profile = await context.MentorProfiles.AsNoTracking().Include(x => x.User).Include(x => x.Experiences)
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
-        return profile is null
-            ? Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.")
-            : Result.Success(Map(profile));
+        if (profile is null)
+            return Result.Failure<MentorProfileResponse>(ErrorCodes.CommonNotFoundError, "Mentor profile was not found.");
+        var history = await MentorHistoryEvidenceLoader.LoadAsync(context, [profile.Id],
+            dateTimeProvider?.UtcNow ?? DateTime.UtcNow, cancellationToken);
+        return Result.Success(Map(profile, history: history.GetValueOrDefault(profile.Id)));
     }
 
     public async Task<Result<MentorProfileResponse>> UpdateMineAsync(Guid userId, UpdateMentorProfileRequest request, CancellationToken cancellationToken)
@@ -151,7 +177,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
                 "Mentor type is managed by the administrator.");
         ApplyMetadata(profile, request);
         await context.SaveChangesAsync(cancellationToken);
-        return Result.Success(Map(profile));
+        return await GetMineAsync(userId, cancellationToken);
     }
 
     public async Task<Result<IReadOnlyCollection<MentorProfileResponse>>> GetDirectoryAsync(Guid userId, string role, CancellationToken cancellationToken)
@@ -165,6 +191,8 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
                 context.Classes.Any(c => c.SemesterId == s.SemesterId && c.PrimaryLecturerId == userId)));
         var profiles = await query.OrderBy(x => x.User.FullName).ToListAsync(cancellationToken);
         var ids = profiles.Select(x => x.Id).ToArray();
+        var history = await MentorHistoryEvidenceLoader.LoadAsync(context, ids,
+            dateTimeProvider?.UtcNow ?? DateTime.UtcNow, cancellationToken);
         var assignments = await context.MentorAssignments.AsNoTracking()
             .Where(x => ids.Contains(x.MentorProfileId)).Select(x => new { x.Id, x.MentorProfileId, x.Status, x.EndedAt })
             .ToListAsync(cancellationToken);
@@ -182,7 +210,8 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             var mentorSessionIds = sessions.Where(x => mentorAssignments.Any(a => a.Id == x.MentorAssignmentId)).Select(x => x.Id).ToHashSet();
             var mentorRatings = ratings.Where(x => mentorSessionIds.Contains(x.MentoringSessionId)).Select(x => x.Rating).ToArray();
             return Map(profile, mentorAssignments.Count(x => x.Status == MentorAssignmentStatus.Active && x.EndedAt == null),
-                mentorAssignments.Length, mentorSessionIds.Count, mentorRatings.Length > 0 ? Math.Round(mentorRatings.Average(), 1) : null);
+                mentorAssignments.Length, mentorSessionIds.Count, mentorRatings.Length > 0 ? Math.Round(mentorRatings.Average(), 1) : null,
+                history.GetValueOrDefault(profile.Id));
         }).ToArray();
         return Result.Success<IReadOnlyCollection<MentorProfileResponse>>(result);
     }
@@ -223,20 +252,14 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
                 ErrorCodes.CommonValidationError, "Cần mô tả dự án trước khi gợi ý mentor.");
         var title = team.Project?.Name ?? team.ProjectDirection?.Title ?? team.TeamName;
         var projectText = description + "\n" + title;
-        IReadOnlyDictionary<Guid, double> similarities = new Dictionary<Guid, double>();
-        IReadOnlyDictionary<Guid, MentorFitRanking>? trainedScores = null;
+        IReadOnlyDictionary<Guid, MentorFitRanking> rankings;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(45));
         try
         {
-            if (trainedRanker is not null)
-            {
-                trainedScores = trainedRanker.Rank(projectText, profiles, deadline.Token);
-                if (semanticReranker is not null)
-                    trainedScores = await semanticReranker.RerankAsync(projectText, profiles, trainedScores, deadline.Token);
-            }
-            else
-                similarities = await embeddingSearch.SimilaritiesAsync(projectText, profiles, deadline.Token);
+            var ranker = recommendationRanker ?? new MentorRecommendationRanker(context, embeddingSearch,
+                trainedRanker, semanticReranker, dateTimeProvider);
+            rankings = await ranker.RankAsync(projectText, profiles, deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -253,17 +276,15 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
                 ErrorCodes.MentorMatchingUnavailable, "Mô hình gợi ý mentor tạm thời chưa sẵn sàng.");
         }
-        var items = profiles.Where(profile => trainedScores is null || trainedScores[profile.Id].HasEvidence).Select(profile =>
+        var items = profiles.Where(profile => trainedRanker is null || rankings[profile.Id].HasEvidence).Select(profile =>
         {
             var count = counts.GetValueOrDefault(profile.Id);
-            var fit = trainedScores is not null
-                ? (Score: trainedScores[profile.Id].Score,
-                    Reasons: trainedScores[profile.Id].Reasons.Append($"Đang phụ trách {count} nhóm").ToArray(), HasCapacity: true)
-                : MentorFitScorer.Score(profile, projectText, similarities.GetValueOrDefault(profile.Id), count);
-            return new MentorRecommendationResponse { Mentor = Map(profile), FitScore = fit.Score, Reasons = fit.Reasons,
-                ActiveTeamCount = count, HasCapacity = fit.HasCapacity };
+            var fit = rankings[profile.Id];
+            return new MentorRecommendationResponse { Mentor = Map(profile), FitScore = fit.Score,
+                Reasons = fit.Reasons.Append($"Đang phụ trách {count} nhóm").ToArray(),
+                ActiveTeamCount = count, HasCapacity = true };
         }).OrderByDescending(x => x.HasCapacity).ThenByDescending(x =>
-            trainedScores?.GetValueOrDefault(x.Mentor.Id)?.RankingValue ?? x.FitScore)
+            rankings.GetValueOrDefault(x.Mentor.Id)?.RankingValue ?? x.FitScore)
             .ThenBy(x => x.Mentor.FullName).ToArray();
         return Result.Success<IReadOnlyCollection<MentorRecommendationResponse>>(items);
     }
@@ -301,7 +322,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
     }
 
     internal static MentorProfileResponse Map(MentorProfile x, int activeTeams = 0, int totalAssignments = 0,
-        int totalSessions = 0, double? averageRating = null) => new() { Id = x.Id, UserId = x.UserId,
+        int totalSessions = 0, double? averageRating = null, MentorHistoryEvidence? history = null) => new() { Id = x.Id, UserId = x.UserId,
         FullName = x.User.FullName, Email = x.User.Email, MentorType = x.MentorType, Expertise = x.Expertise,
         StartupDomains = x.StartupDomains, TechnologySkills = x.TechnologySkills, Tags = x.Tags,
         Experiences = x.Experiences.Select(e => new MentorExperienceDto { Kind = e.Kind, Area = e.Area,
@@ -310,5 +331,10 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         LinkedInUrl = x.LinkedInUrl, PortfolioUrl = x.PortfolioUrl, CvFileName = x.CvFileName,
         PortfolioFileName = x.PortfolioFileName,
         MaxTeams = null, Status = x.Status.ToString(), ActiveTeamCount = activeTeams,
-        TotalAssignments = totalAssignments, TotalSessions = totalSessions, AverageFeedbackRating = averageRating };
+        TotalAssignments = totalAssignments, TotalSessions = totalSessions, AverageFeedbackRating = averageRating,
+        History = history is null ? null : new MentorHistorySummaryResponse
+        {
+            CompletedSessionCount = history.CompletedSessionCount, MentoredTeamCount = history.MentoredTeamCount,
+            AchievementCount = history.AchievementCount
+        } };
 }

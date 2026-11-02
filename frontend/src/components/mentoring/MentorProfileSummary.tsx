@@ -49,6 +49,16 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
         : <p className="mt-2 text-body text-slate-500">No skills added yet.</p>}
     </section>)}
 
+    {profile.history && <section className="border-t border-slate-200 pt-5" aria-labelledby="mentor-recorded-history">
+      <h3 id="mentor-recorded-history" className="text-subheading text-secondary">Recorded mentoring history</h3>
+      <dl className="mt-3 grid gap-4 sm:grid-cols-3">
+        <div><dt className="text-caption text-slate-500">Completed sessions</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.completedSessionCount}</dd></div>
+        <div><dt className="text-caption text-slate-500">Teams coached in completed sessions</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.mentoredTeamCount}</dd></div>
+        <div><dt className="text-caption text-slate-500">Projects with recorded achievements</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.achievementCount}</dd></div>
+      </dl>
+      <p className="mt-3 text-caption text-slate-500">Completed mentoring sessions inform skill matching. Project achievements are counted when recorded during this mentor’s assignment.</p>
+    </section>}
+
     <section className="border-t border-slate-200 pt-5">
       <h3 className="text-subheading text-secondary">Professional bio</h3>
       {parsedBio ? <div className="mt-3 space-y-5">

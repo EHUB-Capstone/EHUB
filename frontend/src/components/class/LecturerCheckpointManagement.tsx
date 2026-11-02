@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -10,7 +10,6 @@ import {
   RotateCcw,
   ExternalLink,
   Eye,
-  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { lecturerCheckpointApi } from '../../api/lecturerCheckpointApi';
@@ -33,7 +32,7 @@ import Modal from '../ui/Modal';
 import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFilePreviewModal';
 import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
 import { warmUpPdfPreview } from '../../utils/pdfPreviewRuntime';
-import EvaluationPanel from '../workspace/EvaluationPanel';
+import CheckpointGradingDialog, { type CheckpointGradingDialogHandle } from '../evaluation/CheckpointGradingDialog';
 
 interface Props {
   semester: string;
@@ -102,13 +101,7 @@ export default function LecturerCheckpointManagement({
     checkpointNumber: number;
     file: { _id: string; originalName: string };
   } | null>(null);
-  const [evaluationTarget, setEvaluationTarget] = useState<{
-    teamId: string;
-    teamName: string;
-    classCode: string;
-    checkpointNumber: number;
-    checkpointTitle: string;
-  } | null>(null);
+  const gradingDialogRef = useRef<CheckpointGradingDialogHandle>(null);
 
   useEffect(() => {
     setSelectedClassId(initialClassId);
@@ -446,7 +439,7 @@ export default function LecturerCheckpointManagement({
                         </Link>
                         <button
                           type="button"
-                          onClick={() => setEvaluationTarget({
+                          onClick={() => gradingDialogRef.current?.open({
                             teamId: item.teamId,
                             teamName: item.teamName,
                             classCode: item.classCode,
@@ -538,37 +531,7 @@ export default function LecturerCheckpointManagement({
         file={previewTarget?.file ?? null}
         onClose={() => setPreviewTarget(null)}
       />
-      {evaluationTarget && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="checkpoint-evaluation-dialog-title">
-          <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
-              <div className="min-w-0">
-                <p className="text-overline font-bold uppercase tracking-wider text-primary-700">{evaluationTarget.classCode} · {evaluationTarget.teamName}</p>
-                <h2 id="checkpoint-evaluation-dialog-title" className="truncate text-lg font-black text-slate-900">
-                  Grade · Checkpoint {evaluationTarget.checkpointNumber}: {evaluationTarget.checkpointTitle}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEvaluationTarget(null)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close grading dialog"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="overflow-y-auto">
-              <EvaluationPanel
-                teamId={evaluationTarget.teamId}
-                proposalId={undefined}
-                pitchDeckId={undefined}
-                checkpointNumber={evaluationTarget.checkpointNumber}
-                embedded
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <CheckpointGradingDialog ref={gradingDialogRef} titlePrefix="Grade · " />
     </div>
   );
 }

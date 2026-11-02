@@ -1,5 +1,5 @@
 import axiosClient from './axiosClient';
-import type { MentorProfile, MentorProfileDraft, SaveAdminMentorProfile, MentorRecommendation, MentoringActionItem, MentoringFeedback, MentoringSession, SaveMentoringSession } from '../types/mentoring';
+import type { MentorProfile, MentorProfileDraft, SaveAdminMentorProfile, MentorRecommendation, MentoringActionItem, MentoringFeedback, MentoringSession, SaveMentoringSession, MentorCvMatchResponse } from '../types/mentoring';
 
 interface Envelope<T> { data: T }
 const data = <T>(value: Envelope<T>): T => value.data;
@@ -16,6 +16,21 @@ export const mentorSupportApi = {
     const form = new FormData();
     form.append('file', file);
     return data(await axiosClient.post(`/mentoring/profile/documents/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90_000, signal,
+    }));
+  },
+  uploadManagedCv: async (mentorId: string, file: File, replaceExisting = false, signal?: AbortSignal): Promise<MentorProfile> => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('replaceExisting', String(replaceExisting));
+    return data(await axiosClient.post(`/mentoring/profiles/${mentorId}/documents/cv`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90_000, signal,
+    }));
+  },
+  matchCvMentor: async (file: File, signal?: AbortSignal): Promise<MentorCvMatchResponse> => {
+    const form = new FormData();
+    form.append('file', file);
+    return data(await axiosClient.post('/mentoring/profiles/cv-match', form, {
       headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90_000, signal,
     }));
   },

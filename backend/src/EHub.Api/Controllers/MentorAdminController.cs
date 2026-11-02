@@ -67,11 +67,11 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
 
     [HttpPost("allocations/preview")]
     public async Task<IActionResult> PreviewAllocation([FromBody] PreviewMentorAllocationRequest request, CancellationToken cancellationToken) =>
-        ToResponse(await handler.PreviewAllocationAsync(request, cancellationToken), "Balanced mentor allocation preview generated successfully.");
+        ToResponse(await handler.PreviewAllocationAsync(request, cancellationToken), "Mentor allocation preview generated successfully.");
 
     [HttpPost("allocations/commit")]
     public async Task<IActionResult> CommitAllocation([FromBody] CommitMentorAllocationRequest request, CancellationToken cancellationToken) =>
-        ToResponse(await handler.CommitAllocationAsync(request, cancellationToken), "Balanced mentor allocation committed successfully.");
+        ToResponse(await handler.CommitAllocationAsync(request, cancellationToken), "Mentor allocation committed successfully.");
 
     [HttpGet("assignments/export")]
     public async Task<IActionResult> ExportAssignments([FromQuery] Guid semesterId, CancellationToken cancellationToken)
@@ -89,6 +89,7 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
     {
         var response = ApiResponse<object>.FailureResponse(error.Message, error.Code);
         if (error.Code == ErrorCodes.CommonUnauthorizedError) return Unauthorized(response);
+        if (error.Code == ErrorCodes.MentorMatchingUnavailable) return StatusCode(StatusCodes.Status503ServiceUnavailable, response);
         if (error.Code.EndsWith("_NOT_FOUND", StringComparison.OrdinalIgnoreCase)) return NotFound(response);
         if (error.Code.Contains("SESSION", StringComparison.OrdinalIgnoreCase) || error.Code.Contains("CONFLICT", StringComparison.OrdinalIgnoreCase))
             return Conflict(response);

@@ -12,7 +12,7 @@
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="CloudinaryDotNet" Version="1.29.3" />
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
-    <PackageReference Include="MailKit" Version="4.17.0" />
+    <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -37,6 +37,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Mentoring\Models\bootstrap-model.json"
                       LogicalName="EHub.Mentoring.BootstrapModel.json" />
+    <None Update="Mentoring\Models\allocation-model.json"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

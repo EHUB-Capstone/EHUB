@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, Loader2, ChevronDown } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Trash2, Users, ArrowLeft, ArrowRight, Check, X, Mail, GraduationCap, Upload, FileText, Loader2, ChevronDown } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
@@ -13,6 +13,7 @@ import { parseApiError } from '../../utils/apiError';
 import { PROGRAM_GROUPS } from '../../constants/majors';
 import ImportLecturersModal from '../../components/admin/ImportLecturersModal';
 import ImportMentorsModal from '../../components/admin/ImportMentorsModal';
+import UploadMentorCvsModal from '../../components/admin/UploadMentorCvsModal';
 import IncompleteMentorsPanel from '../../components/admin/IncompleteMentorsPanel';
 import MentorKindTag from '../../components/admin/MentorKindTag';
 import TagInput from '../../components/admin/TagInput';
@@ -47,6 +48,7 @@ export default function UserManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isMentorImportOpen, setIsMentorImportOpen] = useState(false);
+  const [isMentorCvsOpen, setIsMentorCvsOpen] = useState(false);
   const [view, setView] = useState<'accounts' | 'incomplete'>('accounts');
   const [incompleteCount, setIncompleteCount] = useState(0);
   const [incompleteRefresh, setIncompleteRefresh] = useState(0);
@@ -309,11 +311,12 @@ export default function UserManagement() {
               : `${incompleteCount} mentor${incompleteCount === 1 ? '' : 's'} imported without a login account`}
           </p>
         </div>
-        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
           <ImportMenu
             onImportLecturers={() => setIsImportModalOpen(true)}
             onImportMentors={() => setIsMentorImportOpen(true)}
           />
+          <Button variant="outline" icon={FileText} className="whitespace-nowrap" onClick={() => setIsMentorCvsOpen(true)}>Upload mentor CVs</Button>
           <Button variant="primary" icon={Plus} className="whitespace-nowrap" onClick={openAddModal}>Create User</Button>
         </div>
       </div>
@@ -797,6 +800,13 @@ export default function UserManagement() {
         <ImportMentorsModal
           onClose={() => setIsMentorImportOpen(false)}
           onImported={() => { void fetchUsers(); void loadIncompleteCount(); setIncompleteRefresh(value => value + 1); }}
+        />
+      )}
+
+      {isMentorCvsOpen && (
+        <UploadMentorCvsModal
+          onClose={() => setIsMentorCvsOpen(false)}
+          onUploaded={() => void fetchUsers()}
         />
       )}
 

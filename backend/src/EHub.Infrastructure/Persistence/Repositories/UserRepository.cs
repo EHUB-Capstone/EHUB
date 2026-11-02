@@ -27,6 +27,7 @@ public class UserRepository : IUserRepository
         return await _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
+            .Include(u => u.MentorProfile)
             .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, cancellationToken);
     }
 
@@ -38,6 +39,7 @@ public class UserRepository : IUserRepository
             .AsNoTracking()
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
+            .Include(u => u.MentorProfile)
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
     }
 

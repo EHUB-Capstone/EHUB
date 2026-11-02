@@ -68,6 +68,7 @@ public sealed class CheckpointEvaluationHandler(
             .Include(team => team.MentorAssignments).ThenInclude(assignment => assignment.MentorProfile)
             .Include(team => team.Project)
             .Include(team => team.ApprovedProposals)
+            .AsSplitQuery()
             .OrderBy(team => team.Class.ClassCode)
             .ThenBy(team => team.TeamName)
             .ToArrayAsync(cancellationToken);
@@ -82,6 +83,7 @@ public sealed class CheckpointEvaluationHandler(
             .Include(checkpoint => checkpoint.Rubrics.Where(rubric =>
                 rubric.ClassId == null && rubric.Status == RubricStatus.Active))
             .ThenInclude(rubric => rubric.Criteria)
+            .AsSplitQuery()
             .OrderBy(checkpoint => checkpoint.CheckpointNumber)
             .ToArrayAsync(cancellationToken);
         var assessments = await context.Rubrics
@@ -113,6 +115,7 @@ public sealed class CheckpointEvaluationHandler(
                 .Include(evaluation => evaluation.Evaluator)
                 .Include(evaluation => evaluation.Details).ThenInclude(detail => detail.RubricCriterion)
                 .Include(evaluation => evaluation.MemberScores)
+                .AsSplitQuery()
                 .OrderByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
                 .ToArrayAsync(cancellationToken);
         var evaluationsByProjectAndRubric = evaluations.ToLookup(evaluation => (evaluation.ProjectId, evaluation.RubricId));
@@ -206,7 +209,8 @@ public sealed class CheckpointEvaluationHandler(
         if (evaluationContext.IsFailure) return Result.Failure<WorkspaceCheckpointEvaluationSummaryResponse>(evaluationContext.Error);
 
         var item = evaluationContext.Value;
-        var evaluations = await EvaluationQuery()
+        var evaluations = await EvaluationQuery(
+                includeTeamGraph: false, includeHistories: EvaluationVisibilityRules.IsInternalViewer(role))
             .Where(evaluation => evaluation.ProjectId == item.Project.Id && evaluation.RubricId == item.Rubric.Id)
             .OrderByDescending(evaluation => evaluation.UpdatedAt ?? evaluation.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -310,7 +314,8 @@ public sealed class CheckpointEvaluationHandler(
             validation.Value.MemberScoreOverrides, item.Rubric, item.Team, userId, now);
         context.Evaluations.Add(evaluation);
         await context.SaveChangesAsync(cancellationToken);
-        var saved = await EvaluationQuery().SingleAsync(item => item.Id == evaluation.Id, cancellationToken);
+        var saved = await EvaluationQuery(includeTeamGraph: false, includeHistories: false)
+            .SingleAsync(item => item.Id == evaluation.Id, cancellationToken);
         await PublishUpdatedAsync(item.Team, checkpointNumber, cancellationToken);
         return Result.Success(ToEvaluationResponse(saved, item.Team, userId, role));
     }
@@ -570,12 +575,14 @@ public sealed class CheckpointEvaluationHandler(
             .Include(item => item.Class).ThenInclude(item => item.ClassLecturers)
             .Include(item => item.TeamMembers).ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
             .Include(item => item.MentorAssignments).ThenInclude(item => item.MentorProfile)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(item => item.Id == teamId, cancellationToken);
         if (team is null || !CanView(role, team, userId))
             return Denied<EvaluationContext>("You do not have access to this team checkpoint.");
 
         var checkpoint = await context.Checkpoints
             .Include(item => item.Rubrics).ThenInclude(item => item.Criteria)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(item => item.CourseId == team.Class.CourseId && item.ClassId == null &&
                 item.CheckpointNumber == checkpointNumber && item.Status != CheckpointStatus.Archived, cancellationToken);
         if (checkpoint is null)
@@ -805,21 +812,34 @@ public sealed class CheckpointEvaluationHandler(
         }
     }
 
-    private IQueryable<Evaluation> EvaluationQuery(bool tracking = false)
+    // Read-only responses already receive the team from LoadContextAsync, so they can skip the team graph;
+    // history is only returned to internal viewers. Both are large collections that would otherwise be
+    // loaded (and joined) for every evaluation.
+    private IQueryable<Evaluation> EvaluationQuery(
+        bool tracking = false, bool includeTeamGraph = true, bool includeHistories = true)
     {
         var query = tracking ? context.Evaluations.AsQueryable() : context.Evaluations.AsNoTracking();
-        return query
-            .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.Class).ThenInclude(item => item.ClassLecturers)
-            .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.TeamMembers)
-                .ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
-            .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.MentorAssignments)
-                .ThenInclude(item => item.MentorProfile)
+        if (includeTeamGraph)
+        {
+            query = query
+                .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.Class).ThenInclude(item => item.ClassLecturers)
+                .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.TeamMembers)
+                    .ThenInclude(item => item.ClassStudent).ThenInclude(item => item.Student)
+                .Include(item => item.Project).ThenInclude(item => item.Team).ThenInclude(item => item.MentorAssignments)
+                    .ThenInclude(item => item.MentorProfile);
+        }
+
+        query = query
             .Include(item => item.Rubric).ThenInclude(item => item.Checkpoint)
             .Include(item => item.Rubric).ThenInclude(item => item.Criteria)
             .Include(item => item.Evaluator)
             .Include(item => item.Details).ThenInclude(item => item.RubricCriterion)
-            .Include(item => item.MemberScores)
-            .Include(item => item.Histories).ThenInclude(item => item.ChangedBy);
+            .Include(item => item.MemberScores);
+        if (includeHistories)
+            query = query.Include(item => item.Histories).ThenInclude(item => item.ChangedBy);
+
+        // Several collection includes in one SQL statement multiply rows (a Cartesian product); split queries avoid it.
+        return query.AsSplitQuery();
     }
 
     private static CourseAssessmentEvaluationResponse ToCourseAssessmentResponse(
