@@ -3706,8 +3706,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnName("deleted_by");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsAwarded")
@@ -3742,8 +3742,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
                     b.Property<Guid?>("PreviousProjectId")
@@ -5157,6 +5157,249 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("SemesterId", "Status");
 
                     b.ToTable("semester_temporary_mentors", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<string>("LinkType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("link_type");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShowcaseProjectId");
+
+                    b.ToTable("showcase_links", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("caption");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("media_type");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShowcaseProjectId");
+
+                    b.ToTable("showcase_media", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CommentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("comment_count");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<string>("DevelopmentStage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("development_stage");
+
+                    b.Property<string>("Highlights")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("highlights");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<int>("LikeCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("like_count");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("logo_url");
+
+                    b.Property<Guid>("ProjectLineageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_lineage_id");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<bool>("ShowTeamMembers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("show_team_members");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("ViewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("view_count");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectLineageId")
+                        .IsUnique()
+                        .HasFilter("is_deleted = false");
+
+                    b.HasIndex("PublishedAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("showcase_projects", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReviewHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("from_status");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("ShowcaseProjectId", "CreatedAt");
+
+                    b.ToTable("showcase_review_histories", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
@@ -8604,6 +8847,47 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Semester");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseLink", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", "ShowcaseProject")
+                        .WithMany("Links")
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ShowcaseProject");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseMedia", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", "ShowcaseProject")
+                        .WithMany("Media")
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ShowcaseProject");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReviewHistory", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", "ShowcaseProject")
+                        .WithMany("ReviewHistory")
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("ShowcaseProject");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.Student", "AssigneeStudent")
@@ -9391,6 +9675,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("StaffAssignments");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseProject", b =>
+                {
+                    b.Navigation("Links");
+
+                    b.Navigation("Media");
+
+                    b.Navigation("ReviewHistory");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Student", b =>

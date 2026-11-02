@@ -107,6 +107,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
     public DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments => Set<ProductFeedbackAttachment>();
+    public DbSet<ShowcaseProject> ShowcaseProjects => Set<ShowcaseProject>();
+    public DbSet<ShowcaseLink> ShowcaseLinks => Set<ShowcaseLink>();
+    public DbSet<ShowcaseMedia> ShowcaseMedia => Set<ShowcaseMedia>();
+    public DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories => Set<ShowcaseReviewHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

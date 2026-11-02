@@ -64,4 +64,44 @@ public sealed class CloudinaryImageStorageService : IImageStorageService
                 "Avatar upload could not be completed.");
         }
     }
+
+    public async Task<Result<StoredImageUploadResult>> UploadShowcaseImageAsync(
+        Stream content,
+        string fileName,
+        Guid showcaseId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var upload = await _cloudinary.UploadAsync(new ImageUploadParams
+            {
+                File = new FileDescription(fileName, content),
+                Folder = $"ehub/showcase/{showcaseId:N}",
+                UniqueFilename = true,
+                Overwrite = false
+            }, cancellationToken);
+
+            if (upload.Error is not null || upload.SecureUrl is null)
+            {
+                _logger.LogWarning(
+                    "Cloudinary showcase image upload failed. StatusCode: {StatusCode}; Error: {Error}",
+                    upload.StatusCode,
+                    upload.Error?.Message ?? "Cloudinary did not return a secure URL.");
+
+                return Result.Failure<StoredImageUploadResult>(
+                    ErrorCodes.ShowcaseImageUploadFailed,
+                    "Image upload could not be completed.");
+            }
+
+            return Result.Success(new StoredImageUploadResult(upload.SecureUrl.ToString()));
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Cloudinary showcase image upload threw an exception.");
+
+            return Result.Failure<StoredImageUploadResult>(
+                ErrorCodes.ShowcaseImageUploadFailed,
+                "Image upload could not be completed.");
+        }
+    }
 }

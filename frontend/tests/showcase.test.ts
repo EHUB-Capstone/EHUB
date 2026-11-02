@@ -1,0 +1,196 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_NAME_MAX_LENGTH,
+  PROJECT_PROFILE_LABELS,
+} from '../src/constants/projectProfile.ts';
+import {
+  SHOWCASE_LIMITS,
+  canSubmitForReview,
+  canWithdraw,
+  emptyForm,
+  emptyLink,
+  formFromShowcase,
+  hasFormErrors,
+  isFormDirty,
+  isPublicWebUrl,
+  missingForReview,
+  moderationActionsFor,
+  projectProfilePath,
+  toSaveRequest,
+  validateImageFile,
+  validateShowcaseForm,
+} from '../src/utils/showcase.ts';
+import { validateProjectProfile, validateProjectWorkspace } from '../src/utils/projectWorkspace.ts';
+import { createReleaseFeatureFlags } from '../src/config/releaseFeatureFlags.ts';
+import type { ShowcaseDto } from '../src/types/showcase.ts';
+
+const showcase = (overrides: Partial<ShowcaseDto> = {}): ShowcaseDto => ({
+  id: 's1',
+  projectLineageId: 'l1',
+  profile: {
+    projectName: 'Smart Garden',
+    description: 'Water plants automatically',
+    problem: 'Plants die',
+    solution: 'A pump',
+    targetUsers: null,
+  },
+  logoUrl: null,
+  highlights: null,
+  developmentStage: 'Mvp',
+  status: 'Draft',
+  showTeamMembers: true,
+  reviewNote: null,
+  publishedAt: null,
+  viewCount: 0,
+  likeCount: 0,
+  commentCount: 0,
+  rowVersion: 7,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: null,
+  canEdit: true,
+  links: [{ id: 'k1', linkType: 'Demo', label: 'Demo', url: 'https://demo.example.test' }],
+  media: [],
+  ...overrides,
+});
+
+test('shares one set of field names and limits with the Project Profile page', () => {
+  assert.deepEqual(PROJECT_PROFILE_LABELS, {
+    projectName: 'Project name',
+    description: 'Description',
+    problem: 'Problem',
+    solution: 'Solution',
+    targetUsers: 'Target users',
+  });
+  assert.equal(PROJECT_NAME_MAX_LENGTH, 100);
+  assert.equal(PROJECT_DESCRIPTION_MAX_LENGTH, 300);
+});
+
+test('applies the new Project name and Description limits on the Project Profile and create forms', () => {
+  const profile = { projectName: 'x'.repeat(100), description: 'd'.repeat(300), problem: '', solution: '', targetUsers: '', zaloGroupUrl: 'https://zalo.me/g/abc' };
+
+  assert.equal(validateProjectProfile(profile).projectName, undefined);
+  assert.equal(validateProjectProfile(profile).description, undefined);
+  assert.match(validateProjectProfile({ ...profile, projectName: 'x'.repeat(101) }).projectName ?? '', /3–100/);
+  assert.match(validateProjectProfile({ ...profile, description: 'd'.repeat(301) }).description ?? '', /20–300/);
+
+  const create = { teamName: 'Team', projectName: 'x'.repeat(101), description: 'd'.repeat(301), zaloGroupUrl: 'https://zalo.me/g/abc', startupIndustryIds: ['i1'] };
+  assert.match(validateProjectWorkspace(create).projectName ?? '', /3–100/);
+  assert.match(validateProjectWorkspace(create).description ?? '', /20–300/);
+});
+
+test('starts a new page with only showcase-specific defaults', () => {
+  const form = emptyForm();
+
+  assert.equal(form.highlights, '');
+  assert.equal(form.developmentStage, 'Idea');
+  assert.equal(form.showTeamMembers, true);
+  assert.deepEqual(form.links, []);
+  assert.equal('title' in form, false);
+});
+
+test('builds a save request without any Project Profile field', () => {
+  const form = { ...formFromShowcase(showcase()), highlights: '  Works offline  ' };
+
+  const request = toSaveRequest(form, { rowVersion: 7 });
+
+  assert.equal(request.highlights, 'Works offline');
+  assert.equal(request.rowVersion, 7);
+  assert.equal('projectLineageId' in request, false);
+  for (const profileField of ['title', 'tagline', 'problem', 'solution', 'targetCustomers', 'projectName', 'description']) {
+    assert.equal(profileField in request, false, profileField);
+  }
+  assert.deepEqual(request.links, [{ linkType: 'Demo', label: 'Demo', url: 'https://demo.example.test' }]);
+});
+
+test('sends the lineage only when creating, and nulls blank highlights', () => {
+  const request = toSaveRequest(emptyForm(), { projectLineageId: 'l1' });
+
+  assert.equal(request.projectLineageId, 'l1');
+  assert.equal(request.highlights, null);
+  assert.equal('rowVersion' in request, false);
+});
+
+test('accepts only plain http(s) links without credentials', () => {
+  assert.equal(isPublicWebUrl('https://garden.example.test/a?b=1'), true);
+  assert.equal(isPublicWebUrl(' http://garden.example.test '), true);
+  for (const bad of ['javascript:alert(1)', 'data:text/html;base64,AAAA', 'ftp://files.example.test', 'https://user:secret@example.test', 'example.test', '']) {
+    assert.equal(isPublicWebUrl(bad), false, bad);
+  }
+});
+
+test('validates highlights length and link rows', () => {
+  const base = formFromShowcase(showcase());
+  assert.equal(hasFormErrors(validateShowcaseForm(base)), false);
+
+  const bad = {
+    ...base,
+    highlights: 'x'.repeat(SHOWCASE_LIMITS.highlights + 1),
+    links: [{ ...emptyLink(), label: '', url: 'javascript:alert(1)' }, { ...emptyLink(), label: 'Site', url: 'https://ok.example.test' }],
+  };
+  const errors = validateShowcaseForm(bad);
+
+  assert.ok(errors.highlights);
+  assert.equal(Object.keys(errors.linkRows).length, 1);
+  assert.ok(errors.linkRows[bad.links[0].key].label);
+  assert.ok(errors.linkRows[bad.links[0].key].url);
+  assert.equal(hasFormErrors(errors), true);
+});
+
+test('rejects more links than the server accepts', () => {
+  const links = Array.from({ length: SHOWCASE_LIMITS.links + 1 }, () => ({ ...emptyLink(), label: 'L', url: 'https://ok.example.test' }));
+
+  assert.ok(validateShowcaseForm({ ...formFromShowcase(showcase()), links }).links);
+});
+
+test('detects unsaved changes, including edits to links', () => {
+  const saved = formFromShowcase(showcase());
+
+  assert.equal(isFormDirty(saved, formFromShowcase(showcase())), false);
+  assert.equal(isFormDirty({ ...saved, highlights: 'Other' }, saved), true);
+  assert.equal(isFormDirty({ ...saved, links: [{ ...saved.links[0], url: 'https://other.example.test' }] }, saved), true);
+  assert.equal(isFormDirty({ ...saved, links: [] }, saved), true);
+});
+
+test('names the Project Profile fields still missing before a page can be submitted', () => {
+  assert.deepEqual(missingForReview(showcase().profile), []);
+  assert.deepEqual(
+    missingForReview({ description: ' ', problem: null, solution: 'Pump' }),
+    ['Description', 'Problem'],
+  );
+});
+
+test('links to the Project Profile page of the team', () => {
+  assert.equal(projectProfilePath('team-1'), '/student/workspace/project-profile/team-1');
+});
+
+test('mirrors the status rules for owners', () => {
+  assert.deepEqual(['Draft', 'ChangesRequested', 'Hidden'].map((status) => canSubmitForReview(status as never)), [true, true, true]);
+  assert.deepEqual(['PendingReview', 'Published'].map((status) => canSubmitForReview(status as never)), [false, false]);
+  assert.deepEqual(['Published', 'PendingReview'].map((status) => canWithdraw(status as never)), [true, true]);
+  assert.deepEqual(['Draft', 'Hidden', 'ChangesRequested'].map((status) => canWithdraw(status as never)), [false, false, false]);
+});
+
+test('mirrors the decisions a reviewer may take', () => {
+  assert.deepEqual(moderationActionsFor('PendingReview', false), ['approve', 'request-changes', 'reject']);
+  assert.deepEqual(moderationActionsFor('Published', true), ['hide']);
+  assert.deepEqual(moderationActionsFor('Hidden', true), ['unhide']);
+  assert.deepEqual(moderationActionsFor('Hidden', false), []);
+  assert.deepEqual(moderationActionsFor('Draft', false), []);
+  assert.deepEqual(moderationActionsFor('ChangesRequested', true), []);
+});
+
+test('checks image type and size before uploading', () => {
+  assert.equal(validateImageFile({ name: 'shot.PNG', size: 1024 }), null);
+  assert.equal(validateImageFile({ name: 'shot.webp', size: SHOWCASE_LIMITS.imageBytes }), null);
+  assert.ok(validateImageFile({ name: 'shot.gif', size: 1024 }));
+  assert.ok(validateImageFile({ name: 'run.exe', size: 1024 }));
+  assert.ok(validateImageFile({ name: 'empty.png', size: 0 }));
+  assert.ok(validateImageFile({ name: 'big.png', size: SHOWCASE_LIMITS.imageBytes + 1 }));
+});
+
+test('can be switched off with the release feature flag', () => {
+  assert.equal(createReleaseFeatureFlags({}).showcase, true);
+  assert.equal(createReleaseFeatureFlags({ VITE_FEATURE_SHOWCASE: 'false' }).showcase, false);
+});
