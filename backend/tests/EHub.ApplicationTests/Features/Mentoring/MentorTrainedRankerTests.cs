@@ -7,6 +7,7 @@ using EHub.Domain.Enums;
 using EHub.Infrastructure.Mentoring;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace EHub.ApplicationTests.Features.Mentoring;
 
@@ -254,6 +255,39 @@ public sealed class MentorTrainedRankerTests
             .WithMessage("Mentor ranking model is unavailable.");
     }
 
+    [Fact]
+    public void FailedLoadIsLoggedWithItsCauseAndRetriedOnceTheArtifactIsReadable()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Mentoring:TrainedModelPath"] = path
+        }).Build();
+        var logger = new CapturingLogger<FileMentorFitRanker>();
+        var ranker = new FileMentorFitRanker(config, logger);
+        var mentor = new MentorProfile { Experience = "Marketing" };
+
+        try
+        {
+            var unavailable = () => ranker.Rank("Marketing", [mentor], default);
+
+            unavailable.Should().Throw<MentorFitRankerUnavailableException>()
+                .WithMessage("Mentor ranking model is unavailable.")
+                .WithInnerException<FileNotFoundException>();
+            logger.Entries.Should().ContainSingle(entry => entry.Level == LogLevel.Error &&
+                entry.Exception is MentorFitRankerUnavailableException &&
+                entry.Exception.InnerException is FileNotFoundException);
+
+            // A failed load is not cached: fixing the file is enough, no backend restart.
+            File.WriteAllText(path, Artifact());
+            ranker.Rank("Marketing", [mentor], default).Should().ContainKey(mentor.Id);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static MentorRankingModel Model(double bias = -4) => MentorRankingModel.FromJson(Artifact(bias: bias));
 
     private static string Artifact(double[]? weights = null, double bias = -4) => JsonSerializer.Serialize(new
@@ -274,4 +308,13 @@ public sealed class MentorTrainedRankerTests
         },
         stopWords = new[] { "can", "cho", "du", "an" }
     });
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, Exception? Exception)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, exception));
+    }
 }
