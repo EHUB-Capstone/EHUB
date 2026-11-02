@@ -18,40 +18,50 @@ public sealed class CheckpointSummaryTextTests
     }
 
     [Fact]
-    public void Chunks_KeepEveryCharacterAndStayWithinTheSize()
+    public void Select_KeepsInformativeSentencesInOrderAndDropsRepeatedLogs()
     {
-        var text = string.Join('\n', Enumerable.Range(1, 400).Select(i => $"Dòng {i}: nhóm ghi nhận phản hồi số {i} của người dùng."))
-            + "\n" + new string('x', 9_000);
+        var log = string.Join('\n', Enumerable.Range(1, 200).Select(i =>
+            $"Phụ lục {i}: Đội vận hành kiểm tra xe và ghi nhận phản hồi về đèn xe buổi tối của người dùng trong ký túc xá."));
+        var text = "1. Tóm tắt\nGreenRide cho thuê xe đạp điện trong ký túc xá.\n2. Kế hoạch gọi vốn\n" +
+                   "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, đổi lấy 12% cổ phần.\n" + log;
 
-        var chunks = CheckpointSummaryText.Chunks(text, 2_000).ToArray();
+        var selected = CheckpointSummaryText.Select(text, ["Kế hoạch gọi vốn"], 350);
 
-        chunks.Should().HaveCountGreaterThan(5);
-        chunks.Should().OnlyContain(chunk => chunk.Length <= 2_001);
-        string.Concat(chunks).Replace("\n", string.Empty).Should().Be(text.Replace("\n", string.Empty));
-    }
-
-    [Fact]
-    public void IsGrounded_AcceptsExactAndLightlyEditedQuotesButRejectsInventedOnes()
-    {
-        const string source = "Trong 4 tuần bán thử, FitBox nhận 320 đơn từ 96 khách hàng. Tỷ lệ khách quay lại sau tuần đầu là 38%.";
-        var trigrams = CheckpointSummaryText.Trigrams(CheckpointSummaryText.Normalize(source));
-
-        CheckpointSummaryText.IsGrounded("Trong 4 tuần bán thử, FitBox nhận 320 đơn từ 96 khách hàng.", trigrams).Should().BeTrue();
-        // Models often join sentences and drop punctuation.
-        CheckpointSummaryText.IsGrounded("FitBox nhận 320 đơn từ 96 khách hàng; tỷ lệ khách quay lại sau tuần đầu là 38%", trigrams).Should().BeTrue();
-        CheckpointSummaryText.IsGrounded("Nhóm đã ký hợp đồng với 5 công ty và gọi vốn 2 tỷ đồng.", trigrams).Should().BeFalse();
-        CheckpointSummaryText.IsGrounded("", trigrams).Should().BeFalse();
+        selected.Length.Should().BeLessThanOrEqualTo(350);
+        selected.Should().Contain("500 triệu đồng vốn hạt giống").And.Contain("2. Kế hoạch gọi vốn");
+        selected.IndexOf("1. Tóm tắt", StringComparison.Ordinal).Should().BeLessThan(selected.IndexOf("500 triệu", StringComparison.Ordinal));
+        // 200 near-identical weekly logs never push the informative sentences out of a small budget.
+        selected.Split('\n').Count(line => line.StartsWith("Phụ lục", StringComparison.Ordinal)).Should().BeLessThanOrEqualTo(2);
+        CheckpointSummaryText.Select("Ngắn.", ["Kế hoạch"], 1_000).Should().Be("Ngắn.");
     }
 
     [Theory]
-    [InlineData("Kế hoạch gọi vốn", "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, gọi vốn từ quỹ trường.", true)]
-    [InlineData("Phân tích đối thủ cạnh tranh", "Đối thủ trực tiếp là túi vải in sẵn trên Shopee.", true)]
-    [InlineData("Kế hoạch gọi vốn", "Giải pháp là túi vải bạt tái chế giá 45.000 đồng.", false)]
-    [InlineData("Kết quả khảo sát hoặc phỏng vấn", "Hoặc của các bên khác.", false)]
-    [InlineData("MVP", "MVP là landing page.", false)]
-    public void IsRelevant_RequiresATwoWordPhraseFromTheRequirement(string title, string quote, bool expected)
+    [InlineData("Kế hoạch gọi vốn", "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, gọi vốn từ quỹ trường.")]
+    [InlineData("Phân tích đối thủ cạnh tranh", "Đối thủ trực tiếp là túi vải in sẵn trên Shopee.")]
+    // A matching heading points to the first sentence under it.
+    [InlineData("Dự báo tài chính", "Năm đầu dự kiến doanh thu 1,8 tỷ đồng và lợi nhuận 450 triệu đồng.")]
+    public void BestEvidence_ReturnsASentenceThatNamesTheRequirement(string title, string expected)
     {
-        CheckpointSummaryText.IsRelevant(title, quote).Should().Be(expected);
+        string[] sentences =
+        [
+            "Giải pháp là túi vải bạt tái chế giá 45.000 đồng.",
+            "Dự báo tài chính",
+            "Năm đầu dự kiến doanh thu 1,8 tỷ đồng và lợi nhuận 450 triệu đồng.",
+            "Đối thủ trực tiếp là túi vải in sẵn trên Shopee.",
+            "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, gọi vốn từ quỹ trường."
+        ];
+
+        CheckpointSummaryText.BestEvidence(title, sentences).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Kế hoạch phân công nhóm")]
+    [InlineData("MVP")]
+    [InlineData("Kết quả khảo sát hoặc phỏng vấn")]
+    public void BestEvidence_IsNullWhenNoSentenceNamesTheRequirement(string title)
+    {
+        CheckpointSummaryText.BestEvidence(title, ["Giải pháp là túi vải bạt tái chế giá 45.000 đồng.", "Hoặc của các bên khác."])
+            .Should().BeNull();
     }
 
     [Fact]

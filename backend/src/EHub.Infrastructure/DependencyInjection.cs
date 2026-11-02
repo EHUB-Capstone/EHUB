@@ -183,18 +183,25 @@ public static class DependencyInjection
         var enabled = string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase);
         if (!enabled && !string.Equals(provider, "Disabled", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Summarization:Provider must be Disabled or Ollama.");
-        var maxInput = configuration.GetValue("Summarization:MaxInputCharacters", 20_000);
+        var maxInput = configuration.GetValue("Summarization:MaxInputCharacters", 30_000);
+        var filePrompt = configuration.GetValue("Summarization:FilePromptCharacters", 12_000);
         var timeoutMinutes = configuration.GetValue("Summarization:JobTimeoutMinutes", 10);
         if (maxInput is < 1_000 or > 100_000)
             throw new InvalidOperationException("Summarization:MaxInputCharacters must be between 1000 and 100000.");
+        // About 3 characters per token: more than 18,000 characters does not fit an 8k context with the instructions and answer.
+        if (filePrompt is < 2_000 or > 18_000 || filePrompt > maxInput)
+            throw new InvalidOperationException("Summarization:FilePromptCharacters must be between 2000 and 18000 and not above MaxInputCharacters.");
         if (timeoutMinutes is < 1 or > 14)
             throw new InvalidOperationException("Summarization:JobTimeoutMinutes must be between 1 and 14 (the processing lease is 15).");
 
         services.AddSingleton(new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummarySettings
         {
-            Enabled = enabled, MaxInputCharacters = maxInput, JobTimeout = TimeSpan.FromMinutes(timeoutMinutes)
+            Enabled = enabled, MaxInputCharacters = maxInput, FilePromptCharacters = filePrompt,
+            JobTimeout = TimeSpan.FromMinutes(timeoutMinutes)
         });
         services.AddSingleton<ISubmissionTextExtractor, EHub.Infrastructure.Summarization.SubmissionTextExtractor>();
+        services.AddSingleton<ICheckpointSummaryQueueSignal, CheckpointSummaryQueueSignal>();
+        services.AddSingleton<ICheckpointSummaryCancellation, CheckpointSummaryCancellation>();
         if (!enabled)
         {
             services.AddSingleton<ICheckpointSummarizer, EHub.Infrastructure.Summarization.DisabledCheckpointSummarizer>();

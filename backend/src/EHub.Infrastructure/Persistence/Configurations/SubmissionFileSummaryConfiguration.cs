@@ -5,19 +5,22 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EHub.Infrastructure.Persistence.Configurations;
 
-public class CheckpointSummaryConfiguration : IEntityTypeConfiguration<CheckpointSummary>
+public class SubmissionFileSummaryConfiguration : IEntityTypeConfiguration<SubmissionFileSummary>
 {
-    public void Configure(EntityTypeBuilder<CheckpointSummary> builder)
+    public void Configure(EntityTypeBuilder<SubmissionFileSummary> builder)
     {
-        builder.ToTable("checkpoint_summaries");
+        builder.ToTable("submission_file_summaries");
 
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).HasColumnName("id");
+        builder.Property(item => item.SubmissionFileId).HasColumnName("submission_file_id").IsRequired();
         builder.Property(item => item.TeamId).HasColumnName("team_id").IsRequired();
         builder.Property(item => item.CheckpointId).HasColumnName("checkpoint_id").IsRequired();
+        builder.Property(item => item.FileVersionNumber).HasColumnName("file_version_number").IsRequired();
 
-        // One summary per team and checkpoint: a new request overwrites it.
-        builder.HasIndex(item => new { item.TeamId, item.CheckpointId }).IsUnique();
+        // One summary per stored file version.
+        builder.HasIndex(item => item.SubmissionFileId).IsUnique();
+        builder.HasIndex(item => new { item.TeamId, item.CheckpointId });
 
         builder.Property(item => item.Status)
             .HasColumnName("status")
@@ -25,7 +28,6 @@ public class CheckpointSummaryConfiguration : IEntityTypeConfiguration<Checkpoin
             .HasMaxLength(20)
             .HasDefaultValue(CheckpointSummaryStatus.Pending)
             .IsRequired();
-        builder.Property(item => item.SourceHash).HasColumnName("source_hash").HasMaxLength(64).IsRequired();
         builder.Property(item => item.ContentJson).HasColumnName("content_json").HasColumnType("jsonb");
         builder.Property(item => item.Model).HasColumnName("model").HasMaxLength(100);
         builder.Property(item => item.PromptVersion).HasColumnName("prompt_version").HasMaxLength(20);
@@ -50,14 +52,10 @@ public class CheckpointSummaryConfiguration : IEntityTypeConfiguration<Checkpoin
         builder.Property(item => item.DeletedBy).HasColumnName("deleted_by");
         builder.HasQueryFilter(item => !item.IsDeleted);
 
-        // A summary has no meaning without its team or checkpoint.
-        builder.HasOne(item => item.Team)
+        // A summary has no meaning without its file.
+        builder.HasOne(item => item.SubmissionFile)
             .WithMany()
-            .HasForeignKey(item => item.TeamId)
-            .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(item => item.Checkpoint)
-            .WithMany()
-            .HasForeignKey(item => item.CheckpointId)
+            .HasForeignKey(item => item.SubmissionFileId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

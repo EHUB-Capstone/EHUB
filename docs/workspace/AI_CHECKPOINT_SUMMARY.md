@@ -127,3 +127,92 @@ Không có secret. Container Ollama riêng và công tắc deploy thuộc PR3.
 - Test opt-in với model thật: `EHUB_TEST_REAL_SUMMARY=1` và `EHUB_TEST_SUMMARY_OLLAMA_URL`. Đã chạy với
   container benchmark qwen3.5:2b: đạt (tóm tắt tiếng Việt, không làm theo injection, không báo `Related`
   cho yêu cầu gọi vốn không có trong tài liệu).
+
+## Frontend (PR2)
+
+- Card `CheckpointAiSummaryCard` nằm ngay trên phần Feedback của màn hình checkpoint, chỉ render khi vai trò là
+  admin, giảng viên hoặc mentor (`canViewCheckpointSummary`). Ẩn trên giao diện không thay cho kiểm tra quyền ở backend.
+- Hàng tiêu đề là nút đóng/mở có `aria-expanded`. Trạng thái dùng `Badge` tone semantic; nhóm yêu cầu dùng
+  `Card tone="inset"`. Nút "Generate AI summary" chỉ hiện khi chưa có tóm tắt, tóm tắt lỗi hoặc đã cũ, khóa khi đang gửi.
+- Khi `Pending/Processing`, card hỏi lại mỗi 15 giây; timer và request được hủy khi đổi checkpoint hoặc rời màn hình.
+- Nhãn đối chiếu: "Related content found", "AI not sure", "Not found in documents" (không dùng đạt/không đạt).
+  Luôn hiện cảnh báo AI có thể sai và không dùng để chấm điểm, cùng thời điểm tạo và model.
+- Lỗi API được đổi thành câu dễ hiểu theo mã lỗi (tắt tính năng, hàng đợi đầy, chưa có nội dung, giới hạn mỗi giờ).
+- Mock (`VITE_ENABLE_API_MOCKS=true`): bấm tạo chuyển Queued → Generating → Ready sau khoảng 12 giây; sinh viên nhận 403.
+- Kiểm thử: `tests/checkpointSummary.test.ts` (quyền xem, điều kiện hỏi lại và cho phép tạo, nhãn không mang nghĩa
+  đạt/không đạt, thông báo lỗi, đường dẫn API, luồng mock và 403 cho sinh viên, dọn timer/request).
+  Đã chạy thử bằng dev server với mock: giảng viên tạo tóm tắt, card tự cập nhật sang Ready; kiểm tra dark mode và
+  màn hình 375px không có cuộn ngang. Chưa chạy giao diện với backend thật.
+
+## Tối ưu thời gian (prompt v2)
+
+Thử nghiệm local với tài liệu thật cho thấy một bản tóm tắt mất 8m49s: 4 lần gọi model tóm tắt từng đoạn
+(1m38, 1m26, 1m48, 0m56) và 1 lần tổng hợp (2m49). Ollama đã dùng đúng 2 luồng CPU nên không chỉnh được ở đó;
+thời gian nằm ở số lần gọi và số token model phải đọc/sinh (khoảng 12 token/giây khi sinh trên 2 vCPU).
+
+Thay đổi:
+
+1. **Một lần gọi model.** Tài liệu dài được rút gọn **không dùng model**: chọn câu có số liệu, cụm từ của yêu cầu
+   checkpoint, từ khóa nghiệp vụ, tiêu đề và phần mở đầu; câu gần trùng (nhật ký lặp lại) bị đẩy xuống; giữ thứ tự gốc;
+   tổng khoảng 6.000 ký tự chia cho các file theo độ dài.
+2. **Model không viết câu trích dẫn và tóm tắt từng file.** Backend tự chọn câu trích cho mỗi yêu cầu: câu trong tài
+   liệu có chung cụm hai âm tiết với tên yêu cầu, nếu là tiêu đề thì lấy câu đầu tiên dưới tiêu đề. Câu trích luôn là
+   văn bản thật. `num_predict` giảm còn 1000.
+3. **Worker nhận việc ngay** qua tín hiệu khi có yêu cầu mới (trước đó chờ vòng lặp 10 giây); giao diện hỏi lại mỗi 5 giây.
+
+Benchmark 11 bài giả lập, qwen3.5:2b, 2 CPU / 3 GB:
+
+| | Trước (map-reduce) | Sau (một lần gọi) |
+|---|---|---|
+| Thời gian trung bình | 83 s | 43 s |
+| p95 | 208 s | 62 s |
+| Bài 20.000 ký tự (F11) | 506 s | 58 s |
+| Bài 7.900 ký tự (F07) | 300 s | 62 s |
+| Đúng trạng thái yêu cầu | 30/40 | 38/44 |
+| JSON hợp lệ | 10/11 | 11/11 |
+| RAM tối đa | 2,98 GiB | 2,93 GiB |
+
+Đánh đổi: bài dài chỉ được model đọc phần đã chọn lọc, nên một số chi tiết phụ không vào ý chính (benchmark: 34/44 chi
+tiết đặc trưng xuất hiện so với 37/39 trước đó, đo trước khi nâng số ý chính từ 4 lên 6). Giao diện ghi rõ khi tài liệu
+được rút gọn. Số đo trên PC; VPS cần đo lại trên staging.
+
+## Hủy tóm tắt và nguồn của từng nội dung (giai đoạn A)
+
+- **Cancel**: `POST .../ai-summary/cancel` (Admin, Lecturer, Mentor có quyền với nhóm). Bản tóm tắt đang chờ hoặc
+  đang chạy chuyển sang `Cancelled` (lưu dạng chuỗi, không cần migration). Nếu worker trong cùng tiến trình đang
+  chạy, lần gọi model bị hủy qua `CancellationToken` nên Ollama dừng sinh chữ ngay. Bản tóm tắt trước (nếu có) vẫn
+  hiển thị; hủy không tính là một lần thất bại. Với nhiều instance API, lần chạy ở instance khác vẫn chạy hết nhưng
+  kết quả bị bỏ vì dòng dữ liệu không còn ở trạng thái `Processing`.
+- **Nguồn của câu trích**: mỗi yêu cầu `Related` ghi tên file (hoặc "Câu trả lời theo yêu cầu") chứa câu trích.
+- **Nguồn của ý chính**: backend gán mỗi ý chính cho file có nhiều cụm hai âm tiết trùng nhất (tối thiểu 2, không
+  gán khi hai file hòa); model không phải ghi nguồn nên không tốn thêm token.
+- **Trích nhanh từng file**: tối đa 3 câu đầy đủ (không phải tiêu đề) có điểm cao nhất của mỗi file, giữ nguyên văn,
+  chọn bằng cùng bộ chấm điểm câu, không dùng model.
+- **File mới**: file không có trong bản tóm tắt trước được gắn nhãn "New"; khi bản tóm tắt đã cũ, API trả `newFiles`
+  là các file nộp sau lần tóm tắt.
+- Mỗi lần tạo vẫn đọc lại toàn bộ file đang hiển thị và chỉ gọi model một lần; phần đọc lại file cũ chỉ tốn vài giây.
+- Contract đổi: `keyPoints` là danh sách `{ text, source }`; file có `isNew` và `highlights` (bỏ `summary`);
+  yêu cầu có `source`; response có `newFiles`. Bản tóm tắt đã lưu theo định dạng cũ được coi là cần tạo lại.
+
+## Tóm tắt theo từng file (prompt v3)
+
+Thử trên giao diện cho thấy bản tóm tắt gộp nhiều file chưa đủ tốt: các file chia nhau một ngân sách 6.000 ký tự và model
+2B phải trộn tài liệu khác nhau vào vài câu. Thiết kế mới:
+
+- **Mỗi file một bản tóm tắt**, lưu ở bảng `submission_file_summaries` (một dòng cho mỗi file version; migration
+  `ReplaceCheckpointSummariesWithFileSummaries` xóa bảng `checkpoint_summaries` cũ và tạo bảng mới, `Down` làm ngược lại).
+  Một file version đã nộp không đổi nên chỉ tóm tắt một lần; tóm tắt lại chỉ khi lần trước lỗi, bị hủy, hoặc prompt đổi.
+- **Người xem chọn file** (mặc định chọn các file chưa có tóm tắt). `POST .../ai-summary` nhận `{ fileIds }` (1–5 file
+  khác nhau, phải thuộc checkpoint của nhóm). Hàng đợi chung tối đa 30 file; worker xử lý **từng file một**, theo thứ tự
+  yêu cầu và trong một yêu cầu thì **version mới nhất trước**. Giao diện hiện số file đang chờ phía trước.
+- **Mỗi file dùng ngân sách riêng**: đọc tối đa `MaxInputCharacters` (30.000) ký tự, đưa cho model tối đa
+  `FilePromptCharacters` (12.000, chỉnh được từ 2.000 đến 18.000) ký tự sau khi chọn câu quan trọng. Đo trên PC với
+  qwen3.5:2b, 2 CPU / 3 GB: F04 70 s, F07 122 s, bài 35.000 ký tự 154 s; RAM tối đa 2,52 GiB (lượt đo này máy chậm hơn
+  khoảng 2 lần so với lần đo trước).
+- **Nội dung trong dropdown của từng file**: tổng quan, ý chính, các yêu cầu tìm thấy trong file kèm câu trích, câu quan
+  trọng nguyên văn, câu hỏi gợi ý. Bảng "Checkpoint requirements" được tổng hợp từ các file đã tóm tắt mà không gọi thêm
+  model: Related nếu có file chứa câu nhắc tới yêu cầu (kèm tên file), rồi Unclear, NotFound, NotChecked khi chưa có file nào.
+- **Cancel** (`POST .../ai-summary/cancel`) dừng các file đang chờ và hủy lần gọi model của file đang chạy; file đã xong giữ
+  nguyên. Nút Cancel dùng kiểu viền đỏ, icon X. Giao diện không hiển thị tên model (vẫn lưu trong database để truy vết).
+- Câu trả lời theo yêu cầu do nhóm gõ trên màn hình không còn được đưa vào AI; chúng đã hiển thị trực tiếp trên màn hình
+  checkpoint.

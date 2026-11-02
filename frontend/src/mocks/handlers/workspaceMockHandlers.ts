@@ -421,6 +421,88 @@ const MOCK_FILE_LIMIT_MESSAGE = `A checkpoint can contain at most ${MOCK_MAX_CHE
 const mockPreviewPolls = new Map<string, number>();
 
 /** Stands in for the presigned R2 URL: the browser PUTs here through storageClient. */
+// AI file summaries are simulated in memory. Each request queues the chosen files newest first; every file then
+// spends a few seconds Pending and Processing before it is Ready, so the polling screen can be exercised without a model.
+const MOCK_SUMMARY_STEP_MS = 6_000;
+const mockFileSummaries = new Map<string, { startsAt: number; cancelledAt?: number }>();
+
+function mockFileStatus(fileId: string, now = Date.now()) {
+  const entry = mockFileSummaries.get(fileId);
+  if (!entry) return 'None';
+  const endsAt = entry.startsAt + MOCK_SUMMARY_STEP_MS;
+  if (entry.cancelledAt !== undefined && entry.cancelledAt < endsAt) return 'Cancelled';
+  return now < entry.startsAt ? 'Pending' : now < endsAt ? 'Processing' : 'Ready';
+}
+
+function mockSummary(teamId: string, number: number) {
+  const cls = classByTeam(teamId)!;
+  const checkpoint = checkpointDefinitionsForClass(cls).find((item) => item.number === number);
+  const requirements = (checkpoint?.requirements || []).map((requirement) => String(requirement));
+  const files = [...filesForCheckpoint(teamId, number)].sort((a, b) => (b.versionNumber ?? 0) - (a.versionNumber ?? 0));
+  const pending = files.filter((file) => mockFileStatus(file._id) === 'Pending')
+    .sort((a, b) => mockFileSummaries.get(a._id)!.startsAt - mockFileSummaries.get(b._id)!.startsAt);
+  const busy = files.some((file) => mockFileStatus(file._id) === 'Processing') ? 1 : 0;
+  const fileSummaries = files.map((file, position) => {
+    const status = mockFileStatus(file._id);
+    const entry = mockFileSummaries.get(file._id);
+    return {
+      fileId: file._id,
+      name: file.originalName,
+      versionNumber: file.versionNumber ?? 1,
+      uploadedAt: file.uploadedAt,
+      status,
+      queueAhead: status === 'Pending' ? busy + pending.findIndex((item) => item._id === file._id) : null,
+      requestedAt: entry ? new Date(entry.startsAt).toISOString() : null,
+      generatedAt: status === 'Ready' ? new Date(entry!.startsAt + MOCK_SUMMARY_STEP_MS).toISOString() : null,
+      errorCode: null,
+      inputTruncated: position === 0 && files.length > 1,
+      content: status !== 'Ready' ? null : {
+        overview: `Tài liệu "${file.originalName}" trình bày vấn đề của sinh viên khi tìm dịch vụ trong khuôn viên trường và đề xuất một nền tảng kết nối dịch vụ đã được xác minh.`,
+        keyPoints: [
+          'Khách hàng mục tiêu là sinh viên năm nhất và năm hai.',
+          'Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.',
+          'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.',
+        ],
+        highlights: ['Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.', 'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.'],
+        requirements: requirements.map((title, index) => ({
+          index,
+          title,
+          finding: index === 0 && position === 0 ? 'Related' : index === 1 ? 'Unclear' : 'NotFound',
+          evidence: index === 0 && position === 0 ? 'Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.' : null,
+        })),
+        questions: ['Nhóm đã kiểm chứng mức phí hoa hồng 8% với nhà cung cấp dịch vụ nào chưa?'],
+      },
+    };
+  });
+  const ready = fileSummaries.filter((file) => file.content);
+  return {
+    checkpointNumber: number,
+    enabled: true,
+    filePromptCharacters: 12_000,
+    files: fileSummaries,
+    requirements: requirements.map((title, index) => {
+      const related = ready.find((file) => file.content!.requirements[index]?.finding === 'Related');
+      const findings = ready.map((file) => file.content!.requirements[index]?.finding);
+      return {
+        index,
+        title,
+        finding: related ? 'Related' : findings.includes('Unclear') ? 'Unclear' : findings.length ? 'NotFound' : 'NotChecked',
+        evidence: related?.content!.requirements[index].evidence ?? null,
+        source: related?.name ?? null,
+      };
+    }),
+    links: linksForCheckpoint(teamId, number).map((link) => ({ name: link.name, domain: new URL(link.url).hostname })),
+  };
+}
+
+function summaryReviewerFailure(teamId: string) {
+  const state = getMockState();
+  const user = state.users.find((item) => item.id === state.sessionUserId);
+  return !user || user.role === 'STUDENT' || !canAccessCheckpointTeam(teamId)
+    ? failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to AI summaries for this team.')
+    : null;
+}
+
 export function registerStorageMockHandlers(mock: MockAdapter): void {
   mock.onPut(new RegExp(`^${MOCK_STORAGE_PREFIX}[^/]+$`)).reply((config) => {
     const uploadId = config.url?.slice(MOCK_STORAGE_PREFIX.length) || '';
@@ -1444,6 +1526,50 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     return canAccessCheckpointTeam(teamId) && checkpointDefinitionsForClass(classByTeam(teamId)!).some((item) => item.number === checkpointNumber)
       ? ok(evaluationSummary(teamId, checkpointNumber), 'Evaluation summary retrieved successfully.')
       : failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+  });
+
+  const summaryRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary$/;
+  mock.onGet(summaryRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(summaryRoute) || [];
+    return summaryReviewerFailure(teamId) ?? ok(mockSummary(teamId, Number(number)), 'AI summary retrieved.');
+  });
+
+  mock.onPost(summaryRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(summaryRoute) || [];
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    const checkpointNumber = Number(number);
+    const fileIds = (parseBody(config).fileIds as string[] | undefined) ?? [];
+    if (fileIds.length === 0 || fileIds.length > 5 || new Set(fileIds).size !== fileIds.length)
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Choose between one and five files to summarise.');
+    const files = [...filesForCheckpoint(teamId, checkpointNumber)].sort((a, b) => (b.versionNumber ?? 0) - (a.versionNumber ?? 0));
+    if (fileIds.some((id) => !files.some((file) => file._id === id)))
+      return failure(404, 'WORKSPACE_NOT_FOUND', 'One or more files are not part of this checkpoint any more.');
+    // Queue after whatever is still waiting, newest version first.
+    const now = Date.now();
+    let startsAt = Math.max(now, ...[...mockFileSummaries.entries()]
+      .filter(([id]) => ['Pending', 'Processing'].includes(mockFileStatus(id, now)))
+      .map(([, entry]) => entry.startsAt + MOCK_SUMMARY_STEP_MS));
+    for (const file of files.filter((item) => fileIds.includes(item._id))) {
+      if (!['None', 'Cancelled', 'Failed'].includes(mockFileStatus(file._id, now))) continue;
+      mockFileSummaries.set(file._id, { startsAt });
+      startsAt += MOCK_SUMMARY_STEP_MS;
+    }
+    return [202, { success: true, message: 'AI summary queued.', code: null, data: mockSummary(teamId, checkpointNumber), errors: null }];
+  });
+
+  const cancelRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/cancel$/;
+  mock.onPost(cancelRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(cancelRoute) || [];
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    const checkpointNumber = Number(number);
+    const now = Date.now();
+    for (const file of filesForCheckpoint(teamId, checkpointNumber)) {
+      const entry = mockFileSummaries.get(file._id);
+      if (entry && ['Pending', 'Processing'].includes(mockFileStatus(file._id, now))) entry.cancelledAt = now;
+    }
+    return ok(mockSummary(teamId, checkpointNumber), 'AI summary cancelled.');
   });
 
   mock.onPost('/workspace/checkpoints/evaluation-grading/export').reply((config) => {

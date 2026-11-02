@@ -140,10 +140,10 @@ class MemorySampler(threading.Thread):
         self.join()
 
 
-def chat(base_url, model, system, user, schema, num_ctx, timeout):
+def chat(base_url, model, system, user, schema, num_ctx, timeout, num_predict=1500):
     body = {"model": model, "stream": False, "format": schema, "keep_alive": "5m",
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "options": {"temperature": 0.2, "num_ctx": num_ctx, "num_predict": 1500}}
+            "options": {"temperature": 0.2, "num_ctx": num_ctx, "num_predict": num_predict}}
     if model.startswith("qwen3.5"):
         body["think"] = False  # Hybrid thinking model: reasoning tokens would only add latency here.
     request = urllib.request.Request(f"{base_url}/api/chat", data=json.dumps(body).encode(),
@@ -194,16 +194,118 @@ def score(item, source, output):
     })
     return result
 
+# ---------------------------------------------------------------- single-call strategy
+
+COMPACT_RULES = (
+    "Với mỗi yêu cầu của checkpoint, chọn status: Covered nếu tài liệu trình bày rõ và có chi tiết, "
+    "Partial nếu chỉ nhắc sơ qua hoặc thiếu số liệu, NotFound nếu tài liệu không đề cập. "
+    "evidence là MỘT câu chép nguyên văn từ tài liệu, tối đa 150 ký tự; để chuỗi rỗng khi NotFound. "
+    "overview 2-3 câu. keyPoints tối đa 5 ý ngắn, giữ số liệu cụ thể. files: mỗi tài liệu một câu. "
+    "questions tối đa 3 câu hỏi về phần còn thiếu."
+)
+
+LEAN_RULES = (
+    "Với mỗi yêu cầu của checkpoint, chọn status: Covered nếu tài liệu trình bày rõ và có chi tiết, "
+    "Partial nếu chỉ nhắc sơ qua hoặc thiếu số liệu, NotFound nếu tài liệu không đề cập. "
+    "overview 2-3 câu. keyPoints tối đa 4 ý ngắn, giữ số liệu cụ thể. questions tối đa 3 câu hỏi về phần còn thiếu."
+)
+
+
+def lean_schema(requirement_count):
+    return {
+        "type": "object",
+        "properties": {
+            "overview": {"type": "string"},
+            "keyPoints": {"type": "array", "items": {"type": "string"}},
+            "requirements": {"type": "array", "minItems": requirement_count, "maxItems": requirement_count,
+                             "items": {"type": "object", "properties": {
+                                 "index": {"type": "integer"}, "status": {"type": "string", "enum": STATUSES}},
+                                 "required": ["index", "status"]}},
+            "questions": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["overview", "keyPoints", "requirements", "questions"],
+    }
+
+
+def attach_evidence(content, requirements, source):
+    """The backend, not the model, picks the quote: the source sentence sharing most two-word phrases with the
+    requirement title. Quotes are therefore always genuine and the model writes far fewer tokens."""
+    data = json.loads(content)
+    sentences = [part.strip() for line in source.split("\n") for part in re.split(r"(?<=[.!?])\s+", line) if part.strip()]
+    for item in data["requirements"]:
+        index = item.get("index", 0) - 1
+        title = requirements[index] if 0 <= index < len(requirements) else ""
+        pairs = _words(title, 2)
+        best = max(sentences, key=lambda sentence: len(pairs & _words(sentence, 2)), default="")
+        item["evidence"] = best if item.get("status") != "NotFound" and pairs & _words(best, 2) else ""
+    data.setdefault("files", [])
+    return json.dumps(data, ensure_ascii=False)
+
+
+KEYWORDS = ("khách hàng", "doanh thu", "giá", "chi phí", "đối thủ", "rủi ro", "vốn", "mvp", "prototype", "khảo sát",
+            "phỏng vấn", "kết quả", "mục tiêu", "giải pháp", "vấn đề", "kênh", "marketing", "lợi nhuận", "thị trường",
+            "người dùng", "kế hoạch", "tài chính", "hòa vốn", "đơn", "tỷ lệ")
+
+
+def _words(text, size):
+    words = norm(text).split()
+    return {" ".join(words[i:i + size]) for i in range(len(words) - size + 1)}
+
+
+def select_sentences(text, requirements, budget):
+    """Picks the most informative sentences without a model: numbers, requirement phrases, domain keywords,
+    headings and the start of the document. Near-duplicates (repeated weekly logs) are pushed down and the
+    original order is kept, so one model call sees the substance of a long file."""
+    pieces = []
+    for line in (line.strip() for line in text.split("\n")):
+        if not line:
+            continue
+        parts = re.split(r"(?<=[.!?])\s+", line) if len(line) > 200 else [line]
+        pieces.extend(part.strip() for part in parts if part.strip())
+    requirement_pairs = set().union(*(_words(r, 2) for r in requirements)) if requirements else set()
+    scored, seen = [], []
+    for position, piece in enumerate(pieces):
+        lowered = piece.lower()
+        score = 0.0
+        if re.search(r"\d", piece): score += 3
+        if requirement_pairs & _words(piece, 2): score += 3
+        score += min(3, sum(1 for keyword in KEYWORDS if keyword in lowered))
+        if len(piece) <= 80 and not piece.endswith("."): score += 1.5  # heading
+        if position < len(pieces) * 0.1: score += 1
+        signature = _words(piece, 3)
+        if signature and any(len(signature & other) / len(signature) > 0.6 for other in seen):
+            score -= 4
+        seen.append(signature)
+        scored.append((score, position, piece))
+    chosen, used = set(), 0
+    for score, position, piece in sorted(scored, key=lambda item: (-item[0], item[1])):
+        if used + len(piece) + 1 > budget:
+            continue
+        chosen.add(position)
+        used += len(piece) + 1
+    return "\n".join(piece for _, position, piece in scored if position in chosen)
+
 # ---------------------------------------------------------------- benchmark
 
 
-def summarise(base_url, model, item, folder, num_ctx, timeout, raw_limit, chunk_size, total_limit):
+def summarise(base_url, model, item, folder, num_ctx, timeout, raw_limit, chunk_size, total_limit,
+              strategy="mapreduce", compact=False, prompt_budget=6000):
     calls, documents, source_parts = [], [], []
     budget = total_limit
+    texts = []
     for name in item["files"]:
         text = redact(extract(folder / name))[:budget]
         budget -= len(text)
         source_parts.append(text)
+        texts.append((name, text))
+    total = sum(len(text) for _, text in texts) or 1
+    for name, text in texts:
+        if strategy == "extractive":
+            # One model call: long files are shrunk by sentence selection instead of being summarised by the model.
+            share = max(800, int(prompt_budget * len(text) / total))
+            body = text if len(text) <= share else select_sentences(text, item["requirements"], share)
+            documents.append(f'<tai_lieu ten="{name}">\n{body}\n</tai_lieu>')
+            continue
         if len(text) <= raw_limit:
             documents.append(f'<tai_lieu ten="{name}">\n{text}\n</tai_lieu>')
             continue
@@ -223,10 +325,15 @@ def summarise(base_url, model, item, folder, num_ctx, timeout, raw_limit, chunk_
     user = (f"Checkpoint {item['checkpoint']} – bài nộp của nhóm: {item['title']}\n"
             f"Yêu cầu của checkpoint (index bắt đầu từ 1):\n{requirements}\n"
             f"Link nhóm đã nộp (bạn KHÔNG truy cập được nội dung, không suy đoán nội dung link):\n{links}\n\n"
-            + "\n\n".join(documents) + "\n\n" + FINAL_RULES)
-    response = chat(base_url, model, SYSTEM, user, final_schema(len(item["requirements"])), num_ctx, timeout)
+            + "\n\n".join(documents) + "\n\n"
+            + (LEAN_RULES if compact == "lean" else COMPACT_RULES if compact else FINAL_RULES))
+    schema = lean_schema(len(item["requirements"])) if compact == "lean" else final_schema(len(item["requirements"]))
+    response = chat(base_url, model, SYSTEM, user, schema, num_ctx, timeout, num_predict=1200 if compact else 1500)
     calls.append(response)
-    return calls, "\n".join(source_parts), response["message"]["content"]
+    content = response["message"]["content"]
+    if compact == "lean":
+        content = attach_evidence(content, item["requirements"], "\n".join(source_parts))
+    return calls, "\n".join(source_parts), content
 
 
 def main():
@@ -243,6 +350,11 @@ def main():
     parser.add_argument("--chunk-size", type=int, default=CHUNK_SIZE)
     parser.add_argument("--total-limit", type=int, default=TOTAL_LIMIT,
                         help="Characters read per submission; the rest is not summarised.")
+    parser.add_argument("--strategy", choices=["mapreduce", "extractive"], default="mapreduce",
+                        help="extractive: select sentences without a model, then make a single model call.")
+    parser.add_argument("--compact", nargs="?", const="compact", default="",
+                        help="'compact': shorter output rules; 'lean': the model writes no quotes or per-file summaries.")
+    parser.add_argument("--prompt-budget", type=int, default=6000, help="Document characters sent in the single call.")
     args = parser.parse_args()
 
     fixtures = Path(args.fixtures)
@@ -265,12 +377,13 @@ def main():
         for item in manifest:
             record = {"model": model, "fixture": item["id"], "prompt_version": PROMPT_VERSION,
                       "num_ctx": args.num_ctx, "raw_limit": args.raw_limit, "chunk_size": args.chunk_size,
-                      "total_limit": args.total_limit,
-                      "cold_load_s": cold_load_s}
+                      "total_limit": args.total_limit, "strategy": args.strategy, "compact": args.compact,
+                      "prompt_budget": args.prompt_budget, "cold_load_s": cold_load_s}
             started = time.time()
             try:
                 calls, source, content = summarise(args.base_url, model, item, fixtures / item["id"], args.num_ctx, args.timeout,
-                                                    args.raw_limit, args.chunk_size, args.total_limit)
+                                                    args.raw_limit, args.chunk_size, args.total_limit,
+                                                    args.strategy, args.compact, args.prompt_budget)
                 record.update({
                     "ok": True, "wall_s": round(time.time() - started, 1), "calls": len(calls),
                     "prompt_tokens": sum(c.get("prompt_eval_count", 0) for c in calls),

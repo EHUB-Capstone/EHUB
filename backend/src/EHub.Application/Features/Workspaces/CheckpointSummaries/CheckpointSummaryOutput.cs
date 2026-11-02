@@ -4,45 +4,21 @@ using EHub.Shared.Constants;
 
 namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 
-/// <param name="Text">The extracted text, or null when the file was not read.</param>
-/// <param name="Status">Summarized, Unreadable or NotIncluded.</param>
-internal sealed record SummaryFileText(SummarySourceFile File, string? Text, string Status);
-
 /// <summary>
-/// Validates the model's JSON and turns it into the response content. The model is not trusted: lengths are clipped,
-/// unknown files are ignored, and a requirement is only reported as related when its quote is found in the documents.
+/// Validates the model's JSON for one file and turns it into the stored content. The model is not trusted: lengths
+/// are clipped and it never writes quotes. For each requirement the backend quotes a sentence of the file that names
+/// it, and it picks the file's highlights itself.
 /// </summary>
 internal static class CheckpointSummaryOutput
 {
     public const string Related = "Related";
     public const string NotFound = "NotFound";
     public const string Unclear = "Unclear";
+    public const string NotChecked = "NotChecked";
 
-    public const string FileSummarized = "Summarized";
-    public const string FileUnreadable = "Unreadable";
-    public const string FileNotIncluded = "NotIncluded";
+    private const int HighlightsPerFile = 3;
 
-    public static bool TryParseMap(string json, out string summary, out IReadOnlyList<string> quotes)
-    {
-        summary = string.Empty;
-        quotes = [];
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !TryString(root, "summary", out summary)) return false;
-            quotes = Strings(root, "quotes").Take(6).ToArray();
-            return true;
-        }
-        catch (JsonException) { return false; }
-    }
-
-    public static WorkspaceCheckpointSummaryContent? TryBuild(
-        string json,
-        IReadOnlyList<SummaryFileText> files,
-        IReadOnlyList<SummarySourceLink> links,
-        IReadOnlyList<SummarySourceRequirement> requirements,
-        string sourceText)
+    public static WorkspaceFileSummaryContent? TryBuild(string json, string fileText, IReadOnlyList<SummarySourceRequirement> requirements)
     {
         try
         {
@@ -53,7 +29,7 @@ internal static class CheckpointSummaryOutput
                 requirementItems.ValueKind != JsonValueKind.Array)
                 return null;
 
-            var sourceTrigrams = CheckpointSummaryText.Trigrams(CheckpointSummaryText.Normalize(sourceText));
+            var sentences = CheckpointSummaryText.Sentences(fileText);
             var findings = new Dictionary<int, (string Finding, string? Evidence)>();
             foreach (var item in requirementItems.EnumerateArray())
             {
@@ -62,49 +38,31 @@ internal static class CheckpointSummaryOutput
                     !TryString(item, "status", out var status)) return null;
                 var index = number - 1;
                 if (index < 0 || index >= requirements.Count || findings.ContainsKey(index)) continue;
-                TryString(item, "evidence", out var evidence);
-                var claimed = status is "Covered" or "Partial";
-                var grounded = claimed && CheckpointSummaryText.IsGrounded(evidence, sourceTrigrams);
-                var quote = grounded ? CheckpointSummaryText.Clip(evidence, CheckpointSummaryLimits.MaxEvidenceCharacters) : null;
-                findings[index] = status == "NotFound"
-                    ? (NotFound, null)
-                    // A real quote that does not mention the requirement is shown, but only as unclear; an invented
-                    // quote is never shown.
-                    : grounded && CheckpointSummaryText.IsRelevant(requirements[index].Title, evidence)
-                        ? (Related, quote)
-                        : (Unclear, quote);
-            }
-
-            var fileSummaries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (root.TryGetProperty("files", out var fileItems) && fileItems.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in fileItems.EnumerateArray())
+                if (status is not ("Covered" or "Partial"))
                 {
-                    if (item.ValueKind == JsonValueKind.Object && TryString(item, "name", out var name) &&
-                        TryString(item, "summary", out var summary) && !string.IsNullOrWhiteSpace(summary))
-                        fileSummaries.TryAdd(name.Trim(), summary);
+                    findings[index] = (NotFound, null);
+                    continue;
                 }
+                // The model says the requirement is addressed; only a sentence that names it can back that up.
+                var evidence = CheckpointSummaryText.BestEvidence(requirements[index].Title, sentences);
+                findings[index] = evidence is null
+                    ? (Unclear, null)
+                    : (Related, CheckpointSummaryText.Clip(evidence, CheckpointSummaryLimits.MaxEvidenceCharacters));
             }
 
-            return new WorkspaceCheckpointSummaryContent
+            var titles = requirements.Select(item => item.Title).ToArray();
+            return new WorkspaceFileSummaryContent
             {
                 Overview = CheckpointSummaryText.Clip(overview, CheckpointSummaryLimits.MaxOverviewCharacters),
                 KeyPoints = Clean(Strings(root, "keyPoints"), CheckpointSummaryLimits.MaxKeyPoints),
                 Questions = Clean(Strings(root, "questions"), CheckpointSummaryLimits.MaxQuestions),
-                Files = files.Select(item => new WorkspaceCheckpointSummaryFile
-                {
-                    FileId = item.File.Id,
-                    Name = item.File.OriginalName,
-                    Status = item.Status,
-                    Summary = item.Status == FileSummarized && fileSummaries.TryGetValue(item.File.OriginalName, out var summary)
-                        ? CheckpointSummaryText.Clip(summary, CheckpointSummaryLimits.MaxItemCharacters)
-                        : null
-                }).ToArray(),
-                Links = links.Select(link => new WorkspaceCheckpointSummaryLink { Name = link.Name, Domain = Domain(link.Url) }).ToArray(),
+                Highlights = CheckpointSummaryText.Highlights(fileText, titles, HighlightsPerFile)
+                    .Select(text => CheckpointSummaryText.Clip(text, CheckpointSummaryLimits.MaxEvidenceCharacters))
+                    .ToArray(),
                 Requirements = requirements.Select(requirement =>
                 {
                     var (finding, evidence) = findings.GetValueOrDefault(requirement.Index, (Unclear, null));
-                    return new WorkspaceCheckpointSummaryRequirement
+                    return new WorkspaceFileRequirementFinding
                     {
                         Index = requirement.Index, Title = requirement.Title, Finding = finding, Evidence = evidence
                     };
@@ -112,6 +70,35 @@ internal static class CheckpointSummaryOutput
             };
         }
         catch (JsonException) { return null; }
+    }
+
+    /// <summary>
+    /// Combines the per-file findings, newest file first: Related wins (with the first file that has a quote), then
+    /// Unclear, then NotFound. Requirements no summarised file looked at are NotChecked.
+    /// </summary>
+    public static IReadOnlyList<WorkspaceCheckpointRequirementFinding> Combine(
+        IReadOnlyList<SummarySourceRequirement> requirements, IReadOnlyList<(string FileName, WorkspaceFileSummaryContent Content)> files)
+    {
+        return requirements.Select(requirement =>
+        {
+            var matches = files
+                .Select(file => (file.FileName, Finding: file.Content.Requirements.FirstOrDefault(item => item.Index == requirement.Index)))
+                .Where(item => item.Finding is not null)
+                .ToArray();
+            var related = matches.FirstOrDefault(item => item.Finding!.Finding == Related);
+            var finding = related.Finding is not null ? Related
+                : matches.Any(item => item.Finding!.Finding == Unclear) ? Unclear
+                : matches.Length > 0 ? NotFound
+                : NotChecked;
+            return new WorkspaceCheckpointRequirementFinding
+            {
+                Index = requirement.Index,
+                Title = requirement.Title,
+                Finding = finding,
+                Evidence = related.Finding?.Evidence,
+                Source = related.Finding is null ? null : related.FileName
+            };
+        }).ToArray();
     }
 
     public static string Domain(string url) =>

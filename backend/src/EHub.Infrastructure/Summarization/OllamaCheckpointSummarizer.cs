@@ -36,7 +36,8 @@ public sealed class OllamaCheckpointSummarizer(HttpClient client, IConfiguration
             {
                 ["temperature"] = 0.2,
                 ["num_ctx"] = _contextLength,
-                ["num_predict"] = 1500
+                // The short answer needs about 350-500 tokens; the cap stops a runaway answer at about 1.5 minutes on CPU.
+                ["num_predict"] = 1000
             }
         };
 

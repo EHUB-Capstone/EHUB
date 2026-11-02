@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
@@ -15,14 +14,15 @@ namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 
 public interface ICheckpointSummaryGenerator
 {
-    /// <returns>True when a summary was handled (or lost to another worker), so the caller should poll again immediately.</returns>
+    /// <returns>True when a file was handled (or lost to another worker), so the caller should poll again immediately.</returns>
     Task<bool> ProcessNextAsync(DateTime nowUtc, CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Produces one queued checkpoint summary: reads the team's current files (newest first, up to the input limit),
-/// summarises long files in chunks, asks for the final structured summary and validates it. Summaries are claimed with
-/// a lease so overlapping runs never process the same one twice; transient failures are retried with a back-off.
+/// Summarises one queued file: reads its text up to the input limit, condenses it without a model to the prompt budget,
+/// makes one model call and validates the answer. Requests are taken oldest first and, within a request, newest file
+/// version first. Rows are claimed with a lease so overlapping runs never process the same file twice; transient
+/// failures are retried with a back-off; a reviewer can cancel, which aborts the model call.
 /// </summary>
 public sealed class CheckpointSummaryGenerator(
     IApplicationDbContext context,
@@ -32,19 +32,20 @@ public sealed class CheckpointSummaryGenerator(
     ICheckpointSummarizer summarizer,
     IDateTimeProvider dateTimeProvider,
     CheckpointSummarySettings settings,
+    ICheckpointSummaryCancellation cancellations,
     ILogger<CheckpointSummaryGenerator> logger) : ICheckpointSummaryGenerator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private sealed record Generated(string ContentJson, string SourceHash, bool InputTruncated);
+    private sealed record Generated(string ContentJson, bool InputTruncated);
 
     public async Task<bool> ProcessNextAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        var candidate = await context.CheckpointSummaries.AsNoTracking()
+        var candidate = await context.SubmissionFileSummaries.AsNoTracking()
             .Where(item => (item.Status == CheckpointSummaryStatus.Pending && (item.NextAttemptAtUtc == null || item.NextAttemptAtUtc <= nowUtc)) ||
                 (item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc <= nowUtc))
-            .OrderBy(item => item.NextAttemptAtUtc)
-            .Select(item => new { item.Id, item.TeamId, item.CheckpointId, item.AttemptCount })
+            .OrderBy(item => item.NextAttemptAtUtc).ThenByDescending(item => item.FileVersionNumber)
+            .Select(item => new { item.Id, item.SubmissionFileId, item.CheckpointId, item.AttemptCount })
             .FirstOrDefaultAsync(cancellationToken);
         if (candidate is null) return false;
 
@@ -52,7 +53,7 @@ public sealed class CheckpointSummaryGenerator(
         // or the saved value would never equal the one held here.
         var lease = (nowUtc + CheckpointSummaryLimits.ProcessingLease).Ticks;
         var leaseUntil = new DateTime(lease - lease % 10, DateTimeKind.Utc);
-        var claimed = await context.CheckpointSummaries
+        var claimed = await context.SubmissionFileSummaries
             .Where(item => item.Id == candidate.Id &&
                 ((item.Status == CheckpointSummaryStatus.Pending && (item.NextAttemptAtUtc == null || item.NextAttemptAtUtc <= nowUtc)) ||
                  (item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc <= nowUtc)))
@@ -61,13 +62,25 @@ public sealed class CheckpointSummaryGenerator(
                 .SetProperty(item => item.NextAttemptAtUtc, leaseUntil), cancellationToken);
         if (claimed == 0) return true;
 
+        using var registration = cancellations.Register(candidate.Id, out var cancelledByReviewer);
+        // A reviewer may have cancelled between the claim and the registration; then there is nothing to abort.
+        if (!await context.SubmissionFileSummaries.AnyAsync(item => item.Id == candidate.Id &&
+                item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc == leaseUntil, cancellationToken))
+            return true;
+
         Result<Generated> result;
-        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cancelledByReviewer))
         {
             timeout.CancelAfter(settings.JobTimeout);
             try
             {
-                result = await GenerateAsync(candidate.TeamId, candidate.CheckpointId, timeout.Token);
+                result = await GenerateAsync(candidate.SubmissionFileId, candidate.CheckpointId, timeout.Token);
+            }
+            catch (OperationCanceledException) when (cancelledByReviewer.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // The reviewer's request already marked the row Cancelled; nothing to save.
+                logger.LogInformation("File summary {SummaryId} was cancelled by a reviewer.", candidate.Id);
+                return true;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -76,7 +89,7 @@ public sealed class CheckpointSummaryGenerator(
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // Only the type is logged: messages from parsers or the model client can contain document text.
-                logger.LogError("Checkpoint summary {SummaryId} crashed with {ExceptionType}.", candidate.Id, exception.GetType().Name);
+                logger.LogError("File summary {SummaryId} crashed with {ExceptionType}.", candidate.Id, exception.GetType().Name);
                 result = Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryUnavailable, "The summary failed unexpectedly.");
             }
         }
@@ -84,12 +97,11 @@ public sealed class CheckpointSummaryGenerator(
         if (result.IsSuccess)
         {
             var finishedAt = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
-            await context.CheckpointSummaries
+            await context.SubmissionFileSummaries
                 .Where(item => item.Id == candidate.Id && item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc == leaseUntil)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(item => item.Status, CheckpointSummaryStatus.Ready)
                     .SetProperty(item => item.ContentJson, result.Value.ContentJson)
-                    .SetProperty(item => item.SourceHash, result.Value.SourceHash)
                     .SetProperty(item => item.InputTruncated, result.Value.InputTruncated)
                     .SetProperty(item => item.Model, summarizer.ModelName)
                     .SetProperty(item => item.PromptVersion, CheckpointSummaryPrompt.Version)
@@ -97,7 +109,7 @@ public sealed class CheckpointSummaryGenerator(
                     .SetProperty(item => item.AttemptCount, 0)
                     .SetProperty(item => item.NextAttemptAtUtc, (DateTime?)null)
                     .SetProperty(item => item.LastErrorCode, (string?)null), cancellationToken);
-            logger.LogInformation("Checkpoint summary {SummaryId} is ready.", candidate.Id);
+            logger.LogInformation("File summary {SummaryId} is ready.", candidate.Id);
             return true;
         }
 
@@ -105,93 +117,42 @@ public sealed class CheckpointSummaryGenerator(
         return true;
     }
 
-    private async Task<Result<Generated>> GenerateAsync(Guid teamId, Guid checkpointId, CancellationToken cancellationToken)
+    private async Task<Result<Generated>> GenerateAsync(Guid fileId, Guid checkpointId, CancellationToken cancellationToken)
     {
         var checkpoint = await context.Checkpoints.AsNoTracking().FirstOrDefaultAsync(item => item.Id == checkpointId, cancellationToken);
-        if (checkpoint is null) return NoContent();
-        var source = await CheckpointSummarySource.LoadAsync(context, teamId, checkpoint, cancellationToken);
-        if (source.IsEmpty) return NoContent();
+        // The query filter hides deleted files: a file removed after it was queued has nothing left to summarise.
+        var file = await context.SubmissionFiles.AsNoTracking()
+            .Where(item => item.Id == fileId)
+            .Select(item => new SummarySourceFile(item.Id, item.VersionNumber, item.OriginalName, item.FileSize, item.UploadedAt,
+                item.StorageProvider, item.StorageKey, item.FileUrl))
+            .FirstOrDefaultAsync(cancellationToken);
+        if (checkpoint is null || file is null)
+            return Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryNoContent, "The file is no longer part of this checkpoint.");
+        var requirements = CheckpointSummarySource.Requirements(checkpoint);
 
-        var budget = settings.MaxInputCharacters;
-        var truncated = false;
-        var sourceText = new StringBuilder();
-        var answers = new StringBuilder();
-        foreach (var requirement in source.Requirements.Where(item => !string.IsNullOrWhiteSpace(item.TeamAnswer)))
-        {
-            var answer = CheckpointSummaryText.Redact(requirement.TeamAnswer!.Trim());
-            if (answer.Length > budget) { answer = answer[..Math.Max(0, budget)]; truncated = true; }
-            if (answer.Length == 0) break;
-            answers.Append("Yêu cầu ").Append(requirement.Index + 1).Append(": ").Append(answer).Append('\n');
-            budget -= answer.Length;
-        }
-        sourceText.Append(answers);
+        // One character over the limit tells a document that fills it exactly apart from a longer one.
+        var read = await ReadTextAsync(file, settings.MaxInputCharacters + 1, cancellationToken);
+        if (read.IsFailure) return Result.Failure<Generated>(read.Error);
+        var text = CheckpointSummaryText.Redact(read.Value).Trim();
+        var truncated = text.Length > settings.MaxInputCharacters;
+        if (truncated) text = text[..settings.MaxInputCharacters];
+        if (text.Length == 0) return Result.Failure<Generated>(Unreadable().Error);
 
-        // Newest files first, so the limit drops older versions rather than the latest work.
-        var files = new List<SummaryFileText>();
-        foreach (var file in source.Files)
-        {
-            if (budget <= 0)
-            {
-                truncated = true;
-                files.Add(new SummaryFileText(file, null, CheckpointSummaryOutput.FileNotIncluded));
-                continue;
-            }
-            // One character over the budget tells a document that fills it exactly apart from a longer one.
-            var text = await ReadTextAsync(file, budget + 1, cancellationToken);
-            if (text.IsFailure)
-            {
-                if (text.Error.Code != ErrorCodes.WorkspaceSummaryUnreadable) return Result.Failure<Generated>(text.Error);
-                files.Add(new SummaryFileText(file, null, CheckpointSummaryOutput.FileUnreadable));
-                continue;
-            }
-            var value = CheckpointSummaryText.Redact(text.Value).Trim();
-            if (value.Length > budget) { value = value[..budget]; truncated = true; }
-            if (value.Length == 0)
-            {
-                files.Add(new SummaryFileText(file, null, CheckpointSummaryOutput.FileUnreadable));
-                continue;
-            }
-            budget -= value.Length;
-            sourceText.Append(value).Append('\n');
-            files.Add(new SummaryFileText(file, value, CheckpointSummaryOutput.FileSummarized));
-        }
-        if (sourceText.Length == 0)
-            return Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryUnreadable,
-                "No text could be read from the submitted files. Scanned PDFs and images are not supported.");
+        // Long files are condensed to their most informative sentences without a model, so one call reads them.
+        var condensed = text.Length > settings.FilePromptCharacters;
+        var prompt = condensed
+            ? CheckpointSummaryText.Select(text, requirements.Select(item => item.Title).ToArray(), settings.FilePromptCharacters)
+            : text;
+        var answer = await summarizer.CompleteJsonAsync(CheckpointSummaryPrompt.System,
+            CheckpointSummaryPrompt.User(checkpoint.CheckpointNumber, checkpoint.Name, requirements, file.OriginalName, prompt, condensed),
+            CheckpointSummaryPrompt.Schema(requirements.Count), cancellationToken);
+        if (answer.IsFailure) return Result.Failure<Generated>(answer.Error);
 
-        var documents = new List<string>();
-        if (answers.Length > 0) documents.Add(CheckpointSummaryPrompt.Document("Câu trả lời của nhóm theo từng yêu cầu", answers.ToString(), notes: false));
-        foreach (var file in files.Where(item => item.Text is not null))
-        {
-            if (file.Text!.Length <= CheckpointSummaryLimits.RawFileCharacters)
-            {
-                documents.Add(CheckpointSummaryPrompt.Document(file.File.OriginalName, file.Text, notes: false));
-                continue;
-            }
-            var notes = new StringBuilder();
-            var part = 0;
-            foreach (var chunk in CheckpointSummaryText.Chunks(file.Text, CheckpointSummaryLimits.ChunkCharacters))
-            {
-                part++;
-                var mapped = await summarizer.CompleteJsonAsync(CheckpointSummaryPrompt.System,
-                    CheckpointSummaryPrompt.MapUser(file.File.OriginalName, part, chunk), CheckpointSummaryPrompt.MapSchema, cancellationToken);
-                if (mapped.IsFailure) return Result.Failure<Generated>(mapped.Error);
-                if (!CheckpointSummaryOutput.TryParseMap(mapped.Value, out var summary, out var quotes)) return InvalidOutput();
-                notes.Append("[Phần ").Append(part).Append("] ").Append(summary).Append("\nTrích dẫn:\n");
-                foreach (var quote in quotes) notes.Append("- ").Append(quote).Append('\n');
-                notes.Append('\n');
-            }
-            documents.Add(CheckpointSummaryPrompt.Document(file.File.OriginalName, notes.ToString(), notes: true));
-        }
-
-        var links = source.Links.Select(link => (link.Name, CheckpointSummaryOutput.Domain(link.Url))).ToArray();
-        var final = await summarizer.CompleteJsonAsync(CheckpointSummaryPrompt.System,
-            CheckpointSummaryPrompt.FinalUser(checkpoint.CheckpointNumber, checkpoint.Name, source.Requirements, links, documents),
-            CheckpointSummaryPrompt.FinalSchema(source.Requirements.Count), cancellationToken);
-        if (final.IsFailure) return Result.Failure<Generated>(final.Error);
-        var content = CheckpointSummaryOutput.TryBuild(final.Value, files, source.Links, source.Requirements, sourceText.ToString());
-        if (content is null) return InvalidOutput();
-        return Result.Success(new Generated(JsonSerializer.Serialize(content, JsonOptions), source.Hash, truncated));
+        // Quotes and highlights come from everything that was read, not only from the condensed prompt.
+        var content = CheckpointSummaryOutput.TryBuild(answer.Value, text, requirements);
+        if (content is null)
+            return Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryUnavailable, "The model returned an answer that could not be used.");
+        return Result.Success(new Generated(JsonSerializer.Serialize(content, JsonOptions), truncated || condensed));
     }
 
     private async Task<Result<string>> ReadTextAsync(SummarySourceFile file, int maxCharacters, CancellationToken cancellationToken)
@@ -228,7 +189,7 @@ public sealed class CheckpointSummaryGenerator(
         var delays = CheckpointSummaryLimits.RetryDelays;
         var nextAttempt = nowUtc + delays[Math.Min(attempts - 1, delays.Length - 1)];
 
-        await context.CheckpointSummaries
+        await context.SubmissionFileSummaries
             .Where(item => item.Id == summaryId && item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc == leaseUntil)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.Status, failed ? CheckpointSummaryStatus.Failed : CheckpointSummaryStatus.Pending)
@@ -236,16 +197,10 @@ public sealed class CheckpointSummaryGenerator(
                 .SetProperty(item => item.NextAttemptAtUtc, failed ? (DateTime?)null : nextAttempt)
                 .SetProperty(item => item.LastErrorCode, error.Code), cancellationToken);
 
-        logger.LogWarning("Checkpoint summary {SummaryId} failed (attempt {Attempt}, {Outcome}): {Code}.",
+        logger.LogWarning("File summary {SummaryId} failed (attempt {Attempt}, {Outcome}): {Code}.",
             summaryId, attempts, failed ? "giving up" : "will retry", error.Code);
     }
 
-    private static Result<Generated> NoContent() => Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryNoContent,
-        "The team has not submitted anything to summarise for this checkpoint.");
-
-    private static Result<Generated> InvalidOutput() => Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryUnavailable,
-        "The model returned an answer that could not be used.");
-
     private static Result<string> Unreadable() => Result.Failure<string>(ErrorCodes.WorkspaceSummaryUnreadable,
-        "The file could not be read for summarising.");
+        "The file has no readable text. Scanned PDFs, images and password-protected files are not supported.");
 }

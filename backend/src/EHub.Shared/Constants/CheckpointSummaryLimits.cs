@@ -6,7 +6,7 @@ namespace EHub.Shared.Constants;
 /// </summary>
 public static class CheckpointSummaryLimits
 {
-    /// <summary>Pending and processing summaries across the whole system; new requests are refused beyond this.</summary>
+    /// <summary>Pending and processing file summaries across the whole system; new requests are refused beyond this.</summary>
     public const int MaxQueuedSummaries = 30;
 
     /// <summary>Attempts before a summary is marked Failed.</summary>
@@ -21,16 +21,11 @@ public static class CheckpointSummaryLimits
     /// <summary>Files larger than this are not downloaded for summarising.</summary>
     public const long MaxFileSizeBytes = 30L * 1024 * 1024;
 
-    /// <summary>A file up to this many characters is sent to the final prompt verbatim; longer files are summarised in chunks first.</summary>
-    public const int RawFileCharacters = 4_000;
-
-    public const int ChunkCharacters = 6_000;
-
     public const int MaxOverviewCharacters = 1_500;
     public const int MaxItemCharacters = 500;
     public const int MaxEvidenceCharacters = 300;
-    public const int MaxKeyPoints = 7;
-    public const int MaxQuestions = 5;
+    public const int MaxKeyPoints = 6;
+    public const int MaxQuestions = 3;
 
     public const int RequestsPerUserPerHour = 10;
 }

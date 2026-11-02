@@ -12,9 +12,11 @@ namespace EHub.Infrastructure.BackgroundJobs;
 /// </summary>
 internal sealed class CheckpointSummaryGenerationService(
     IServiceScopeFactory scopeFactory,
+    ICheckpointSummaryQueueSignal queueSignal,
     ILogger<CheckpointSummaryGenerationService> logger) : BackgroundService
 {
-    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(10);
+    // A new request wakes the worker at once; this poll only covers retries and other API instances.
+    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ErrorDelay = TimeSpan.FromSeconds(30);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -41,7 +43,11 @@ internal sealed class CheckpointSummaryGenerationService(
 
             if (delay > TimeSpan.Zero)
             {
-                try { await Task.Delay(delay, stoppingToken); }
+                try
+                {
+                    if (delay == IdleDelay) await queueSignal.WaitAsync(IdleDelay, stoppingToken);
+                    else await Task.Delay(delay, stoppingToken);
+                }
                 catch (OperationCanceledException) { break; }
             }
         }

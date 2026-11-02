@@ -244,12 +244,24 @@ public sealed class WorkspaceCheckpointsController(
     [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
     [EnableRateLimiting(CheckpointSummaryRateLimitPolicies.Request)]
     public async Task<IActionResult> RequestAiSummary(Guid teamId, int checkpointNumber,
+        [FromBody] RequestCheckpointSummaryRequest request,
         [FromServices] ICheckpointSummaryHandler handler, CancellationToken cancellationToken)
     {
-        var result = await handler.RequestAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        var result = await handler.RequestAsync(teamId, checkpointNumber, request, UserId, Role, cancellationToken);
         return result.IsSuccess
             ? StatusCode(StatusCodes.Status202Accepted,
                 ApiResponse<WorkspaceCheckpointSummaryResponse>.SuccessResponse(result.Value, "AI summary queued."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/cancel")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> CancelAiSummary(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointSummaryHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.CancelAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceCheckpointSummaryResponse>.SuccessResponse(result.Value, "AI summary cancelled."))
             : ToErrorResponse(result.Error);
     }
 

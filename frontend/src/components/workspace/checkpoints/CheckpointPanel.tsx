@@ -15,6 +15,8 @@ import ConfirmDialog from '../../ui/ConfirmDialog';
 import CheckpointSubmissionCard from './CheckpointSubmissionCard';
 import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
 import FeedbackThread from './FeedbackThread';
+import CheckpointAiSummaryCard from './CheckpointAiSummaryCard';
+import { canViewCheckpointSummary } from '../../../utils/checkpointSummary';
 import EvaluationPanel from '../EvaluationPanel';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
 
@@ -366,6 +368,10 @@ export default function CheckpointPanel({
                 onEditLink={setEditingLink}
                 onUnsentFilesChange={setHasUnsentFiles}
               />
+
+              {canViewCheckpointSummary(user?.role) && (
+                <CheckpointAiSummaryCard teamId={String(teamId)} checkpointNumber={checkpoint.number} />
+              )}
 
               <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4 pb-2">
                 <SectionTitle

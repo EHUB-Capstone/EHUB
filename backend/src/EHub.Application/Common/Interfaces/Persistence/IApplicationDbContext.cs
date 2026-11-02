@@ -50,7 +50,7 @@ public interface IApplicationDbContext
     DbSet<SubmissionLink> SubmissionLinks { get; }
     DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
-    DbSet<CheckpointSummary> CheckpointSummaries { get; }
+    DbSet<SubmissionFileSummary> SubmissionFileSummaries { get; }
     DbSet<Rubric> Rubrics { get; }
     DbSet<RubricCriterion> RubricCriteria { get; }
     DbSet<Evaluation> Evaluations { get; }

@@ -8,18 +8,23 @@ using EHub.Domain.Enums;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
 namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 
 /// <summary>
-/// Reads and queues AI checkpoint summaries. Only admins, the class's lecturers and the team's active mentors may use
-/// them; students never see a summary. Requests are queued and processed by <see cref="CheckpointSummaryGenerator"/>.
+/// Reads, queues and cancels AI summaries of checkpoint files. Only admins, the class's lecturers and the team's active
+/// mentors may use them; students never see a summary. Files are summarised one at a time by
+/// <see cref="CheckpointSummaryGenerator"/>, and a file version is summarised at most once.
 /// </summary>
 public sealed class CheckpointSummaryHandler(
     IApplicationDbContext context,
     IDateTimeProvider dateTimeProvider,
-    CheckpointSummarySettings settings) : ICheckpointSummaryHandler
+    CheckpointSummarySettings settings,
+    ICheckpointSummaryQueueSignal queueSignal,
+    ICheckpointSummaryCancellation cancellations,
+    IValidator<RequestCheckpointSummaryRequest> validator) : ICheckpointSummaryHandler
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -28,79 +33,177 @@ public sealed class CheckpointSummaryHandler(
     {
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointSummaryResponse>(access.Error);
-
-        var summary = await context.CheckpointSummaries.AsNoTracking()
-            .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == access.Value.Id, cancellationToken);
-        var source = await CheckpointSummarySource.LoadAsync(context, teamId, access.Value, cancellationToken);
-        return Result.Success(ToResponse(checkpointNumber, summary, source.Hash));
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, cancellationToken));
     }
 
     public async Task<Result<WorkspaceCheckpointSummaryResponse>> RequestAsync(
-        Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken = default)
+        Guid teamId, int checkpointNumber, RequestCheckpointSummaryRequest request, Guid userId, string role,
+        CancellationToken cancellationToken = default)
     {
         if (!settings.Enabled)
             return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryDisabled,
                 "AI summaries are not enabled on this server.");
+        var validation = await validator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+            return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceValidationError, validation.Errors[0].ErrorMessage);
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointSummaryResponse>(access.Error);
         var checkpoint = access.Value;
 
         var source = await CheckpointSummarySource.LoadAsync(context, teamId, checkpoint, cancellationToken);
-        if (source.IsEmpty)
-            return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryNoContent,
-                "The team has not submitted any file, link or requirement answer for this checkpoint yet.");
+        var chosen = source.Files.Where(file => request.FileIds.Contains(file.Id)).ToArray();
+        // Only files on this team's checkpoint can be summarised; an id from elsewhere is refused, not ignored.
+        if (chosen.Length != request.FileIds.Count)
+            return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceNotFound,
+                "One or more files are not part of this checkpoint any more. Refresh and try again.");
 
-        var summary = await context.CheckpointSummaries
-            .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == checkpoint.Id, cancellationToken);
-        // Asking again while queued, or for unchanged content, never adds work.
-        if (summary is not null && (summary.Status is CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing ||
-            (summary.Status == CheckpointSummaryStatus.Ready && summary.SourceHash == source.Hash)))
-            return Result.Success(ToResponse(checkpointNumber, summary, source.Hash));
-
-        var queued = await context.CheckpointSummaries.CountAsync(item =>
-            item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing, cancellationToken);
-        if (queued >= CheckpointSummaryLimits.MaxQueuedSummaries)
-            return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryQueueFull,
-                "Many summaries are waiting. Please try again in a few minutes.");
-
-        var now = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
-        if (summary is null)
+        var chosenIds = chosen.Select(file => file.Id).ToArray();
+        var existing = await context.SubmissionFileSummaries
+            .Where(item => chosenIds.Contains(item.SubmissionFileId))
+            .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
+        // A current summary of an unchanged file, or one already queued, never adds work.
+        var toQueue = chosen.Where(file => !existing.TryGetValue(file.Id, out var summary) || NeedsWork(summary)).ToArray();
+        if (toQueue.Length > 0)
         {
-            summary = new CheckpointSummary
+            var queued = await context.SubmissionFileSummaries.CountAsync(item =>
+                item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing, cancellationToken);
+            if (queued + toQueue.Length > CheckpointSummaryLimits.MaxQueuedSummaries)
+                return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryQueueFull,
+                    "Many summaries are waiting. Please try again in a few minutes.");
+
+            var now = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
+            foreach (var file in toQueue)
             {
-                TeamId = teamId, CheckpointId = checkpoint.Id, SourceHash = source.Hash,
-                CreatedAt = now, CreatedBy = userId
+                if (!existing.TryGetValue(file.Id, out var summary))
+                {
+                    summary = new SubmissionFileSummary
+                    {
+                        SubmissionFileId = file.Id, TeamId = teamId, CheckpointId = checkpoint.Id,
+                        FileVersionNumber = file.VersionNumber, CreatedAt = now, CreatedBy = userId
+                    };
+                    context.SubmissionFileSummaries.Add(summary);
+                }
+                else
+                {
+                    summary.UpdatedAt = now;
+                    summary.UpdatedBy = userId;
+                }
+                // The same due time for the whole request; the worker then takes the newest version first.
+                summary.Status = CheckpointSummaryStatus.Pending;
+                summary.RequestedById = userId;
+                summary.RequestedAtUtc = now;
+                summary.AttemptCount = 0;
+                summary.NextAttemptAtUtc = now;
+                summary.LastErrorCode = null;
+            }
+
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Another reviewer queued the same file at the same moment: their request stands.
+                context.ClearChanges();
+            }
+            // Start right away instead of waiting for the worker's next poll; the queued rows are committed.
+            queueSignal.Signal();
+        }
+
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, checkpoint, cancellationToken));
+    }
+
+    public async Task<Result<WorkspaceCheckpointSummaryResponse>> CancelAsync(
+        Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
+        if (access.IsFailure) return Result.Failure<WorkspaceCheckpointSummaryResponse>(access.Error);
+        var checkpointId = access.Value.Id;
+
+        var running = context.SubmissionFileSummaries.Where(item => item.TeamId == teamId && item.CheckpointId == checkpointId &&
+            (item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing));
+        var runningIds = await running.Where(item => item.Status == CheckpointSummaryStatus.Processing)
+            .Select(item => item.Id).ToListAsync(cancellationToken);
+        var now = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
+        // A conditional update, so a file the worker has just finished keeps its summary.
+        await running.ExecuteUpdateAsync(setters => setters
+            .SetProperty(item => item.Status, CheckpointSummaryStatus.Cancelled)
+            .SetProperty(item => item.NextAttemptAtUtc, (DateTime?)null)
+            .SetProperty(item => item.LastErrorCode, (string?)null)
+            .SetProperty(item => item.UpdatedAt, now)
+            .SetProperty(item => item.UpdatedBy, userId), cancellationToken);
+        // Abort the model call if this instance's worker is running it.
+        foreach (var id in runningIds) cancellations.Cancel(id);
+
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, cancellationToken));
+    }
+
+    private async Task<WorkspaceCheckpointSummaryResponse> BuildResponseAsync(
+        Guid teamId, int checkpointNumber, Checkpoint checkpoint, CancellationToken cancellationToken)
+    {
+        var source = await CheckpointSummarySource.LoadAsync(context, teamId, checkpoint, cancellationToken);
+        var fileIds = source.Files.Select(file => file.Id).ToArray();
+        var summaries = await context.SubmissionFileSummaries.AsNoTracking()
+            .Where(item => fileIds.Contains(item.SubmissionFileId))
+            .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
+        // The shared queue is small (bounded by MaxQueuedSummaries), so its order is read once.
+        var queue = summaries.Values.Any(item => item.Status == CheckpointSummaryStatus.Pending)
+            ? await context.SubmissionFileSummaries.AsNoTracking()
+                .Where(item => item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing)
+                .OrderByDescending(item => item.Status == CheckpointSummaryStatus.Processing)
+                .ThenBy(item => item.NextAttemptAtUtc).ThenByDescending(item => item.FileVersionNumber)
+                .Select(item => item.Id)
+                .ToListAsync(cancellationToken)
+            : [];
+
+        var files = source.Files.Select(file =>
+        {
+            summaries.TryGetValue(file.Id, out var summary);
+            var content = summary?.Status == CheckpointSummaryStatus.Ready ? ReadContent(summary.ContentJson) : null;
+            return new WorkspaceFileSummary
+            {
+                FileId = file.Id,
+                Name = file.OriginalName,
+                VersionNumber = file.VersionNumber,
+                UploadedAt = file.UploadedAt,
+                Status = summary is null ? "None" : summary.Status.ToString(),
+                QueueAhead = summary?.Status == CheckpointSummaryStatus.Pending ? Math.Max(0, queue.IndexOf(summary.Id)) : null,
+                RequestedAt = summary?.RequestedAtUtc,
+                GeneratedAt = summary?.GeneratedAtUtc,
+                ErrorCode = summary?.Status == CheckpointSummaryStatus.Failed ? summary.LastErrorCode : null,
+                InputTruncated = content is not null && summary!.InputTruncated,
+                Content = content
             };
-            context.CheckpointSummaries.Add(summary);
-        }
-        else
-        {
-            summary.UpdatedAt = now;
-            summary.UpdatedBy = userId;
-        }
-        // SourceHash keeps describing the previous content until the new summary is saved, so it still shows as stale.
-        summary.Status = CheckpointSummaryStatus.Pending;
-        summary.RequestedById = userId;
-        summary.RequestedAtUtc = now;
-        summary.AttemptCount = 0;
-        summary.NextAttemptAtUtc = now;
-        summary.LastErrorCode = null;
+        }).ToArray();
 
-        try
+        return new WorkspaceCheckpointSummaryResponse
         {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            // Another reviewer queued the same team/checkpoint at the same moment: report their request.
-            context.ClearChanges();
-            var current = await context.CheckpointSummaries.AsNoTracking()
-                .FirstOrDefaultAsync(item => item.TeamId == teamId && item.CheckpointId == checkpoint.Id, cancellationToken);
-            if (current is null) throw;
-            return Result.Success(ToResponse(checkpointNumber, current, source.Hash));
-        }
+            CheckpointNumber = checkpointNumber,
+            Enabled = settings.Enabled,
+            FilePromptCharacters = settings.FilePromptCharacters,
+            Files = files,
+            Requirements = CheckpointSummaryOutput.Combine(source.Requirements,
+                files.Where(file => file.Content is not null).Select(file => (file.Name, file.Content!)).ToArray()),
+            Links = source.Links.Select(link => new WorkspaceCheckpointSummaryLink
+            {
+                Name = link.Name, Domain = CheckpointSummaryOutput.Domain(link.Url)
+            }).ToArray()
+        };
+    }
 
-        return Result.Success(ToResponse(checkpointNumber, summary, source.Hash));
+    /// <summary>Pending or running work is left alone; a ready summary is redone only if it came from an older prompt.</summary>
+    private static bool NeedsWork(SubmissionFileSummary summary) => summary.Status switch
+    {
+        CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing => false,
+        CheckpointSummaryStatus.Ready => summary.PromptVersion != CheckpointSummaryPrompt.Version || ReadContent(summary.ContentJson) is null,
+        _ => true
+    };
+
+    private static WorkspaceFileSummaryContent? ReadContent(string? json)
+    {
+        if (json is null) return null;
+        try { return JsonSerializer.Deserialize<WorkspaceFileSummaryContent>(json, JsonOptions); }
+        catch (JsonException) { return null; }
     }
 
     private async Task<Result<Checkpoint>> ResolveAccessAsync(
@@ -111,26 +214,6 @@ public sealed class CheckpointSummaryHandler(
             return Result.Failure<Checkpoint>(ErrorCodes.WorkspaceAccessDenied, "You do not have access to AI summaries for this team.");
         var access = await CheckpointWorkspaceAccess.ResolveAsync(context, teamId, checkpointNumber, userId, role, cancellationToken);
         return access.IsSuccess ? Result.Success(access.Value.Checkpoint) : Result.Failure<Checkpoint>(access.Error);
-    }
-
-    private WorkspaceCheckpointSummaryResponse ToResponse(int checkpointNumber, CheckpointSummary? summary, string currentHash)
-    {
-        var content = summary?.ContentJson is null
-            ? null
-            : JsonSerializer.Deserialize<WorkspaceCheckpointSummaryContent>(summary.ContentJson, JsonOptions);
-        return new WorkspaceCheckpointSummaryResponse
-        {
-            CheckpointNumber = checkpointNumber,
-            Status = summary?.Status.ToString() ?? (settings.Enabled ? "None" : "Disabled"),
-            IsStale = content is not null && summary!.SourceHash != currentHash,
-            InputTruncated = content is not null && summary!.InputTruncated,
-            MaxInputCharacters = settings.MaxInputCharacters,
-            RequestedAt = summary?.RequestedAtUtc,
-            GeneratedAt = summary?.GeneratedAtUtc,
-            Model = content is null ? null : summary!.Model,
-            ErrorCode = summary?.Status == CheckpointSummaryStatus.Failed ? summary.LastErrorCode : null,
-            Content = content
-        };
     }
 
     private static bool IsReviewer(string role) =>
