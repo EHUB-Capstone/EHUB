@@ -1,5 +1,36 @@
-export const PROJECT_ACHIEVEMENTS = ['Potential', 'Internally Funded', 'Externally Funded', 'Awarded'] as const;
+export const PROJECT_ACHIEVEMENTS = ['Potential', 'Internally Funded', 'Externally Funded', 'Awarded', 'Pitching', 'Demo'] as const;
 export type ProjectAchievement = (typeof PROJECT_ACHIEVEMENTS)[number];
+
+/** The competitions projects usually enter. "Others" is a free-text name. Keep in step with ProjectCompetitionNames (API). */
+export const PROJECT_COMPETITIONS = [
+  'SV.STARTUP',
+  'Sinh viên Thế Hệ Mới VTV',
+  'VietFuture Awards',
+  'FTalent',
+  'DBC',
+  'FShark',
+  'Startup Wheel',
+  'DAVAS',
+  'SURF',
+  'Others',
+] as const;
+export const COMPETITION_OTHERS = 'Others';
+
+/** Furthest stage reached, in order. Sent to and received from the API as these names. */
+export const PROJECT_COMPETITION_STAGES = ['Registered', 'Qualifier', 'Final'] as const;
+export type ProjectCompetitionStage = (typeof PROJECT_COMPETITION_STAGES)[number];
+
+export const COMPETITION_STAGE_LABELS: Record<ProjectCompetitionStage, string> = {
+  Registered: 'Registered',
+  Qualifier: 'Qualifier round',
+  Final: 'Final round',
+};
+
+/** The year a competition took place (not the academic year of the project). */
+export const COMPETITION_YEAR_MIN = 2000;
+export const COMPETITION_YEAR_MAX = 2100;
+export const COMPETITION_OTHER_NAME_MAX_LENGTH = 100;
+export const COMPETITION_MAX_ENTRIES = 30;
 
 export const PROJECT_DATA_SEMESTER_TERMS = ['SP', 'SU', 'FA'] as const;
 export type ProjectDataSemesterTerm = (typeof PROJECT_DATA_SEMESTER_TERMS)[number];
@@ -48,11 +79,22 @@ export interface ProjectDataItem {
   mentor: ProjectDataMentor | null;
   academicMentor: ProjectDataMentor | null;
   achievements: ProjectAchievement[];
+  competitions: ProjectCompetition[];
   /** Why the project carries its labels; only present while at least one label is set. */
   achievementNote: string | null;
   achievementsUpdatedAtUtc: string | null;
   achievementsUpdatedBy: ProjectDataPerson | null;
   rowVersion: string;
+}
+
+export interface ProjectCompetition {
+  competition: string;
+  /** The free-text name; only set when `competition` is "Others". */
+  otherName: string | null;
+  /** What to show: the free text for "Others", otherwise the competition name. */
+  name: string;
+  year: number;
+  stage: ProjectCompetitionStage;
 }
 
 export interface ProjectDataPage {
@@ -68,13 +110,18 @@ export interface ProjectDataQuery {
   subjectCode: string;
   semester: ProjectDataSemesterTerm | '';
   year: string;
-  group: string;
-  startupIndustry: string;
-  /** A major code or UNSPECIFIED; matches projects with at least one active member of that major. */
-  major: string;
-  lecturerId: string;
-  mentorId: string;
-  achievement: ProjectAchievement | '';
+  // The filters below hold any number of values: a project matches when it matches ANY of them; empty means "All".
+  group: string[];
+  startupIndustry: string[];
+  /** Major codes or UNSPECIFIED; matches projects with at least one active member of any of those majors. */
+  major: string[];
+  lecturerId: string[];
+  mentorId: string[];
+  achievement: ProjectAchievement[];
+  /** Competition filters describe one entry: a project matches when one of its entries satisfies all of them. */
+  competition: string[];
+  competitionStage: ProjectCompetitionStage[];
+  competitionYear: string[];
   pageIndex: number;
   pageSize: ProjectDataPageSize;
   sortBy: ProjectDataSortField;
@@ -87,6 +134,8 @@ export interface ProjectDataSummary {
   internallyFundedGroups: number;
   externallyFundedGroups: number;
   awardedGroups: number;
+  pitchingGroups: number;
+  demoGroups: number;
 }
 
 export interface ProjectDataDistributionBucket {
@@ -129,12 +178,16 @@ export interface ProjectDataTrendRow {
   internallyFundedGroups: number;
   externallyFundedGroups: number;
   awardedGroups: number;
+  pitchingGroups: number;
+  demoGroups: number;
   /** Change since the previous semester of the same subject or class code; null for the earliest one. */
   averageScoreChange: number | null;
   potentialChange: number | null;
   internallyFundedChange: number | null;
   externallyFundedChange: number | null;
   awardedChange: number | null;
+  pitchingChange: number | null;
+  demoChange: number | null;
 }
 
 export interface ProjectDataTrends {
@@ -161,11 +214,32 @@ export interface ProjectDataFilterOptions {
   lecturers: ProjectDataPerson[];
   mentors: ProjectDataMentorOption[];
   achievements: ProjectAchievement[];
+  competitions: string[];
+  competitionStages: ProjectCompetitionStage[];
+  competitionYears: number[];
 }
 
 export interface UpdateProjectAchievementsPayload {
   achievements: ProjectAchievement[];
   note: string | null;
+  rowVersion: string;
+}
+
+export interface ProjectCompetitionEntryPayload {
+  competition: string;
+  otherName: string | null;
+  year: number;
+  stage: ProjectCompetitionStage;
+}
+
+export interface UpdateProjectCompetitionsPayload {
+  entries: ProjectCompetitionEntryPayload[];
+  rowVersion: string;
+}
+
+export interface ProjectCompetitionsResult {
+  projectId: string;
+  competitions: ProjectCompetition[];
   rowVersion: string;
 }
 

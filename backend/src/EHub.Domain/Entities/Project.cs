@@ -25,6 +25,8 @@ public class Project : AuditableEntity
     public bool IsInternallyFunded { get; set; } = false;
     public bool IsExternallyFunded { get; set; } = false;
     public bool IsAwarded { get; set; } = false;
+    public bool IsPitching { get; set; } = false;
+    public bool IsDemo { get; set; } = false;
 
     // Why the project carries its achievement labels, and who last changed them and when. These are kept apart from
     // UpdatedAt/UpdatedBy, which any other edit of the project overwrites.
@@ -47,6 +49,7 @@ public class Project : AuditableEntity
 
     // Navigation properties
     public virtual ICollection<ProjectTag> ProjectTags { get; set; } = new List<ProjectTag>();
+    public virtual ICollection<ProjectCompetitionEntry> ProjectCompetitionEntries { get; set; } = new List<ProjectCompetitionEntry>();
     public virtual ICollection<ProjectActivityLog> ActivityLogs { get; set; } = new List<ProjectActivityLog>();
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
     public virtual ICollection<Evaluation> Evaluations { get; set; } = new List<Evaluation>();

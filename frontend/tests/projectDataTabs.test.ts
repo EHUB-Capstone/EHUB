@@ -21,7 +21,7 @@ test('an unknown tab value falls back to Overview', () => {
 });
 
 test('the Analytics tab round-trips through the URL together with the filters', () => {
-  const query = { ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', achievement: 'Potential' as const, pageIndex: 3 };
+  const query = { ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', achievement: ['Potential' as const], pageIndex: 3 };
   const params = toProjectDataSearchParams(query, 'analytics');
 
   assert.equal(params.get('tab'), 'analytics');

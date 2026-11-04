@@ -56,6 +56,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProjectDirectionReview> ProjectDirectionReviews => Set<ProjectDirectionReview>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
+    public DbSet<ProjectCompetitionEntry> ProjectCompetitionEntries => Set<ProjectCompetitionEntry>();
     public DbSet<ProjectActivityLog> ProjectActivityLogs => Set<ProjectActivityLog>();
     public DbSet<Checkpoint> Checkpoints => Set<Checkpoint>();
     public DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules => Set<ClassCheckpointSchedule>();

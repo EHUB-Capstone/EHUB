@@ -43,6 +43,9 @@ public sealed class GetProjectDataTrendsQueryHandler(IApplicationDbContext conte
             LecturerId = request.LecturerId,
             MentorId = request.MentorId,
             Achievement = request.Achievement,
+            Competition = request.Competition,
+            CompetitionStage = request.CompetitionStage,
+            CompetitionYear = request.CompetitionYear,
         };
 
         var rows = await ProjectDataQuery.ApplyFilters(
@@ -62,60 +65,15 @@ public sealed class GetProjectDataTrendsQueryHandler(IApplicationDbContext conte
                 project.IsInternallyFunded,
                 project.IsExternallyFunded,
                 project.IsAwarded,
+                project.IsPitching,
+                project.IsDemo,
             })
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0) return Result.Success(new ProjectDataTrendsResponse());
 
-        var courseIds = rows.Select(row => row.CourseId).Distinct().ToArray();
-        var projectIds = rows.Select(row => row.ProjectId).ToArray();
-
-        // Course-level parts of the score. Checkpoints and assessments together carry the 100% weight.
-        var checkpointComponents = await context.Checkpoints.AsNoTracking()
-            .Where(item => item.CourseId.HasValue && courseIds.Contains(item.CourseId.Value) &&
-                           item.ClassId == null && item.Status != CheckpointStatus.Archived && item.CourseWeight > 0)
-            .Select(item => new { CourseId = item.CourseId!.Value, item.Id, item.CourseWeight })
-            .ToListAsync(cancellationToken);
-        var assessmentComponents = await context.Rubrics.AsNoTracking()
-            .Where(item => item.CourseId.HasValue && courseIds.Contains(item.CourseId.Value) &&
-                           item.ClassId == null && item.CheckpointId == null &&
-                           item.Status == RubricStatus.Active && item.CourseWeight > 0)
-            .Select(item => new { CourseId = item.CourseId!.Value, item.Id, item.CourseWeight })
-            .ToListAsync(cancellationToken);
-        var componentsByCourse = courseIds.ToDictionary(
-            courseId => courseId,
-            courseId => (IReadOnlyCollection<TrendComponent>)
-            [
-                .. checkpointComponents.Where(item => item.CourseId == courseId)
-                    .Select(item => new TrendComponent(item.Id, null, item.CourseWeight)),
-                .. assessmentComponents.Where(item => item.CourseId == courseId)
-                    .Select(item => new TrendComponent(null, item.Id, item.CourseWeight)),
-            ]);
-
-        // Only course-level rubrics, whatever their status now, so a semester keeps its score after a rubric is replaced.
-        var evaluationRows = await context.Evaluations.AsNoTracking()
-            .Where(item => projectIds.Contains(item.ProjectId) && item.Rubric.ClassId == null &&
-                           (item.Status == EvaluationStatus.Submitted || item.Status == EvaluationStatus.Published))
-            .Select(item => new
-            {
-                item.ProjectId,
-                item.Id,
-                item.RubricId,
-                CheckpointId = item.Rubric.CheckpointId,
-                item.Status,
-                item.TotalScore,
-                item.MaxTotalScore,
-                UpdatedAt = item.UpdatedAt ?? item.CreatedAt,
-            })
-            .ToListAsync(cancellationToken);
-        var evaluationsByProject = evaluationRows
-            .GroupBy(item => item.ProjectId)
-            .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyCollection<TrendEvaluation>)group
-                    .Select(item => new TrendEvaluation(
-                        item.Id, item.RubricId, item.CheckpointId, item.Status, item.TotalScore, item.MaxTotalScore, item.UpdatedAt))
-                    .ToArray());
+        var scores = await ProjectDataScoreLoader.LoadAsync(
+            context, rows.Select(row => (row.ProjectId, row.CourseId)).ToArray(), cancellationToken);
 
         var projects = rows.Select(row => new TrendProject(
             row.ProjectId,
@@ -129,9 +87,9 @@ public sealed class GetProjectDataTrendsQueryHandler(IApplicationDbContext conte
             row.IsInternallyFunded,
             row.IsExternallyFunded,
             row.IsAwarded,
-            OfficialCourseScore.Calculate(
-                componentsByCourse[row.CourseId],
-                evaluationsByProject.GetValueOrDefault(row.ProjectId) ?? []))).ToArray();
+            row.IsPitching,
+            row.IsDemo,
+            scores.GetValueOrDefault(row.ProjectId))).ToArray();
 
         return Result.Success(ProjectDataTrendBuilder.Build(projects));
     }

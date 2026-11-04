@@ -39,10 +39,53 @@ public sealed class ProjectDataApplicationTests
             PageSize = pageSize,
             Search = search,
             SortBy = sortBy,
-            Achievement = achievement,
+            Achievement = achievement is null ? null : [achievement],
         };
 
         new GetProjectDataRequestValidator().Validate(request).IsValid.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ListValidator_AcceptsSeveralValuesPerFilterAndRejectsAnyInvalidOne()
+    {
+        var validator = new GetProjectDataRequestValidator();
+        validator.Validate(new GetProjectDataRequest
+        {
+            Group = ["G1", "G2"],
+            StartupIndustry = ["Health Tech", "EdTech"],
+            Major = ["BIT_SE", "UNSPECIFIED"],
+            LecturerId = [Guid.NewGuid(), Guid.NewGuid()],
+            MentorId = [Guid.NewGuid(), Guid.NewGuid()],
+            Achievement = ["Potential", "awarded"],
+        }).IsValid.Should().BeTrue();
+
+        validator.Validate(new GetProjectDataRequest { Major = ["BIT_SE", "NOPE"] }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { Achievement = ["Potential", "Famous"] }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { LecturerId = [Guid.NewGuid(), Guid.Empty] }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { MentorId = [Guid.Empty] }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { Group = [new string('x', 101)] }).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ListValidator_ClampsHowManyValuesOneFilterMayCarry()
+    {
+        var validator = new GetProjectDataRequestValidator();
+        var max = ProjectDataQuery.MaxFilterValues;
+
+        validator.Validate(new GetProjectDataRequest { Group = Enumerable.Range(0, max).Select(i => $"G{i}").ToArray() })
+            .IsValid.Should().BeTrue();
+        validator.Validate(new GetProjectDataRequest { Group = Enumerable.Range(0, max + 1).Select(i => $"G{i}").ToArray() })
+            .IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { MentorId = Enumerable.Range(0, max + 1).Select(_ => Guid.NewGuid()).ToArray() })
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NormalizeAll_TrimsDropsBlanksAndDuplicatesAndAppliesTheTransform()
+    {
+        ProjectDataQuery.NormalizeAll(null, value => value).Should().BeEmpty();
+        ProjectDataQuery.NormalizeAll(["  G1 ", "", "  ", "g1", "G2"], value => value.ToLower())
+            .Should().Equal("g1", "g2");
     }
 
     [Fact]
@@ -56,8 +99,8 @@ public sealed class ProjectDataApplicationTests
         validator.Validate(new GetProjectDataRequest { Semester = "XX" }).IsValid.Should().BeFalse();
         validator.Validate(new GetProjectDataRequest { Year = 1999 }).IsValid.Should().BeFalse();
         validator.Validate(new GetProjectDataRequest { Year = 10000 }).IsValid.Should().BeFalse();
-        validator.Validate(new GetProjectDataRequest { LecturerId = Guid.Empty }).IsValid.Should().BeFalse();
-        validator.Validate(new GetProjectDataRequest { MentorId = Guid.Empty }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { LecturerId = [Guid.Empty] }).IsValid.Should().BeFalse();
+        validator.Validate(new GetProjectDataRequest { MentorId = [Guid.Empty] }).IsValid.Should().BeFalse();
     }
 
     [Theory]
@@ -67,7 +110,8 @@ public sealed class ProjectDataApplicationTests
     [InlineData("", new[] { "Potential" }, false)]
     [InlineData("abc", new[] { "Potential" }, false)]
     [InlineData("1", new[] { "Famous" }, false)]
-    [InlineData("1", new[] { "Potential", "Internally Funded", "Externally Funded", "Awarded", "Potential" }, false)]
+    [InlineData("42", new[] { "Pitching", "demo" }, true)]
+    [InlineData("1", new[] { "Potential", "Internally Funded", "Externally Funded", "Awarded", "Pitching", "Demo", "Potential" }, false)]
     public void UpdateValidator_RequiresKnownLabelsAndNumericRowVersion(
         string rowVersion, string[] achievements, bool expected)
     {
@@ -178,10 +222,16 @@ public sealed class ProjectDataApplicationTests
     [Fact]
     public void AchievementMapping_ReturnsIndependentLabelsInStableOrder()
     {
-        ProjectAchievementMapping.ToNames(false, false, false, false).Should().BeEmpty();
-        ProjectAchievementMapping.ToNames(true, false, false, true).Should().Equal("Potential", "Awarded");
-        ProjectAchievementMapping.ToNames(false, false, true, false).Should().Equal("Externally Funded");
-        ProjectAchievementMapping.ToNames(true, true, true, true).Should().Equal("Potential", "Internally Funded", "Externally Funded", "Awarded");
+        ProjectAchievementMapping.ToNames(false, false, false, false, false, false).Should().BeEmpty();
+        ProjectAchievementMapping.ToNames(true, false, false, true, false, false).Should().Equal("Potential", "Awarded");
+        ProjectAchievementMapping.ToNames(false, false, true, false, false, false).Should().Equal("Externally Funded");
+        ProjectAchievementMapping.ToNames(false, false, false, false, true, true).Should().Equal("Pitching", "Demo");
+        ProjectAchievementMapping.ToNames(true, true, true, true, true, true)
+            .Should().Equal("Potential", "Internally Funded", "Externally Funded", "Awarded", "Pitching", "Demo");
+        ProjectAchievementMapping.ToNames(true, true, true, true, true, true)
+            .Should().Equal(ProjectAchievementNames.All);
+        ProjectAchievementMapping.Canonicalize(" pitching ").Should().Be("Pitching");
+        ProjectAchievementMapping.Canonicalize("DEMO").Should().Be("Demo");
         ProjectAchievementMapping.Canonicalize(" internally funded ").Should().Be("Internally Funded");
         ProjectAchievementMapping.Canonicalize("EXTERNALLY FUNDED").Should().Be("Externally Funded");
         // The retired single label is no longer accepted from clients.

@@ -57,6 +57,63 @@ public sealed partial class ProjectDataIntegrationTests
     }
 
     [Fact]
+    public async Task PitchingAndDemo_AreLabelsLikeTheOthers_StoredFilteredCountedAndLogged()
+    {
+        var world = await SeedAsync();
+        try
+        {
+            using var client = factory.CreateClient();
+            var search = $"search={world.Token}";
+            var current = await CurrentAchievements(client, world, world.ProjectB);
+            var before = await GetSummary(client, world.Admin, SystemRoles.Admin, search);
+
+            var updated = await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB,
+                ["demo", "Pitching", "Awarded"], current.RowVersion, $"Pitched at the demo day {world.Token}");
+            updated.Achievements.Should().Equal("Awarded", "Pitching", "Demo");
+
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var project = await context.Projects.AsNoTracking().SingleAsync(item => item.Id == world.ProjectB);
+                (project.IsPitching, project.IsDemo, project.IsAwarded, project.IsHighPotential).Should().Be((true, true, true, false));
+            }
+
+            (await CurrentAchievements(client, world, world.ProjectB)).Achievements.Should().Equal("Awarded", "Pitching", "Demo");
+
+            // Filter: one label, or any of several; labels of other projects do not leak in.
+            (await Ids(client, world, $"{search}&achievement=Pitching")).Should().Equal(world.ProjectB);
+            (await Ids(client, world, $"{search}&achievement=Demo&achievement=Potential"))
+                .Should().BeEquivalentTo([world.ProjectA, world.ProjectB]);
+
+            // Summary and distribution count them with the same filter rules as the table.
+            var after = await GetSummary(client, world.Admin, SystemRoles.Admin, search);
+            (after.PitchingGroups, after.DemoGroups).Should().Be((before.PitchingGroups + 1, before.DemoGroups + 1));
+            var pitching = await GetSummary(client, world.Admin, SystemRoles.Admin, $"{search}&achievement=Pitching");
+            (pitching.TotalGroups, pitching.PitchingGroups, pitching.DemoGroups).Should().Be((1, 1, 1));
+            var distribution = await GetDistribution(client, world.Admin, SystemRoles.Admin, search);
+            distribution.Outcomes.Select(bucket => bucket.Name).Should().Equal(ProjectAchievementNames.All);
+            distribution.Outcomes.Single(bucket => bucket.Name == "Pitching").Count.Should().Be(after.PitchingGroups);
+            distribution.Outcomes.Single(bucket => bucket.Name == "Demo").Count.Should().Be(after.DemoGroups);
+
+            // Options offer them, and the history reads them back from the activity log.
+            (await GetOptions(client, world.Admin, SystemRoles.Admin)).Achievements.Should().Contain(["Pitching", "Demo"]);
+            var entry = (await History(client, world.Admin, SystemRoles.Admin, world.ProjectB)).Items.Single();
+            entry.Added.Should().Equal("Awarded", "Pitching", "Demo");
+
+            // An unknown label still fails, and they can be removed again.
+            (await Send(client, world.Admin, SystemRoles.Admin, HttpMethod.Get, $"/api/project-data?{search}&achievement=Pitch"))
+                .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            var cleared = await PutAchievements(client, world.Admin, SystemRoles.Admin, world.ProjectB, ["Awarded"], updated.RowVersion);
+            cleared.Achievements.Should().Equal("Awarded");
+            (await Ids(client, world, $"{search}&achievement=Pitching&achievement=Demo")).Should().BeEmpty();
+        }
+        finally
+        {
+            await CleanupAsync(world);
+        }
+    }
+
+    [Fact]
     public async Task Note_IsStoredWithWhoAndWhen_ShownInTheListAndSearchable()
     {
         var world = await SeedAsync();
@@ -367,7 +424,7 @@ public sealed partial class ProjectDataIntegrationTests
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB, ["Potential"], "not-a-version"))
                 .StatusCode.Should().Be(HttpStatusCode.BadRequest);
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB,
-                ["Potential", "Internally Funded", "Externally Funded", "Awarded", "Potential"], current.RowVersion))
+                ["Potential", "Internally Funded", "Externally Funded", "Awarded", "Pitching", "Demo", "Potential"], current.RowVersion))
                 .StatusCode.Should().Be(HttpStatusCode.BadRequest);
             // A note describes labels, so it needs at least one, and it has a length limit.
             (await Put(client, world.Admin, SystemRoles.Admin, world.ProjectB, [], current.RowVersion, "Orphan note"))

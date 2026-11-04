@@ -67,5 +67,5 @@ public sealed class ProjectDataDistributionTests
     [InlineData(null, true)]
     public void ListValidator_ChecksTheMajorFilter(string? major, bool expected) =>
         new EHub.Application.Features.ProjectData.GetProjectData.GetProjectDataRequestValidator()
-            .Validate(new GetProjectDataRequest { Major = major }).IsValid.Should().Be(expected);
+            .Validate(new GetProjectDataRequest { Major = major is null ? null : [major] }).IsValid.Should().Be(expected);
 }

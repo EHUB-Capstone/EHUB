@@ -9,6 +9,7 @@ import type {
   ProjectDataQuery,
 } from '../../../types/projectData';
 import { cn } from '../../../utils/cn';
+import { hasFilterValue, toggleAchievement, toggleFilterValue } from '../../../utils/projectData';
 import {
   distributionBarWidth,
   distributionPercent,
@@ -111,7 +112,8 @@ const toRows = (
 
 /**
  * Projects grouped by semester, major, startup industry (also the project topic) and outcome, for the same scope,
- * search and filters as the table. Semester, major, industry and outcome rows filter the table when clicked.
+ * search and filters as the table. Semester, major, industry and outcome rows filter the table when clicked; major,
+ * industry and outcome rows add to (or take out of) the filter, so several can be on at once.
  */
 export default function ProjectDataDistribution({
   distribution,
@@ -164,16 +166,16 @@ export default function ProjectDataDistribution({
 
   const majorRows = toRows(
     distribution.majors,
-    bucket => () => onFilter({ major: query.major === bucket.name ? '' : bucket.name }),
-    bucket => query.major === bucket.name,
+    bucket => () => onFilter({ major: toggleFilterValue(query.major, bucket.name) }),
+    bucket => hasFilterValue(query.major, bucket.name),
     majorLabel,
   );
 
   const industries = limitDistributionBuckets(distribution.startupIndustries, MAX_INDUSTRY_ROWS);
   const industryRows: Row[] = toRows(
     industries.items,
-    bucket => () => onFilter({ startupIndustry: query.startupIndustry.toLowerCase() === bucket.name.toLowerCase() ? '' : bucket.name }),
-    bucket => query.startupIndustry.toLowerCase() === bucket.name.toLowerCase(),
+    bucket => () => onFilter({ startupIndustry: toggleFilterValue(query.startupIndustry, bucket.name) }),
+    bucket => hasFilterValue(query.startupIndustry, bucket.name),
   );
   if (industries.otherCount > 0) {
     industryRows.push({ key: '__other', label: `${industries.otherBuckets} more industries`, count: industries.otherCount, onSelect: null });
@@ -184,8 +186,8 @@ export default function ProjectDataDistribution({
 
   const outcomeRows: Row[] = toRows(
     distribution.outcomes,
-    bucket => () => onFilter({ achievement: query.achievement === bucket.name ? '' : (bucket.name as ProjectAchievement) }),
-    bucket => query.achievement === bucket.name,
+    bucket => () => onFilter({ achievement: toggleAchievement(query.achievement, bucket.name as ProjectAchievement) }),
+    bucket => query.achievement.includes(bucket.name as ProjectAchievement),
   );
   if (distribution.noOutcomeCount > 0) {
     outcomeRows.push({ key: '__none', label: 'No label', count: distribution.noOutcomeCount, onSelect: null });

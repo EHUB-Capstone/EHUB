@@ -45,7 +45,11 @@ public sealed class GetProjectDataDistributionQueryHandler(IApplicationDbContext
                 InternallyFunded = group.Count(project => project.IsInternallyFunded),
                 ExternallyFunded = group.Count(project => project.IsExternallyFunded),
                 Awarded = group.Count(project => project.IsAwarded),
-                None = group.Count(project => !project.IsHighPotential && !project.IsInternallyFunded && !project.IsExternallyFunded && !project.IsAwarded),
+                Pitching = group.Count(project => project.IsPitching),
+                Demo = group.Count(project => project.IsDemo),
+                None = group.Count(project =>
+                    !project.IsHighPotential && !project.IsInternallyFunded && !project.IsExternallyFunded &&
+                    !project.IsAwarded && !project.IsPitching && !project.IsDemo),
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -135,6 +139,8 @@ public sealed class GetProjectDataDistributionQueryHandler(IApplicationDbContext
                 new() { Name = ProjectAchievementNames.InternallyFunded, Count = outcomes?.InternallyFunded ?? 0 },
                 new() { Name = ProjectAchievementNames.ExternallyFunded, Count = outcomes?.ExternallyFunded ?? 0 },
                 new() { Name = ProjectAchievementNames.Awarded, Count = outcomes?.Awarded ?? 0 },
+                new() { Name = ProjectAchievementNames.Pitching, Count = outcomes?.Pitching ?? 0 },
+                new() { Name = ProjectAchievementNames.Demo, Count = outcomes?.Demo ?? 0 },
             ],
             NoOutcomeCount = outcomes?.None ?? 0,
         });

@@ -3722,6 +3722,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
 
+                    b.Property<bool>("IsDemo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_demo");
+
                     b.Property<bool>("IsExternallyFunded")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -3739,6 +3745,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_internally_funded");
+
+                    b.Property<bool>("IsPitching")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_pitching");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4097,6 +4109,70 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProjectProposalId", "SectionKey");
 
                     b.ToTable("project_comments", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectCompetitionEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Competition")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("competition");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("NormalizedOtherName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("normalized_other_name");
+
+                    b.Property<string>("OtherName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("other_name");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("stage");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_id");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer")
+                        .HasColumnName("year");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Competition", "Year", "Stage");
+
+                    b.HasIndex("ProjectId", "Competition", "NormalizedOtherName", "Year")
+                        .IsUnique();
+
+                    b.ToTable("project_competition_entries", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ProjectDirection", b =>
@@ -8721,6 +8797,17 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ThreadRoot");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ProjectCompetitionEntry", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Project", "Project")
+                        .WithMany("ProjectCompetitionEntries")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ProjectDirection", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.User", "ReviewedByUser")
@@ -9770,6 +9857,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("PitchDecks");
 
                     b.Navigation("ProjectAnalyses");
+
+                    b.Navigation("ProjectCompetitionEntries");
 
                     b.Navigation("ProjectProposal");
 

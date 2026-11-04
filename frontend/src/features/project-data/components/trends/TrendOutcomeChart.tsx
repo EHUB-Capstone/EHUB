@@ -7,6 +7,8 @@ export const OUTCOME_SERIES = [
   { key: 'Internally Funded', color: CHART_SERIES[1] },
   { key: 'Externally Funded', color: CHART_SERIES[2] },
   { key: 'Awarded', color: CHART_SERIES[3] },
+  { key: 'Pitching', color: CHART_SERIES[4] },
+  { key: 'Demo', color: CHART_SERIES[5] },
 ] as const;
 
 interface TooltipProps {
@@ -35,7 +37,7 @@ function OutcomeTooltip({ active, label, payload }: TooltipProps) {
   );
 }
 
-/** Potential, Internally Funded, Externally Funded and Awarded groups per semester. Grouped (not stacked) because the labels overlap. */
+/** Groups per semester for each achievement label. Grouped (not stacked) because the labels overlap. */
 export default function TrendOutcomeChart({ data }: { data: OutcomeChartRow[] }) {
   return (
     <div className="h-64 w-full">

@@ -36,23 +36,26 @@ internal static class ProjectDataMentorResolver
          assignment.Team.Class.Status == ClassStatus.Archived &&
          assignment.Team.Class.StatusBeforeArchive == ClassStatus.Completed);
 
-    /// <summary>True when the displayed Enterprise or Academic mentor of the project's team is this user.</summary>
-    internal static Expression<Func<Project, bool>> HasDisplayedMentor(Guid userId) =>
-        project =>
-            project.Team.MentorAssignments.AsQueryable()
+    /// <summary>True when the displayed Enterprise or Academic mentor of the project's team is any of these users.</summary>
+    internal static Expression<Func<Project, bool>> HasDisplayedMentorAny(Guid[] userIds)
+    {
+        var ids = userIds.Select(id => (Guid?)id).ToArray();
+        return project =>
+            ids.Contains(project.Team.MentorAssignments.AsQueryable()
                 .Where(IsDisplayed)
                 .Where(assignment => assignment.Slot == MentorType.Enterprise)
                 .OrderByDescending(assignment => assignment.AssignedAt)
                 .ThenBy(assignment => assignment.Id)
                 .Select(assignment => (Guid?)assignment.MentorProfile.UserId)
-                .FirstOrDefault() == userId ||
-            project.Team.MentorAssignments.AsQueryable()
+                .FirstOrDefault()) ||
+            ids.Contains(project.Team.MentorAssignments.AsQueryable()
                 .Where(IsDisplayed)
                 .Where(assignment => assignment.Slot == MentorType.Academic)
                 .OrderByDescending(assignment => assignment.AssignedAt)
                 .ThenBy(assignment => assignment.Id)
                 .Select(assignment => (Guid?)assignment.MentorProfile.UserId)
-                .FirstOrDefault() == userId;
+                .FirstOrDefault());
+    }
 
     /// <summary>True when the displayed Enterprise or Academic mentor's name contains the (lower-cased) term.</summary>
     internal static Expression<Func<Project, bool>> HasDisplayedMentorNamed(string term) =>

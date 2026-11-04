@@ -106,8 +106,9 @@ public sealed class ProjectDataTrendsTests
     }
 
     private static TrendProject Project(string semester, int year, SemesterTerm term, string subject, string classCode,
-        decimal? score, bool potential = false, bool internallyFunded = false, bool externallyFunded = false, bool awarded = false) =>
-        new(Guid.NewGuid(), semester, year, term, subject, ClassId(semester, classCode), classCode, potential, internallyFunded, externallyFunded, awarded, score);
+        decimal? score, bool potential = false, bool internallyFunded = false, bool externallyFunded = false, bool awarded = false,
+        bool pitching = false, bool demo = false) =>
+        new(Guid.NewGuid(), semester, year, term, subject, ClassId(semester, classCode), classCode, potential, internallyFunded, externallyFunded, awarded, pitching, demo, score);
 
     // The same class in the same semester is one class, so its projects share an id.
     private static Guid ClassId(string semester, string classCode) =>
@@ -139,6 +140,24 @@ public sealed class ProjectDataTrendsTests
         response.Subjects.Single(row => row.SubjectCode == "EXE301").AverageScoreChange.Should().BeNull();
 
         response.Classes.Count.Should().Be(3);
+    }
+
+    [Fact]
+    public void Builder_CountsPitchingAndDemoGroupsAndTheirChange()
+    {
+        var response = ProjectDataTrendBuilder.Build(
+        [
+            Project("SU2026", 2026, SemesterTerm.Summer, "EXE201", "EXE201_1", 7m, pitching: true),
+            Project("SU2026", 2026, SemesterTerm.Summer, "EXE201", "EXE201_1", 8m),
+            Project("FA2026", 2026, SemesterTerm.Fall, "EXE201", "EXE201_1", 9m, pitching: true, demo: true),
+            Project("FA2026", 2026, SemesterTerm.Fall, "EXE201", "EXE201_1", 6m, pitching: true, demo: true),
+            Project("FA2026", 2026, SemesterTerm.Fall, "EXE201", "EXE201_1", 5m),
+        ]);
+
+        response.Semesters.Select(row => (row.PitchingGroups, row.DemoGroups)).Should().Equal((1, 0), (2, 2));
+        response.Semesters.First().PitchingChange.Should().BeNull();
+        response.Semesters.Last().PitchingChange.Should().Be(1);
+        response.Semesters.Last().DemoChange.Should().Be(2);
     }
 
     [Fact]

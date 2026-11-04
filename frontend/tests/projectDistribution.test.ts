@@ -59,7 +59,7 @@ test('majorLabel shows a readable name for codes and the unspecified bucket', ()
 });
 
 test('distribution query key ignores paging and sorting and sits under the project-data scope', () => {
-  const base = { ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', achievement: 'Potential' as const };
+  const base = { ...DEFAULT_PROJECT_DATA_QUERY, subjectCode: 'EXE201', achievement: ['Potential' as const] };
   const paged = { ...base, pageIndex: 4, pageSize: 50 as const, sortBy: 'group' as const, isDescending: true };
 
   assert.deepEqual(projectDataDistributionKey('u1', base), projectDataDistributionKey('u1', paged));
@@ -91,14 +91,14 @@ test('getDistribution sends the same filter params as the summary and no paging'
 
 test('major is a filter: parsed from the URL, serialised back, and sent with the summary params', () => {
   const query = parseProjectDataQuery(new URLSearchParams('major=bit_se&semester=SU'));
-  assert.equal(query.major, 'BIT_SE');
+  assert.deepEqual(query.major, ['BIT_SE']);
   assert.equal(toProjectDataSearchParams(query).get('major'), 'BIT_SE');
-  assert.deepEqual(toProjectDataSummaryParams(query), { semester: 'SU', major: 'BIT_SE' });
+  assert.deepEqual(toProjectDataSummaryParams(query), { semester: 'SU', major: ['BIT_SE'] });
   assert.deepEqual(activeFilterKeys(query), ['semester', 'major']);
-  assert.equal(clearProjectDataFilters(query).major, '');
+  assert.deepEqual(clearProjectDataFilters(query).major, []);
 });
 
 test('an invalid major in the URL is ignored instead of failing the request', () => {
-  assert.equal(parseProjectDataQuery(new URLSearchParams('major=BIT SE!')).major, '');
-  assert.equal(parseProjectDataQuery(new URLSearchParams('major=' + 'A'.repeat(40))).major, '');
+  assert.deepEqual(parseProjectDataQuery(new URLSearchParams('major=BIT SE!')).major, []);
+  assert.deepEqual(parseProjectDataQuery(new URLSearchParams('major=' + 'A'.repeat(40))).major, []);
 });
