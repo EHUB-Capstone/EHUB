@@ -165,6 +165,15 @@ public static class ErrorCodes
     public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";
     public const string ProductFeedbackValidationError = "PRODUCT_FEEDBACK_VALIDATION_ERROR";
 
+    // Showcase error codes
+    public const string ShowcaseNotFound = "SHOWCASE_NOT_FOUND";
+    public const string ShowcaseAccessDenied = "SHOWCASE_ACCESS_DENIED";
+    public const string ShowcaseValidationError = "SHOWCASE_VALIDATION_ERROR";
+    public const string ShowcaseAlreadyExists = "SHOWCASE_ALREADY_EXISTS";
+    public const string ShowcaseInvalidState = "SHOWCASE_INVALID_STATE";
+    public const string ShowcaseConcurrencyConflict = "SHOWCASE_CONCURRENCY_CONFLICT";
+    public const string ShowcaseImageUploadFailed = "SHOWCASE_IMAGE_UPLOAD_FAILED";
+
     // Project data (cross-semester project list and achievements) error codes
     public const string ProjectDataAccessDenied = "PROJECT_DATA_ACCESS_DENIED";
     public const string ProjectDataNotFound = "PROJECT_DATA_NOT_FOUND";

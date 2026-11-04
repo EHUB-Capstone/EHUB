@@ -23,6 +23,7 @@ import {
 import { isProjectProfileAvailable, type ProjectDirectionSyncValue } from '../../utils/projectDirectionSync';
 import type { ProjectWorkspaceDetail, ProjectWorkspaceProfile } from '../../types/projectWorkspace';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 
 const emptyDraft: ProjectProfileDraft = {
   projectName: '',
@@ -279,8 +280,8 @@ export default function ProjectProfileEditor() {
 
         <div className="grid gap-5 p-6">
           {canEdit && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">Project name, Description and Startup industries require lecturer approval.</p><p className="mt-1 text-xs leading-5 text-amber-800">Saving a change to any of these fields creates a new change request. The currently approved values remain active while the request is Pending or needs revision.</p></div>}
-          <ProfileField id="projectName" label="Project name" value={draft.projectName} error={errors.projectName} maxLength={200} readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="description" label="Description" value={draft.description} error={errors.description} maxLength={2000} multiline readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="projectName" label={PROJECT_PROFILE_LABELS.projectName} value={draft.projectName} error={errors.projectName} maxLength={PROJECT_NAME_MAX_LENGTH} readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="description" label={PROJECT_PROFILE_LABELS.description} value={draft.description} error={errors.description} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} multiline readOnly={!canEdit} onChange={setField} />
           <div>
             <label id="project-profile-industries-label" className="text-sm font-semibold text-slate-700">Startup industries <span className="text-red-500">*</span></label>
             <div className="mt-1.5">
@@ -311,9 +312,9 @@ export default function ProjectProfileEditor() {
             </div>
             {canEdit && <p className="mt-1.5 text-xs text-slate-500">Approved: {currentIndustryNames.length > 0 ? currentIndustryNames.join(', ') : 'none'} · choose 1 to 3.</p>}
           </div>
-          <ProfileField id="problem" label="Problem" value={draft.problem} error={errors.problem} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="solution" label="Solution" value={draft.solution} error={errors.solution} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="targetUsers" label="Target users" value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="problem" label={PROJECT_PROFILE_LABELS.problem} value={draft.problem} error={errors.problem} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="solution" label={PROJECT_PROFILE_LABELS.solution} value={draft.solution} error={errors.solution} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="targetUsers" label={PROJECT_PROFILE_LABELS.targetUsers} value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 

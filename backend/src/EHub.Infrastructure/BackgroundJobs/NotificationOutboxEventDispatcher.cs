@@ -370,6 +370,9 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             case "Team.MentorChanged.v1":
                 await AddMentorChangedNotificationsAsync(message, data, cancellationToken);
                 break;
+            case "Showcase.Notification.v1":
+                await AddShowcaseNotificationsAsync(message, data, cancellationToken);
+                break;
             default:
                 _logger.LogDebug("Outbox event {OutboxEventId} {OutboxEventType} has no notification projection", message.EventId, message.Type);
                 break;
@@ -914,6 +917,28 @@ internal sealed class NotificationOutboxEventDispatcher : IOutboxEventDispatcher
             {
                 await AddAsync(message, userId, type, title, body, cancellationToken);
             }
+        }
+    }
+
+    private async Task AddShowcaseNotificationsAsync(OutboxMessage message, JsonElement data, CancellationToken cancellationToken)
+    {
+        var title = ReadString(data, "title");
+        var body = ReadString(data, "body");
+        var link = ReadString(data, "link");
+        var recipients = ReadGuids(data, "recipientUserIds").ToList();
+        if (ReadBoolean(data, "notifyAdministrators"))
+        {
+            recipients.AddRange(await _context.Users
+                .AsNoTracking()
+                .Where(user => user.Status == UserStatus.Active && user.UserRoles.Any(userRole => userRole.Role.Name == SystemRoles.Admin))
+                .Select(user => user.Id)
+                .ToArrayAsync(cancellationToken));
+        }
+
+        foreach (var recipientId in recipients.Distinct())
+        {
+            await AddAsync(message, recipientId, NotificationType.ShowcaseReview, title, body, cancellationToken,
+                linkOverride: string.IsNullOrWhiteSpace(link) ? null : link);
         }
     }
 
