@@ -27,20 +27,20 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
     private static readonly XNamespace Relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelationships = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-    public Task<Result<string>> ExtractAsync(byte[] content, string extension, int maxCharacters, CancellationToken cancellationToken)
+    public Task<Result<ExtractedText>> ExtractAsync(byte[] content, string extension, int maxCharacters, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (content.Length == 0 || maxCharacters <= 0) return Task.FromResult(Unreadable());
         try
         {
-            var text = extension switch
+            var read = extension switch
             {
                 ".pdf" => ReadPdf(content, maxCharacters, cancellationToken),
-                ".docx" => ReadDocx(content, maxCharacters, cancellationToken),
+                ".docx" => new ExtractedText(ReadDocx(content, maxCharacters, cancellationToken), 0),
                 ".pptx" => ReadPptx(content, maxCharacters, cancellationToken),
                 _ => null
             };
-            return Task.FromResult(string.IsNullOrWhiteSpace(text) ? Unreadable() : Result.Success(text));
+            return Task.FromResult(read is null || string.IsNullOrWhiteSpace(read.Text) ? Unreadable() : Result.Success(read));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) when (exception is not OutOfMemoryException)
@@ -50,18 +50,20 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
         }
     }
 
-    private static string ReadPdf(byte[] content, int maxCharacters, CancellationToken cancellationToken)
+    private static ExtractedText ReadPdf(byte[] content, int maxCharacters, CancellationToken cancellationToken)
     {
         using var document = PdfDocument.Open(content);
         if (document.IsEncrypted) throw new InvalidDataException();
         var text = new StringBuilder();
+        var pages = 0;
         foreach (var page in document.GetPages().Take(MaximumPdfPages))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            pages++;
             text.AppendLine(ContentOrderTextExtractor.GetText(page));
             if (text.Length >= maxCharacters) break;
         }
-        return Limit(text, maxCharacters);
+        return new ExtractedText(Limit(text, maxCharacters), pages);
     }
 
     private static string ReadDocx(byte[] content, int maxCharacters, CancellationToken cancellationToken)
@@ -85,7 +87,7 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
         return Limit(text, maxCharacters);
     }
 
-    private static string ReadPptx(byte[] content, int maxCharacters, CancellationToken cancellationToken)
+    private static ExtractedText ReadPptx(byte[] content, int maxCharacters, CancellationToken cancellationToken)
     {
         using var zip = new ZipArchive(new MemoryStream(content, writable: false), ZipArchiveMode.Read);
         var text = new StringBuilder();
@@ -105,7 +107,7 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
             text.Append('\n');
             if (text.Length >= maxCharacters) break;
         }
-        return Limit(text, maxCharacters);
+        return new ExtractedText(Limit(text, maxCharacters), number);
     }
 
     /// <summary>Slides in presentation order (the file numbering changes meaning once slides are reordered).</summary>
@@ -148,7 +150,7 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
     private static string Limit(StringBuilder text, int maxCharacters) =>
         text.Length <= maxCharacters ? text.ToString() : text.ToString(0, maxCharacters);
 
-    private static Result<string> Unreadable() => Result.Failure<string>(ErrorCodes.WorkspaceSummaryUnreadable,
+    private static Result<ExtractedText> Unreadable() => Result.Failure<ExtractedText>(ErrorCodes.WorkspaceSummaryUnreadable,
         "The file has no readable text. Scanned PDFs, images and password-protected files are not supported.");
 
     [GeneratedRegex(@"^ppt/slides/slide(\d+)\.xml$")]

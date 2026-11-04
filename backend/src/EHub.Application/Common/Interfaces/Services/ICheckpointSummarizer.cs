@@ -9,7 +9,14 @@ public interface ICheckpointSummarizer
 
     /// <summary>
     /// Returns the model's JSON answer constrained by <paramref name="jsonSchema"/>. Transport errors, timeouts and
-    /// malformed replies are returned as <c>WorkspaceSummaryUnavailable</c>; the caller validates the JSON itself.
+    /// malformed replies are returned as <c>WorkspaceSummaryModelUnreachable</c>, <c>WorkspaceSummaryModelTimeout</c> and
+    /// <c>WorkspaceSummaryModelBadAnswer</c>; the caller validates the JSON itself.
     /// </summary>
     Task<Result<string>> CompleteJsonAsync(string systemPrompt, string userPrompt, string jsonSchema, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Loads the model into memory ahead of the first request, so the first summary after a start or a long idle does not
+    /// pay the load time. Best effort: failures are ignored.
+    /// </summary>
+    Task WarmUpAsync(CancellationToken cancellationToken);
 }

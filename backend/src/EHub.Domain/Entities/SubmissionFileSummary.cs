@@ -20,6 +20,12 @@ public class SubmissionFileSummary : AuditableEntity
 
     public CheckpointSummaryStatus Status { get; set; } = CheckpointSummaryStatus.Pending;
 
+    /// <summary>Queued by an upload rather than by a reviewer; reviewers' requests always run first.</summary>
+    public bool IsAutomatic { get; set; }
+
+    /// <summary>Quick view built without the model (key sentences and checklist evidence), available in seconds.</summary>
+    public string? PreviewJson { get; set; }
+
     public string? ContentJson { get; set; }
     public string? Model { get; set; }
     public string? PromptVersion { get; set; }

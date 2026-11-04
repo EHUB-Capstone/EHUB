@@ -192,6 +192,12 @@ public static class ErrorCodes
     public const string WorkspaceSummaryQueueFull = "WORKSPACE_SUMMARY_QUEUE_FULL";
     public const string WorkspaceSummaryNoContent = "WORKSPACE_SUMMARY_NO_CONTENT";
     public const string WorkspaceSummaryUnreadable = "WORKSPACE_SUMMARY_UNREADABLE";
+    // Stored on a failed file summary so reviewers and operators can tell the causes apart. The first three are
+    // temporary (infrastructure) and are retried for longer; a bad model answer is not.
+    public const string WorkspaceSummaryModelUnreachable = "WORKSPACE_SUMMARY_MODEL_UNREACHABLE";
+    public const string WorkspaceSummaryModelTimeout = "WORKSPACE_SUMMARY_MODEL_TIMEOUT";
+    public const string WorkspaceSummaryStorageUnavailable = "WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE";
+    public const string WorkspaceSummaryModelBadAnswer = "WORKSPACE_SUMMARY_MODEL_BAD_ANSWER";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

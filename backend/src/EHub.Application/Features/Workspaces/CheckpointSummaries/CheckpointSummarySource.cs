@@ -10,16 +10,26 @@ internal sealed record SummarySourceFile(Guid Id, int VersionNumber, string Orig
 
 internal sealed record SummarySourceLink(Guid Id, int VersionNumber, string Name, string Url);
 
-internal sealed record SummarySourceRequirement(int Index, string Title);
+/// <summary>One thing reviewers look for: a checkpoint requirement or a rubric criterion.</summary>
+/// <param name="Description">The criterion's description, or when it has none the Excellent level text of the imported rubric.</param>
+/// <param name="Weight">Share of the checkpoint grade, for criteria.</param>
+/// <param name="Assessment">Document, Product or Live: whether a submitted file can show it (<see cref="CheckpointCriterionProfile"/>).</param>
+/// <param name="Excellent">The Excellent level text, from which the evidence cues are taken.</param>
+internal sealed record ChecklistItem(
+    int Index, string Kind, string Title, string? Description,
+    decimal? Weight = null, string Assessment = CheckpointCriterionProfile.Document, string? Excellent = null);
 
 /// <summary>What the checkpoint screen currently shows for a team: every visible file and link, newest first.</summary>
 internal sealed record SummarySource(
     IReadOnlyList<SummarySourceFile> Files,
     IReadOnlyList<SummarySourceLink> Links,
-    IReadOnlyList<SummarySourceRequirement> Requirements);
+    IReadOnlyList<ChecklistItem> Checklist);
 
 internal static class CheckpointSummarySource
 {
+    public const string RequirementKind = "Requirement";
+    public const string CriterionKind = "Criterion";
+
     public static async Task<SummarySource> LoadAsync(
         IApplicationDbContext context, Guid teamId, Checkpoint checkpoint, CancellationToken cancellationToken)
     {
@@ -35,14 +45,41 @@ internal static class CheckpointSummarySource
             .OrderByDescending(link => link.VersionNumber).ThenByDescending(link => link.SubmittedAt)
             .Select(link => new SummarySourceLink(link.Id, link.VersionNumber, link.Name, link.Url))
             .ToListAsync(cancellationToken);
-        return new SummarySource(files, links, Requirements(checkpoint));
+        return new SummarySource(files, links, await ChecklistAsync(context, checkpoint, cancellationToken));
     }
 
-    public static IReadOnlyList<SummarySourceRequirement> Requirements(Checkpoint checkpoint)
+    /// <summary>
+    /// The checkpoint's requirements followed by its rubric criteria. Many checkpoints define only a rubric, which is
+    /// exactly what lecturers grade against, so both are checked.
+    /// </summary>
+    public static async Task<IReadOnlyList<ChecklistItem>> ChecklistAsync(
+        IApplicationDbContext context, Checkpoint checkpoint, CancellationToken cancellationToken)
     {
-        string[] titles;
-        try { titles = JsonSerializer.Deserialize<string[]>(checkpoint.RequirementsJson) ?? []; }
-        catch (JsonException) { titles = []; }
-        return titles.Select((title, index) => new SummarySourceRequirement(index, title)).ToArray();
+        string[] requirements;
+        try { requirements = JsonSerializer.Deserialize<string[]>(checkpoint.RequirementsJson) ?? []; }
+        catch (JsonException) { requirements = []; }
+        var criteria = await context.RubricCriteria.AsNoTracking()
+            .Where(criterion => criterion.Rubric.CheckpointId == checkpoint.Id)
+            .OrderBy(criterion => criterion.DisplayOrder)
+            .Select(criterion => new { criterion.Name, criterion.Description, criterion.Weight, criterion.LevelsJson })
+            .ToListAsync(cancellationToken);
+
+        var items = requirements.Where(title => !string.IsNullOrWhiteSpace(title))
+            .Select(title => new ChecklistItem(0, RequirementKind, title.Trim(), null))
+            .Concat(criteria.Where(item => !string.IsNullOrWhiteSpace(item.Name))
+                .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group =>
+                {
+                    var first = group.First();
+                    // A rubric imported from a spreadsheet keeps its text in the four levels and leaves the description
+                    // empty; the Excellent level says what a lecturer expects to see, so it stands in for it.
+                    var excellent = CheckpointCriterionProfile.ExcellentText(first.LevelsJson);
+                    return new ChecklistItem(0, CriterionKind, group.Key,
+                        string.IsNullOrWhiteSpace(first.Description) ? excellent : first.Description,
+                        first.Weight, CheckpointCriterionProfile.Classify(group.Key), excellent);
+                }))
+            .Take(20)
+            .ToArray();
+        return items.Select((item, index) => item with { Index = index }).ToArray();
     }
 }

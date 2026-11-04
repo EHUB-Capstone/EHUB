@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Workspaces.CheckpointFiles;
 using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
@@ -26,7 +27,7 @@ namespace EHub.IntegrationTests.Classes;
 // AI file summaries: staff-only access, per-file queueing and the background generator against PostgreSQL.
 public sealed partial class TeamWorkflowIntegrationTests
 {
-    private static readonly CheckpointSummarySettings EnabledSummaries = new() { Enabled = true, MaxInputCharacters = 30_000, FilePromptCharacters = 12_000 };
+    private static readonly CheckpointSummarySettings EnabledSummaries = new() { Enabled = true, MaxInputCharacters = 30_000, FilePromptCharacters = 5_000 };
 
     private const string SurveyText = "Nhóm khảo sát 150 sinh viên tại TP.HCM về thói quen dùng túi nilon.";
     private const string CompetitorText = "Đối thủ trực tiếp là túi vải in sẵn trên Shopee giá 25.000 đồng.";
@@ -47,8 +48,10 @@ public sealed partial class TeamWorkflowIntegrationTests
         ICheckpointSummaryCancellation? cancellations = null)
     {
         fixture.Context.ChangeTracker.Clear();
-        return new CheckpointSummaryGenerator(fixture.Context, fixture.Storage, new InMemoryCheckpointStorage(),
-            new SubmissionTextExtractor(), summarizer, fixture.Clock, settings ?? EnabledSummaries,
+        var used = settings ?? EnabledSummaries;
+        return new CheckpointSummaryGenerator(fixture.Context,
+            new CheckpointFileText(fixture.Context, fixture.Storage, new InMemoryCheckpointStorage(), new SubmissionTextExtractor(), used),
+            summarizer, fixture.Clock, used, CheckpointSummaryTopics.None,
             cancellations ?? new CheckpointSummaryCancellation(), NullLogger<CheckpointSummaryGenerator>.Instance);
     }
 
@@ -93,11 +96,10 @@ public sealed partial class TeamWorkflowIntegrationTests
         return stream.ToArray();
     }
 
-    private static string Answer(params string[] statuses) => JsonSerializer.Serialize(new
+    private static string Answer() => JsonSerializer.Serialize(new
     {
         overview = "Tài liệu trình bày kết quả khảo sát 150 sinh viên.",
         keyPoints = new[] { "150 sinh viên được khảo sát" },
-        requirements = statuses.Select((status, index) => new { index = index + 1, status }),
         questions = new[] { "Nhóm sẽ gọi vốn từ đâu?" }
     });
 
@@ -130,7 +132,7 @@ public sealed partial class TeamWorkflowIntegrationTests
 
         var read = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.AdminId, SystemRoles.Admin);
         read.Value.Enabled.Should().BeTrue();
-        read.Value.FilePromptCharacters.Should().Be(12_000);
+        read.Value.FilePromptCharacters.Should().Be(5_000);
         read.Value.Files.Should().OnlyContain(item => item.Content == null);
     }
 
@@ -223,8 +225,8 @@ public sealed partial class TeamWorkflowIntegrationTests
         var teamId = fixture.Seed.TeamId!.Value;
         (await CreateSummaryHandler(fixture).RequestAsync(teamId, 1, Files(plan.Id, slides.Id), fixture.Seed.LecturerId, SystemRoles.Lecturer))
             .IsSuccess.Should().BeTrue();
-        // The model claims every requirement in every file; only sentences that name a requirement count.
-        var summarizer = new ScriptedSummarizer(_ => Result.Success(Answer("Covered", "Covered", "Covered")));
+        // Checklist evidence is found by the backend from the file text; the model only writes the overview.
+        var summarizer = new ScriptedSummarizer(_ => Result.Success(Answer()));
 
         (await DrainSummariesAsync(CreateSummaryGenerator(fixture, summarizer), fixture.Clock.UtcNow)).Should().Be(2);
 
@@ -235,16 +237,17 @@ public sealed partial class TeamWorkflowIntegrationTests
         var stored = await LoadFileSummaryAsync(fixture, plan.Id);
         stored.Status.Should().Be(CheckpointSummaryStatus.Ready);
         stored.Model.Should().Be("scripted-model");
-        stored.PromptVersion.Should().Be("v3");
+        stored.PromptVersion.Should().Be("v10");
+        stored.PreviewJson.Should().NotBeNull();
 
         var read = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.MentorUserId, SystemRoles.Mentor);
         var planSummary = FileOf(read.Value, plan.Id).Content!;
-        planSummary.Requirements.Select(item => item.Finding).Should().Equal("Related", "Unclear", "Unclear");
+        planSummary.Requirements.Take(3).Select(item => item.Finding).Should().Equal("Related", "NotFound", "NotFound");
         planSummary.Requirements.First().Evidence.Should().Be(SurveyText);
         planSummary.Highlights.Should().Contain(SurveyText);
-        FileOf(read.Value, slides.Id).Content!.Requirements.Select(item => item.Finding).Should().Equal("Unclear", "Related", "Unclear");
+        FileOf(read.Value, slides.Id).Content!.Requirements.Take(3).Select(item => item.Finding).Should().Equal("NotFound", "Related", "NotFound");
         var combined = read.Value.Requirements.ToArray();
-        combined.Select(item => item.Finding).Should().Equal("Related", "Related", "Unclear");
+        combined.Take(3).Select(item => item.Finding).Should().Equal("Related", "Related", "NotFound");
         combined[0].Source.Should().Be("plan.docx");
         combined[1].Source.Should().Be("slides.docx");
 
@@ -260,8 +263,64 @@ public sealed partial class TeamWorkflowIntegrationTests
         (await DrainSummariesAsync(CreateSummaryGenerator(fixture, summarizer), fixture.Clock.UtcNow)).Should().Be(1);
         summarizer.Prompts[^1].Should().Contain("update.docx");
         var latest = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.LecturerId, SystemRoles.Lecturer);
-        latest.Value.Requirements.Last().Finding.Should().Be("Related");
-        latest.Value.Requirements.Last().Source.Should().Be("update.docx");
+        latest.Value.Requirements.ElementAt(2).Finding.Should().Be("Related");
+        latest.Value.Requirements.ElementAt(2).Source.Should().Be("update.docx");
+    }
+
+    [Fact]
+    public async Task SummaryJob_KeepsRetryingAnUnreachableModelForAnHourAndAHalfBeforeGivingUp()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var plan = await fixture.UploadStoredFileAsync("plan.docx", BuildDocx(SurveyText));
+        var teamId = fixture.Seed.TeamId!.Value;
+        (await CreateSummaryHandler(fixture).RequestAsync(teamId, 1, Files(plan.Id), fixture.Seed.LecturerId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
+        var summarizer = new ScriptedSummarizer(_ => Result.Failure<string>(ErrorCodes.WorkspaceSummaryModelUnreachable, "down"));
+        var now = fixture.Clock.UtcNow;
+
+        // The delays grow 1, 5, 15, 60 minutes; the fifth failure is the last.
+        var delays = CheckpointSummaryLimits.InfrastructureRetryDelays;
+        for (var attempt = 1; attempt < CheckpointSummaryLimits.MaxInfrastructureAttempts; attempt++)
+        {
+            await DrainSummariesAsync(CreateSummaryGenerator(fixture, summarizer), now);
+            var row = await LoadFileSummaryAsync(fixture, plan.Id);
+            row.Status.Should().Be(CheckpointSummaryStatus.Pending);
+            row.AttemptCount.Should().Be(attempt);
+            row.NextAttemptAtUtc.Should().BeCloseTo(now + delays[Math.Min(attempt - 1, delays.Length - 1)], TimeSpan.FromMilliseconds(1));
+            row.LastErrorCode.Should().Be(ErrorCodes.WorkspaceSummaryModelUnreachable);
+            now = row.NextAttemptAtUtc!.Value;
+        }
+
+        await DrainSummariesAsync(CreateSummaryGenerator(fixture, summarizer), now);
+        var last = await LoadFileSummaryAsync(fixture, plan.Id);
+        last.Status.Should().Be(CheckpointSummaryStatus.Failed);
+        last.AttemptCount.Should().Be(CheckpointSummaryLimits.MaxInfrastructureAttempts);
+        last.LastErrorCode.Should().Be(ErrorCodes.WorkspaceSummaryModelUnreachable);
+    }
+
+    [Fact]
+    public async Task SummaryJob_DoesNotRetryABadModelAnswerLongerThanTheUsualThreeTimes()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var plan = await fixture.UploadStoredFileAsync("plan.docx", BuildDocx(SurveyText));
+        var teamId = fixture.Seed.TeamId!.Value;
+        await CreateSummaryHandler(fixture).RequestAsync(teamId, 1, Files(plan.Id), fixture.Seed.LecturerId, SystemRoles.Lecturer);
+        // Valid JSON without an overview cannot be used.
+        var summarizer = new ScriptedSummarizer(_ => Result.Success("{\"keyPoints\":[]}"));
+        var now = fixture.Clock.UtcNow;
+
+        for (var attempt = 0; attempt < CheckpointSummaryLimits.MaxAttempts; attempt++)
+        {
+            await DrainSummariesAsync(CreateSummaryGenerator(fixture, summarizer), now);
+            var row = await LoadFileSummaryAsync(fixture, plan.Id);
+            if (row.NextAttemptAtUtc is { } next) now = next;
+        }
+
+        var last = await LoadFileSummaryAsync(fixture, plan.Id);
+        last.Status.Should().Be(CheckpointSummaryStatus.Failed);
+        last.AttemptCount.Should().Be(CheckpointSummaryLimits.MaxAttempts);
+        last.LastErrorCode.Should().Be(ErrorCodes.WorkspaceSummaryModelBadAnswer);
     }
 
     [Fact]
@@ -439,10 +498,11 @@ public sealed partial class TeamWorkflowIntegrationTests
         {
             read.StatusCode.Should().Be(HttpStatusCode.OK);
             var text = await read.Content.ReadAsStringAsync();
-            text.Should().Contain("\"enabled\":false").And.Contain("plan.docx");
+            // Switched off for this environment: the screen hides the feature, so no file name is returned.
+            text.Should().Contain("\"enabled\":false").And.NotContain("plan.docx");
         }
         using (var cancel = await client.SendAsync(Request(HttpMethod.Post, lecturer, SystemRoles.Lecturer, "/cancel")))
-            cancel.StatusCode.Should().Be(HttpStatusCode.OK);
+            cancel.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
 
         // The test host keeps the default Summarization:Provider=Disabled.
         for (var i = 0; i < CheckpointSummaryLimits.RequestsPerUserPerHour; i++)
@@ -452,6 +512,124 @@ public sealed partial class TeamWorkflowIntegrationTests
         }
         using var limited = await client.SendAsync(Request(HttpMethod.Post, lecturer, SystemRoles.Lecturer));
         limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
+
+    private static async Task<WorkspaceCheckpointFileResponse> StudentUploadAsync(
+        UploadFixture fixture, string name, byte[] content, CheckpointSummarySettings? settings, ICheckpointSummaryQueueSignal? signal = null)
+    {
+        fixture.Context.ChangeTracker.Clear();
+        var handler = new CheckpointFileUploadHandler(fixture.Context, fixture.Storage, fixture.Clock,
+            new InitiateCheckpointFileUploadRequestValidator(), settings, signal);
+        var teamId = fixture.Seed.TeamId!.Value;
+        var userId = fixture.Seed.ProposerUserId;
+        var initiated = await handler.InitiateAsync(teamId, 1,
+            new InitiateCheckpointFileUploadRequest { FileName = name, Size = content.Length }, userId, SystemRoles.Student);
+        initiated.IsSuccess.Should().BeTrue();
+        fixture.Storage.Put(fixture.ObjectKeyOf(initiated.Value.UploadId), content, null);
+        var completed = await handler.CompleteAsync(teamId, 1, initiated.Value.UploadId, userId, SystemRoles.Student);
+        completed.IsSuccess.Should().BeTrue();
+        return completed.Value;
+    }
+
+    [Fact]
+    public async Task SwitchedOff_HidesEarlierSummariesAndRefusesEveryAction()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var plan = await fixture.UploadStoredFileAsync("plan.docx", BuildDocx(SurveyText));
+        var teamId = fixture.Seed.TeamId!.Value;
+        await CreateSummaryHandler(fixture).RequestAsync(teamId, 1, Files(plan.Id), fixture.Seed.LecturerId, SystemRoles.Lecturer);
+        await DrainSummariesAsync(CreateSummaryGenerator(fixture, new ScriptedSummarizer(_ => Result.Success(Answer()))), fixture.Clock.UtcNow);
+        (await LoadFileSummaryAsync(fixture, plan.Id)).Status.Should().Be(CheckpointSummaryStatus.Ready);
+        var off = new CheckpointSummarySettings { Enabled = false };
+
+        var read = await CreateSummaryHandler(fixture, off).GetAsync(teamId, 1, fixture.Seed.LecturerId, SystemRoles.Lecturer);
+
+        // The environment has the feature off: nothing, not even the earlier summary, reaches the screen.
+        read.IsSuccess.Should().BeTrue();
+        read.Value.Enabled.Should().BeFalse();
+        read.Value.Files.Should().BeEmpty();
+        read.Value.Requirements.Should().BeEmpty();
+        read.Value.Links.Should().BeEmpty();
+        (await CreateSummaryHandler(fixture, off).CancelAsync(teamId, 1, fixture.Seed.LecturerId, SystemRoles.Lecturer))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceSummaryDisabled);
+        // Switching it off never opens it to students.
+        (await CreateSummaryHandler(fixture, off).GetAsync(teamId, 1, fixture.Seed.ProposerUserId, SystemRoles.Student))
+            .Error.Code.Should().Be(ErrorCodes.WorkspaceAccessDenied);
+    }
+
+    [Fact]
+    public async Task Upload_QueuesAnAutomaticSummaryOnlyWhenEnabled()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var signal = new CountingQueueSignal();
+
+        var automatic = await StudentUploadAsync(fixture, "auto.docx", BuildDocx(SurveyText), EnabledSummaries, signal);
+        var off = await StudentUploadAsync(fixture, "off.docx", BuildDocx(SurveyText), new CheckpointSummarySettings { Enabled = true, AutoSummarize = false });
+        var disabled = await StudentUploadAsync(fixture, "disabled.docx", BuildDocx(SurveyText), new CheckpointSummarySettings());
+
+        var queued = await LoadFileSummaryAsync(fixture, automatic.Id);
+        queued.Status.Should().Be(CheckpointSummaryStatus.Pending);
+        queued.IsAutomatic.Should().BeTrue();
+        queued.FileVersionNumber.Should().Be(automatic.VersionNumber);
+        signal.Count.Should().Be(1);
+        (await fixture.Context.SubmissionFileSummaries.AnyAsync(item => item.SubmissionFileId == off.Id || item.SubmissionFileId == disabled.Id))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AutomaticSummary_RunsAfterReviewerRequestsAndAReviewerRequestPromotesIt()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var first = await StudentUploadAsync(fixture, "first.docx", BuildDocx(SurveyText), EnabledSummaries);
+        var second = await StudentUploadAsync(fixture, "second.docx", BuildDocx(CompetitorText), EnabledSummaries);
+        var teamId = fixture.Seed.TeamId!.Value;
+
+        var before = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.LecturerId, SystemRoles.Lecturer);
+        FileOf(before.Value, first.Id).IsAutomatic.Should().BeTrue();
+        // Newest first within the automatic queue.
+        FileOf(before.Value, second.Id).QueueAhead.Should().Be(0);
+        FileOf(before.Value, first.Id).QueueAhead.Should().Be(1);
+
+        // The older file is requested by a reviewer: it jumps ahead of the newer automatic one.
+        var request = await CreateSummaryHandler(fixture).RequestAsync(teamId, 1, Files(first.Id), fixture.Seed.LecturerId, SystemRoles.Lecturer);
+        request.IsSuccess.Should().BeTrue();
+        FileOf(request.Value, first.Id).IsAutomatic.Should().BeFalse();
+        FileOf(request.Value, first.Id).QueueAhead.Should().Be(0);
+        FileOf(request.Value, second.Id).QueueAhead.Should().Be(1);
+
+        var summarizer = new ScriptedSummarizer(_ => Result.Success(Answer()));
+        await CreateSummaryGenerator(fixture, summarizer).ProcessNextAsync(fixture.Clock.UtcNow, CancellationToken.None);
+        summarizer.Prompts.Should().ContainSingle().Which.Should().Contain("first.docx");
+    }
+
+    [Fact]
+    public async Task Previewer_ShowsTheQuickViewBeforeTheModelRuns()
+    {
+        using var fixture = await CreateUploadFixtureAsync();
+        await ClearSummaryQueueAsync(fixture);
+        var file = await StudentUploadAsync(fixture, "plan.docx", BuildDocx(SurveyText), EnabledSummaries);
+        await SetRequirementsAsync(fixture, "Khảo sát khách hàng", "Kế hoạch gọi vốn");
+        var teamId = fixture.Seed.TeamId!.Value;
+        var settings = EnabledSummaries;
+        fixture.Context.ChangeTracker.Clear();
+        var previewer = new CheckpointSummaryPreviewer(fixture.Context,
+            new CheckpointFileText(fixture.Context, fixture.Storage, new InMemoryCheckpointStorage(), new SubmissionTextExtractor(), settings),
+            CheckpointSummaryTopics.None, NullLogger<CheckpointSummaryPreviewer>.Instance);
+
+        (await previewer.ProcessNextAsync(CancellationToken.None)).Should().BeTrue();
+        (await previewer.ProcessNextAsync(CancellationToken.None)).Should().BeFalse();
+
+        var read = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.LecturerId, SystemRoles.Lecturer);
+        var summary = FileOf(read.Value, file.Id);
+        summary.Status.Should().Be("Pending");
+        summary.Content.Should().BeNull();
+        summary.Preview.Should().NotBeNull();
+        summary.Preview!.Requirements.Take(2).Select(item => item.Finding).Should().Equal("Related", "NotFound");
+        summary.Preview.Requirements.First().Evidence.Should().Be(SurveyText);
+        read.Value.Requirements.Take(2).Select(item => item.Finding).Should().Equal("Related", "NotFound");
     }
 
     [RealSummaryOllamaFact]
@@ -483,9 +661,10 @@ public sealed partial class TeamWorkflowIntegrationTests
         var content = file.Content!;
         content.Overview.Should().MatchRegex("[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉĩọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]");
         content.Overview.Should().NotContain("10 ĐIỂM");
-        content.Requirements.Should().HaveCount(2);
+        var requirements = content.Requirements.Where(item => item.Kind == "Requirement").ToArray();
+        requirements.Should().HaveCount(2);
         // Funding is not in the document: it must never be reported as related.
-        content.Requirements.Last().Finding.Should().NotBe("Related", because: $"evidence was: {content.Requirements.Last().Evidence}");
+        requirements.Last().Finding.Should().NotBe("Related", because: $"evidence was: {requirements.Last().Evidence}");
     }
 
     /// <summary>Waits like a slow model call until it is cancelled, the way HttpClient behaves when the token fires.</summary>
@@ -494,6 +673,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Cancelled { get; private set; }
         public string ModelName => "blocking-model";
+        public Task WarmUpAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public async Task<Result<string>> CompleteJsonAsync(string systemPrompt, string userPrompt, string jsonSchema, CancellationToken cancellationToken)
         {
@@ -522,6 +702,7 @@ public sealed partial class TeamWorkflowIntegrationTests
     {
         public List<string> Prompts { get; } = [];
         public string ModelName => "scripted-model";
+        public Task WarmUpAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<Result<string>> CompleteJsonAsync(string systemPrompt, string userPrompt, string jsonSchema, CancellationToken cancellationToken)
         {

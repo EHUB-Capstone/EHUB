@@ -56,6 +56,12 @@ x-backend-environment: &backend-environment
   AdminSeed__FullName: ${ADMIN_SEED_FULL_NAME:-EHUB Staging Administrator}
   Mentoring__OllamaBaseUrl: http://ollama:11434
   Mentoring__EmbeddingModel: bge-m3
+  # AI checkpoint summaries: off unless CHECKPOINT_SUMMARY_PROVIDER=Ollama is in the env file (see
+  # docs/workspace/AI_CHECKPOINT_SUMMARY.md). The deploy script then starts ollama and pulls the model.
+  Summarization__Provider: ${CHECKPOINT_SUMMARY_PROVIDER:-Disabled}
+  Summarization__BaseUrl: http://ollama:11434
+  Summarization__Model: ${CHECKPOINT_SUMMARY_MODEL:-qwen3.5:2b-q4_K_M}
+  Summarization__AutoSummarize: ${CHECKPOINT_SUMMARY_AUTO:-true}
 
 services:
   postgres:

@@ -356,6 +356,8 @@ export interface MockApiState {
   checkpointSchedules: Record<string, MockClassCheckpointSchedule>;
   checkpointFiles: Record<string, MockCheckpointFile[]>;
   checkpointLinks: Record<string, MockCheckpointLink[]>;
+  /** Simulates an environment with AI checkpoint summaries switched off (Summarization:Provider=Disabled). */
+  checkpointSummaryDisabled?: boolean;
   courseAssessmentScores: Record<string, number>;
   courseAssessmentMemberScores: Record<string, number>;
   evaluationPublicationStatuses: Record<string, 'SUBMITTED' | 'PUBLISHED'>;

@@ -442,6 +442,33 @@ function mockSummary(teamId: string, number: number) {
   const pending = files.filter((file) => mockFileStatus(file._id) === 'Pending')
     .sort((a, b) => mockFileSummaries.get(a._id)!.startsAt - mockFileSummaries.get(b._id)!.startsAt);
   const busy = files.some((file) => mockFileStatus(file._id) === 'Processing') ? 1 : 0;
+  const highlights = ['Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.', 'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.'];
+  const mockConflicts = [{
+    subject: 'Conversion rate',
+    values: [
+      { value: '15%', quote: '750 Premium Subscribers (15% conversion rate)' },
+      { value: '30%', quote: 'Premium Users 600 (Year 1) 30% conversion target' },
+    ],
+  }];
+  const mockStatus = [
+    { status: 'Done', text: 'Kho lưu trữ project nằm trong scope và đã được xây dựng.' },
+    {
+      status: 'Pending',
+      request: 'Thêm chức năng trao đổi giữa mentor doanh nghiệp và giảng viên đứng lớp.',
+      text: 'Nhóm xin ghi nhận và sẽ nghiên cứu sau khi hoàn thành phạm vi (scope) của dự án.',
+    },
+    { status: 'InProgress', text: 'Sử dụng AI hỗ trợ cảnh báo trùng đề tài để giảng viên quyết định.' },
+  ];
+  const findingsFor = (position: number) => requirements.map((title, index) => ({
+    index,
+    kind: 'Requirement',
+    title,
+    finding: index === 0 && position === 0 ? 'Related' : 'NotFound',
+    evidence: index === 0 && position === 0 ? highlights[0] : null,
+    weight: null,
+    assessment: 'Document',
+    cues: [],
+  }));
   const fileSummaries = files.map((file, position) => {
     const status = mockFileStatus(file._id);
     const entry = mockFileSummaries.get(file._id);
@@ -452,6 +479,9 @@ function mockSummary(teamId: string, number: number) {
       uploadedAt: file.uploadedAt,
       status,
       queueAhead: status === 'Pending' ? busy + pending.findIndex((item) => item._id === file._id) : null,
+      isAutomatic: false,
+      // The quick view needs no AI, so it is there as soon as a file is queued.
+      preview: status === 'Pending' || status === 'Processing' ? { highlights, requirements: findingsFor(position), conflicts: mockConflicts, statusItems: mockStatus, littleText: false } : null,
       requestedAt: entry ? new Date(entry.startsAt).toISOString() : null,
       generatedAt: status === 'Ready' ? new Date(entry!.startsAt + MOCK_SUMMARY_STEP_MS).toISOString() : null,
       errorCode: null,
@@ -463,13 +493,11 @@ function mockSummary(teamId: string, number: number) {
           'Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.',
           'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.',
         ],
-        highlights: ['Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.', 'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.'],
-        requirements: requirements.map((title, index) => ({
-          index,
-          title,
-          finding: index === 0 && position === 0 ? 'Related' : index === 1 ? 'Unclear' : 'NotFound',
-          evidence: index === 0 && position === 0 ? 'Nhóm đã phỏng vấn 18 sinh viên về cách tìm dịch vụ sửa chữa và in ấn.' : null,
-        })),
+        highlights,
+        requirements: findingsFor(position),
+        conflicts: mockConflicts,
+        statusItems: mockStatus,
+        littleText: false,
         questions: ['Nhóm đã kiểm chứng mức phí hoa hồng 8% với nhà cung cấp dịch vụ nào chưa?'],
       },
     };
@@ -478,22 +506,36 @@ function mockSummary(teamId: string, number: number) {
   return {
     checkpointNumber: number,
     enabled: true,
-    filePromptCharacters: 12_000,
+    filePromptCharacters: 5_000,
     files: fileSummaries,
     requirements: requirements.map((title, index) => {
       const related = ready.find((file) => file.content!.requirements[index]?.finding === 'Related');
       const findings = ready.map((file) => file.content!.requirements[index]?.finding);
       return {
         index,
+        kind: 'Requirement',
         title,
-        finding: related ? 'Related' : findings.includes('Unclear') ? 'Unclear' : findings.length ? 'NotFound' : 'NotChecked',
+        finding: related ? 'Related' : findings.length ? 'NotFound' : 'NotChecked',
         evidence: related?.content!.requirements[index].evidence ?? null,
         source: related?.name ?? null,
       };
     }),
+    // Two summarised files that give different sample sizes, as the server reports them.
+    conflicts: ready.length < 2 ? [] : [{
+      subject: 'Survey sample size',
+      values: ready.slice(0, 2).map((file, index) => ({
+        value: index === 0 ? '51' : '52',
+        quote: index === 0 ? 'Quy mô mẫu hợp lệ: N = 51 nhân sự.' : '52 doanh nghiệp tham gia khảo sát.',
+        source: file.name,
+      })),
+    }],
     links: linksForCheckpoint(teamId, number).map((link) => ({ name: link.name, domain: new URL(link.url).hostname })),
   };
 }
+
+const summaryDisabledFailure = () => (getMockState().checkpointSummaryDisabled
+  ? failure(503, 'WORKSPACE_SUMMARY_DISABLED', 'AI summaries are not enabled on this server.')
+  : null);
 
 function summaryReviewerFailure(teamId: string) {
   const state = getMockState();
@@ -1531,11 +1573,18 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   const summaryRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary$/;
   mock.onGet(summaryRoute).reply((config) => {
     const [, teamId = '', number = '1'] = config.url?.match(summaryRoute) || [];
-    return summaryReviewerFailure(teamId) ?? ok(mockSummary(teamId, Number(number)), 'AI summary retrieved.');
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    // Switched off: like the server, nothing but the flag is returned.
+    if (getMockState().checkpointSummaryDisabled)
+      return ok({ checkpointNumber: Number(number), enabled: false, filePromptCharacters: 0, files: [], requirements: [], links: [] }, 'AI summary retrieved.');
+    return ok(mockSummary(teamId, Number(number)), 'AI summary retrieved.');
   });
 
   mock.onPost(summaryRoute).reply((config) => {
     const [, teamId = '', number = '1'] = config.url?.match(summaryRoute) || [];
+    const disabled = summaryDisabledFailure();
+    if (disabled) return disabled;
     const denied = summaryReviewerFailure(teamId);
     if (denied) return denied;
     const checkpointNumber = Number(number);
@@ -1561,6 +1610,8 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   const cancelRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/cancel$/;
   mock.onPost(cancelRoute).reply((config) => {
     const [, teamId = '', number = '1'] = config.url?.match(cancelRoute) || [];
+    const disabled = summaryDisabledFailure();
+    if (disabled) return disabled;
     const denied = summaryReviewerFailure(teamId);
     if (denied) return denied;
     const checkpointNumber = Number(number);

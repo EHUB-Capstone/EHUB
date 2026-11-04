@@ -16,7 +16,8 @@ namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 /// <summary>
 /// Reads, queues and cancels AI summaries of checkpoint files. Only admins, the class's lecturers and the team's active
 /// mentors may use them; students never see a summary. Files are summarised one at a time by
-/// <see cref="CheckpointSummaryGenerator"/>, and a file version is summarised at most once.
+/// <see cref="CheckpointSummaryGenerator"/>, and a file version is summarised at most once. Uploads queue files
+/// automatically at low priority; a reviewer's request moves them ahead of every automatic one.
 /// </summary>
 public sealed class CheckpointSummaryHandler(
     IApplicationDbContext context,
@@ -33,6 +34,9 @@ public sealed class CheckpointSummaryHandler(
     {
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointSummaryResponse>(access.Error);
+        // Switched off for this environment: the screen hides the feature, so no file or earlier summary is returned.
+        if (!settings.Enabled)
+            return Result.Success(new WorkspaceCheckpointSummaryResponse { CheckpointNumber = checkpointNumber, Enabled = false });
         return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, cancellationToken));
     }
 
@@ -61,17 +65,30 @@ public sealed class CheckpointSummaryHandler(
         var existing = await context.SubmissionFileSummaries
             .Where(item => chosenIds.Contains(item.SubmissionFileId))
             .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
-        // A current summary of an unchanged file, or one already queued, never adds work.
+        // A current summary of an unchanged file, or one already requested, never adds work. A file queued
+        // automatically after upload is only promoted ahead of the automatic queue.
         var toQueue = chosen.Where(file => !existing.TryGetValue(file.Id, out var summary) || NeedsWork(summary)).ToArray();
-        if (toQueue.Length > 0)
+        var toPromote = chosen.Where(file => existing.TryGetValue(file.Id, out var summary) && summary.IsAutomatic &&
+            summary.Status is CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing).Select(file => existing[file.Id]).ToArray();
+        if (toQueue.Length > 0 || toPromote.Length > 0)
         {
-            var queued = await context.SubmissionFileSummaries.CountAsync(item =>
-                item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing, cancellationToken);
-            if (queued + toQueue.Length > CheckpointSummaryLimits.MaxQueuedSummaries)
+            // Only reviewers' requests count against the cap: the automatic queue has its own and always yields to them.
+            var queued = await context.SubmissionFileSummaries.CountAsync(item => !item.IsAutomatic &&
+                (item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing), cancellationToken);
+            if (queued + toQueue.Length + toPromote.Length > CheckpointSummaryLimits.MaxQueuedSummaries)
                 return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryQueueFull,
                     "Many summaries are waiting. Please try again in a few minutes.");
 
             var now = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
+            foreach (var summary in toPromote)
+            {
+                // The lease and attempt count stay as they are, so a file already being read is not restarted.
+                summary.IsAutomatic = false;
+                summary.RequestedById = userId;
+                summary.RequestedAtUtc = now;
+                summary.UpdatedAt = now;
+                summary.UpdatedBy = userId;
+            }
             foreach (var file in toQueue)
             {
                 if (!existing.TryGetValue(file.Id, out var summary))
@@ -90,6 +107,9 @@ public sealed class CheckpointSummaryHandler(
                 }
                 // The same due time for the whole request; the worker then takes the newest version first.
                 summary.Status = CheckpointSummaryStatus.Pending;
+                summary.IsAutomatic = false;
+                // The checklist may have changed since the last run, so the quick view is worked out again.
+                summary.PreviewJson = null;
                 summary.RequestedById = userId;
                 summary.RequestedAtUtc = now;
                 summary.AttemptCount = 0;
@@ -116,6 +136,9 @@ public sealed class CheckpointSummaryHandler(
     public async Task<Result<WorkspaceCheckpointSummaryResponse>> CancelAsync(
         Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken = default)
     {
+        if (!settings.Enabled)
+            return Result.Failure<WorkspaceCheckpointSummaryResponse>(ErrorCodes.WorkspaceSummaryDisabled,
+                "AI summaries are not enabled on this server.");
         var access = await ResolveAccessAsync(teamId, checkpointNumber, userId, role, cancellationToken);
         if (access.IsFailure) return Result.Failure<WorkspaceCheckpointSummaryResponse>(access.Error);
         var checkpointId = access.Value.Id;
@@ -146,12 +169,13 @@ public sealed class CheckpointSummaryHandler(
         var summaries = await context.SubmissionFileSummaries.AsNoTracking()
             .Where(item => fileIds.Contains(item.SubmissionFileId))
             .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
-        // The shared queue is small (bounded by MaxQueuedSummaries), so its order is read once.
+        // The shared queue is bounded (MaxQueuedSummaries plus MaxQueuedAutomaticSummaries), so its order is read once;
+        // it mirrors the worker's order: reviewers' requests, then automatic ones.
         var queue = summaries.Values.Any(item => item.Status == CheckpointSummaryStatus.Pending)
             ? await context.SubmissionFileSummaries.AsNoTracking()
                 .Where(item => item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing)
                 .OrderByDescending(item => item.Status == CheckpointSummaryStatus.Processing)
-                .ThenBy(item => item.NextAttemptAtUtc).ThenByDescending(item => item.FileVersionNumber)
+                .ThenBy(item => item.IsAutomatic).ThenBy(item => item.NextAttemptAtUtc).ThenByDescending(item => item.FileVersionNumber)
                 .Select(item => item.Id)
                 .ToListAsync(cancellationToken)
             : [];
@@ -159,7 +183,7 @@ public sealed class CheckpointSummaryHandler(
         var files = source.Files.Select(file =>
         {
             summaries.TryGetValue(file.Id, out var summary);
-            var content = summary?.Status == CheckpointSummaryStatus.Ready ? ReadContent(summary.ContentJson) : null;
+            var content = summary?.Status == CheckpointSummaryStatus.Ready ? Read<WorkspaceFileSummaryContent>(summary.ContentJson) : null;
             return new WorkspaceFileSummary
             {
                 FileId = file.Id,
@@ -168,6 +192,9 @@ public sealed class CheckpointSummaryHandler(
                 UploadedAt = file.UploadedAt,
                 Status = summary is null ? "None" : summary.Status.ToString(),
                 QueueAhead = summary?.Status == CheckpointSummaryStatus.Pending ? Math.Max(0, queue.IndexOf(summary.Id)) : null,
+                IsAutomatic = summary?.IsAutomatic ?? false,
+                // The quick view is shown while the model is still working; a finished summary already contains it.
+                Preview = content is null ? ReadPreview(summary?.PreviewJson) : null,
                 RequestedAt = summary?.RequestedAtUtc,
                 GeneratedAt = summary?.GeneratedAtUtc,
                 ErrorCode = summary?.Status == CheckpointSummaryStatus.Failed ? summary.LastErrorCode : null,
@@ -182,8 +209,14 @@ public sealed class CheckpointSummaryHandler(
             Enabled = settings.Enabled,
             FilePromptCharacters = settings.FilePromptCharacters,
             Files = files,
-            Requirements = CheckpointSummaryOutput.Combine(source.Requirements,
-                files.Where(file => file.Content is not null).Select(file => (file.Name, file.Content!)).ToArray()),
+            Requirements = CheckpointSummaryOutput.Combine(source.Checklist,
+                files.Select(file => (file.Name, Findings: file.Content?.Requirements ?? file.Preview?.Requirements))
+                    .Where(file => file.Findings is not null)
+                    .Select(file => (file.Name, file.Findings!)).ToArray()),
+            Conflicts = CheckpointCrossFileFigures.Compare(files
+                .Select(file => (file.Name, Figures: file.Content?.Figures ?? file.Preview?.Figures))
+                .Where(file => file.Figures is { Count: > 0 })
+                .Select(file => (file.Name, file.Figures!)).ToArray()),
             Links = source.Links.Select(link => new WorkspaceCheckpointSummaryLink
             {
                 Name = link.Name, Domain = CheckpointSummaryOutput.Domain(link.Url)
@@ -195,14 +228,19 @@ public sealed class CheckpointSummaryHandler(
     private static bool NeedsWork(SubmissionFileSummary summary) => summary.Status switch
     {
         CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing => false,
-        CheckpointSummaryStatus.Ready => summary.PromptVersion != CheckpointSummaryPrompt.Version || ReadContent(summary.ContentJson) is null,
+        CheckpointSummaryStatus.Ready => summary.PromptVersion != CheckpointSummaryPrompt.Version ||
+            Read<WorkspaceFileSummaryContent>(summary.ContentJson) is null,
         _ => true
     };
 
-    private static WorkspaceFileSummaryContent? ReadContent(string? json)
+    /// <summary>An empty quick view marks a file that could not be read yet; it is not evidence that items are missing.</summary>
+    private static WorkspaceFilePreview? ReadPreview(string? json) =>
+        Read<WorkspaceFilePreview>(json) is { } preview && (preview.Highlights.Count > 0 || preview.Requirements.Count > 0) ? preview : null;
+
+    private static T? Read<T>(string? json) where T : class
     {
         if (json is null) return null;
-        try { return JsonSerializer.Deserialize<WorkspaceFileSummaryContent>(json, JsonOptions); }
+        try { return JsonSerializer.Deserialize<T>(json, JsonOptions); }
         catch (JsonException) { return null; }
     }
 

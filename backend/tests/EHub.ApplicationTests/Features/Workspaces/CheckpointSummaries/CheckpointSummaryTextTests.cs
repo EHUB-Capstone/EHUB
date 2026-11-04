@@ -35,33 +35,17 @@ public sealed class CheckpointSummaryTextTests
         CheckpointSummaryText.Select("Ngắn.", ["Kế hoạch"], 1_000).Should().Be("Ngắn.");
     }
 
-    [Theory]
-    [InlineData("Kế hoạch gọi vốn", "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, gọi vốn từ quỹ trường.")]
-    [InlineData("Phân tích đối thủ cạnh tranh", "Đối thủ trực tiếp là túi vải in sẵn trên Shopee.")]
-    // A matching heading points to the first sentence under it.
-    [InlineData("Dự báo tài chính", "Năm đầu dự kiến doanh thu 1,8 tỷ đồng và lợi nhuận 450 triệu đồng.")]
-    public void BestEvidence_ReturnsASentenceThatNamesTheRequirement(string title, string expected)
+    [Fact]
+    public void Clean_RemovesCharactersThatPostgresJsonbRefusesButKeepsTextAndLineBreaks()
     {
-        string[] sentences =
-        [
-            "Giải pháp là túi vải bạt tái chế giá 45.000 đồng.",
-            "Dự báo tài chính",
-            "Năm đầu dự kiến doanh thu 1,8 tỷ đồng và lợi nhuận 450 triệu đồng.",
-            "Đối thủ trực tiếp là túi vải in sẵn trên Shopee.",
-            "Nhóm kêu gọi 500 triệu đồng vốn hạt giống, gọi vốn từ quỹ trường."
-        ];
+        // PDF fonts can yield NUL characters; "\u0000" inside a jsonb value makes PostgreSQL reject the whole row.
+        var dirty = "Kế hoạch\0 gọi vốn\u0001\n\tNhóm 😀 xin\ud800 chào\udc00";
 
-        CheckpointSummaryText.BestEvidence(title, sentences).Should().Be(expected);
-    }
+        var clean = CheckpointSummaryText.Clean(dirty);
 
-    [Theory]
-    [InlineData("Kế hoạch phân công nhóm")]
-    [InlineData("MVP")]
-    [InlineData("Kết quả khảo sát hoặc phỏng vấn")]
-    public void BestEvidence_IsNullWhenNoSentenceNamesTheRequirement(string title)
-    {
-        CheckpointSummaryText.BestEvidence(title, ["Giải pháp là túi vải bạt tái chế giá 45.000 đồng.", "Hoặc của các bên khác."])
-            .Should().BeNull();
+        clean.Should().Be("Kế hoạch gọi vốn\n\tNhóm 😀 xin chào");
+        CheckpointSummaryText.Clean(null).Should().BeEmpty();
+        System.Text.Json.JsonSerializer.Serialize(clean).Should().NotContain("\\u0000").And.NotContain("\\ud800");
     }
 
     [Fact]

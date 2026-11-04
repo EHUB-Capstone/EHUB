@@ -28,6 +28,8 @@ public class SubmissionFileSummaryConfiguration : IEntityTypeConfiguration<Submi
             .HasMaxLength(20)
             .HasDefaultValue(CheckpointSummaryStatus.Pending)
             .IsRequired();
+        builder.Property(item => item.IsAutomatic).HasColumnName("is_automatic").HasDefaultValue(false).IsRequired();
+        builder.Property(item => item.PreviewJson).HasColumnName("preview_json").HasColumnType("jsonb");
         builder.Property(item => item.ContentJson).HasColumnName("content_json").HasColumnType("jsonb");
         builder.Property(item => item.Model).HasColumnName("model").HasMaxLength(100);
         builder.Property(item => item.PromptVersion).HasColumnName("prompt_version").HasMaxLength(20);

@@ -457,3 +457,15 @@ theo HEAD đang thay đổi của `develop`.
   backend/frontend và validate cả hai Compose.
 - Đây là kiểm tra cấu hình trong source. Chưa build image, tải model hoặc chạy
   migration trên VPS; các bước triển khai và smoke test vẫn thực hiện theo runbook.
+
+## 15. AI tóm tắt file checkpoint (demo đồ án)
+
+- Bật bằng một dòng trong `/opt/ehub/staging/app/.env.staging`: `CHECKPOINT_SUMMARY_PROVIDER=Ollama`.
+  Thiếu dòng hoặc `Disabled` thì tắt: giao diện không có thẻ "AI summary", backend không chạy
+  tiến trình nền nào của tính năng này.
+- Staging dùng `MENTOR_MATCHING_PROVIDER=Trained`, nên container `ollama` chỉ chạy model tóm tắt.
+  Script deploy tự khởi động `ollama` và tải `qwen3.5:2b-q4_K_M` khi bật.
+- Script deploy được cài như bản root-owned tại `/opt/ehub/deploy/`: sau khi merge thay đổi này
+  phải cài lại bản staging theo `STAGING_CD.md` thì công tắc mới có tác dụng.
+- Đổi công tắc: sửa `.env.staging` rồi chạy lại deploy. Không cần build lại frontend.
+- Chi tiết: `docs/workspace/AI_CHECKPOINT_SUMMARY.md`.

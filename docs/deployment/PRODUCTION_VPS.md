@@ -112,6 +112,13 @@ Google Identity Services must allow the production origin
 `https://e-hub.com.vn`. The `www` hostname redirects to the canonical apex
 domain and should not be used as the application origin.
 
+AI checkpoint summaries are off in production unless `.env.production` contains
+`CHECKPOINT_SUMMARY_PROVIDER=Ollama`. Off (the default, also when the line is missing)
+means no AI card in the UI and no background summary work. Switching on needs the
+re-installed deploy script (it starts `ollama` and pulls the summary model) and costs up
+to the `ollama` container's 2 vCPU / 3 GB; do it outside busy submission periods. See
+`docs/workspace/AI_CHECKPOINT_SUMMARY.md`.
+
 ## 4. Prepare an approved release on the VPS
 
 Do this only after the deployment changes pass Pull Request review and CI.

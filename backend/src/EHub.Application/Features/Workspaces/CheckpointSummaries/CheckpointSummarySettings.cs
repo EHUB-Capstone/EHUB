@@ -5,14 +5,20 @@ public sealed class CheckpointSummarySettings
 {
     public bool Enabled { get; init; }
 
+    /// <summary>
+    /// Queue every uploaded file at low priority, so summaries are usually ready before a reviewer opens the
+    /// checkpoint. The worker still runs one file at a time, so this lengthens the queue, not memory use.
+    /// </summary>
+    public bool AutoSummarize { get; init; } = true;
+
     /// <summary>Characters read from one file; the rest is not considered.</summary>
     public int MaxInputCharacters { get; init; } = 30_000;
 
     /// <summary>
     /// Characters of one file sent to the model. Longer files are condensed to their most informative sentences.
-    /// 12,000 characters is about 4,500 tokens: it fits the 8k context, peaked at 2.5 GiB and took 1-2.5 minutes on PC.
+    /// With the short v4 answer, 5,000 characters took 21-32 s for typical files and about 70 s for long ones on PC.
     /// </summary>
-    public int FilePromptCharacters { get; init; } = 12_000;
+    public int FilePromptCharacters { get; init; } = 5_000;
 
     /// <summary>Upper bound for one file summary.</summary>
     public TimeSpan JobTimeout { get; init; } = TimeSpan.FromMinutes(10);

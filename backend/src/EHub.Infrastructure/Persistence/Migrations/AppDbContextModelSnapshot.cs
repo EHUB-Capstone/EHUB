@@ -5930,6 +5930,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("input_truncated");
 
+                    b.Property<bool>("IsAutomatic")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_automatic");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -5949,6 +5955,10 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("NextAttemptAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<string>("PreviewJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("preview_json");
 
                     b.Property<string>("PromptVersion")
                         .HasMaxLength(20)

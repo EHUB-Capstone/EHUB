@@ -45,7 +45,8 @@ public sealed class SubmissionTextExtractorTests
         var result = await _extractor.ExtractAsync(Docx("Khách hàng mục tiêu là sinh viên", "Giá bán 45.000 đồng"), ".docx", 10_000, default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().Contain("Khách hàng mục tiêu là sinh viên").And.Contain("Giá bán 45.000 đồng");
+        result.Value.Text.Should().Contain("Khách hàng mục tiêu là sinh viên").And.Contain("Giá bán 45.000 đồng");
+        result.Value.Pages.Should().Be(0);
     }
 
     [Fact]
@@ -65,9 +66,10 @@ public sealed class SubmissionTextExtractorTests
         var result = await _extractor.ExtractAsync(pptx, ".pptx", 10_000, default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.IndexOf("Vấn đề của khách hàng", StringComparison.Ordinal)
-            .Should().BeLessThan(result.Value.IndexOf("Kế hoạch gọi vốn", StringComparison.Ordinal));
-        result.Value.Should().StartWith("[Slide 1]");
+        result.Value.Text.IndexOf("Vấn đề của khách hàng", StringComparison.Ordinal)
+            .Should().BeLessThan(result.Value.Text.IndexOf("Kế hoạch gọi vốn", StringComparison.Ordinal));
+        result.Value.Text.Should().StartWith("[Slide 1]");
+        result.Value.Pages.Should().Be(2);
     }
 
     [Fact]
@@ -80,7 +82,8 @@ public sealed class SubmissionTextExtractorTests
         var result = await _extractor.ExtractAsync(builder.Build(), ".pdf", 10_000, default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().Contain("150 students");
+        result.Value.Text.Should().Contain("150 students");
+        result.Value.Pages.Should().Be(1);
     }
 
     [Fact]
@@ -89,7 +92,7 @@ public sealed class SubmissionTextExtractorTests
         var result = await _extractor.ExtractAsync(Docx(Enumerable.Range(1, 500).Select(i => $"Đoạn văn số {i} về kế hoạch").ToArray()), ".docx", 1_000, default);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Length.Should().Be(1_000);
+        result.Value.Text.Length.Should().Be(1_000);
     }
 
     [Theory]

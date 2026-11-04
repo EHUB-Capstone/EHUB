@@ -21,6 +21,7 @@ internal sealed class CheckpointSummaryGenerationService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await WarmUpAsync(stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             var delay = IdleDelay;
@@ -50,6 +51,20 @@ internal sealed class CheckpointSummaryGenerationService(
                 }
                 catch (OperationCanceledException) { break; }
             }
+        }
+    }
+
+    // Loads the model when the service starts, so the first summary does not wait for it.
+    private async Task WarmUpAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<ICheckpointSummarizer>().WarmUpAsync(stoppingToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning("Checkpoint summary model warm-up failed with {ExceptionType}.", exception.GetType().Name);
         }
     }
 }

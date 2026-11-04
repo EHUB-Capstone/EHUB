@@ -227,6 +227,34 @@ def lean_schema(requirement_count):
     }
 
 
+MINIMAL_RULES = (
+    "overview đúng 2 câu ngắn: tài liệu là gì và nội dung chính. "
+    "keyPoints tối đa 4 ý, mỗi ý dưới 20 từ, giữ số liệu cụ thể. questions tối đa 2 câu hỏi ngắn về phần còn thiếu."
+)
+
+MINIMAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "overview": {"type": "string"},
+        "keyPoints": {"type": "array", "items": {"type": "string"}},
+        "questions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["overview", "keyPoints", "questions"],
+}
+
+
+def attach_requirements(content, requirements, source):
+    """Minimal mode: the model writes no requirement statuses; the backend decides from sentences that name them."""
+    data = json.loads(content)
+    data["requirements"] = [{"index": index + 1, "status": "NotFound"} for index in range(len(requirements))]
+    sentences = [part.strip() for line in source.split("\n") for part in re.split(r"(?<=[.!?])\s+", line) if part.strip()]
+    for item in data["requirements"]:
+        pairs = _words(requirements[item["index"] - 1], 2)
+        if pairs and any(pairs & _words(sentence, 2) for sentence in sentences):
+            item["status"] = "Covered"
+    return attach_evidence(json.dumps(data, ensure_ascii=False), requirements, source)
+
+
 def attach_evidence(content, requirements, source):
     """The backend, not the model, picks the quote: the source sentence sharing most two-word phrases with the
     requirement title. Quotes are therefore always genuine and the model writes far fewer tokens."""
@@ -326,13 +354,17 @@ def summarise(base_url, model, item, folder, num_ctx, timeout, raw_limit, chunk_
             f"Yêu cầu của checkpoint (index bắt đầu từ 1):\n{requirements}\n"
             f"Link nhóm đã nộp (bạn KHÔNG truy cập được nội dung, không suy đoán nội dung link):\n{links}\n\n"
             + "\n\n".join(documents) + "\n\n"
-            + (LEAN_RULES if compact == "lean" else COMPACT_RULES if compact else FINAL_RULES))
-    schema = lean_schema(len(item["requirements"])) if compact == "lean" else final_schema(len(item["requirements"]))
-    response = chat(base_url, model, SYSTEM, user, schema, num_ctx, timeout, num_predict=1200 if compact else 1500)
+            + (MINIMAL_RULES if compact == "minimal" else LEAN_RULES if compact == "lean" else COMPACT_RULES if compact else FINAL_RULES))
+    schema = (MINIMAL_SCHEMA if compact == "minimal" else lean_schema(len(item["requirements"])) if compact == "lean"
+              else final_schema(len(item["requirements"])))
+    response = chat(base_url, model, SYSTEM, user, schema, num_ctx, timeout,
+                    num_predict=400 if compact == "minimal" else 1200 if compact else 1500)
     calls.append(response)
     content = response["message"]["content"]
     if compact == "lean":
         content = attach_evidence(content, item["requirements"], "\n".join(source_parts))
+    elif compact == "minimal":
+        content = attach_requirements(content, item["requirements"], "\n".join(source_parts))
     return calls, "\n".join(source_parts), content
 
 
