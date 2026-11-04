@@ -112,6 +112,13 @@ Google Identity Services must allow the production origin
 `https://e-hub.com.vn`. The `www` hostname redirects to the canonical apex
 domain and should not be used as the application origin.
 
+AI checkpoint summaries are off in production unless `.env.production` contains
+`CHECKPOINT_SUMMARY_PROVIDER=Ollama`. Off (the default, also when the line is missing)
+means no AI card in the UI and no background summary work. Switching on needs the
+re-installed deploy script (it starts `ollama` and pulls the summary model) and costs up
+to the `ollama` container's 2 vCPU / 3 GB; do it outside busy submission periods. See
+`docs/workspace/AI_CHECKPOINT_SUMMARY.md`.
+
 ## 4. Prepare an approved release on the VPS
 
 Do this only after the deployment changes pass Pull Request review and CI.
@@ -258,9 +265,24 @@ when prompted by the first command:
 read -r -p "Certificate notification email: " EHUB_CERT_EMAIL
 sudo certbot certonly --webroot -w /var/www/certbot \
   -d e-hub.com.vn -d www.e-hub.com.vn \
-  --email "${EHUB_CERT_EMAIL}" --agree-tos --no-eff-email
+  --email "${EHUB_CERT_EMAIL}" --agree-tos --no-eff-email \
+  --deploy-hook 'nginx -t && systemctl reload nginx'
 unset EHUB_CERT_EMAIL
 ```
+
+The deploy hook is required. Nginx keeps the certificate it loaded at start or
+reload in memory, so without it a successful renewal only replaces the file on
+disk and Nginx keeps serving the old certificate until it expires; Cloudflare
+Full (strict) then returns 526 for the whole site. For an existing certificate
+that was issued without the hook, add it in place:
+
+```bash
+sudo certbot reconfigure --cert-name e-hub.com.vn \
+  --deploy-hook 'nginx -t && systemctl reload nginx'
+sudo grep -i hook /etc/letsencrypt/renewal/e-hub.com.vn.conf
+```
+
+The last command must print `renew_hook = nginx -t && systemctl reload nginx`.
 
 Install the reviewed Cloudflare visitor-IP ranges and final HTTPS site:
 
@@ -270,8 +292,13 @@ sudo cp deploy/nginx/e-hub.com.vn.conf /etc/nginx/sites-available/e-hub.com.vn
 sudo nginx -t
 sudo systemctl reload nginx
 curl --fail --silent --show-error https://e-hub.com.vn/
-sudo certbot renew --dry-run
+sudo certbot renew --cert-name e-hub.com.vn --dry-run --run-deploy-hooks
+systemctl list-timers --all | grep -i certbot
 ```
+
+Expect the dry run to succeed with the hook reporting `syntax is ok` (Certbot
+labels the `nginx -t` messages as "error output" because Nginx writes them to
+stderr) and an active Certbot timer.
 
 Compare `deploy/nginx/cloudflare-real-ip.conf` with Cloudflare's official IP
 list before installing it. Cloudflare changes these ranges infrequently but

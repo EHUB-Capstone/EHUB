@@ -8,4 +8,6 @@ public static class SystemPolicies
     public const string LecturerOnly = "LecturerOnly";
     public const string MentorOnly = "MentorOnly";
     public const string StaffOnly = "StaffOnly";
+    /// <summary>Admin, Lecturer or Mentor: the people who review a team's checkpoint work.</summary>
+    public const string CheckpointReviewers = "CheckpointReviewers";
 }

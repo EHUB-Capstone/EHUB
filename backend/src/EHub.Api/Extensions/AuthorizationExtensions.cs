@@ -45,6 +45,12 @@ public static class AuthorizationExtensions
                 policy.RequireAuthenticatedUser();
                 policy.RequireRole(SystemRoles.Admin, SystemRoles.Lecturer);
             });
+
+            options.AddPolicy(SystemPolicies.CheckpointReviewers, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.RequireRole(SystemRoles.Admin, SystemRoles.Lecturer, SystemRoles.Mentor);
+            });
         });
 
         return services;

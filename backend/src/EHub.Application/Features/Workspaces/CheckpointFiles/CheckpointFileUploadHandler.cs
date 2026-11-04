@@ -2,6 +2,7 @@ using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Application.Features.Classes.Common;
+using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using EHub.Contracts.Workspaces;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
@@ -21,7 +22,9 @@ public sealed class CheckpointFileUploadHandler(
     IApplicationDbContext context,
     ISubmissionObjectStorage storage,
     IDateTimeProvider dateTimeProvider,
-    IValidator<InitiateCheckpointFileUploadRequest> validator) : ICheckpointFileUploadHandler
+    IValidator<InitiateCheckpointFileUploadRequest> validator,
+    CheckpointSummarySettings? summarySettings = null,
+    ICheckpointSummaryQueueSignal? summaryQueueSignal = null) : ICheckpointFileUploadHandler
 {
     public async Task<Result<CheckpointFileUploadSessionResponse>> InitiateAsync(
         Guid teamId, int checkpointNumber, InitiateCheckpointFileUploadRequest request,
@@ -251,8 +254,10 @@ public sealed class CheckpointFileUploadHandler(
                     SubmissionVersion = submission.VersionNumber,
                     LecturerUserId = access.Value.LecturerUserId
                 }, now);
-                // Session state, Submission and SubmissionFile commit together or not at all.
+                var queuedForSummary = await QueueAutomaticSummaryAsync(file, teamId, access.Value.Checkpoint.Id, userId, now, cancellationToken);
+                // Session state, Submission, SubmissionFile and its summary queue entry commit together or not at all.
                 await context.SaveChangesAsync(cancellationToken);
+                if (queuedForSummary) summaryQueueSignal?.Signal();
                 return Result.Success(Map(file, access.Value.UserName));
             }
             catch (DbUpdateException)
@@ -274,6 +279,36 @@ public sealed class CheckpointFileUploadHandler(
         // The object stays in place and the session stays pending, so the browser can retry complete.
         return Result.Failure<WorkspaceCheckpointFileResponse>(ErrorCodes.WorkspaceConcurrencyConflict,
             "Another upload changed this checkpoint at the same time. Please retry.");
+    }
+
+    /// <summary>
+    /// Queues the new file for an AI summary at low priority, so it is usually ready before a reviewer opens the
+    /// checkpoint. Skipped when summaries are off, the file is too large to read, or the automatic queue is full.
+    /// </summary>
+    private async Task<bool> QueueAutomaticSummaryAsync(
+        SubmissionFile file, Guid teamId, Guid checkpointId, Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        if (summarySettings is not { Enabled: true, AutoSummarize: true } || file.FileSize > CheckpointSummaryLimits.MaxFileSizeBytes)
+            return false;
+        var waiting = await context.SubmissionFileSummaries.CountAsync(item => item.IsAutomatic &&
+            (item.Status == CheckpointSummaryStatus.Pending || item.Status == CheckpointSummaryStatus.Processing), cancellationToken);
+        if (waiting >= CheckpointSummaryLimits.MaxQueuedAutomaticSummaries) return false;
+
+        context.SubmissionFileSummaries.Add(new SubmissionFileSummary
+        {
+            SubmissionFile = file,
+            TeamId = teamId,
+            CheckpointId = checkpointId,
+            FileVersionNumber = file.VersionNumber,
+            Status = CheckpointSummaryStatus.Pending,
+            IsAutomatic = true,
+            RequestedById = userId,
+            RequestedAtUtc = now,
+            NextAttemptAtUtc = now,
+            CreatedAt = now,
+            CreatedBy = userId
+        });
+        return true;
     }
 
     private static string FileLimitMessage =>

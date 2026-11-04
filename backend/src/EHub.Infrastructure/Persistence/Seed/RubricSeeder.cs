@@ -42,6 +42,7 @@ public static class RubricSeeder
                         new RubricCriterion
                         {
                             RubricId = rubric.Id,
+                            Key = "problemClarity",
                             Name = "Problem Clarity",
                             Description = "Clearly defined problem statement, customer pain points, and target persona.",
                             MaxScore = 10,
@@ -52,6 +53,7 @@ public static class RubricSeeder
                         new RubricCriterion
                         {
                             RubricId = rubric.Id,
+                            Key = "solutionFit",
                             Name = "Solution Fit",
                             Description = "Proposed solution directly addresses the problem and delivers clear value.",
                             MaxScore = 10,
@@ -62,6 +64,7 @@ public static class RubricSeeder
                         new RubricCriterion
                         {
                             RubricId = rubric.Id,
+                            Key = "marketPotential",
                             Name = "Market Potential",
                             Description = "Identified market size, potential competitors, and competitive advantage.",
                             MaxScore = 10,
@@ -72,6 +75,7 @@ public static class RubricSeeder
                         new RubricCriterion
                         {
                             RubricId = rubric.Id,
+                            Key = "businessModel",
                             Name = "Business Model",
                             Description = "Revenue model, pricing strategy, and initial cost assumptions are logical.",
                             MaxScore = 10,
@@ -82,6 +86,7 @@ public static class RubricSeeder
                         new RubricCriterion
                         {
                             RubricId = rubric.Id,
+                            Key = "presentation",
                             Name = "Presentation",
                             Description = "Pitch quality, slide organization, professional delivery, and Q&A answers.",
                             MaxScore = 10,

@@ -16,6 +16,11 @@
 # which shares the backend's network namespace and is therefore recreated with the backend.
 # Trained adds docker-compose.trained.yml with a model packaged in the backend image; it does
 # not start Ollama or pull an embedding model. Leaving Hybrid removes mentor-semantic.
+#
+# AI checkpoint summaries: CHECKPOINT_SUMMARY_PROVIDER=Disabled|Ollama in the env file (a missing line
+# means Disabled). Ollama starts the ollama container even with the Trained provider and pulls the
+# summary model (CHECKPOINT_SUMMARY_MODEL, default qwen3.5:2b-q4_K_M). Compose passes the same value
+# to the backend, which then shows the feature and runs its background workers; Disabled hides it.
 set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -52,6 +57,7 @@ readonly MIN_AVAILABLE_MEMORY_MB=1536
 STAGE="init"
 TARGET_SHA=""
 PROVIDER="Ollama"
+SUMMARY="Disabled"
 PREVIOUS_SHA="unknown"
 OWNER=""
 OWNER_HOME=""
@@ -178,6 +184,43 @@ case "${provider_value,,}" in
 esac
 echo "AI provider: ${PROVIDER}"
 
+# Read the same way as the mentor provider: at most one line, never sourced.
+read_env_value() {
+    local name="$1" lines value
+    lines="$(grep -c "^${name}=" "${ENV_FILE}" || true)"
+    if (( lines > 1 )); then
+        echo "${ENV_FILE} must contain at most one ${name}= line." >&2
+        return 1
+    fi
+    if (( lines == 1 )); then
+        value="$(grep "^${name}=" "${ENV_FILE}" | cut -d= -f2-)"
+        printf '%s' "${value}" | tr -d "\"' \t\r"
+    fi
+    return 0
+}
+summary_value="$(read_env_value CHECKPOINT_SUMMARY_PROVIDER)"
+case "${summary_value,,}" in
+    ""|disabled) SUMMARY="Disabled" ;;
+    ollama) SUMMARY="Ollama" ;;
+    *)
+        echo "CHECKPOINT_SUMMARY_PROVIDER must be Disabled or Ollama." >&2
+        false
+        ;;
+esac
+SUMMARY_MODEL="$(read_env_value CHECKPOINT_SUMMARY_MODEL)"
+SUMMARY_MODEL="${SUMMARY_MODEL:-qwen3.5:2b-q4_K_M}"
+if [[ ! "${SUMMARY_MODEL}" =~ ^[A-Za-z0-9._:/-]+$ ]]; then
+    echo "CHECKPOINT_SUMMARY_MODEL contains unexpected characters." >&2
+    false
+fi
+echo "AI checkpoint summaries: ${SUMMARY}"
+
+# Ollama is needed for mentor embeddings (every provider but Trained) or for summaries.
+NEEDS_OLLAMA="false"
+if [[ "${PROVIDER}" != "Trained" || "${SUMMARY}" == "Ollama" ]]; then
+    NEEDS_OLLAMA="true"
+fi
+
 if [[ "${PROVIDER}" == "Hybrid" ]]; then
     # The VPS has no swap: refuse to start another memory consumer when RAM is already short.
     available_mb="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024 }' /proc/meminfo)"
@@ -198,7 +241,7 @@ if [[ -n "${dirty}" ]]; then
     false
 fi
 PREVIOUS_SHA="$(git_as_owner rev-parse HEAD)"
-record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER}"
+record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER} summary=${SUMMARY}"
 
 # The backup runs from the already-deployed checkout, before it is replaced.
 stage "backup"
@@ -255,7 +298,7 @@ fi
 
 stage "start-dependencies"
 dependencies=(postgres)
-if [[ "${PROVIDER}" != "Trained" ]]; then
+if [[ "${NEEDS_OLLAMA}" == "true" ]]; then
     dependencies+=(ollama)
 fi
 "${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" "${dependencies[@]}"
@@ -265,6 +308,14 @@ if [[ "${PROVIDER}" != "Trained" ]]; then
     models="$("${compose[@]}" exec -T ollama ollama list)"
     if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
         "${compose[@]}" exec -T ollama ollama pull bge-m3
+    fi
+fi
+
+if [[ "${SUMMARY}" == "Ollama" ]]; then
+    stage "summary-model"
+    models="$("${compose[@]}" exec -T ollama ollama list)"
+    if ! awk 'NR > 1 { print $1 }' <<< "${models}" | grep -qxF "${SUMMARY_MODEL}"; then
+        "${compose[@]}" exec -T ollama ollama pull "${SUMMARY_MODEL}"
     fi
 fi
 
