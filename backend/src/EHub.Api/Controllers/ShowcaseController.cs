@@ -3,6 +3,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Features.Showcase.Manage;
 using EHub.Application.Features.Showcase.Moderation;
 using EHub.Application.Features.Showcase.Query;
+using EHub.Application.Features.Showcase.Discovery;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Shared.Constants;
@@ -23,6 +24,20 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     private Guid UserId => currentUser.UserId ?? Guid.Empty;
 
     private string Role => currentUser.Roles.FirstOrDefault(role => SystemRoles.All.Contains(role, StringComparer.OrdinalIgnoreCase)) ?? string.Empty;
+
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> List(
+        [FromQuery] GetShowcasesRequest request,
+        [FromServices] IGetShowcasesQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(await handler.HandleAsync(request, cancellationToken), "Showcase projects retrieved.");
+
+    [HttpGet("filter-options")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> FilterOptions(
+        [FromServices] IGetShowcasesQueryHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetFilterOptionsAsync(cancellationToken), "Showcase filters retrieved.");
 
     [HttpGet("mine")]
     [Authorize(Policy = SystemPolicies.StudentOnly)]

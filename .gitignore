@@ -163,3 +163,8 @@ lcov.info
 *.tmp
 *.swp
 *.bak
+
+# Local Module 6 build and test outputs
+/outputs/module6-gallery-build/
+/outputs/module6-gallery-results/
+/outputs/module6-retest-20261104/
