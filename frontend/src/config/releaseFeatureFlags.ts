@@ -21,6 +21,7 @@ export const createReleaseFeatureFlags = (environment: FeatureEnvironment) => Ob
   rankings: isEnabledByDefault(environment.VITE_FEATURE_RANKINGS),
   roleDashboards: isEnabledByDefault(environment.VITE_FEATURE_ROLE_DASHBOARDS),
   startupIdeas: isEnabledByDefault(environment.VITE_FEATURE_STARTUP_IDEAS),
+  showcase: isEnabledByDefault(environment.VITE_FEATURE_SHOWCASE),
   workshops: isEnabledByDefault(environment.VITE_FEATURE_WORKSHOPS),
 });
 

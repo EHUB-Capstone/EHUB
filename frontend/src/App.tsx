@@ -53,6 +53,7 @@ const ProfileSettings = lazy(() => import('./pages/shared/ProfileSettings'));
 const FeedbackPage = lazy(() => import('./pages/shared/FeedbackPage'));
 const EvaluationGrading = lazy(() => import('./pages/shared/EvaluationGrading'));
 const ProjectData = lazy(() => import('./pages/shared/ProjectData'));
+const ShowcaseGallery = lazy(() => import('./features/showcase/ShowcaseGallery'));
 
 const PageFallback = () => (
   <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
@@ -132,6 +133,7 @@ function App(): React.ReactElement {
 
                   <Route path="/workspace" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR']}><StartupWorkspaceHub /></ProtectedRoute>} />
                   <Route path="/project-data" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><ProjectData /></ProtectedRoute>} />
+                  {releaseFeatureFlags.showcase && <Route path="/showcase" element={<ShowcaseGallery />} />}
                   <Route path="/student/workspace" element={<ProtectedRoute allowedRoles={['STUDENT']}><TeamWorkspace /></ProtectedRoute>} />
                   <Route path="/student/workspace/proposal" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProposalEditor /></ProtectedRoute>} />
                   <Route path="/student/workspace/project-profile/:teamId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ProjectProfileEditor /></ProtectedRoute>} />
