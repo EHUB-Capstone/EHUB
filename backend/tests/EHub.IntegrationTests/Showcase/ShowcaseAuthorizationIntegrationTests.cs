@@ -5,6 +5,7 @@ using EHub.Application.Common.Interfaces.Identity;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Domain.Entities;
+using EHub.Infrastructure.Persistence;
 using EHub.IntegrationTests.Common;
 using EHub.Shared.Constants;
 using EHub.Shared.Errors;
@@ -24,6 +25,8 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     }
 
     [Theory]
+    [InlineData("GET", "/api/showcase")]
+    [InlineData("GET", "/api/showcase/filter-options")]
     [InlineData("GET", "/api/showcase/mine")]
     [InlineData("POST", "/api/showcase")]
     [InlineData("PUT", "/api/showcase/00000000-0000-0000-0000-000000000001")]
@@ -97,6 +100,75 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         // The global ValidationFilter rejects a structurally invalid body before the handler runs.
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         body!.Code.Should().Be(ErrorCodes.CommonValidationError);
+    }
+
+    [Theory]
+    [InlineData(SystemRoles.Student)]
+    [InlineData(SystemRoles.Lecturer)]
+    [InlineData(SystemRoles.Mentor)]
+    [InlineData(SystemRoles.Admin)]
+    public async Task Discovery_AllSignedInRolesCanQueryPostgreSql(string role)
+    {
+        using var client = _factory.CreateClient();
+        using var request = AuthorizedRequest(HttpMethod.Get,
+            "/api/showcase?search=Discovery%25_literal&industry=HealthTech&stage=Mvp&sort=popular&pageSize=1", role, null);
+        using var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var json = await response.Content.ReadAsStringAsync();
+        json.Should().NotContain("reviewNote").And.NotContain("history");
+        using var filterRequest = AuthorizedRequest(HttpMethod.Get, "/api/showcase/filter-options", role, null);
+        using var filterResponse = await client.SendAsync(filterRequest);
+        filterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("page=0")]
+    [InlineData("pageSize=51")]
+    [InlineData("stage=Prototype")]
+    [InlineData("sort=trending")]
+    [InlineData("semesterId=invalid")]
+    public async Task Discovery_InvalidQueryReturnsBadRequest(string query)
+    {
+        using var client = _factory.CreateClient();
+        using var request = AuthorizedRequest(HttpMethod.Get, $"/api/showcase?{query}", SystemRoles.Student, null);
+        using var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task FilterOptions_ReturnAllFiveUnusedCatalogIndustries_AndFilteringCanReturnEmpty()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var prefix = $"Discovery-{Guid.NewGuid():N}";
+        var industries = Enumerable.Range(1, 5).Select(index => new StartupIndustry
+        {
+            Name = $"{prefix}-{index}", NormalizedName = $"{prefix}-{index}".ToUpperInvariant()
+        }).ToArray();
+        db.StartupIndustries.AddRange(industries);
+        await db.SaveChangesAsync();
+        try
+        {
+            using var client = _factory.CreateClient();
+            using var request = AuthorizedRequest(HttpMethod.Get, "/api/showcase/filter-options", SystemRoles.Student, null);
+            using var response = await client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseFilterOptionsDto>>();
+            body!.Data!.Industries.Should().Contain(industries.Select(industry => industry.Name));
+
+            using var filteredRequest = AuthorizedRequest(HttpMethod.Get,
+                $"/api/showcase?industry={Uri.EscapeDataString(industries[0].Name)}", SystemRoles.Student, null);
+            using var filteredResponse = await client.SendAsync(filteredRequest);
+            filteredResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var filtered = await filteredResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCardDto>>>();
+            filtered!.Data!.Items.Should().BeEmpty();
+            filtered.Data.TotalItems.Should().Be(0);
+        }
+        finally
+        {
+            db.StartupIndustries.RemoveRange(industries);
+            await db.SaveChangesAsync();
+        }
     }
 
     private static SaveShowcaseRequest Payload(Guid lineageId) => new()

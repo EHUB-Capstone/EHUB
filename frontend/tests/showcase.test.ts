@@ -1,5 +1,49 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import MockAdapter from 'axios-mock-adapter';
+import axiosClient from '../src/api/axiosClient.ts';
+import { showcaseApi } from '../src/api/showcaseApi.ts';
+import { discoveryRequest, discoveryPages } from '../src/utils/showcaseDiscovery.ts';
+
+test('discovery URL maps to server filters and rejects obsolete stages, sorts and invalid paging', () => {
+  const semesterId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const request = discoveryRequest(new URLSearchParams({ q: ' garden ', stage: 'MVP', industry: ' HealthTech ', semesterId, sort: 'popular', page: '2' }));
+  assert.deepEqual(request, { search: 'garden', stage: 'Mvp', industry: 'HealthTech', semesterId, sort: 'popular', page: 2, pageSize: 8 });
+  const invalid = discoveryRequest(new URLSearchParams('stage=Prototype&sort=name&semesterId=FA2026&page=-1'));
+  assert.equal(invalid.stage, undefined);
+  assert.equal(invalid.semesterId, undefined);
+  assert.equal(invalid.sort, 'newest');
+  assert.equal(invalid.page, 1);
+  assert.equal(discoveryRequest(new URLSearchParams('sort=popular&tab=new')).sort, 'newest');
+  assert.equal(discoveryRequest(new URLSearchParams('page=999999999999')).page, 1);
+  assert.equal(discoveryRequest(new URLSearchParams({ q: 'x'.repeat(101) })).search?.length, 100);
+});
+
+test('discovery pagination stays bounded for large server result sets', () => {
+  assert.deepEqual(discoveryPages(1, 0), []);
+  assert.deepEqual(discoveryPages(1, 2), [1, 2]);
+  assert.deepEqual(discoveryPages(1000, 1000), [996, 997, 998, 999, 1000]);
+});
+
+test('discovery client forwards filters and unwraps list, options and detail; errors remain failures', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const params = discoveryRequest(new URLSearchParams('q=garden&page=2'));
+  const page = { items: [], pageIndex: 2, pageSize: 8, totalItems: 0, totalPages: 0 };
+  const options = { industries: ['HealthTech'], semesters: [{ id: 's1', code: 'FA26', name: 'Fall 2026' }] };
+  mock.onGet('/showcase', { params }).reply(200, { data: page });
+  mock.onGet('/showcase/filter-options').reply(200, { data: options });
+  mock.onGet('/showcase/published-id').reply(200, { data: { teamName: 'Real team', members: [] } });
+  mock.onGet('/showcase/missing').reply(404, { message: 'Not found' });
+  try {
+    assert.deepEqual(await showcaseApi.list(params), page);
+    assert.deepEqual(await showcaseApi.getFilterOptions(), options);
+    assert.equal((await showcaseApi.get('published-id')).teamName, 'Real team');
+    await assert.rejects(showcaseApi.get('missing'));
+    const abort = new AbortController();
+    abort.abort();
+    await assert.rejects(showcaseApi.list(params, abort.signal));
+  } finally { mock.restore(); }
+});
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_NAME_MAX_LENGTH,

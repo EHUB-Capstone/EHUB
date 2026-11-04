@@ -5,6 +5,42 @@ export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
 export type ShowcaseDecision = 'approve' | 'request-changes' | 'reject' | 'hide' | 'unhide';
 
+export interface GetShowcasesRequest {
+  search?: string;
+  stage?: ShowcaseStage;
+  industry?: string;
+  semesterId?: string;
+  sort?: 'newest' | 'popular';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ShowcaseCardDto {
+  id: string;
+  projectName: string;
+  description: string;
+  logoUrl: string | null;
+  developmentStage: ShowcaseStage;
+  publishedAt: string | null;
+  teamName: string;
+  industries: string[];
+  likeCount: number;
+  commentCount: number;
+}
+
+export interface ShowcaseDiscoveryPageDto {
+  items: ShowcaseCardDto[];
+  pageIndex: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface ShowcaseFilterOptionsDto {
+  industries: string[];
+  semesters: { id: string; code: string; name: string }[];
+}
+
 export interface ShowcaseLinkDto {
   id: string;
   linkType: ShowcaseLinkType;

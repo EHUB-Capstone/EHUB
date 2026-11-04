@@ -59,6 +59,7 @@ public static class DependencyInjection
         AddCheckpointSummaries(services, configuration);
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddScoped<IShowcaseProjectSearch, ShowcaseProjectSearch>();
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<MentorAdminSessionCleanupService>();

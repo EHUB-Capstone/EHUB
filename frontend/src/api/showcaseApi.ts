@@ -1,6 +1,9 @@
 import axiosClient from './axiosClient.ts';
 import type { ApiEnvelope } from '../types/workspaceTools.ts';
 import type {
+  GetShowcasesRequest,
+  ShowcaseDiscoveryPageDto,
+  ShowcaseFilterOptionsDto,
   MyShowcaseEntryDto,
   SaveShowcaseRequest,
   ShowcaseDecision,
@@ -23,6 +26,10 @@ const imageForm = (file: File): FormData => {
 const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 
 export const showcaseApi = {
+  getFilterOptions: (signal?: AbortSignal) =>
+    unwrap<ShowcaseFilterOptionsDto>(axiosClient.get('/showcase/filter-options', { signal })),
+  list: (params: GetShowcasesRequest = {}, signal?: AbortSignal) =>
+    unwrap<ShowcaseDiscoveryPageDto>(axiosClient.get('/showcase', { params, signal })),
   getMine: (signal?: AbortSignal) =>
     unwrap<MyShowcaseEntryDto[]>(axiosClient.get('/showcase/mine', { signal })),
   get: (id: string, signal?: AbortSignal) =>
