@@ -28,7 +28,9 @@ import {
 const row = (patch: Partial<ProjectDataTrendRow> = {}): ProjectDataTrendRow => ({
   semesterCode: 'FA2026', year: 2026, term: 'FA', subjectCode: null, classId: null, classCode: null,
   totalGroups: 2, gradedGroups: 1, averageScore: 9, potentialGroups: 1, internallyFundedGroups: 0, externallyFundedGroups: 0, awardedGroups: 0,
+  pitchingGroups: 0, demoGroups: 0,
   averageScoreChange: null, potentialChange: null, internallyFundedChange: null, externallyFundedChange: null, awardedChange: null,
+  pitchingChange: null, demoChange: null,
   ...patch,
 });
 
@@ -75,9 +77,9 @@ test('rows are picked by level and keyed per semester, subject and class', () =>
 test('trend params leave out semester and year but keep the other filters', () => {
   const query = {
     ...DEFAULT_PROJECT_DATA_QUERY, search: 'farm', subjectCode: 'EXE201', semester: 'SU' as const, year: '2026',
-    major: 'BIT_SE', pageIndex: 4,
+    major: ['BIT_SE'], pageIndex: 4,
   };
-  assert.deepEqual(toProjectDataTrendParams(query), { search: 'farm', subjectCode: 'EXE201', major: 'BIT_SE' });
+  assert.deepEqual(toProjectDataTrendParams(query), { search: 'farm', subjectCode: 'EXE201', major: ['BIT_SE'] });
 });
 
 test('trend key ignores semester and year changes and sits under the project-data scope', () => {
@@ -164,8 +166,8 @@ test('subjects outside the first slots take the free ones and never share a slot
 
 test('outcome chart data follows the semester rows', () => {
   assert.deepEqual(toOutcomeChartData(trends()), [
-    { semester: 'SU2026', Potential: 1, 'Internally Funded': 0, 'Externally Funded': 0, Awarded: 0 },
-    { semester: 'FA2026', Potential: 2, 'Internally Funded': 1, 'Externally Funded': 1, Awarded: 0 },
+    { semester: 'SU2026', Potential: 1, 'Internally Funded': 0, 'Externally Funded': 0, Awarded: 0, Pitching: 0, Demo: 0 },
+    { semester: 'FA2026', Potential: 2, 'Internally Funded': 1, 'Externally Funded': 1, Awarded: 0, Pitching: 0, Demo: 0 },
   ]);
 });
 

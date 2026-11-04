@@ -15,6 +15,8 @@ internal sealed record TrendProject(
     bool IsInternallyFunded,
     bool IsExternallyFunded,
     bool IsAwarded,
+    bool IsPitching,
+    bool IsDemo,
     decimal? Score);
 
 /// <summary>Groups scored projects into semester, subject and class rows and adds the change since the previous semester.</summary>
@@ -73,6 +75,8 @@ internal static class ProjectDataTrendBuilder
                         InternallyFundedGroups = group.Count(project => project.IsInternallyFunded),
                         ExternallyFundedGroups = group.Count(project => project.IsExternallyFunded),
                         AwardedGroups = group.Count(project => project.IsAwarded),
+                        PitchingGroups = group.Count(project => project.IsPitching),
+                        DemoGroups = group.Count(project => project.IsDemo),
                     });
             })
             .OrderBy(row => row.Year)
@@ -103,6 +107,8 @@ internal static class ProjectDataTrendBuilder
                 InternallyFundedGroups = current.InternallyFundedGroups,
                 ExternallyFundedGroups = current.ExternallyFundedGroups,
                 AwardedGroups = current.AwardedGroups,
+                PitchingGroups = current.PitchingGroups,
+                DemoGroups = current.DemoGroups,
                 AverageScoreChange = current.AverageScore.HasValue && previous.AverageScore.HasValue
                     ? current.AverageScore - previous.AverageScore
                     : null,
@@ -110,6 +116,8 @@ internal static class ProjectDataTrendBuilder
                 InternallyFundedChange = current.InternallyFundedGroups - previous.InternallyFundedGroups,
                 ExternallyFundedChange = current.ExternallyFundedGroups - previous.ExternallyFundedGroups,
                 AwardedChange = current.AwardedGroups - previous.AwardedGroups,
+                PitchingChange = current.PitchingGroups - previous.PitchingGroups,
+                DemoChange = current.DemoGroups - previous.DemoGroups,
             });
             previousByContext[row.Context] = current;
         }

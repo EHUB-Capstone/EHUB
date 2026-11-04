@@ -6,8 +6,14 @@ public static class ProjectAchievementNames
     public const string InternallyFunded = "Internally Funded";
     public const string ExternallyFunded = "Externally Funded";
     public const string Awarded = "Awarded";
+    public const string Pitching = "Pitching";
+    public const string Demo = "Demo";
 
-    public static readonly IReadOnlyList<string> All = [Potential, InternallyFunded, ExternallyFunded, Awarded];
+    /// <summary>Every label, in display order.</summary>
+    public static readonly IReadOnlyList<string> All = [Potential, InternallyFunded, ExternallyFunded, Awarded, Pitching, Demo];
+
+    /// <summary>The labels as one sentence fragment for error messages.</summary>
+    public const string Description = "Potential, Internally Funded, Externally Funded, Awarded, Pitching or Demo";
 }
 
 public sealed class UpdateProjectAchievementsRequest

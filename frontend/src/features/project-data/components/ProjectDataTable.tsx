@@ -19,6 +19,7 @@ import type {
   ProjectDataSortField,
 } from '../../../types/projectData';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
+import ProjectCompetitionBadges from './ProjectCompetitionBadges';
 
 const headerClass = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap';
 const cellClass = 'px-4 py-3 align-top text-sm text-slate-700';
@@ -101,9 +102,9 @@ export default function ProjectDataTable({
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
       <div className="relative" aria-busy={isRefreshing}>
-        {/* Desktop and tablet: the full ten-column table. */}
+        {/* Desktop and tablet: the full eleven-column table. */}
         <div className={cn('hidden overflow-x-auto transition-opacity md:block', isRefreshing && 'opacity-60')} tabIndex={0} aria-label="Scrollable project data table">
-          <table className="w-full min-w-[1180px] border-collapse">
+          <table className="w-full min-w-[1380px] border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
                 <SortHeader label="Semester" field="semester" query={query} onSort={onSort} />
@@ -116,6 +117,7 @@ export default function ProjectDataTable({
                 <th scope="col" className={headerClass}>Mentor</th>
                 <th scope="col" className={headerClass}>Mentor - GV</th>
                 <th scope="col" className={headerClass}>Achievements</th>
+                <th scope="col" className={headerClass}>Competitions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -137,6 +139,7 @@ export default function ProjectDataTable({
                   <td className={cellClass}><MentorLabel mentor={item.mentor} /></td>
                   <td className={cellClass}><MentorLabel mentor={item.academicMentor} /></td>
                   <td className={cellClass}><ProjectAchievementBadges achievements={item.achievements} /></td>
+                  <td className={cn(cellClass, 'min-w-[12rem]')}><ProjectCompetitionBadges competitions={item.competitions} /></td>
                 </tr>
               ))}
             </tbody>
@@ -154,6 +157,7 @@ export default function ProjectDataTable({
                 {displayText(item.semesterCode)} · {displayText(item.classCode)} · {displayText(item.lecturer?.fullName)}
               </p>
               <ProjectAchievementBadges achievements={item.achievements} />
+              {item.competitions.length > 0 && <ProjectCompetitionBadges competitions={item.competitions} />}
             </li>
           ))}
         </ul>

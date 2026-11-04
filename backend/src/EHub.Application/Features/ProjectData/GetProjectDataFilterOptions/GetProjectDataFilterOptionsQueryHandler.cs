@@ -57,6 +57,13 @@ public sealed class GetProjectDataFilterOptionsQueryHandler(IApplicationDbContex
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var competitionYears = await scoped
+            .SelectMany(project => project.ProjectCompetitionEntries)
+            .Select(entry => entry.Year)
+            .Distinct()
+            .OrderByDescending(year => year)
+            .ToListAsync(cancellationToken);
+
         var lecturers = await scoped
             .Where(project => project.Team.Class.PrimaryLecturer != null)
             .Select(project => new ProjectDataPersonResponse
@@ -93,6 +100,7 @@ public sealed class GetProjectDataFilterOptionsQueryHandler(IApplicationDbContex
             Majors = ProjectDataQuery.MajorFilterOptions,
             Lecturers = lecturers,
             Mentors = mentors,
+            CompetitionYears = competitionYears,
         });
     }
 

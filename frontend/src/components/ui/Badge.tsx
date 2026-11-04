@@ -10,6 +10,7 @@ export const badgeTones = {
   info: 'bg-info-50 text-info-dark border-info-light',
   neutral: 'bg-slate-100 text-slate-600 border-slate-200',
   brand: 'bg-primary-50 text-primary-800 border-primary-200',
+  navy: 'bg-secondary-50 text-secondary border-secondary-200',
 } as const;
 
 export type BadgeTone = keyof typeof badgeTones;
@@ -35,6 +36,8 @@ const statusColors: Record<string, string> = {
   'Internally Funded': badgeTones.success,
   'Externally Funded': badgeTones.info,
   Awarded: badgeTones.warning,
+  Pitching: badgeTones.navy,
+  Demo: badgeTones.neutral,
 };
 
 type BadgeSize = 'xs' | 'sm' | 'md';
@@ -64,6 +67,7 @@ const Badge = ({ children, variant = 'Draft', className, dot = false, size = 'sm
       {dot && <span className={cn('w-1.5 h-1.5 rounded-full', {
         'bg-slate-400': statusColors[variant] === badgeTones.neutral || !statusColors[variant],
         'bg-primary': statusColors[variant] === badgeTones.brand,
+        'bg-secondary': statusColors[variant] === badgeTones.navy,
         'bg-info': statusColors[variant] === badgeTones.info,
         'bg-warning': statusColors[variant] === badgeTones.warning,
         'bg-success': statusColors[variant] === badgeTones.success,

@@ -25,7 +25,7 @@ export default function ProjectDataTrendsTable({ rows, level }: { rows: ProjectD
 
   return (
     <div className="mt-3 overflow-x-auto">
-      <table className="w-full min-w-[800px] text-left text-body-sm">
+      <table className="w-full min-w-[960px] text-left text-body-sm">
         <caption className="sr-only">Average score and outcomes by {TREND_LEVEL_LABELS[level].toLowerCase()} and semester</caption>
         <thead>
           <tr className="border-b border-slate-200 text-caption text-slate-500">
@@ -39,7 +39,9 @@ export default function ProjectDataTrendsTable({ rows, level }: { rows: ProjectD
             <th scope="col" className="py-2 pr-3 text-right font-medium">Potential</th>
             <th scope="col" className="py-2 pr-3 text-right font-medium">Internally funded</th>
             <th scope="col" className="py-2 pr-3 text-right font-medium">Externally funded</th>
-            <th scope="col" className="py-2 text-right font-medium">Awarded</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">Awarded</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">Pitching</th>
+            <th scope="col" className="py-2 text-right font-medium">Demo</th>
           </tr>
         </thead>
         <tbody>
@@ -62,7 +64,9 @@ export default function ProjectDataTrendsTable({ rows, level }: { rows: ProjectD
               <td className="py-2 pr-3 text-right"><Count value={row.potentialGroups} change={row.potentialChange} /></td>
               <td className="py-2 pr-3 text-right"><Count value={row.internallyFundedGroups} change={row.internallyFundedChange} /></td>
               <td className="py-2 pr-3 text-right"><Count value={row.externallyFundedGroups} change={row.externallyFundedChange} /></td>
-              <td className="py-2 text-right"><Count value={row.awardedGroups} change={row.awardedChange} /></td>
+              <td className="py-2 pr-3 text-right"><Count value={row.awardedGroups} change={row.awardedChange} /></td>
+              <td className="py-2 pr-3 text-right"><Count value={row.pitchingGroups} change={row.pitchingChange} /></td>
+              <td className="py-2 text-right"><Count value={row.demoGroups} change={row.demoChange} /></td>
             </tr>
           ))}
         </tbody>

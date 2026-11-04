@@ -5,10 +5,12 @@ import { projectDataApi } from '../../../api/projectDataApi';
 import { useAuth } from '../../../hooks/useAuth';
 import type {
   ProjectAchievementsResult,
+  ProjectCompetitionsResult,
   ProjectDataQuery,
   ProjectDataTab,
   ProjectStartupIndustriesResult,
   UpdateProjectAchievementsPayload,
+  UpdateProjectCompetitionsPayload,
   UpdateProjectStartupIndustriesPayload,
 } from '../../../types/projectData';
 import {
@@ -118,6 +120,20 @@ export function useProjectData() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectDataScopeKey(userId) }),
   });
 
+  const updateCompetitions = useMutation<
+    ProjectCompetitionsResult,
+    unknown,
+    { projectId: string; payload: UpdateProjectCompetitionsPayload }
+  >({
+    mutationFn: async ({ projectId, payload }) => (await projectDataApi.updateCompetitions(projectId, payload)).data,
+    // Competitions drive filters and the filter options (years), so refresh everything in scope.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectDataScopeKey(userId) }),
+  });
+
+  const exportProjectData = useMutation<Blob, unknown, ProjectDataQuery>({
+    mutationFn: query => projectDataApi.exportProjectData(query),
+  });
+
   const updateStartupIndustries = useMutation<
     ProjectStartupIndustriesResult,
     unknown,
@@ -142,6 +158,8 @@ export function useProjectData() {
     trends,
     options,
     updateAchievements,
+    updateCompetitions,
+    exportProjectData,
     updateStartupIndustries,
   };
 }

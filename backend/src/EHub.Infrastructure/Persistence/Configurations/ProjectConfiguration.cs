@@ -90,6 +90,14 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasColumnName("is_awarded")
             .HasDefaultValue(false);
 
+        builder.Property(p => p.IsPitching)
+            .HasColumnName("is_pitching")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsDemo)
+            .HasColumnName("is_demo")
+            .HasDefaultValue(false);
+
         builder.Property(p => p.AchievementNote)
             .HasColumnName("achievement_note")
             .HasMaxLength(500);

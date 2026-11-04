@@ -41,6 +41,7 @@ public interface IApplicationDbContext
     DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
+    DbSet<ProjectCompetitionEntry> ProjectCompetitionEntries { get; }
     DbSet<ProjectActivityLog> ProjectActivityLogs { get; }
     DbSet<Checkpoint> Checkpoints { get; }
     DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }

@@ -28,7 +28,9 @@ using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataTrends;
 using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
+using EHub.Application.Features.ProjectData.ExportProjectData;
 using EHub.Application.Features.ProjectData.ManageAchievements;
+using EHub.Application.Features.ProjectData.ManageCompetitions;
 using EHub.Application.Features.ProjectData.ManageStartupIndustries;
 using EHub.Application.Features.Rankings.TeamRankings;
 using EHub.Application.Features.Subjects.Curriculum;
@@ -93,6 +95,8 @@ public static class DependencyInjection
         services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
         services.AddScoped<IGetProjectStartupIndustryHistoryQueryHandler, GetProjectStartupIndustryHistoryQueryHandler>();
         services.AddScoped<IUpdateProjectStartupIndustriesCommandHandler, UpdateProjectStartupIndustriesCommandHandler>();
+        services.AddScoped<IUpdateProjectCompetitionsCommandHandler, UpdateProjectCompetitionsCommandHandler>();
+        services.AddScoped<IExportProjectDataQueryHandler, ExportProjectDataQueryHandler>();
         services.AddScoped<IGetNotificationsQueryHandler, GetNotificationsQueryHandler>();
         services.AddScoped<IMarkNotificationReadCommandHandler, MarkNotificationReadCommandHandler>();
 

@@ -62,6 +62,8 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
                 project.IsInternallyFunded,
                 project.IsExternallyFunded,
                 project.IsAwarded,
+                project.IsPitching,
+                project.IsDemo,
                 project.AchievementNote,
                 project.AchievementsUpdatedAt,
                 project.AchievementsUpdatedBy,
@@ -96,6 +98,14 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
         var industriesByProject = tagRows
             .GroupBy(tag => tag.ProjectId)
             .ToDictionary(group => group.Key, group => ProjectDataQuery.DistinctSorted(group.Select(tag => tag.TagName)));
+
+        // Every entry of the shown projects, not only those matching a competition filter, so a row always shows its full record.
+        var competitionRows = await context.ProjectCompetitionEntries.AsNoTracking()
+            .Where(entry => projectIds.Contains(entry.ProjectId))
+            .ToListAsync(cancellationToken);
+        var competitionsByProject = competitionRows
+            .GroupBy(entry => entry.ProjectId)
+            .ToDictionary(group => group.Key, group => ProjectCompetitionMapping.ToOrderedResponses(group));
 
         var groupRows = await context.TeamMembers.AsNoTracking()
             .Where(member => teamIds.Contains(member.TeamId) &&
@@ -139,7 +149,9 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
                 : null,
             Mentor = ToMentor(mentors.GetValueOrDefault((row.TeamId, MentorType.Enterprise))),
             AcademicMentor = ToMentor(mentors.GetValueOrDefault((row.TeamId, MentorType.Academic))),
-            Achievements = ProjectAchievementMapping.ToNames(row.IsHighPotential, row.IsInternallyFunded, row.IsExternallyFunded, row.IsAwarded),
+            Achievements = ProjectAchievementMapping.ToNames(
+                row.IsHighPotential, row.IsInternallyFunded, row.IsExternallyFunded, row.IsAwarded, row.IsPitching, row.IsDemo),
+            Competitions = competitionsByProject.GetValueOrDefault(row.ProjectId) ?? [],
             AchievementNote = row.AchievementNote,
             AchievementsUpdatedAtUtc = row.AchievementsUpdatedAt,
             AchievementsUpdatedBy = row.AchievementsUpdatedBy is { } updaterId && updaterNames.TryGetValue(updaterId, out var updaterName)
@@ -182,6 +194,8 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
         bool IsInternallyFunded,
         bool IsExternallyFunded,
         bool IsAwarded,
+        bool IsPitching,
+        bool IsDemo,
         string? AchievementNote,
         DateTime? AchievementsUpdatedAt,
         Guid? AchievementsUpdatedBy,

@@ -36,7 +36,7 @@ public sealed class UpdateProjectAchievementsCommandHandler(
         foreach (var value in request.Achievements ?? [])
         {
             if (ProjectAchievementMapping.Canonicalize(value) is not { } canonical)
-                return Failure(ErrorCodes.ProjectDataValidationError, "Achievement must be Potential, Internally Funded, Externally Funded or Awarded.");
+                return Failure(ErrorCodes.ProjectDataValidationError, $"Achievement must be {ProjectAchievementNames.Description}.");
             requested.Add(canonical);
         }
 
@@ -66,11 +66,15 @@ public sealed class UpdateProjectAchievementsCommandHandler(
         var nextInternallyFunded = requested.Contains(ProjectAchievementNames.InternallyFunded);
         var nextExternallyFunded = requested.Contains(ProjectAchievementNames.ExternallyFunded);
         var nextAwarded = requested.Contains(ProjectAchievementNames.Awarded);
+        var nextPitching = requested.Contains(ProjectAchievementNames.Pitching);
+        var nextDemo = requested.Contains(ProjectAchievementNames.Demo);
 
         var labelsChanged = project.IsHighPotential != nextPotential ||
                             project.IsInternallyFunded != nextInternallyFunded ||
                             project.IsExternallyFunded != nextExternallyFunded ||
-                            project.IsAwarded != nextAwarded;
+                            project.IsAwarded != nextAwarded ||
+                            project.IsPitching != nextPitching ||
+                            project.IsDemo != nextDemo;
         var noteChanged = !string.Equals(project.AchievementNote, note, StringComparison.Ordinal);
 
         // An unchanged label set and note is a no-op so retries after a lost response stay harmless.
@@ -82,6 +86,8 @@ public sealed class UpdateProjectAchievementsCommandHandler(
         project.IsInternallyFunded = nextInternallyFunded;
         project.IsExternallyFunded = nextExternallyFunded;
         project.IsAwarded = nextAwarded;
+        project.IsPitching = nextPitching;
+        project.IsDemo = nextDemo;
         project.AchievementNote = note;
         project.AchievementsUpdatedAt = now;
         project.AchievementsUpdatedBy = currentUserId;
