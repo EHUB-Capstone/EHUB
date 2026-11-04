@@ -33,6 +33,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
 builder.Services.AddApplicationAuthorization();
 builder.Services.AddAuthRateLimiting(builder.Configuration);
+builder.Services.AddCheckpointSummaryRateLimiting(builder.Configuration);
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -128,13 +129,14 @@ app.UseSerilogRequestLogging();
 
 // CORS must be configured before Authentication & Authorization middleware
 app.UseCors(CorsExtensions.FrontendPolicy);
-app.UseRateLimiter();
 app.UseWebSockets(new WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromSeconds(30)
 });
 
 app.UseAuthentication();
+// After authentication so per-user policies (AI summary requests) see the caller; auth policies stay per IP.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

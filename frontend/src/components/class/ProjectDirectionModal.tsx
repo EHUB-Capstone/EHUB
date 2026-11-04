@@ -5,6 +5,7 @@ import { teamApi } from '../../api/teamApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { entityId } from '../../utils/teamManagement';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH } from '../../constants/projectProfile';
 import {
   canSubmitProjectDirection,
   getProjectDirectionSubmitGuidance,
@@ -26,7 +27,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
   const isLeader = role === 'STUDENT' && entityId(team.leaderId) === currentStudentId;
   const canEdit = isLeader && direction && ['Draft', 'NeedsRevision'].includes(direction.status);
   const canReview = role === 'LECTURER' && direction?.status === 'Submitted';
-  const valid = title.trim().length >= 3 && summary.trim().length >= 20 && summary.trim().length <= 2000;
+  const valid = title.trim().length >= 3 && title.trim().length <= PROJECT_NAME_MAX_LENGTH && summary.trim().length >= 20 && summary.trim().length <= PROJECT_DESCRIPTION_MAX_LENGTH;
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary);
   const canSubmitDirection = canSubmitProjectDirection(direction, title, summary);
   const submitGuidance = getProjectDirectionSubmitGuidance(direction, title, summary);
@@ -119,12 +120,12 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
             <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase text-slate-500">Current status</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{formatStatus(direction?.status)}</span></div>
             <div>
               <label className="text-xs font-semibold text-slate-600">Project Name</label>
-              <input value={title} onChange={event => setTitle(event.target.value)} disabled={!canEdit} maxLength={200} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary disabled:bg-slate-50" />
+              <input value={title} onChange={event => setTitle(event.target.value)} disabled={!canEdit} maxLength={PROJECT_NAME_MAX_LENGTH} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary disabled:bg-slate-50" />
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600">Project description</label>
-              <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={!canEdit} maxLength={2000} rows={7} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-primary disabled:bg-slate-50" />
-              <p className="mt-1 text-right text-caption text-slate-400">{summary.length}/2000 · minimum 20</p>
+              <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={!canEdit} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} rows={7} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-primary disabled:bg-slate-50" />
+              <p className="mt-1 text-right text-caption text-slate-400">{summary.length}/{PROJECT_DESCRIPTION_MAX_LENGTH} · minimum 20</p>
             </div>
 
             {direction?.startupIndustries?.length > 0 && <div><p className="mb-2 text-xs font-semibold text-slate-600">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}

@@ -3,3 +3,5 @@
 # Production operational scripts and systemd units run on Linux and must keep LF endings.
 /scripts/production/*.sh text eol=lf
 /deploy/systemd/* text eol=lf
+# Preserve model bytes and its checksum across Windows and Linux checkouts.
+/backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json -text whitespace=cr-at-eol

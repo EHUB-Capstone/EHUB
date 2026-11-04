@@ -65,6 +65,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SubmissionLink> SubmissionLinks => Set<SubmissionLink>();
     public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
+    public DbSet<SubmissionFileSummary> SubmissionFileSummaries => Set<SubmissionFileSummary>();
     public DbSet<Rubric> Rubrics => Set<Rubric>();
     public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
@@ -107,6 +108,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
     public DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments => Set<ProductFeedbackAttachment>();
+    public DbSet<ShowcaseProject> ShowcaseProjects => Set<ShowcaseProject>();
+    public DbSet<ShowcaseLink> ShowcaseLinks => Set<ShowcaseLink>();
+    public DbSet<ShowcaseMedia> ShowcaseMedia => Set<ShowcaseMedia>();
+    public DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories => Set<ShowcaseReviewHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

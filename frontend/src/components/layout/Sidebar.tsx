@@ -6,7 +6,7 @@ import logo from '../../assets/logo.png';
 import {
   LayoutDashboard, Users, GraduationCap, CalendarDays,
   Kanban, Brain, Video, Rocket, LogOut, Plus, X, MessageSquare, Database, BookOpen, ShieldCheck, Factory,
-  ClipboardCheck,
+  ClipboardCheck, Sparkles,
 } from 'lucide-react';
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
@@ -28,6 +28,7 @@ const iconMap: Record<string, LucideIcon> = {
   factory: Factory,
   account_approval: ShieldCheck,
   grading: ClipboardCheck,
+  showcase: Sparkles,
 };
 
 interface SidebarProps {
@@ -69,6 +70,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       { path: '/project-data', icon: 'database', label: 'Project Data' },
       ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', label: 'Showcase Moderation' }] : []),
       { path: '/admin/feedback', icon: 'chat', label: 'Feedback Inbox' },
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
@@ -84,6 +86,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       { path: '/project-data', icon: 'database', label: 'Project Data' },
       ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', label: 'Showcase Moderation' }] : []),
       { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
@@ -114,6 +117,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
         : []),
       { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
       ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/manage', icon: 'showcase', label: 'My Showcase' }] : []),
       ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
       { path: '/feedback', icon: 'chat', label: 'Send feedback' },
       // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),

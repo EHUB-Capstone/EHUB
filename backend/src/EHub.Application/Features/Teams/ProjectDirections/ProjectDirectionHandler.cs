@@ -413,8 +413,8 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
 
     private static (string Code, string Message)? ValidateContent(string title, string summary)
     {
-        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 200) return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 200 characters.");
-        if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 2_000) return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 2000 characters.");
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length is < 3 or > 100) return (ErrorCodes.ClassValidationError, "Project name must be between 3 and 100 characters.");
+        if (string.IsNullOrWhiteSpace(summary) || summary.Trim().Length is < 20 or > 300) return (ErrorCodes.ClassValidationError, "Project description must be between 20 and 300 characters.");
         return null;
     }
 

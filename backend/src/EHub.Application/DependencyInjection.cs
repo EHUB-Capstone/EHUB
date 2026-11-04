@@ -165,12 +165,20 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointLinks.ICheckpointLinkHandler, EHub.Application.Features.Workspaces.CheckpointLinks.CheckpointLinkHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointRequirements.ICheckpointRequirementHandler, EHub.Application.Features.Workspaces.CheckpointRequirements.CheckpointRequirementHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();
+        // CheckpointSummarySettings, the summarizer and the text extractor are registered by Infrastructure.
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryGenerator, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryGenerator>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryPreviewer, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryPreviewer>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointFileText>();
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.EvaluationReportExport.IEvaluationReportExportHandler, EHub.Application.Features.Workspaces.EvaluationReportExport.EvaluationReportExportHandler>();
 
         services.AddScoped<EHub.Application.Features.ProductFeedback.IProductFeedbackHandler, EHub.Application.Features.ProductFeedback.ProductFeedbackHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Manage.IShowcaseManageHandler, EHub.Application.Features.Showcase.Manage.ShowcaseManageHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Moderation.IShowcaseModerationHandler, EHub.Application.Features.Showcase.Moderation.ShowcaseModerationHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Query.IShowcaseQueryHandler, EHub.Application.Features.Showcase.Query.ShowcaseQueryHandler>();
 
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();

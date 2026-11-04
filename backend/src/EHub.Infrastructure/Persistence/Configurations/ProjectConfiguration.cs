@@ -33,12 +33,12 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(p => p.Name)
             .HasColumnName("name")
-            .HasMaxLength(200)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(p => p.Description)
             .HasColumnName("description")
-            .HasMaxLength(2000);
+            .HasMaxLength(300);
 
         builder.Property(p => p.Problem)
             .HasColumnName("problem")

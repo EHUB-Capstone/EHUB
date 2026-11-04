@@ -98,6 +98,15 @@ public sealed class R2SubmissionObjectStorage : ISubmissionObjectStorage, IDispo
         try
         {
             using var response = await _client.GetObjectAsync(_bucketName, objectKey, cancellationToken);
+            // With a known length the bytes are read straight into one array. Copying through a MemoryStream and then
+            // ToArray() holds the file twice, which matters for 100 MB slide decks.
+            if (response.ContentLength is > 0 and <= int.MaxValue)
+            {
+                var content = new byte[response.ContentLength];
+                await response.ResponseStream.ReadExactlyAsync(content, cancellationToken);
+                return Result.Success(content);
+            }
+
             using var buffer = new MemoryStream();
             await response.ResponseStream.CopyToAsync(buffer, cancellationToken);
             return Result.Success(buffer.ToArray());

@@ -165,6 +165,15 @@ public static class ErrorCodes
     public const string ProductFeedbackAccessDenied = "PRODUCT_FEEDBACK_ACCESS_DENIED";
     public const string ProductFeedbackValidationError = "PRODUCT_FEEDBACK_VALIDATION_ERROR";
 
+    // Showcase error codes
+    public const string ShowcaseNotFound = "SHOWCASE_NOT_FOUND";
+    public const string ShowcaseAccessDenied = "SHOWCASE_ACCESS_DENIED";
+    public const string ShowcaseValidationError = "SHOWCASE_VALIDATION_ERROR";
+    public const string ShowcaseAlreadyExists = "SHOWCASE_ALREADY_EXISTS";
+    public const string ShowcaseInvalidState = "SHOWCASE_INVALID_STATE";
+    public const string ShowcaseConcurrencyConflict = "SHOWCASE_CONCURRENCY_CONFLICT";
+    public const string ShowcaseImageUploadFailed = "SHOWCASE_IMAGE_UPLOAD_FAILED";
+
     // Project data (cross-semester project list and achievements) error codes
     public const string ProjectDataAccessDenied = "PROJECT_DATA_ACCESS_DENIED";
     public const string ProjectDataNotFound = "PROJECT_DATA_NOT_FOUND";
@@ -187,6 +196,17 @@ public static class ErrorCodes
     public const string WorkspaceUploadSessionExpired = "WORKSPACE_UPLOAD_SESSION_EXPIRED";
     public const string WorkspaceUploadObjectMissing = "WORKSPACE_UPLOAD_OBJECT_MISSING";
     public const string WorkspaceUploadTooManyPending = "WORKSPACE_UPLOAD_TOO_MANY_PENDING";
+    public const string WorkspaceSummaryDisabled = "WORKSPACE_SUMMARY_DISABLED";
+    public const string WorkspaceSummaryUnavailable = "WORKSPACE_SUMMARY_UNAVAILABLE";
+    public const string WorkspaceSummaryQueueFull = "WORKSPACE_SUMMARY_QUEUE_FULL";
+    public const string WorkspaceSummaryNoContent = "WORKSPACE_SUMMARY_NO_CONTENT";
+    public const string WorkspaceSummaryUnreadable = "WORKSPACE_SUMMARY_UNREADABLE";
+    // Stored on a failed file summary so reviewers and operators can tell the causes apart. The first three are
+    // temporary (infrastructure) and are retried for longer; a bad model answer is not.
+    public const string WorkspaceSummaryModelUnreachable = "WORKSPACE_SUMMARY_MODEL_UNREACHABLE";
+    public const string WorkspaceSummaryModelTimeout = "WORKSPACE_SUMMARY_MODEL_TIMEOUT";
+    public const string WorkspaceSummaryStorageUnavailable = "WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE";
+    public const string WorkspaceSummaryModelBadAnswer = "WORKSPACE_SUMMARY_MODEL_BAD_ANSWER";
     public const string WeeklyTaskNotFound = "WEEKLY_TASK_NOT_FOUND";
     public const string WeeklyTaskDuplicated = "WEEKLY_TASK_DUPLICATED";
     public const string ShortcutNotFound = "SHORTCUT_NOT_FOUND";

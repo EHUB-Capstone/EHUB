@@ -54,7 +54,9 @@ ENV VITE_FEATURE_CLASS_STUDENT_SELF_SERVICE=$VITE_FEATURE_CLASS_STUDENT_SELF_SER
 ENV VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT=$VITE_FEATURE_CLASS_LECTURER_STUDENT_IMPORT
 ENV VITE_SHOW_UNAVAILABLE_CLASS_FEATURES=$VITE_SHOW_UNAVAILABLE_CLASS_FEATURES
 
-RUN npm run build
+# The deploy scripts check out with umask 077, so files copied from public/ arrive as 0600.
+# Nginx workers are not root and must still be able to read them.
+RUN npm run build && chmod -R a+rX dist
 
 FROM nginx:1.27-alpine AS runtime
 

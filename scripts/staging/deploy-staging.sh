@@ -11,10 +11,16 @@
 #             77 not root, anything else = failed stage (see EHUB_DEPLOY_RESULT).
 # A failure never rolls back automatically: a migration may already have been applied.
 #
-# AI provider switch: the line MENTOR_MATCHING_PROVIDER=Ollama|Hybrid in .env.staging (a missing
+# AI provider switch: MENTOR_MATCHING_PROVIDER=Ollama|Trained|Hybrid in .env.staging (a missing
 # line means Ollama). Hybrid adds docker-compose.hybrid.yml and the mentor-semantic container,
 # which shares the backend's network namespace and is therefore recreated with the backend.
-# Switching back to Ollama removes a leftover mentor-semantic container.
+# Trained adds docker-compose.trained.yml with a model packaged in the backend image; it does
+# not start Ollama or pull an embedding model. Leaving Hybrid removes mentor-semantic.
+#
+# AI checkpoint summaries: CHECKPOINT_SUMMARY_PROVIDER=Disabled|Ollama in the env file (a missing line
+# means Disabled). Ollama starts the ollama container even with the Trained provider and pulls the
+# summary model (CHECKPOINT_SUMMARY_MODEL, default qwen3.5:2b-q4_K_M). Compose passes the same value
+# to the backend, which then shows the feature and runs its background workers; Disabled hides it.
 set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -41,6 +47,8 @@ readonly MIN_FREE_GB=8
 readonly COMPOSE_PROJECT="ehub-staging"
 # Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
 readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
+readonly TRAINED_OVERRIDE="${APP_DIR}/docker-compose.trained.yml"
+readonly TRAINED_MODEL_SOURCE="${APP_DIR}/backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json"
 readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
 readonly SEMANTIC_HEALTH_ATTEMPTS=24
 readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
@@ -49,6 +57,7 @@ readonly MIN_AVAILABLE_MEMORY_MB=1536
 STAGE="init"
 TARGET_SHA=""
 PROVIDER="Ollama"
+SUMMARY="Disabled"
 PREVIOUS_SHA="unknown"
 OWNER=""
 OWNER_HOME=""
@@ -166,13 +175,51 @@ else
 fi
 case "${provider_value,,}" in
     ""|ollama) PROVIDER="Ollama" ;;
+    trained) PROVIDER="Trained" ;;
     hybrid) PROVIDER="Hybrid" ;;
     *)
-        echo "MENTOR_MATCHING_PROVIDER must be Ollama or Hybrid." >&2
+        echo "MENTOR_MATCHING_PROVIDER must be Ollama, Trained or Hybrid." >&2
         false
         ;;
 esac
 echo "AI provider: ${PROVIDER}"
+
+# Read the same way as the mentor provider: at most one line, never sourced.
+read_env_value() {
+    local name="$1" lines value
+    lines="$(grep -c "^${name}=" "${ENV_FILE}" || true)"
+    if (( lines > 1 )); then
+        echo "${ENV_FILE} must contain at most one ${name}= line." >&2
+        return 1
+    fi
+    if (( lines == 1 )); then
+        value="$(grep "^${name}=" "${ENV_FILE}" | cut -d= -f2-)"
+        printf '%s' "${value}" | tr -d "\"' \t\r"
+    fi
+    return 0
+}
+summary_value="$(read_env_value CHECKPOINT_SUMMARY_PROVIDER)"
+case "${summary_value,,}" in
+    ""|disabled) SUMMARY="Disabled" ;;
+    ollama) SUMMARY="Ollama" ;;
+    *)
+        echo "CHECKPOINT_SUMMARY_PROVIDER must be Disabled or Ollama." >&2
+        false
+        ;;
+esac
+SUMMARY_MODEL="$(read_env_value CHECKPOINT_SUMMARY_MODEL)"
+SUMMARY_MODEL="${SUMMARY_MODEL:-qwen3.5:2b-q4_K_M}"
+if [[ ! "${SUMMARY_MODEL}" =~ ^[A-Za-z0-9._:/-]+$ ]]; then
+    echo "CHECKPOINT_SUMMARY_MODEL contains unexpected characters." >&2
+    false
+fi
+echo "AI checkpoint summaries: ${SUMMARY}"
+
+# Ollama is needed for mentor embeddings (every provider but Trained) or for summaries.
+NEEDS_OLLAMA="false"
+if [[ "${PROVIDER}" != "Trained" || "${SUMMARY}" == "Ollama" ]]; then
+    NEEDS_OLLAMA="true"
+fi
 
 if [[ "${PROVIDER}" == "Hybrid" ]]; then
     # The VPS has no swap: refuse to start another memory consumer when RAM is already short.
@@ -194,7 +241,7 @@ if [[ -n "${dirty}" ]]; then
     false
 fi
 PREVIOUS_SHA="$(git_as_owner rev-parse HEAD)"
-record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER}"
+record "START sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER} summary=${SUMMARY}"
 
 # The backup runs from the already-deployed checkout, before it is replaced.
 stage "backup"
@@ -230,6 +277,12 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
         false
     fi
     compose+=(-f "${SEMANTIC_OVERRIDE}")
+elif [[ "${PROVIDER}" == "Trained" ]]; then
+    if [[ ! -f "${TRAINED_OVERRIDE}" ]]; then
+        echo "This commit has no Trained support file (docker-compose.trained.yml)." >&2
+        false
+    fi
+    compose+=(-f "${TRAINED_OVERRIDE}")
 fi
 
 stage "validate-compose"
@@ -244,12 +297,26 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
 fi
 
 stage "start-dependencies"
-"${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" postgres ollama
+dependencies=(postgres)
+if [[ "${NEEDS_OLLAMA}" == "true" ]]; then
+    dependencies+=(ollama)
+fi
+"${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" "${dependencies[@]}"
 
-stage "embedding-model"
-models="$("${compose[@]}" exec -T ollama ollama list)"
-if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
-    "${compose[@]}" exec -T ollama ollama pull bge-m3
+if [[ "${PROVIDER}" != "Trained" ]]; then
+    stage "embedding-model"
+    models="$("${compose[@]}" exec -T ollama ollama list)"
+    if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
+        "${compose[@]}" exec -T ollama ollama pull bge-m3
+    fi
+fi
+
+if [[ "${SUMMARY}" == "Ollama" ]]; then
+    stage "summary-model"
+    models="$("${compose[@]}" exec -T ollama ollama list)"
+    if ! awk 'NR > 1 { print $1 }' <<< "${models}" | grep -qxF "${SUMMARY_MODEL}"; then
+        "${compose[@]}" exec -T ollama ollama pull "${SUMMARY_MODEL}"
+    fi
 fi
 
 # One-time initializer: applies committed EF Core migrations and idempotent seeders, then exits.
@@ -318,6 +385,32 @@ check_semantic() {
     return 1
 }
 
+# /health/ready does not load the mentor model. A checkout under umask 077 once produced an image in
+# which only root could read it: every health check passed while AI allocation failed. This check runs
+# as the backend's own unprivileged user and compares the model with the one in the reviewed commit.
+check_trained_model() {
+    local expected model_path actual
+    if [[ ! -f "${TRAINED_MODEL_SOURCE}" ]]; then
+        echo "This commit has no packaged mentor model (${TRAINED_MODEL_SOURCE})." >&2
+        return 1
+    fi
+    expected="$(sha256sum "${TRAINED_MODEL_SOURCE}" | cut -d' ' -f1)"
+    if ! model_path="$("${compose[@]}" exec -T backend printenv Mentoring__TrainedModelPath)" \
+            || [[ -z "${model_path}" ]]; then
+        echo "The backend has no Mentoring__TrainedModelPath; the Trained override is not applied." >&2
+        return 1
+    fi
+    if ! actual="$("${compose[@]}" exec -T backend sha256sum "${model_path}" | cut -d' ' -f1)"; then
+        echo "The backend user cannot read the mentor model ${model_path}; AI allocation would fail." >&2
+        return 1
+    fi
+    if [[ "${actual}" != "${expected}" ]]; then
+        echo "The mentor model in the backend (${actual:0:12}) differs from the commit (${expected:0:12})." >&2
+        return 1
+    fi
+    echo "ok mentor model (sha256 ${expected:0:12})"
+}
+
 stage "health-check"
 check_endpoint /healthz
 check_endpoint /health/live
@@ -342,6 +435,11 @@ if [[ "${PROVIDER}" == "Hybrid" ]]; then
         echo "Running mentor-semantic image is ${running_image}, expected the requested commit." >&2
         false
     fi
+fi
+
+if [[ "${PROVIDER}" == "Trained" ]]; then
+    stage "verify-ai-model"
+    check_trained_model
 fi
 
 trap - ERR

@@ -14,6 +14,7 @@ import { parseApiError } from '../../utils/apiError';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
 import StartupIndustryPicker from './StartupIndustryPicker';
 import type { ProjectWorkspaceProfile } from '../../types/projectWorkspace';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH } from '../../constants/projectProfile';
 
 interface Props {
   team: { _id?: string; id?: string; teamName?: string; name?: string };
@@ -114,13 +115,13 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="workspace-project-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Project name <span className="text-red-500">*</span></label>
-          <input id="workspace-project-name" value={draft.projectName} onChange={(event) => setField('projectName', event.target.value)} maxLength={200} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.projectName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
+          <input id="workspace-project-name" value={draft.projectName} onChange={(event) => setField('projectName', event.target.value)} maxLength={PROJECT_NAME_MAX_LENGTH} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.projectName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
           {errors.projectName && <p className="mt-1 text-xs text-red-600">{errors.projectName}</p>}
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="workspace-description" className="mb-1.5 block text-xs font-semibold text-slate-700">Project description <span className="text-red-500">*</span></label>
-          <textarea id="workspace-description" value={draft.description} onChange={(event) => setField('description', event.target.value)} rows={4} maxLength={2000} placeholder="Describe the problem, target users, and initial solution…" className={`w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
-          <div className="mt-1 flex justify-between text-xs"><span className="text-red-600">{errors.description}</span><span className="text-slate-400">{draft.description.length}/2000</span></div>
+          <textarea id="workspace-description" value={draft.description} onChange={(event) => setField('description', event.target.value)} rows={4} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} placeholder="Summarize what the project does in a few sentences…" className={`w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
+          <div className="mt-1 flex justify-between text-xs"><span className="text-red-600">{errors.description}</span><span className="text-slate-400">{draft.description.length}/{PROJECT_DESCRIPTION_MAX_LENGTH}</span></div>
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="workspace-zalo-group-url" className="mb-1.5 block text-xs font-semibold text-slate-700">Zalo group link <span className="text-red-500">*</span></label>

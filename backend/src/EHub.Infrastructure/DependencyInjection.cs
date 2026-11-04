@@ -56,6 +56,7 @@ public static class DependencyInjection
         }
         else if (!string.Equals(matchingProvider, "Ollama", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Mentoring:MatchingProvider must be Ollama, Trained or Hybrid.");
+        AddCheckpointSummaries(services, configuration);
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddHostedService<ClassImportSessionCleanupService>();
@@ -170,5 +171,60 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         return services;
+    }
+
+    /// <summary>
+    /// AI checkpoint summaries run on a local Ollama model only. <c>Summarization:Provider</c> is Disabled by default;
+    /// the queue worker is registered only when it is Ollama.
+    /// </summary>
+    private static void AddCheckpointSummaries(IServiceCollection services, IConfiguration configuration)
+    {
+        var provider = configuration["Summarization:Provider"] ?? "Disabled";
+        var enabled = string.Equals(provider, "Ollama", StringComparison.OrdinalIgnoreCase);
+        if (!enabled && !string.Equals(provider, "Disabled", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Summarization:Provider must be Disabled or Ollama.");
+        var maxInput = configuration.GetValue("Summarization:MaxInputCharacters", 30_000);
+        var filePrompt = configuration.GetValue("Summarization:FilePromptCharacters", 5_000);
+        var contextLength = configuration.GetValue("Summarization:ContextLength", 4096);
+        var timeoutMinutes = configuration.GetValue("Summarization:JobTimeoutMinutes", 10);
+        if (maxInput is < 1_000 or > 100_000)
+            throw new InvalidOperationException("Summarization:MaxInputCharacters must be between 1000 and 100000.");
+        // About 3 characters per token, plus about 1,200 tokens for the instructions, checklist and answer.
+        if (filePrompt is < 2_000 or > 18_000 || filePrompt > maxInput || filePrompt / 3 + 1_200 > contextLength)
+            throw new InvalidOperationException(
+                "Summarization:FilePromptCharacters must be between 2000 and 18000, not above MaxInputCharacters, and fit ContextLength.");
+        if (timeoutMinutes is < 1 or > 14)
+            throw new InvalidOperationException("Summarization:JobTimeoutMinutes must be between 1 and 14 (the processing lease is 15).");
+
+        services.AddSingleton(new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummarySettings
+        {
+            Enabled = enabled, AutoSummarize = configuration.GetValue("Summarization:AutoSummarize", true),
+            MaxInputCharacters = maxInput, FilePromptCharacters = filePrompt,
+            JobTimeout = TimeSpan.FromMinutes(timeoutMinutes)
+        });
+        services.AddSingleton<ISubmissionTextExtractor, EHub.Infrastructure.Summarization.SubmissionTextExtractor>();
+        services.AddSingleton<ICheckpointSummaryQueueSignal, CheckpointSummaryQueueSignal>();
+        // Only the keyword catalog of the mentor model is used; a missing or unreadable model just turns topic matching off.
+        services.AddSingleton(_ =>
+        {
+            try { return new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics(FileMentorFitRanker.ReadModel(configuration["Mentoring:TrainedModelPath"])); }
+            catch (Exception) { return EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics.None; }
+        });
+        services.AddSingleton<ICheckpointSummaryCancellation, CheckpointSummaryCancellation>();
+        if (!enabled)
+        {
+            services.AddSingleton<ICheckpointSummarizer, EHub.Infrastructure.Summarization.DisabledCheckpointSummarizer>();
+            return;
+        }
+
+        var baseUrl = configuration["Summarization:BaseUrl"] ?? "http://localhost:11434";
+        services.AddHttpClient<ICheckpointSummarizer, EHub.Infrastructure.Summarization.OllamaCheckpointSummarizer>(client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/", UriKind.Absolute);
+            // The job timeout bounds a whole summary; this only stops a single stuck call.
+            client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
+        services.AddHostedService<CheckpointSummaryGenerationService>();
+        services.AddHostedService<CheckpointSummaryPreviewService>();
     }
 }

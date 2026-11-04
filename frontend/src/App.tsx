@@ -54,6 +54,10 @@ const FeedbackPage = lazy(() => import('./pages/shared/FeedbackPage'));
 const EvaluationGrading = lazy(() => import('./pages/shared/EvaluationGrading'));
 const ProjectData = lazy(() => import('./pages/shared/ProjectData'));
 const ShowcaseGallery = lazy(() => import('./features/showcase/ShowcaseGallery'));
+const MyShowcase = lazy(() => import('./pages/showcase/MyShowcase'));
+const ShowcaseEditor = lazy(() => import('./pages/showcase/ShowcaseEditor'));
+const ShowcaseDetail = lazy(() => import('./pages/showcase/ShowcaseDetail'));
+const ShowcaseModeration = lazy(() => import('./pages/showcase/ShowcaseModeration'));
 
 const PageFallback = () => (
   <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
@@ -148,6 +152,14 @@ function App(): React.ReactElement {
                   {releaseFeatureFlags.mentoring && <Route path="/sessions" element={<MentoringSessionsPage />} />}
                   {releaseFeatureFlags.workshops && <Route path="/workshops" element={<Workshops />} />}
                   {releaseFeatureFlags.chat && <Route path="/chat" element={<GroupChat />} />}
+                  {releaseFeatureFlags.showcase && (
+                    <>
+                      <Route path="/showcase/manage" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyShowcase /></ProtectedRoute>} />
+                      <Route path="/showcase/manage/:lineageId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ShowcaseEditor /></ProtectedRoute>} />
+                      <Route path="/showcase/moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><ShowcaseModeration /></ProtectedRoute>} />
+                      <Route path="/showcase/:id" element={<ShowcaseDetail />} />
+                    </>
+                  )}
                   <Route path="/settings" element={<ProfileSettings />} />
                   <Route path="/feedback" element={<ProtectedRoute allowedRoles={['STUDENT','LECTURER','MENTOR']}><FeedbackPage /></ProtectedRoute>} />
                   <Route path="/evaluation-grading" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER', 'MENTOR', 'STUDENT']}><EvaluationGrading /></ProtectedRoute>} />

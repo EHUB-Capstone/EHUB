@@ -99,6 +99,13 @@ public static class MentorRankingFeatures
         return new RankingEvidence(values, reasons.ToArray(), hasEvidence);
     }
 
+    /// <summary>
+    /// Topic ids named in the affirmative part of a text; denied clauses ("chưa có", "không cần") are ignored.
+    /// Shared with AI checkpoint summaries so both features read Vietnamese evidence the same way.
+    /// </summary>
+    internal static IReadOnlySet<string> AffirmedTopics(MentorRankingModel model, string? text) =>
+        FindTopics(model, MentorEvidenceText.Positive(text)).Keys.ToHashSet(StringComparer.Ordinal);
+
     internal static string Normalize(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
