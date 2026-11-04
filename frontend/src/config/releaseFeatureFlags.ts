@@ -22,7 +22,6 @@ export const createReleaseFeatureFlags = (environment: FeatureEnvironment) => Ob
   roleDashboards: isEnabledByDefault(environment.VITE_FEATURE_ROLE_DASHBOARDS),
   showcase: isEnabledByDefault(environment.VITE_FEATURE_SHOWCASE),
   startupIdeas: isEnabledByDefault(environment.VITE_FEATURE_STARTUP_IDEAS),
-  showcase: isEnabledByDefault(environment.VITE_FEATURE_SHOWCASE),
   workshops: isEnabledByDefault(environment.VITE_FEATURE_WORKSHOPS),
 });
 
