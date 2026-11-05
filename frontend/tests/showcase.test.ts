@@ -5,6 +5,25 @@ import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
 import { discoveryRequest, discoveryPages } from '../src/utils/showcaseDiscovery.ts';
 
+test('featured client calls POST/DELETE, unwraps selection and preserves discovery filters', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const selection = { id: 's1', isFeatured: true, featuredAt: '2026-11-05T02:00:00Z', rowVersion: 9 };
+  const cleared = { ...selection, isFeatured: false, featuredAt: null, rowVersion: 10 };
+  const params = discoveryRequest(new URLSearchParams('featured=true&industry=HealthTech&stage=Mvp&page=2'));
+  mock.onPost('/showcase/s1/feature').reply(200, { data: selection });
+  mock.onDelete('/showcase/s1/feature').reply(200, { data: cleared });
+  mock.onGet('/showcase', { params }).reply(200, { data: { items: [], totalItems: 0, pageIndex: 2, pageSize: 8, totalPages: 0 } });
+  mock.onPost('/showcase/denied/feature').reply(403, { message: 'Forbidden' });
+  try {
+    assert.deepEqual(await showcaseApi.feature('s1'), selection);
+    assert.deepEqual(await showcaseApi.unfeature('s1'), cleared);
+    await showcaseApi.list(params);
+    assert.equal(mock.history.get[0].params.featured, true);
+    assert.equal(mock.history.get[0].params.industry, 'HealthTech');
+    await assert.rejects(showcaseApi.feature('denied'));
+  } finally { mock.restore(); }
+});
+
 test('discovery URL maps to server filters and rejects obsolete stages, sorts and invalid paging', () => {
   const semesterId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   const request = discoveryRequest(new URLSearchParams({ q: ' garden ', stage: 'MVP', industry: ' HealthTech ', semesterId, sort: 'popular', page: '2' }));
@@ -17,6 +36,9 @@ test('discovery URL maps to server filters and rejects obsolete stages, sorts an
   assert.equal(discoveryRequest(new URLSearchParams('sort=popular&tab=new')).sort, 'newest');
   assert.equal(discoveryRequest(new URLSearchParams('page=999999999999')).page, 1);
   assert.equal(discoveryRequest(new URLSearchParams({ q: 'x'.repeat(101) })).search?.length, 100);
+  assert.equal(discoveryRequest(new URLSearchParams('featured=true')).featured, true);
+  assert.equal(discoveryRequest(new URLSearchParams('featured=false')).featured, false);
+  assert.equal(discoveryRequest(new URLSearchParams('featured=invalid')).featured, undefined);
 });
 
 test('discovery pagination stays bounded for large server result sets', () => {
@@ -87,6 +109,8 @@ const showcase = (overrides: Partial<ShowcaseDto> = {}): ShowcaseDto => ({
   showTeamMembers: true,
   reviewNote: null,
   publishedAt: null,
+  isFeatured: false,
+  featuredAt: null,
   viewCount: 0,
   likeCount: 0,
   commentCount: 0,

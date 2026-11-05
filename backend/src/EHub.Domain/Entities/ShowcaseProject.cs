@@ -22,6 +22,8 @@ public class ShowcaseProject : AuditableEntity
     public bool ShowTeamMembers { get; set; } = true;
 
     public DateTime? PublishedAt { get; set; }
+    public bool IsFeatured { get; set; }
+    public DateTime? FeaturedAt { get; set; }
     public string? ReviewNote { get; set; }
 
     public int ViewCount { get; set; }

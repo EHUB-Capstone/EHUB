@@ -16,6 +16,34 @@ public sealed class ShowcaseDiscoveryTests
         new(db, new InMemorySearch(), new GetShowcasesRequestValidator());
 
     [Fact]
+    public async Task FeaturedFilter_ComposesWithStageSearchAndPaging_AndNeverIncludesHiddenPages()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var first = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var second = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var regular = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var hidden = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Hidden);
+        var now = DateTime.UtcNow;
+        foreach (var id in new[] { first.ShowcaseId, second.ShowcaseId, hidden.ShowcaseId })
+        {
+            var page = (await db.ShowcaseProjects.FindAsync(id))!;
+            page.IsFeatured = true;
+            page.FeaturedAt = now;
+        }
+        (await db.ShowcaseProjects.FindAsync(first.ShowcaseId))!.DevelopmentStage = ShowcaseDevelopmentStage.Mvp;
+        await db.SaveChangesAsync();
+        var featured = (await Handler(db).HandleAsync(new() { Featured = true, PageSize = 1, Page = 2 })).Value;
+        featured.TotalItems.Should().Be(2);
+        featured.Items.Should().ContainSingle().Which.IsFeatured.Should().BeTrue();
+        featured.Items.Single().FeaturedAt.Should().Be(now);
+        var mvp = (await Handler(db).HandleAsync(new() { Featured = true, Search = "GARDEN", Stage = "Mvp" })).Value;
+        mvp.Items.Should().ContainSingle().Which.Id.Should().Be(first.ShowcaseId);
+        var normal = (await Handler(db).HandleAsync(new() { Featured = false })).Value;
+        normal.Items.Should().ContainSingle().Which.Id.Should().Be(regular.ShowcaseId);
+        (await Handler(db).HandleAsync(new())).Value.TotalItems.Should().Be(3);
+    }
+
+    [Fact]
     public async Task FilterOptions_ReturnAllActiveCatalogIndustriesAndSemesters_WithoutAnyShowcase()
     {
         await using var db = ShowcaseTestData.NewContext();

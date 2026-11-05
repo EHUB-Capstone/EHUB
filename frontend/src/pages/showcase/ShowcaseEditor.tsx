@@ -249,6 +249,7 @@ export default function ShowcaseEditor() {
     try {
       const updated = await showcaseApi.withdraw(showcase.id);
       patchEntry((current) => ({ ...current, showcase: updated }));
+      void queryClient.invalidateQueries({ queryKey: ['showcase'] });
       setWithdrawOpen(false);
       toast.success('The page is hidden. You can edit it and submit it again.');
     } catch (error) {

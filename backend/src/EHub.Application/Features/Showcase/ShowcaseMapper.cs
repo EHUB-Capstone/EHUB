@@ -31,6 +31,8 @@ internal static class ShowcaseMapper
         ShowTeamMembers = showcase.ShowTeamMembers,
         ReviewNote = includeReviewNote ? showcase.ReviewNote : null,
         PublishedAt = showcase.PublishedAt,
+        IsFeatured = showcase.IsFeatured,
+        FeaturedAt = showcase.FeaturedAt,
         ViewCount = showcase.ViewCount,
         LikeCount = showcase.LikeCount,
         CommentCount = showcase.CommentCount,

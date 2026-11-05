@@ -5353,6 +5353,10 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("development_stage");
 
+                    b.Property<DateTime?>("FeaturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("featured_at");
+
                     b.Property<string>("Highlights")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -5363,6 +5367,12 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsFeatured")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_featured");
 
                     b.Property<int>("LikeCount")
                         .ValueGeneratedOnAdd()
