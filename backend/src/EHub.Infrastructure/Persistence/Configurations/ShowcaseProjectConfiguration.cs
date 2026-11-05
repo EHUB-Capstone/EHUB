@@ -31,6 +31,8 @@ public class ShowcaseProjectConfiguration : IEntityTypeConfiguration<ShowcasePro
 
         builder.Property(s => s.ShowTeamMembers).HasColumnName("show_team_members").HasDefaultValue(true);
         builder.Property(s => s.PublishedAt).HasColumnName("published_at");
+        builder.Property(s => s.IsFeatured).HasColumnName("is_featured").HasDefaultValue(false);
+        builder.Property(s => s.FeaturedAt).HasColumnName("featured_at");
         builder.Property(s => s.ReviewNote).HasColumnName("review_note").HasMaxLength(1000);
 
         builder.Property(s => s.ViewCount).HasColumnName("view_count").HasDefaultValue(0);

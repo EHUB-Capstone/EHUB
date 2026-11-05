@@ -4,6 +4,7 @@ using EHub.Application.Features.Showcase.Manage;
 using EHub.Application.Features.Showcase.Moderation;
 using EHub.Application.Features.Showcase.Query;
 using EHub.Application.Features.Showcase.Discovery;
+using EHub.Application.Features.Showcase.Featured;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Shared.Constants;
@@ -38,6 +39,21 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     public async Task<IActionResult> FilterOptions(
         [FromServices] IGetShowcasesQueryHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetFilterOptionsAsync(cancellationToken), "Showcase filters retrieved.");
+
+    [HttpPost("{id:guid}/feature")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> Feature(
+        Guid id, [FromServices] IShowcaseFeaturedHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SetAsync(id, true, UserId, FeaturedRole, cancellationToken), "Showcase featured.");
+
+    [HttpDelete("{id:guid}/feature")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> Unfeature(
+        Guid id, [FromServices] IShowcaseFeaturedHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SetAsync(id, false, UserId, FeaturedRole, cancellationToken), "Featured selection removed.");
+
+    private string FeaturedRole => currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        ?? currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)) ?? Role;
 
     [HttpGet("mine")]
     [Authorize(Policy = SystemPolicies.StudentOnly)]

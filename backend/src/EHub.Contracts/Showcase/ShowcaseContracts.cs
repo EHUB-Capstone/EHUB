@@ -67,6 +67,8 @@ public sealed class ShowcaseDto
     public bool ShowTeamMembers { get; init; }
     public string? ReviewNote { get; init; }
     public DateTime? PublishedAt { get; init; }
+    public bool IsFeatured { get; init; }
+    public DateTime? FeaturedAt { get; init; }
     public int ViewCount { get; init; }
     public int LikeCount { get; init; }
     public int CommentCount { get; init; }
@@ -101,6 +103,8 @@ public sealed class ShowcaseModerationItemDto
     public string ClassCode { get; init; } = string.Empty;
     public string? ReviewNote { get; init; }
     public DateTime? PublishedAt { get; init; }
+    public bool IsFeatured { get; init; }
+    public DateTime? FeaturedAt { get; init; }
     public DateTime SubmittedOrUpdatedAt { get; init; }
 }
 

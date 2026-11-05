@@ -138,6 +138,7 @@ export default function ShowcaseModeration() {
                       title={item.projectName}
                       status={item.status}
                       wasEverPublished={item.publishedAt !== null}
+                      isFeatured={item.isFeatured}
                       onDecided={afterDecision}
                     />
                     {item.status === 'Draft' || (item.status === 'Hidden' && item.publishedAt === null) ? (

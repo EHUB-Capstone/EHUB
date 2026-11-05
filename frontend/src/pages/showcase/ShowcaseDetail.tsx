@@ -91,6 +91,7 @@ export default function ShowcaseDetail() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
               {privileged && <ShowcaseStatusBadge status={showcase.status} />}
+              {showcase.isFeatured && <Badge variant="brand" size="md">Faculty selected</Badge>}
             </div>
             <h1 className="mt-2 break-words text-display text-secondary">{profile.projectName}</h1>
             {profile.description && <p className="mt-1 text-body-lg text-slate-600">{profile.description}</p>}
@@ -132,6 +133,7 @@ export default function ShowcaseDetail() {
               title={profile.projectName}
               status={showcase.status}
               wasEverPublished={showcase.publishedAt !== null}
+              isFeatured={showcase.isFeatured}
               onDecided={applyDecision}
             />
           </div>
@@ -202,7 +204,7 @@ export default function ShowcaseDetail() {
               <li key={`${entry.createdAt}-${entry.toStatus}`} className="text-body-sm">
                 <p className="text-slate-700">
                   <span className="font-semibold text-secondary">{entry.actorName}</span>
-                  {' '}moved the page from {entry.fromStatus} to {entry.toStatus}
+                  {entry.fromStatus === entry.toStatus ? ' updated the page' : ` moved the page from ${entry.fromStatus} to ${entry.toStatus}`}
                   <span className="text-slate-600"> · {formatDateTime(entry.createdAt)}</span>
                 </p>
                 {entry.note && <p className="mt-0.5 whitespace-pre-line text-slate-600">{entry.note}</p>}

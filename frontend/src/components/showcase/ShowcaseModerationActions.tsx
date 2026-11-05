@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check, EyeOff, Eye, MessageSquareWarning, XCircle } from 'lucide-react';
+import { Check, EyeOff, Eye, MessageSquareWarning, Star, XCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { showcaseApi } from '../../api/showcaseApi';
@@ -36,11 +37,16 @@ interface ShowcaseModerationActionsProps {
   title: string;
   status: ShowcaseStatus;
   wasEverPublished: boolean;
+  isFeatured?: boolean;
   onDecided: (showcase: ShowcaseDto) => void;
 }
 
 /** Decision buttons for a reviewer; only the actions the server would accept for the current status are shown. */
-export default function ShowcaseModerationActions({ showcaseId, title, status, wasEverPublished, onDecided }: ShowcaseModerationActionsProps) {
+export default function ShowcaseModerationActions({ showcaseId, title, status, wasEverPublished, isFeatured = false, onDecided }: ShowcaseModerationActionsProps) {
+  const queryClient = useQueryClient();
+  const featuredInFlight = useRef(false);
+  const [featuredBusy, setFeaturedBusy] = useState(false);
+  const [featuredDialog, setFeaturedDialog] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<ShowcaseDecision | null>(null);
   const [dialog, setDialog] = useState<DialogDecision | null>(null);
   const [note, setNote] = useState('');
@@ -53,6 +59,7 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
     setBusy(decision);
     try {
       const updated = await showcaseApi.decide(showcaseId, decision, text);
+      void queryClient.invalidateQueries({ queryKey: ['showcase'] });
       onDecided(updated);
       return true;
     } catch (error) {
@@ -77,9 +84,28 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
     }
   };
 
+  const confirmFeatured = async () => {
+    if (featuredDialog === null || featuredInFlight.current || busy) return;
+    featuredInFlight.current = true;
+    setFeaturedBusy(true);
+    try {
+      if (featuredDialog) await showcaseApi.feature(showcaseId); else await showcaseApi.unfeature(showcaseId);
+      toast.success(featuredDialog ? 'Showcase selected as featured.' : 'Featured selection removed.');
+      setFeaturedDialog(null);
+      await queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    } catch (error) {
+      toast.error(parseApiError(error, 'Unable to update featured selection. Try again.').message);
+      void queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    } finally {
+      featuredInFlight.current = false;
+      setFeaturedBusy(false);
+    }
+  };
+
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" inert={featuredBusy}>
+        {status === 'Published' && <Button size="sm" variant="outline" icon={Star} disabled={busy !== null || featuredBusy} isLoading={featuredBusy} onClick={() => setFeaturedDialog(!isFeatured)}>{isFeatured ? 'Remove featured' : 'Feature project'}</Button>}
         {actions.includes('approve') && (
           <Button size="sm" variant="secondary" icon={Check} isLoading={busy === 'approve'} disabled={busy !== null} onClick={() => quick('approve')}>Approve</Button>
         )}
@@ -110,6 +136,16 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
         reasonLabel="Note for the team"
         reasonRequired
         isSubmitting={busy !== null}
+      />
+      <ConfirmDialog
+        isOpen={featuredDialog !== null}
+        onClose={() => { if (!featuredBusy) setFeaturedDialog(null); }}
+        onConfirm={confirmFeatured}
+        title={`${featuredDialog ? 'Feature project' : 'Remove featured'}: ${title}`}
+        description={featuredDialog ? 'Show this published project as a faculty-selected showcase.' : 'Remove this project from the faculty-selected showcases. The project stays published.'}
+        confirmText={featuredDialog ? 'Feature project' : 'Remove featured'}
+        confirmVariant={featuredDialog ? 'primary' : 'danger'}
+        isSubmitting={featuredBusy}
       />
     </>
   );

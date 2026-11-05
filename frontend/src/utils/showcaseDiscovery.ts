@@ -8,6 +8,7 @@ export function discoveryRequest(params: URLSearchParams): GetShowcasesRequest {
   const stage = stages.find(value => value.toLowerCase() === params.get('stage')?.toLowerCase());
   const semesterId = params.get('semesterId') ?? '';
   const page = Number(params.get('page'));
+  const featured = params.get('featured');
   return {
     search: params.get('q')?.trim().slice(0, 100) || undefined,
     stage,
@@ -16,6 +17,7 @@ export function discoveryRequest(params: URLSearchParams): GetShowcasesRequest {
     sort: params.get('tab') !== 'new' && params.get('sort') === 'popular' ? 'popular' : 'newest',
     page: Number.isSafeInteger(page) && page >= 1 && page <= Math.floor(2147483647 / 50) ? page : 1,
     pageSize: DISCOVERY_PAGE_SIZE,
+    ...(featured === 'true' || featured === 'false' ? { featured: featured === 'true' } : {}),
   };
 }
 

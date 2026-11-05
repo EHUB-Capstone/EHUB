@@ -40,6 +40,8 @@ public sealed class GetShowcasesQueryHandler(
                     join project in projects on showcase.ProjectLineageId equals project.ProjectLineageId
                     where showcase.Status == ShowcaseStatus.Published
                     select new { Showcase = showcase, Project = project };
+        if (request.Featured is { } featured)
+            query = query.Where(row => row.Showcase.IsFeatured == featured);
         if (!string.IsNullOrWhiteSpace(request.Stage))
         {
             var stage = Enum.Parse<ShowcaseDevelopmentStage>(request.Stage.Trim(), true);
@@ -59,6 +61,8 @@ public sealed class GetShowcasesQueryHandler(
                 LogoUrl = row.Showcase.LogoUrl,
                 DevelopmentStage = row.Showcase.DevelopmentStage.ToString(),
                 PublishedAt = row.Showcase.PublishedAt,
+                IsFeatured = row.Showcase.IsFeatured,
+                FeaturedAt = row.Showcase.FeaturedAt,
                 TeamName = row.Project.Team.TeamName,
                 Industries = row.Project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField)
                     .OrderBy(tag => tag.TagName).Select(tag => tag.TagName).ToArray(),

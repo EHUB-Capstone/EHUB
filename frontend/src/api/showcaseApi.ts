@@ -4,6 +4,7 @@ import type {
   GetShowcasesRequest,
   ShowcaseDiscoveryPageDto,
   ShowcaseFilterOptionsDto,
+  ShowcaseFeaturedDto,
   MyShowcaseEntryDto,
   SaveShowcaseRequest,
   ShowcaseDecision,
@@ -26,6 +27,10 @@ const imageForm = (file: File): FormData => {
 const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 
 export const showcaseApi = {
+  feature: (id: string) =>
+    unwrap<ShowcaseFeaturedDto>(axiosClient.post(`/showcase/${id}/feature`)),
+  unfeature: (id: string) =>
+    unwrap<ShowcaseFeaturedDto>(axiosClient.delete(`/showcase/${id}/feature`)),
   getFilterOptions: (signal?: AbortSignal) =>
     unwrap<ShowcaseFilterOptionsDto>(axiosClient.get('/showcase/filter-options', { signal })),
   list: (params: GetShowcasesRequest = {}, signal?: AbortSignal) =>
