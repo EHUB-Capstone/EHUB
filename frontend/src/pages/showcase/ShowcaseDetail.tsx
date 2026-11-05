@@ -1,6 +1,6 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Pencil, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ExternalLink, Eye, Flame, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -15,18 +15,32 @@ import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 
 const formatDateTime = (value: string): string => new Date(value).toLocaleString();
 
-function Section({ title, children }: { title: string; children: string | null }) {
+function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: string | null }) {
   if (!children?.trim()) return null;
   return (
-    <section>
-      <h2 className="text-subheading text-secondary">{title}</h2>
-      <p className="mt-2 whitespace-pre-line text-body-lg text-slate-600">{children}</p>
+    <section className="flex gap-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700" aria-hidden="true"><Icon className="h-5 w-5" /></span>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-subheading text-secondary">{title}</h2>
+        <p className="mt-1.5 whitespace-pre-line text-body-lg leading-relaxed text-slate-600">{children}</p>
+      </div>
     </section>
+  );
+}
+
+function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-2 text-body-sm text-slate-600">
+      <Icon className="h-4 w-4 text-slate-400" aria-hidden="true" />
+      <span className="font-semibold text-secondary">{value.toLocaleString()}</span>
+      <span>{label}</span>
+    </div>
   );
 }
 
 export default function ShowcaseDetail() {
   const { id = '' } = useParams();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const detail = useQuery({
     queryKey: ['showcase', 'detail', id],
@@ -37,7 +51,7 @@ export default function ShowcaseDetail() {
 
   if (detail.isPending) {
     return (
-      <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-8" role="status" aria-label="Loading showcase page">
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 sm:py-8" role="status" aria-label="Loading showcase page">
         <LoadingSkeleton variant="card" />
         <LoadingSkeleton lines={6} />
       </main>
@@ -47,7 +61,7 @@ export default function ShowcaseDetail() {
   if (detail.isError) {
     const notFound = parseApiError(detail.error, '').code === SHOWCASE_ERROR_CODES.notFound;
     return (
-      <main className="mx-auto max-w-4xl p-4 sm:p-8">
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <ErrorState
           title={notFound ? 'This page is not available' : 'Could not load this page'}
           message={notFound
@@ -62,6 +76,15 @@ export default function ShowcaseDetail() {
   const { showcase, members, history, isOwner, canModerate, teamName } = detail.data;
   const { profile } = showcase;
   const privileged = isOwner || canModerate;
+  const navigationState = location.state as { showcaseBackTo?: unknown; showcaseBackLabel?: unknown } | null;
+  const suppliedBackTo = typeof navigationState?.showcaseBackTo === 'string' && navigationState.showcaseBackTo.startsWith('/showcase')
+    ? navigationState.showcaseBackTo
+    : null;
+  const suppliedBackLabel = typeof navigationState?.showcaseBackLabel === 'string' ? navigationState.showcaseBackLabel : null;
+  const backTo = suppliedBackTo ?? (isOwner ? '/showcase/manage' : canModerate ? '/showcase/moderation' : '/showcase');
+  const backLabel = suppliedBackLabel ?? (isOwner ? 'My Showcase' : canModerate ? 'Showcase Moderation' : 'Project Showcase');
+  const [cover, ...gallery] = showcase.media;
+  const hasStory = [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
 
   const applyDecision = () => {
     void queryClient.invalidateQueries({ queryKey: ['showcase', 'moderation'] });
@@ -69,73 +92,68 @@ export default function ShowcaseDetail() {
   };
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-4 sm:p-8">
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       <Link
-        to={isOwner ? '/showcase/manage' : canModerate ? '/showcase/moderation' : '/'}
+        to={backTo}
         className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-700 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        {isOwner ? 'My Showcase' : canModerate ? 'Showcase Moderation' : 'Home'}
+        {backLabel}
       </Link>
 
-      <Card hover={false}>
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          {showcase.logoUrl ? (
-            <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 object-cover" />
-          ) : (
-            <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-primary-50 text-heading text-primary-700" aria-hidden="true">
-              {profile.projectName.charAt(0).toUpperCase()}
+      <Card hover={false} padding="p-0" className="overflow-hidden">
+        <div className="relative h-28 overflow-hidden bg-secondary-50 sm:h-32">
+          <span aria-hidden="true" className="absolute -right-8 -top-12 h-44 w-44 rounded-full border-[22px] border-secondary-100" />
+          <span aria-hidden="true" className="absolute bottom-0 right-40 h-12 w-12 rounded-t-full bg-primary-200" />
+        </div>
+        <div className="px-5 pb-6 sm:px-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
+            {showcase.logoUrl ? (
+              <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="-mt-10 h-24 w-24 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-soft ring-4 ring-white sm:-mt-12 sm:h-28 sm:w-28" />
+            ) : (
+              <div className="-mt-10 grid h-24 w-24 shrink-0 place-items-center rounded-2xl border border-secondary-100 bg-white text-display text-secondary shadow-soft ring-4 ring-white sm:-mt-12 sm:h-28 sm:w-28" aria-hidden="true">
+                {profile.projectName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1 sm:pb-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
+                {privileged && <ShowcaseStatusBadge status={showcase.status} />}
+              </div>
+              <h1 className="mt-2 break-words text-display text-secondary">{profile.projectName}</h1>
+              <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-slate-600">
+                <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
+                {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />Published {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
+              </p>
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
-              {privileged && <ShowcaseStatusBadge status={showcase.status} />}
-            </div>
-            <h1 className="mt-2 break-words text-display text-secondary">{profile.projectName}</h1>
-            {profile.description && <p className="mt-1 text-body-lg text-slate-600">{profile.description}</p>}
-            <p className="mt-2 text-body-sm text-slate-600">
-              {teamName}
-              {showcase.publishedAt ? ` · Published ${new Date(showcase.publishedAt).toLocaleDateString()}` : ''}
-            </p>
-            {showcase.links.length > 0 && (
-              <ul className="mt-4 flex flex-wrap gap-2">
-                {showcase.links.map((link) => (
-                  <li key={link.id}>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-body-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
-                    >
-                      {link.label}
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span className="sr-only">(opens in a new tab)</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+            {isOwner && showcase.canEdit && (
+              <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
+                <Button variant="outline" icon={Pencil}>Edit page</Button>
+              </Link>
             )}
           </div>
-          {isOwner && showcase.canEdit && (
-            <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
-              <Button variant="outline" icon={Pencil}>Edit page</Button>
-            </Link>
+
+          {profile.description && <p className="mt-5 max-w-3xl text-body-lg leading-relaxed text-slate-600">{profile.description}</p>}
+
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-4">
+            <Stat icon={Eye} label="views" value={showcase.viewCount} />
+            <Stat icon={Flame} label="interested" value={showcase.likeCount} />
+            <Stat icon={MessageSquare} label="comments" value={showcase.commentCount} />
+          </div>
+
+          {canModerate && (
+            <div className="mt-5 border-t border-slate-200 pt-4">
+              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
+              <ShowcaseModerationActions
+                showcaseId={showcase.id}
+                title={profile.projectName}
+                status={showcase.status}
+                wasEverPublished={showcase.publishedAt !== null}
+                onDecided={applyDecision}
+              />
+            </div>
           )}
         </div>
-
-        {canModerate && (
-          <div className="mt-5 border-t border-slate-200 pt-4">
-            <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
-            <ShowcaseModerationActions
-              showcaseId={showcase.id}
-              title={profile.projectName}
-              status={showcase.status}
-              wasEverPublished={showcase.publishedAt !== null}
-              onDecided={applyDecision}
-            />
-          </div>
-        )}
       </Card>
 
       {privileged && showcase.reviewNote && (
@@ -145,72 +163,114 @@ export default function ShowcaseDetail() {
         </div>
       )}
 
-      {showcase.media.length > 0 && (
-        <section aria-label="Screenshots">
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {showcase.media.map((item) => (
-              <li key={item.id}>
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-                  <img src={item.url} alt={item.caption ?? `${profile.projectName} screenshot`} loading="lazy" className="aspect-video w-full object-cover" />
-                  <span className="sr-only">(opens full size in a new tab)</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="min-w-0 space-y-6">
+          {cover && (
+            <section aria-label="Screenshots" className="space-y-3">
+              <a href={cover.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
+                <img src={cover.url} alt={cover.caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full object-cover" />
+                <span className="sr-only">(opens full size in a new tab)</span>
+              </a>
+              {gallery.length > 0 && (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {gallery.map((item) => (
+                    <li key={item.id}>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-slate-200 transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
+                        <img src={item.url} alt={item.caption ?? `${profile.projectName} screenshot`} loading="lazy" className="aspect-video w-full object-cover" />
+                        <span className="sr-only">(opens full size in a new tab)</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
-      <Card hover={false} className="space-y-6">
-        <Section title={PROJECT_PROFILE_LABELS.problem}>{profile.problem}</Section>
-        <Section title={PROJECT_PROFILE_LABELS.targetUsers}>{profile.targetUsers}</Section>
-        <Section title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</Section>
-        <Section title="What makes it different">{showcase.highlights}</Section>
-      </Card>
+          {hasStory && (
+            <Card hover={false} className="space-y-7">
+              <StoryBlock icon={Target} title={PROJECT_PROFILE_LABELS.problem}>{profile.problem}</StoryBlock>
+              <StoryBlock icon={UserRound} title={PROJECT_PROFILE_LABELS.targetUsers}>{profile.targetUsers}</StoryBlock>
+              <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
+              <StoryBlock icon={Sparkles} title="What makes it different">{showcase.highlights}</StoryBlock>
+            </Card>
+          )}
 
-      {members.length > 0 && (
-        <Card hover={false}>
-          <Card.Header>
-            <Card.Title icon={Users}>Team</Card.Title>
-          </Card.Header>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {members.map((member) => (
-              <li key={`${member.fullName}-${member.role}`} className="flex items-center gap-3">
-                {member.avatarUrl ? (
-                  <img src={member.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-                ) : (
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-50 text-body-sm font-semibold text-primary-700" aria-hidden="true">
-                    {member.fullName.charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-body font-medium text-secondary">{member.fullName}</p>
-                  <p className="text-caption text-slate-600">{member.role}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+          {privileged && history.length > 0 && (
+            <Card hover={false}>
+              <Card.Header>
+                <Card.Title>Review history</Card.Title>
+              </Card.Header>
+              <ol className="space-y-4 border-l-2 border-slate-200 pl-5">
+                {history.map((entry) => (
+                  <li key={`${entry.createdAt}-${entry.toStatus}`} className="relative text-body-sm">
+                    <span aria-hidden="true" className="absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
+                    <p className="text-slate-700">
+                      <span className="font-semibold text-secondary">{entry.actorName}</span>
+                      {' '}moved the page from {entry.fromStatus} to {entry.toStatus}
+                    </p>
+                    <p className="text-caption text-slate-500">{formatDateTime(entry.createdAt)}</p>
+                    {entry.note && <p className="mt-1 whitespace-pre-line text-slate-600">{entry.note}</p>}
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          )}
+        </div>
 
-      {privileged && history.length > 0 && (
-        <Card hover={false}>
-          <Card.Header>
-            <Card.Title>Review history</Card.Title>
-          </Card.Header>
-          <ol className="space-y-3">
-            {history.map((entry) => (
-              <li key={`${entry.createdAt}-${entry.toStatus}`} className="text-body-sm">
-                <p className="text-slate-700">
-                  <span className="font-semibold text-secondary">{entry.actorName}</span>
-                  {' '}moved the page from {entry.fromStatus} to {entry.toStatus}
-                  <span className="text-slate-600"> · {formatDateTime(entry.createdAt)}</span>
-                </p>
-                {entry.note && <p className="mt-0.5 whitespace-pre-line text-slate-600">{entry.note}</p>}
-              </li>
-            ))}
-          </ol>
-        </Card>
-      )}
+        <aside className="space-y-6 lg:sticky lg:top-6">
+          {showcase.links.length > 0 && (
+            <Card hover={false} padding="p-5">
+              <Card.Header className="mb-3">
+                <Card.Title icon={ExternalLink}>Links</Card.Title>
+              </Card.Header>
+              <ul className="space-y-2">
+                {showcase.links.map((link) => (
+                  <li key={link.id}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-body-sm font-medium text-slate-700 transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
+                    >
+                      <span className="min-w-0 truncate">{link.label}</span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-caption text-slate-500">
+                        {link.linkType}
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {members.length > 0 && (
+            <Card hover={false} padding="p-5">
+              <Card.Header className="mb-3">
+                <Card.Title icon={Users}>Team</Card.Title>
+              </Card.Header>
+              <ul className="space-y-3">
+                {members.map((member) => (
+                  <li key={`${member.fullName}-${member.role}`} className="flex items-center gap-3">
+                    {member.avatarUrl ? (
+                      <img src={member.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary-50 text-body-sm font-semibold text-secondary" aria-hidden="true">
+                        {member.fullName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-body font-medium text-secondary">{member.fullName}</p>
+                      <p className="text-caption text-slate-600">{member.role}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </aside>
+      </div>
     </main>
   );
 }

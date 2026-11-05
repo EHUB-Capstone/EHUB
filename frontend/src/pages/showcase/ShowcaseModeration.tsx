@@ -114,6 +114,7 @@ export default function ShowcaseModeration() {
                       <h2 className="mt-1 break-words text-subheading text-secondary">
                         <Link
                           to={`/showcase/${item.id}`}
+                          state={{ showcaseBackTo: '/showcase/moderation', showcaseBackLabel: 'Showcase Moderation' }}
                           className="after:absolute after:inset-0 after:content-[''] hover:text-primary-700 focus-visible:outline-none focus-visible:underline"
                         >
                           {item.projectName}
