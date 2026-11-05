@@ -65,8 +65,18 @@ ehub_load_config() {
 
     BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-26}"
     DISK_ALERT_PERCENT="${DISK_ALERT_PERCENT:-75}"
-    if [[ ! "${BACKUP_MAX_AGE_HOURS}" =~ ^[0-9]+$ || ! "${DISK_ALERT_PERCENT}" =~ ^[0-9]+$ ]]; then
-        echo "BACKUP_MAX_AGE_HOURS and DISK_ALERT_PERCENT must be whole numbers." >&2
+    DISK_CRITICAL_PERCENT="${DISK_CRITICAL_PERCENT:-90}"
+    DISK_WARN_COOLDOWN_HOURS="${DISK_WARN_COOLDOWN_HOURS:-24}"
+    DISK_CRITICAL_COOLDOWN_HOURS="${DISK_CRITICAL_COOLDOWN_HOURS:-3}"
+    for name in BACKUP_MAX_AGE_HOURS DISK_ALERT_PERCENT DISK_CRITICAL_PERCENT \
+        DISK_WARN_COOLDOWN_HOURS DISK_CRITICAL_COOLDOWN_HOURS; do
+        if [[ ! "${!name}" =~ ^[0-9]+$ ]]; then
+            echo "${name} must be a whole number." >&2
+            return 1
+        fi
+    done
+    if (( DISK_CRITICAL_PERCENT <= DISK_ALERT_PERCENT )); then
+        echo "DISK_CRITICAL_PERCENT must be greater than DISK_ALERT_PERCENT." >&2
         return 1
     fi
 }
