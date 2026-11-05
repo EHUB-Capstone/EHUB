@@ -51,7 +51,7 @@ public sealed partial class ProjectDataIntegrationTests
             admin.StartupIndustries.Select(bucket => (bucket.Name, bucket.Count)).Should().Equal(("EdTech", 1), ("Health Tech", 1));
             admin.UnspecifiedStartupIndustryCount.Should().Be(3);
             admin.Outcomes.Select(bucket => (bucket.Name, bucket.Count)).Should().Equal(
-                ("Potential", 1), ("Internally Funded", 1), ("Externally Funded", 0), ("Awarded", 0));
+                ("Potential", 1), ("Internally Funded", 1), ("Externally Funded", 0), ("Awarded", 0), ("Pitching", 0), ("Demo", 0));
             admin.NoOutcomeCount.Should().Be(3);
 
             // A lecturer only counts the classes they teach, like the summary.
@@ -78,6 +78,8 @@ public sealed partial class ProjectDataIntegrationTests
                 distribution.Outcomes.Single(bucket => bucket.Name == "Internally Funded").Count.Should().Be(summary.InternallyFundedGroups, query);
                 distribution.Outcomes.Single(bucket => bucket.Name == "Externally Funded").Count.Should().Be(summary.ExternallyFundedGroups, query);
                 distribution.Outcomes.Single(bucket => bucket.Name == "Awarded").Count.Should().Be(summary.AwardedGroups, query);
+                distribution.Outcomes.Single(bucket => bucket.Name == "Pitching").Count.Should().Be(summary.PitchingGroups, query);
+                distribution.Outcomes.Single(bucket => bucket.Name == "Demo").Count.Should().Be(summary.DemoGroups, query);
             }
 
             var filtered = await GetDistribution(client, world.Admin, SystemRoles.Admin, $"{search}&achievement=Potential");
@@ -130,6 +132,23 @@ public sealed partial class ProjectDataIntegrationTests
 
             (await GetPage(client, world.Admin, SystemRoles.Admin, $"{search}&major=BIT_AI")).Items
                 .Select(item => item.ProjectId).Should().Equal(world.ProjectA);
+
+            // Several majors are alternatives: any one matching keeps the project, UNSPECIFIED included.
+            foreach (var (majors, expected) in new[]
+            {
+                ("major=BIT_SE&major=BEN", 1), ("major=BIT_SE&major=BIT_AI", 1),
+                ("major=BIT_SE&major=UNSPECIFIED", 4), ("major=BEN&major=UNSPECIFIED", 4),
+            })
+            {
+                var query = $"{search}&{majors}";
+                (await GetPage(client, world.Admin, SystemRoles.Admin, query)).TotalItems.Should().Be(expected, query);
+                (await GetSummary(client, world.Admin, SystemRoles.Admin, query)).TotalGroups.Should().Be(expected, query);
+                (await GetDistribution(client, world.Admin, SystemRoles.Admin, query)).TotalGroups.Should().Be(expected, query);
+            }
+
+            // One unknown major among valid ones still rejects the request.
+            (await Send(client, world.Admin, SystemRoles.Admin, HttpMethod.Get, $"/api/project-data?{search}&major=BIT_SE&major=NOPE"))
+                .StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
             // A lecturer's scope still applies on top of the filter.
             (await GetPage(client, world.Lecturer, SystemRoles.Lecturer, $"{search}&major=UNSPECIFIED")).TotalItems.Should().Be(3);

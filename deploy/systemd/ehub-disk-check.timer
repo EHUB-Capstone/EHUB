@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly check of EHUB disk usage
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+Unit=ehub-disk-check.service
+
+[Install]
+WantedBy=timers.target

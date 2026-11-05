@@ -3,13 +3,17 @@ import type { KeyboardEvent } from 'react';
 import { Check, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { cn } from '../../../utils/cn';
-import { PROJECT_DATA_SEMESTER_TERMS } from '../../../types/projectData';
+import { COMPETITION_STAGE_LABELS, PROJECT_COMPETITION_STAGES, PROJECT_DATA_SEMESTER_TERMS } from '../../../types/projectData';
 import {
   FILTER_LABELS,
   PROJECT_DATA_SEARCH_MAX_LENGTH,
   activeFilterKeys,
+  activeFilterValues,
   hasActiveSearchOrFilters,
+  removeFilterValue,
+  toggleFilterValue,
 } from '../../../utils/projectData';
+import type { FilterKey } from '../../../utils/projectData';
 import { majorLabel } from '../../../utils/projectDistribution';
 import type { ProjectDataFilterOptions, ProjectDataQuery } from '../../../types/projectData';
 
@@ -24,64 +28,81 @@ interface SelectFieldProps {
   options: SelectOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
-  /** Renders the select on its own (accessible name from `label`) with `allLabel` as the empty choice. */
-  compact?: boolean;
-  allLabel?: string;
+  allLabel: string;
 }
 
-function SelectField({ label, value, options, onChange, disabled, compact = false, allLabel = 'All' }: SelectFieldProps) {
-  const id = useId();
+/** A native single-choice select for the short top-row lists; its accessible name comes from `label`. */
+function SelectField({ label, value, options, onChange, disabled, allLabel }: SelectFieldProps) {
   // A value coming from a shared URL must stay visible even when it is not among the loaded options.
   const items = value && !options.some(option => option.value === value)
     ? [{ value, label: value }, ...options]
     : options;
 
-  if (compact) {
-    return (
-      <select
-        value={value}
-        disabled={disabled}
-        aria-label={label}
-        onChange={event => onChange(event.target.value)}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-      >
-        <option value="">{allLabel}</option>
-        {items.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    );
-  }
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      aria-label={label}
+      onChange={event => onChange(event.target.value)}
+      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+    >
+      <option value="">{allLabel}</option>
+      {items.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+  );
+}
+
+interface MultiSelectFieldProps {
+  label: string;
+  values: string[];
+  options: SelectOption[];
+  onChange: (values: string[]) => void;
+  disabled?: boolean;
+}
+
+/** A labelled filter that accepts any number of values; no value means "All". */
+function MultiSelectField({ label, values, options, onChange, disabled }: MultiSelectFieldProps) {
+  const id = useId();
+  // Values coming from a shared URL must stay visible even when they are not among the loaded options.
+  const known = new Set(options.map(option => option.value));
+  const extras = values.filter(value => !known.has(value)).map(value => ({ value, label: value }));
+  const items = extras.length > 0 ? [...extras, ...options] : options;
 
   return (
     <div className="min-w-0">
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
-      <ListboxSelect id={id} value={value} items={items} disabled={disabled} allLabel={allLabel} onChange={onChange} />
+      <MultiListbox id={id} values={values} items={items} disabled={disabled} onChange={onChange} />
     </div>
   );
 }
 
-interface ListboxSelectProps {
+interface MultiListboxProps {
   id: string;
-  value: string;
+  values: string[];
   items: SelectOption[];
   disabled?: boolean;
-  allLabel: string;
-  onChange: (value: string) => void;
+  onChange: (values: string[]) => void;
 }
 
 /**
- * Replaces the native select for long option lists: the browser flips a native popup upwards
- * (covering the page) when it is taller than the space below, so this list always opens downwards
- * and scrolls inside a capped height.
+ * A dropdown with a check box per option, for picking several values. It stays open while values are toggled and
+ * closes on Escape, Tab or a click outside. A native multiple select is avoided on purpose: it needs Ctrl-click to pick
+ * more than one value, and the browser flips a native popup upwards (covering the page) when it is taller than the
+ * space below. This list always opens downwards and scrolls inside a capped height. The first row, "All", clears the
+ * selection.
  */
-function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: ListboxSelectProps) {
+function MultiListbox({ id, values, items, disabled, onChange }: MultiListboxProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const listId = `${id}-list`;
-  const entries = useMemo(() => [{ value: '', label: allLabel }, ...items], [allLabel, items]);
-  const selectedLabel = entries.find(entry => entry.value === value)?.label ?? allLabel;
+  const entries = useMemo(() => [{ value: '', label: 'All' }, ...items], [items]);
+  const selectedLabels = values.map(value => items.find(item => item.value === value)?.label ?? value);
+  const triggerLabel = selectedLabels.length === 0
+    ? 'All'
+    : selectedLabels.length === 1 ? selectedLabels[0] : `${selectedLabels[0]} +${selectedLabels.length - 1}`;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -101,7 +122,8 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
   }, [open, activeIndex, listId]);
 
   const openList = () => {
-    setActiveIndex(Math.max(0, entries.findIndex(entry => entry.value === value)));
+    const firstSelected = entries.findIndex(entry => entry.value !== '' && values.includes(entry.value));
+    setActiveIndex(Math.max(0, firstSelected));
     setOpen(true);
   };
 
@@ -110,10 +132,14 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
     trigger.current?.focus();
   };
 
-  const choose = (index: number) => {
+  const toggle = (index: number) => {
     const entry = entries[index];
-    if (entry && entry.value !== value) onChange(entry.value);
-    close();
+    if (!entry) return;
+    if (entry.value === '') {
+      if (values.length > 0) onChange([]);
+      return;
+    }
+    onChange(toggleFilterValue(values, entry.value));
   };
 
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -123,7 +149,7 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
       case 'Home': setActiveIndex(0); break;
       case 'End': setActiveIndex(entries.length - 1); break;
       case 'Enter':
-      case ' ': choose(activeIndex); break;
+      case ' ': toggle(activeIndex); break;
       case 'Escape': close(); break;
       case 'Tab': setOpen(false); return;
       default: return;
@@ -141,6 +167,7 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
+        title={selectedLabels.length > 1 ? selectedLabels.join(', ') : undefined}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={event => {
           if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -150,7 +177,7 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
         }}
         className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
       >
-        <span className="truncate">{selectedLabel}</span>
+        <span className="truncate">{triggerLabel}</span>
         <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')} aria-hidden="true" />
       </button>
       {open && (
@@ -158,13 +185,15 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
           ref={list}
           id={listId}
           role="listbox"
+          aria-multiselectable="true"
+          aria-label={selectedLabels.length > 0 ? `Selected: ${selectedLabels.join(', ')}` : 'Nothing selected'}
           tabIndex={-1}
           aria-activedescendant={`${listId}-${activeIndex}`}
           onKeyDown={onListKeyDown}
           className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg outline-none"
         >
           {entries.map((entry, index) => {
-            const selected = entry.value === value;
+            const selected = entry.value === '' ? values.length === 0 : values.includes(entry.value);
             return (
               <div
                 key={entry.value || '__all'}
@@ -172,15 +201,23 @@ function ListboxSelect({ id, value, items, disabled, allLabel, onChange }: Listb
                 role="option"
                 aria-selected={selected}
                 onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => choose(index)}
+                onClick={() => toggle(index)}
                 className={cn(
-                  'flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm text-slate-700',
+                  'flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-slate-700',
                   index === activeIndex && 'bg-slate-100',
                   selected && 'font-semibold text-primary-700',
                 )}
               >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                    selected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white',
+                  )}
+                >
+                  {selected && <Check className="h-3 w-3" />}
+                </span>
                 <span className="truncate">{entry.label}</span>
-                {selected && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
               </div>
             );
           })}
@@ -238,11 +275,14 @@ export default function ProjectDataFilters({
       lecturers: (options?.lecturers ?? []).map(item => ({ value: item.userId, label: item.fullName })),
       mentors: [...mentorsByUser.entries()].map(([value, entry]) => ({ value, label: `${entry.name} (${entry.slots.join(', ')})` })),
       achievements: (options?.achievements ?? []).map(value => ({ value, label: value })),
+      competitions: (options?.competitions ?? []).map(value => ({ value, label: value })),
+      competitionStages: (options?.competitionStages ?? PROJECT_COMPETITION_STAGES).map(stage => ({ value: stage, label: COMPETITION_STAGE_LABELS[stage] })),
+      competitionYears: (options?.competitionYears ?? []).map(year => ({ value: String(year), label: String(year) })),
     };
   }, [options]);
 
-  const valueLabel = (key: (typeof activeKeys)[number]): string => {
-    const lookup: Record<string, SelectOption[]> = {
+  const valueLabel = (key: FilterKey, value: string): string => {
+    const lookup: Record<FilterKey, SelectOption[]> = {
       subjectCode: choices.subjects,
       semester: choices.terms,
       year: choices.years,
@@ -252,9 +292,11 @@ export default function ProjectDataFilters({
       lecturerId: choices.lecturers,
       mentorId: choices.mentors,
       achievement: choices.achievements,
+      competition: choices.competitions,
+      competitionStage: choices.competitionStages,
+      competitionYear: choices.competitionYears,
     };
-    const value = query[key];
-    return lookup[key]?.find(option => option.value === value)?.label ?? value;
+    return lookup[key].find(option => option.value === value)?.label ?? value;
   };
 
   return (
@@ -274,9 +316,9 @@ export default function ProjectDataFilters({
             className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <SelectField compact label="Filter by subject" allLabel="All Subjects" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
-        <SelectField compact label="Filter by semester" allLabel="All Semesters" value={query.semester} options={choices.terms} onChange={value => onChange({ semester: value as ProjectDataQuery['semester'] })} />
-        <SelectField compact label="Filter by year" allLabel="All Years" value={query.year} options={choices.years} disabled={disabled} onChange={value => onChange({ year: value })} />
+        <SelectField label="Filter by subject" allLabel="All Subjects" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
+        <SelectField label="Filter by semester" allLabel="All Semesters" value={query.semester} options={choices.terms} onChange={value => onChange({ semester: value as ProjectDataQuery['semester'] })} />
+        <SelectField label="Filter by year" allLabel="All Years" value={query.year} options={choices.years} disabled={disabled} onChange={value => onChange({ year: value })} />
         <Button
           variant="outline"
           icon={SlidersHorizontal}
@@ -290,12 +332,15 @@ export default function ProjectDataFilters({
       </div>
 
       <div id={advancedId} hidden={!showAdvanced} className={cn('mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', !showAdvanced && 'hidden')}>
-        <SelectField label="Group" value={query.group} options={choices.groups} disabled={disabled} onChange={value => onChange({ group: value })} />
-        <SelectField label="Startup industry" value={query.startupIndustry} options={choices.industries} disabled={disabled} onChange={value => onChange({ startupIndustry: value })} />
-        <SelectField label="Major" value={query.major} options={choices.majors} disabled={disabled} onChange={value => onChange({ major: value })} />
-        <SelectField label="Lecturer" value={query.lecturerId} options={choices.lecturers} disabled={disabled} onChange={value => onChange({ lecturerId: value })} />
-        <SelectField label="Mentor" value={query.mentorId} options={choices.mentors} disabled={disabled} onChange={value => onChange({ mentorId: value })} />
-        <SelectField label="Achievement" value={query.achievement} options={choices.achievements} disabled={disabled} onChange={value => onChange({ achievement: value as ProjectDataQuery['achievement'] })} />
+        <MultiSelectField label="Group" values={query.group} options={choices.groups} disabled={disabled} onChange={values => onChange({ group: values })} />
+        <MultiSelectField label="Startup industry" values={query.startupIndustry} options={choices.industries} disabled={disabled} onChange={values => onChange({ startupIndustry: values })} />
+        <MultiSelectField label="Major" values={query.major} options={choices.majors} disabled={disabled} onChange={values => onChange({ major: values })} />
+        <MultiSelectField label="Lecturer" values={query.lecturerId} options={choices.lecturers} disabled={disabled} onChange={values => onChange({ lecturerId: values })} />
+        <MultiSelectField label="Mentor" values={query.mentorId} options={choices.mentors} disabled={disabled} onChange={values => onChange({ mentorId: values })} />
+        <MultiSelectField label="Achievement" values={query.achievement} options={choices.achievements} disabled={disabled} onChange={values => onChange({ achievement: values as ProjectDataQuery['achievement'] })} />
+        <MultiSelectField label="Competition" values={query.competition} options={choices.competitions} disabled={disabled} onChange={values => onChange({ competition: values })} />
+        <MultiSelectField label="Competition stage" values={query.competitionStage} options={choices.competitionStages} disabled={disabled} onChange={values => onChange({ competitionStage: values as ProjectDataQuery['competitionStage'] })} />
+        <MultiSelectField label="Competition year" values={query.competitionYear} options={choices.competitionYears} disabled={disabled} onChange={values => onChange({ competitionYear: values })} />
       </div>
 
       {optionsError && (
@@ -315,19 +360,22 @@ export default function ProjectDataFilters({
               </button>
             </span>
           )}
-          {activeKeys.map(key => (
-            <span key={key} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs text-primary-700">
-              {FILTER_LABELS[key]}: {valueLabel(key)}
-              <button
-                type="button"
-                aria-label={`Remove ${FILTER_LABELS[key]} filter`}
-                onClick={() => onChange({ [key]: '' } as Partial<ProjectDataQuery>)}
-                className="rounded-full p-0.5 hover:bg-primary-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+          {activeFilterValues(query).map(({ key, value }) => {
+            const label = valueLabel(key, value);
+            return (
+              <span key={`${key}:${value}`} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs text-primary-700">
+                {FILTER_LABELS[key]}: {label}
+                <button
+                  type="button"
+                  aria-label={`Remove ${FILTER_LABELS[key]} filter ${label}`}
+                  onClick={() => onChange(removeFilterValue(query, key, value))}
+                  className="rounded-full p-0.5 hover:bg-primary-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
           <Button variant="ghost" size="xs" onClick={onClear}>Clear filters</Button>
         </div>
       )}

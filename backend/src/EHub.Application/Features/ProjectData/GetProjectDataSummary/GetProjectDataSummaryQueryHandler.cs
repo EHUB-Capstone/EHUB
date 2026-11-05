@@ -43,6 +43,8 @@ public sealed class GetProjectDataSummaryQueryHandler(IApplicationDbContext cont
                 InternallyFunded = group.Count(project => project.IsInternallyFunded),
                 ExternallyFunded = group.Count(project => project.IsExternallyFunded),
                 Awarded = group.Count(project => project.IsAwarded),
+                Pitching = group.Count(project => project.IsPitching),
+                Demo = group.Count(project => project.IsDemo),
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -53,6 +55,8 @@ public sealed class GetProjectDataSummaryQueryHandler(IApplicationDbContext cont
             InternallyFundedGroups = counts?.InternallyFunded ?? 0,
             ExternallyFundedGroups = counts?.ExternallyFunded ?? 0,
             AwardedGroups = counts?.Awarded ?? 0,
+            PitchingGroups = counts?.Pitching ?? 0,
+            DemoGroups = counts?.Demo ?? 0,
         });
     }
 }

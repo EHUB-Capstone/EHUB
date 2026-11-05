@@ -1,14 +1,15 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { ArrowRight, RefreshCw, Rocket } from 'lucide-react';
+import { ArrowRight, ChevronDown, RefreshCw, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../../components/ui/Button';
 import ConfirmDialog from '../../../components/ui/ConfirmDialog';
 import Modal from '../../../components/ui/Modal';
 import { PROJECT_ACHIEVEMENTS } from '../../../types/projectData';
-import type { ProjectAchievement, ProjectDataItem } from '../../../types/projectData';
+import type { ProjectAchievement, ProjectCompetitionEntryPayload, ProjectDataItem } from '../../../types/projectData';
 import {
   PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH,
   PROJECT_DATA_EMPTY_VALUE,
+  describeCompetitionDraft,
   describeIndustryDraft,
   displayText,
   normalizeNote,
@@ -16,12 +17,17 @@ import {
   removedAchievements,
   sameAchievements,
   sameNote,
+  toCompetitionDrafts,
   toggleAchievement,
 } from '../../../utils/projectData';
+import type { CompetitionDraftEntry } from '../../../utils/projectData';
+import { cn } from '../../../utils/cn';
 import { ACHIEVEMENT_STYLES } from '../achievementStyles';
 import { useActiveStartupIndustries } from '../hooks/useActiveStartupIndustries';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectAchievementHistory from './ProjectAchievementHistory';
+import ProjectCompetitionBadges from './ProjectCompetitionBadges';
+import ProjectCompetitionEditor from './ProjectCompetitionEditor';
 import { MentorLabel } from './ProjectDataTable';
 import ProjectStartupIndustryEditor from './ProjectStartupIndustryEditor';
 import ProjectStartupIndustryHistory from './ProjectStartupIndustryHistory';
@@ -31,10 +37,11 @@ export interface ProjectDataSaveError {
   isConflict: boolean;
 }
 
-/** What a save sends: each part only when it changed, so achievements and industries stay independent. */
+/** What a save sends: each part only when it changed, so achievements, industries and competitions stay independent. */
 export interface ProjectDataChanges {
   achievements?: { labels: ProjectAchievement[]; note: string | null };
   startupIndustryIds?: string[];
+  competitions?: ProjectCompetitionEntryPayload[];
 }
 
 interface ProjectDataDetailModalProps {
@@ -47,6 +54,8 @@ interface ProjectDataDetailModalProps {
   onSave: (changes: ProjectDataChanges) => void;
   /** Error of the industries part of a save; `error` belongs to the achievements part. */
   industryError: ProjectDataSaveError | null;
+  /** Error of the competitions part of a save. */
+  competitionError: ProjectDataSaveError | null;
   onReload: () => void;
 }
 
@@ -56,6 +65,43 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</dt>
       <dd className="mt-1 break-words text-sm text-slate-700">{children}</dd>
     </div>
+  );
+}
+
+interface CollapsibleSectionProps {
+  headingId: string;
+  panelId: string;
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  /** Said next to the title while the section is closed, so a closed section still tells its state. */
+  summary: ReactNode;
+  /** Shown whether the section is open or not, e.g. a failed save that must not be hidden. */
+  outside?: ReactNode;
+  children: ReactNode;
+}
+
+/** A section whose whole title row opens and closes it. */
+function CollapsibleSection({ headingId, panelId, title, open, onToggle, summary, outside, children }: CollapsibleSectionProps) {
+  return (
+    <section aria-labelledby={headingId}>
+      <h3 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+        <button
+          id={headingId}
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="flex w-full items-center gap-2 rounded-lg py-1 text-left font-medium uppercase tracking-wider hover:text-slate-600 focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          {title}
+          {!open && <span className="text-xs font-normal normal-case tracking-normal text-slate-500">{summary}</span>}
+          <ChevronDown className={cn('ml-auto h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+        </button>
+      </h3>
+      <div id={panelId} hidden={!open}>{children}</div>
+      {outside}
+    </section>
   );
 }
 
@@ -77,10 +123,18 @@ export default function ProjectDataDetailModal({
   onClose,
   onSave,
   industryError,
+  competitionError,
   onReload,
 }: ProjectDataDetailModalProps) {
   const legendId = useId();
+  const achievementsPanelId = useId();
+  const competitionsHeadingId = useId();
+  const competitionsPanelId = useId();
   const navigate = useNavigate();
+  // The achievements section starts closed for every project; the id of the project it was opened for is kept, so
+  // switching to another project (or closing the dialog) closes it again.
+  const [achievementsOpenFor, setAchievementsOpenFor] = useState<string | null>(null);
+  const [competitionsOpenFor, setCompetitionsOpenFor] = useState<string | null>(null);
   // Edits belong to one version of one project; a new row version starts again from the saved labels.
   const itemKey = item ? `${item.projectId}:${item.rowVersion}` : '';
   const [draftState, setDraftState] = useState<{ key: string; labels: ProjectAchievement[]; note: string } | null>(null);
@@ -88,6 +142,8 @@ export default function ProjectDataDetailModal({
   // The industry pick is kept per project, not per version: saving the achievements first moves the version, and a
   // pick that then fails to save must not vanish.
   const [industryDraft, setIndustryDraft] = useState<{ projectId: string; ids: string[] } | null>(null);
+  // Same for the competition rows: kept per project, so a list that fails to save is not lost when another part saves.
+  const [competitionDraft, setCompetitionDraft] = useState<{ projectId: string; entries: CompetitionDraftEntry[] } | null>(null);
   const savedNote = item?.achievementNote ?? '';
   const draft = draftState?.key === itemKey ? draftState.labels : item?.achievements ?? [];
   const draftNote = draftState?.key === itemKey ? draftState.note : savedNote;
@@ -98,6 +154,9 @@ export default function ProjectDataDetailModal({
   const setConfirmingRemoval = (open: boolean) => setConfirmKey(open ? itemKey : null);
   // A closed dialog keeps no pick, so reopening the project starts from its saved industries.
   if (!item && industryDraft) setIndustryDraft(null);
+  if (!item && achievementsOpenFor) setAchievementsOpenFor(null);
+  if (!item && competitionsOpenFor) setCompetitionsOpenFor(null);
+  if (!item && competitionDraft) setCompetitionDraft(null);
   const industryOptions = useActiveStartupIndustries(canManage && Boolean(item));
   const industryView = describeIndustryDraft(
     item?.startupIndustries ?? [],
@@ -105,6 +164,11 @@ export default function ProjectDataDetailModal({
     industryDraft && industryDraft.projectId === item?.projectId ? industryDraft.ids : null,
     industryOptions.isLoaded,
   );
+
+  // Rows the user has not touched come from the saved list; a draft of another project is never shown.
+  const competitionEntries = competitionDraft && competitionDraft.projectId === item?.projectId
+    ? competitionDraft.entries
+    : null;
 
   useEffect(() => {
     if (!item) return undefined;
@@ -119,15 +183,21 @@ export default function ProjectDataDetailModal({
 
   const achievementsDirty = !sameAchievements(draft, item.achievements) || !sameNote(effectiveNote, savedNote);
   const industriesDirty = industryView.dirty;
-  const dirty = achievementsDirty || industriesDirty;
-  // An invalid industry pick blocks the whole save, so a half-applied change never needs explaining.
-  const blocked = Boolean(industryView.validationMessage);
+  const competitionRows = competitionEntries ?? toCompetitionDrafts(item.competitions);
+  const competitionView = describeCompetitionDraft(item.competitions, competitionRows);
+  const competitionsDirty = competitionEntries !== null && competitionView.dirty;
+  const dirty = achievementsDirty || industriesDirty || competitionsDirty;
+  // An invalid industry pick or competition row blocks the whole save, so a half-applied change never needs explaining.
+  const blocked = Boolean(industryView.validationMessage) || (competitionsDirty && competitionView.blocked);
   const removed = removedAchievements(item.achievements, draft);
+  const achievementsOpen = achievementsOpenFor === item.projectId;
+  const competitionsOpen = competitionsOpenFor === item.projectId;
   // Reloading shows what others saved, so a pick made against the old data is dropped like the label draft is.
-  const reload = () => { setIndustryDraft(null); onReload(); };
+  const reload = () => { setIndustryDraft(null); setCompetitionDraft(null); onReload(); };
   const save = () => onSave({
     ...(achievementsDirty ? { achievements: { labels: draft, note: normalizeNote(effectiveNote) } } : {}),
     ...(industriesDirty ? { startupIndustryIds: industryView.selectedIds } : {}),
+    ...(competitionsDirty ? { competitions: competitionView.payload } : {}),
   });
   const submit = () => {
     if (!dirty || blocked || isSaving) return;
@@ -182,8 +252,24 @@ export default function ProjectDataDetailModal({
 
           {canManage && <ProjectStartupIndustryHistory key={item.projectId} projectId={item.projectId} rowVersion={item.rowVersion} />}
 
-          <section aria-labelledby={legendId}>
-            <h3 id={legendId} className="text-xs font-medium uppercase tracking-wider text-slate-400">Achievements</h3>
+          <CollapsibleSection
+            headingId={legendId}
+            panelId={achievementsPanelId}
+            title="Achievements"
+            open={achievementsOpen}
+            onToggle={() => setAchievementsOpenFor(achievementsOpen ? null : item.projectId)}
+            summary={`${draft.length > 0 ? `${draft.length} selected` : 'None selected'}${achievementsDirty ? ' · unsaved changes' : ''}`}
+            outside={error && (
+              <div role="alert" className="mt-3 rounded-xl border border-danger-light bg-danger-50 p-3 text-sm text-danger">
+                <p>{error.message}</p>
+                {error.isConflict && (
+                  <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={reload} className="mt-2">
+                    Reload latest data
+                  </Button>
+                )}
+              </div>
+            )}
+          >
             {canManage ? (
               <fieldset className="mt-2 space-y-2" disabled={isSaving} aria-labelledby={legendId}>
                 {PROJECT_ACHIEVEMENTS.map(name => {
@@ -226,18 +312,39 @@ export default function ProjectDataDetailModal({
             {item.achievementsUpdatedAtUtc && (
               <ProjectAchievementHistory key={item.projectId} projectId={item.projectId} rowVersion={item.rowVersion} />
             )}
+          </CollapsibleSection>
 
-            {error && (
+          <CollapsibleSection
+            headingId={competitionsHeadingId}
+            panelId={competitionsPanelId}
+            title="Competitions"
+            open={competitionsOpen}
+            onToggle={() => setCompetitionsOpenFor(competitionsOpen ? null : item.projectId)}
+            summary={`${competitionRows.length > 0 ? `${competitionRows.length} ${competitionRows.length === 1 ? 'entry' : 'entries'}` : 'None'}${competitionsDirty ? (competitionView.blocked ? ' · fix the errors' : ' · unsaved changes') : ''}`}
+            outside={competitionError && (
               <div role="alert" className="mt-3 rounded-xl border border-danger-light bg-danger-50 p-3 text-sm text-danger">
-                <p>{error.message}</p>
-                {error.isConflict && (
+                <p>{competitionError.message}</p>
+                {competitionError.isConflict && (
                   <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={reload} className="mt-2">
                     Reload latest data
                   </Button>
                 )}
               </div>
             )}
-          </section>
+          >
+            {canManage ? (
+              <ProjectCompetitionEditor
+                entries={competitionRows}
+                view={competitionView}
+                disabled={isSaving}
+                onChange={entries => setCompetitionDraft({ projectId: item.projectId, entries })}
+              />
+            ) : (
+              <div className="mt-2">
+                <ProjectCompetitionBadges competitions={item.competitions} visible={item.competitions.length} />
+              </div>
+            )}
+          </CollapsibleSection>
 
           <div className="border-t border-slate-100 pt-4">
             <Button

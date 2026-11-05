@@ -69,6 +69,36 @@ public sealed partial class ProjectDataIntegrationTests
             (await GetTrends(client, world.Admin, SystemRoles.Admin, $"{search}&achievement=Internally%20Funded")).Semesters
                 .Select(row => (row.SemesterCode, row.TotalGroups)).Should().Equal((world.NewSemesterCode, 1));
 
+            // The project data export uses the same official scores, so its summary sheets match the trend numbers.
+            var exported = await Export(client, world.Admin, SystemRoles.Admin, search);
+            exported.Data("Theo kỳ").Select(row => (row[0], row[1], row[2])).Should().Equal(
+                trends.Semesters.Select(row => (row.SemesterCode, row.TotalGroups.ToString(), row.GradedGroups.ToString())));
+            exported.Data("Theo kỳ").Select(row => decimal.Parse(row[3], System.Globalization.CultureInfo.InvariantCulture))
+                .Should().Equal(trends.Semesters.Select(row => row.AverageScore!.Value));
+            exported.Data("Dự án").Where(row => row[13].Length > 0)
+                .Select(row => decimal.Parse(row[13], System.Globalization.CultureInfo.InvariantCulture))
+                .Order().Should().Equal([6.0m, 7.6m, 9.0m], "each graded project shows its official score");
+            exported.Metric("Đã có điểm chính thức").Should().Be("3");
+
+            // The competition filters narrow the trend like the table: only the project that entered FShark is left.
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<EHub.Infrastructure.Persistence.AppDbContext>();
+                context.ProjectCompetitionEntries.Add(new EHub.Domain.Entities.ProjectCompetitionEntry
+                {
+                    ProjectId = world.OldProjectOne,
+                    Competition = "FShark",
+                    Year = 2026,
+                    Stage = EHub.Domain.Enums.CompetitionStage.Final,
+                });
+                await context.SaveChangesAsync();
+            }
+
+            (await GetTrends(client, world.Admin, SystemRoles.Admin, $"{search}&competition=FShark&competitionStage=Final")).Semesters
+                .Select(row => (row.SemesterCode, row.TotalGroups)).Should().Equal((world.OldSemesterCode, 1));
+            (await GetTrends(client, world.Admin, SystemRoles.Admin, $"{search}&competition=FShark&competitionYear=2025")).Semesters
+                .Should().BeEmpty();
+
             // Lecturers only see classes they teach.
             (await GetTrends(client, world.Lecturer, SystemRoles.Lecturer, search)).Semesters.Should().HaveCount(2);
             (await GetTrends(client, world.Outsider, SystemRoles.Lecturer, search)).Semesters.Should().BeEmpty();
@@ -78,6 +108,10 @@ public sealed partial class ProjectDataIntegrationTests
             var continued = await GetTrends(client, world.Admin, SystemRoles.Admin, search);
             continued.Semesters.First().Should().BeEquivalentTo(older);
             continued.Semesters.Last().TotalGroups.Should().Be(3);
+
+            // A competition entry belongs to the year it was entered in, so it is not copied to the continued project.
+            (await GetTrends(client, world.Admin, SystemRoles.Admin, $"{search}&competition=FShark")).Semesters
+                .Select(row => row.SemesterCode).Should().Equal(world.OldSemesterCode);
             continued.Semesters.Last().PotentialGroups.Should().Be(2);
 
             // Unpublishing a component takes the group out of the official score.

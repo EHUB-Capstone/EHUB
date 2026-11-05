@@ -33,12 +33,12 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(p => p.Name)
             .HasColumnName("name")
-            .HasMaxLength(200)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(p => p.Description)
             .HasColumnName("description")
-            .HasMaxLength(2000);
+            .HasMaxLength(300);
 
         builder.Property(p => p.Problem)
             .HasColumnName("problem")
@@ -88,6 +88,14 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(p => p.IsAwarded)
             .HasColumnName("is_awarded")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsPitching)
+            .HasColumnName("is_pitching")
+            .HasDefaultValue(false);
+
+        builder.Property(p => p.IsDemo)
+            .HasColumnName("is_demo")
             .HasDefaultValue(false);
 
         builder.Property(p => p.AchievementNote)

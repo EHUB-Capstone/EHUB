@@ -196,6 +196,49 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
     }
 
     [Fact]
+    public async Task MultiValueFilters_MatchAnyValueAndStillNarrowAcrossFilters()
+    {
+        var world = await SeedAsync();
+        try
+        {
+            using var client = factory.CreateClient();
+            var baseQuery = $"search={world.Token}";
+            var groupA = $"{world.GroupPrefix.ToLowerInvariant()}10";
+
+            // Values of one filter are alternatives; an unknown value next to a known one does not hide the match.
+            (await Ids(client, world, $"{baseQuery}&group={groupA}&group=no-such-group")).Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"{baseQuery}&startupIndustry=health tech&startupIndustry=no-such-industry"))
+                .Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"{baseQuery}&achievement=Awarded&achievement=Internally%20Funded"))
+                .Should().Equal(world.ProjectA);
+            (await Ids(client, world, $"{baseQuery}&achievement=Awarded&achievement=Externally%20Funded")).Should().BeEmpty();
+
+            (await Ids(client, world, $"{baseQuery}&lecturerId={world.CoLecturer.Id}&lecturerId={world.Outsider.Id}"))
+                .Should().BeEquivalentTo([world.ProjectA, world.ProjectOutsider]);
+
+            // The displayed mentor of A (enterprise slot) and of the completed class B; the early-ended one never matches.
+            (await Ids(client, world, $"{baseQuery}&mentorId={world.EnterpriseMentor.Id}&mentorId={world.HistoricalMentor.Id}"))
+                .Should().BeEquivalentTo([world.ProjectA, world.ProjectB]);
+            (await Ids(client, world, $"{baseQuery}&mentorId={world.EarlyEndedMentor.Id}&mentorId={world.HistoricalMentor.Id}"))
+                .Should().Equal(world.ProjectB);
+
+            // Different filters still combine with AND, and the summary and distribution see the same rows.
+            var combined = $"{baseQuery}&mentorId={world.EnterpriseMentor.Id}&mentorId={world.HistoricalMentor.Id}&subjectCode={world.CourseCode}";
+            var combinedIds = await Ids(client, world, combined);
+            combinedIds.Should().NotContain(world.ProjectOutsider);
+            (await GetSummary(client, world.Admin, SystemRoles.Admin, combined)).TotalGroups.Should().Be(combinedIds.Count);
+
+            // A lecturer's scope still applies on top of the filter: another lecturer's class stays hidden.
+            (await GetPage(client, world.Lecturer, SystemRoles.Lecturer, $"{baseQuery}&lecturerId={world.Outsider.Id}&lecturerId={world.CoLecturer.Id}"))
+                .Items.Select(item => item.ProjectId).Should().NotContain(world.ProjectOutsider);
+        }
+        finally
+        {
+            await CleanupAsync(world);
+        }
+    }
+
+    [Fact]
     public async Task Pagination_Sorting_AreStableAndCountDistinctProjects()
     {
         var world = await SeedAsync(extraProjects: 12);
@@ -364,7 +407,7 @@ public sealed partial class ProjectDataIntegrationTests(CustomWebApplicationFact
             options.Lecturers.Select(item => item.UserId).Should().Contain([world.Lecturer.Id, world.Outsider.Id]);
             options.Mentors.Should().Contain(item => item.UserId == world.HistoricalMentor.Id && item.Slot == "Enterprise");
             options.Mentors.Should().NotContain(item => item.UserId == world.EarlyEndedMentor.Id);
-            options.Achievements.Should().Equal("Potential", "Internally Funded", "Externally Funded", "Awarded");
+            options.Achievements.Should().Equal("Potential", "Internally Funded", "Externally Funded", "Awarded", "Pitching", "Demo");
             options.Years.Should().Contain(world.SemesterYear).And.BeInDescendingOrder();
         }
         finally

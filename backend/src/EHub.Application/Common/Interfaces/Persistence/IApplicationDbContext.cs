@@ -41,6 +41,7 @@ public interface IApplicationDbContext
     DbSet<ProjectDirectionReview> ProjectDirectionReviews { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectTag> ProjectTags { get; }
+    DbSet<ProjectCompetitionEntry> ProjectCompetitionEntries { get; }
     DbSet<ProjectActivityLog> ProjectActivityLogs { get; }
     DbSet<Checkpoint> Checkpoints { get; }
     DbSet<ClassCheckpointSchedule> ClassCheckpointSchedules { get; }
@@ -50,6 +51,7 @@ public interface IApplicationDbContext
     DbSet<SubmissionLink> SubmissionLinks { get; }
     DbSet<SubmissionRequirementContent> SubmissionRequirementContents { get; }
     DbSet<SubmissionFeedback> SubmissionFeedbacks { get; }
+    DbSet<SubmissionFileSummary> SubmissionFileSummaries { get; }
     DbSet<Rubric> Rubrics { get; }
     DbSet<RubricCriterion> RubricCriteria { get; }
     DbSet<Evaluation> Evaluations { get; }
@@ -91,6 +93,10 @@ public interface IApplicationDbContext
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
     DbSet<ProductFeedback> ProductFeedbacks { get; }
     DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments { get; }
+    DbSet<ShowcaseProject> ShowcaseProjects { get; }
+    DbSet<ShowcaseLink> ShowcaseLinks { get; }
+    DbSet<ShowcaseMedia> ShowcaseMedia { get; }
+    DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     void ClearChanges();

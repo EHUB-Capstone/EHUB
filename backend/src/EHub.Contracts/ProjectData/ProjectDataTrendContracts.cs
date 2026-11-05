@@ -26,6 +26,8 @@ public sealed class ProjectDataTrendRowResponse
     public int InternallyFundedGroups { get; init; }
     public int ExternallyFundedGroups { get; init; }
     public int AwardedGroups { get; init; }
+    public int PitchingGroups { get; init; }
+    public int DemoGroups { get; init; }
 
     /// <summary>
     /// Change since the previous semester of the same subject (or class code). Null for the earliest semester, or
@@ -36,6 +38,8 @@ public sealed class ProjectDataTrendRowResponse
     public int? InternallyFundedChange { get; init; }
     public int? ExternallyFundedChange { get; init; }
     public int? AwardedChange { get; init; }
+    public int? PitchingChange { get; init; }
+    public int? DemoChange { get; init; }
 }
 
 public sealed class ProjectDataTrendsResponse

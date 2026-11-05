@@ -153,6 +153,8 @@ export interface OutcomeChartRow {
   'Internally Funded': number;
   'Externally Funded': number;
   Awarded: number;
+  Pitching: number;
+  Demo: number;
 }
 
 export function toOutcomeChartData(trends: ProjectDataTrends): OutcomeChartRow[] {
@@ -162,6 +164,8 @@ export function toOutcomeChartData(trends: ProjectDataTrends): OutcomeChartRow[]
     'Internally Funded': row.internallyFundedGroups,
     'Externally Funded': row.externallyFundedGroups,
     Awarded: row.awardedGroups,
+    Pitching: row.pitchingGroups,
+    Demo: row.demoGroups,
   }));
 }
 

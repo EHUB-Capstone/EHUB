@@ -873,13 +873,13 @@ public sealed class CommitImportStudentsCommandHandler : ICommitImportStudentsCo
         var projectNames = DistinctNonEmpty(rows.Select(row => row.ProjectName));
         var zaloUrls = DistinctNonEmpty(rows.Select(row => row.ZaloGroupUrl));
         var descriptions = DistinctNonEmpty(rows.Select(row => row.ProjectDescription));
-        if (projectNames.Length != 1 || projectNames[0].Length is < 3 or > 200)
-            return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have one Project name between 3 and 200 characters.");
+        if (projectNames.Length != 1 || projectNames[0].Length is < 3 or > 100)
+            return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have one Project name between 3 and 100 characters.");
         if (zaloUrls.Length > 1 || (zaloUrls.Length == 1 && !IsValidZaloUrl(zaloUrls[0])))
             return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have at most one valid HTTPS zalo.me link.");
         if (descriptions.Length > 1 ||
-            (descriptions.Length == 1 && descriptions[0].Length is < 20 or > 2_000))
-            return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have at most one project description between 20 and 2000 characters.");
+            (descriptions.Length == 1 && descriptions[0].Length is < 20 or > 300))
+            return (ErrorCodes.ClassValidationError, $"Team '{groupName}' must have at most one project description between 20 and 300 characters.");
 
         return null;
     }

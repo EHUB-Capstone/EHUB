@@ -63,8 +63,10 @@ internal static class TeamDataDeletion
         await db.WeeklyTasks.IgnoreQueryFilters().Where(x => x.TeamId == teamId).ExecuteDeleteAsync(ct);
         await db.Milestones.IgnoreQueryFilters().Where(x => x.TeamId == teamId).ExecuteDeleteAsync(ct);
         await db.Shortcuts.IgnoreQueryFilters().Where(x => x.TeamId == teamId || projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
+        await db.SubmissionFileSummaries.IgnoreQueryFilters().Where(x => x.TeamId == teamId).ExecuteDeleteAsync(ct);
         await db.ProjectAnalyses.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
         await db.ProjectTags.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
+        await db.ProjectCompetitionEntries.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
         await db.ProjectActivityLogs.IgnoreQueryFilters().Where(x => projects.Contains(x.ProjectId)).ExecuteDeleteAsync(ct);
         await db.StartupLineages.IgnoreQueryFilters().Where(x => projects.Contains(x.OriginalProjectId) || projects.Contains(x.CurrentProjectId)).ExecuteDeleteAsync(ct);
         await db.DataBankFieldHistories.IgnoreQueryFilters().Where(x => datasets.Contains(x.DatasetId)).ExecuteDeleteAsync(ct);

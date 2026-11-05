@@ -126,8 +126,13 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
             rubric.TotalWeight = 100;
             rubric.UpdatedBy = currentUser.UserId;
 
-            var existingCriteriaByKey = rubric.Criteria
-                .ToDictionary(item => item.Key, StringComparer.OrdinalIgnoreCase);
+            AdoptLegacyCriteriaKeys(rubric.Criteria, input.Rubrics);
+            // A key is unique within a rubric on save, but criteria created before keys existed all have an empty one.
+            var existingCriteriaByKey = new Dictionary<string, RubricCriterion>(StringComparer.OrdinalIgnoreCase);
+            foreach (var existingCriterion in rubric.Criteria.Where(item => !string.IsNullOrWhiteSpace(item.Key)))
+            {
+                existingCriteriaByKey.TryAdd(existingCriterion.Key, existingCriterion);
+            }
             var retainedKeys = input.Rubrics
                 .Select(item => item.Key.Trim())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -253,6 +258,46 @@ public sealed class SynchronizeSubjectCheckpointsHandler(
 
         await context.SaveChangesAsync(cancellationToken);
         return await curriculumQuery.GetAsync(code, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gives the keys of the form to criteria that have none: those seeded before keys existed. A legacy criterion takes the
+    /// key of the submitted criterion with the same name, so its saved evaluations stay attached to it. Criteria that match
+    /// no submitted name are left without a key and are handled as removed.
+    /// </summary>
+    private static void AdoptLegacyCriteriaKeys(
+        IEnumerable<RubricCriterion> criteria,
+        IEnumerable<SubjectCriterionRequest> submitted)
+    {
+        var legacy = criteria.Where(item => string.IsNullOrWhiteSpace(item.Key)).ToList();
+        if (legacy.Count == 0)
+        {
+            return;
+        }
+
+        var usedKeys = criteria
+            .Where(item => !string.IsNullOrWhiteSpace(item.Key))
+            .Select(item => item.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var criterion in submitted)
+        {
+            var key = criterion.Key.Trim();
+            if (usedKeys.Contains(key))
+            {
+                continue;
+            }
+
+            var match = legacy.FirstOrDefault(item =>
+                string.Equals(item.Name?.Trim(), criterion.Label.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                continue;
+            }
+
+            match.Key = key;
+            usedKeys.Add(key);
+            legacy.Remove(match);
+        }
     }
 
     private static string? Validate(

@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Database, Loader2 } from 'lucide-react';
+import { Database, Download, Loader2 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import Button from '../../components/ui/Button';
 import PageHeader from '../../components/ui/PageHeader';
 import ProjectDataDetailModal from '../../features/project-data/components/ProjectDataDetailModal';
 import type { ProjectDataChanges, ProjectDataSaveError } from '../../features/project-data/components/ProjectDataDetailModal';
@@ -17,17 +18,19 @@ import { useProjectData } from '../../features/project-data/hooks/useProjectData
 import { useAuth } from '../../hooks/useAuth';
 import type { ProjectDataItem } from '../../types/projectData';
 import { parseApiError } from '../../utils/apiError';
-import { findItem, hasActiveSearchOrFilters, nextProjectDataSort } from '../../utils/projectData';
+import { downloadBlob, fileDateStamp } from '../../utils/downloadBlob';
+import { findItem, hasActiveSearchOrFilters, nextProjectDataSort, toggleAchievement } from '../../utils/projectData';
 
 const CONCURRENCY_CONFLICT_CODE = 'PROJECT_DATA_CONCURRENCY_CONFLICT';
 const WRITE_ROLES = ['ADMIN', 'LECTURER'];
 
 export default function ProjectData() {
   const { user } = useAuth();
-  const { query, tab, setTab, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, distribution, trends, options, updateAchievements, updateStartupIndustries } = useProjectData();
+  const { query, tab, setTab, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, distribution, trends, options, updateAchievements, updateCompetitions, exportProjectData, updateStartupIndustries } = useProjectData();
   const [selected, setSelected] = useState<ProjectDataItem | null>(null);
   const [saveError, setSaveError] = useState<ProjectDataSaveError | null>(null);
   const [industryError, setIndustryError] = useState<ProjectDataSaveError | null>(null);
+  const [competitionError, setCompetitionError] = useState<ProjectDataSaveError | null>(null);
   const [isReloading, setIsReloading] = useState(false);
 
   // The scope's subject list is fixed by the user's classes, so chart colors do not change when a filter narrows it.
@@ -43,21 +46,29 @@ export default function ProjectData() {
     setSelected(null);
     setSaveError(null);
     setIndustryError(null);
+    setCompetitionError(null);
     updateAchievements.reset();
+    updateCompetitions.reset();
     updateStartupIndustries.reset();
-  }, [updateAchievements, updateStartupIndustries]);
+  }, [updateAchievements, updateCompetitions, updateStartupIndustries]);
 
   const conflictMessage = 'This project was changed by someone else. Reload the latest data before saving again; your changes are kept until then.';
 
-  // Achievements and industries are separate requests: each is sent only when it changed, and one failing never undoes
-  // the other. Every save moves the project's row version, so the second request uses the version the first returned.
+  // Achievements, industries and competitions are separate requests: each is sent only when it changed, and one failing
+  // never undoes the others. Every save moves the project's row version, so the next request uses the version the
+  // previous one returned.
   const saveChanges = useCallback(async (changes: ProjectDataChanges) => {
-    if (!selected || updateAchievements.isPending || updateStartupIndustries.isPending) return;
+    if (!selected || updateAchievements.isPending || updateStartupIndustries.isPending || updateCompetitions.isPending) return;
     setSaveError(null);
     setIndustryError(null);
+    setCompetitionError(null);
     const projectId = selected.projectId;
     let rowVersion = selected.rowVersion;
-    let saved = 0;
+    const saved: string[] = [];
+    // After an earlier part was saved, the toast says so, so the user knows what still needs another try.
+    const failureToast = (what: string, isConflict: boolean, message: string) => toast.error(saved.length > 0
+      ? `${saved.join(' and ')} saved, but ${what} not: ${isConflict ? 'the project is out of date.' : message}`
+      : isConflict ? 'Project data is out of date.' : message);
 
     if (changes.achievements) {
       try {
@@ -66,7 +77,7 @@ export default function ProjectData() {
           payload: { achievements: changes.achievements.labels, note: changes.achievements.note, rowVersion },
         });
         rowVersion = result.rowVersion;
-        saved += 1;
+        saved.push('Achievements');
         setSelected(current => current && current.projectId === projectId
           ? {
               ...current,
@@ -92,7 +103,8 @@ export default function ProjectData() {
           projectId,
           payload: { startupIndustryIds: changes.startupIndustryIds, rowVersion },
         });
-        saved += 1;
+        rowVersion = result.rowVersion;
+        saved.push('Startup industries');
         setSelected(current => current && current.projectId === projectId
           ? { ...current, startupIndustries: result.startupIndustries, rowVersion: result.rowVersion }
           : current);
@@ -100,17 +112,43 @@ export default function ProjectData() {
         const parsed = parseApiError(error, 'Unable to update startup industries.');
         const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
         setIndustryError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
-        toast.error(saved > 0
-          ? `Achievements were saved, but the startup industries were not: ${isConflict ? 'the project is out of date.' : parsed.message}`
-          : isConflict ? 'Project data is out of date.' : parsed.message);
+        failureToast('the startup industries were', isConflict, parsed.message);
         return;
       }
     }
 
-    if (saved === 2) toast.success('Changes saved.');
-    else if (changes.achievements) toast.success('Achievements updated.');
-    else toast.success('Startup industries updated.');
-  }, [selected, updateAchievements, updateStartupIndustries]);
+    if (changes.competitions) {
+      try {
+        const result = await updateCompetitions.mutateAsync({
+          projectId,
+          payload: { entries: changes.competitions, rowVersion },
+        });
+        saved.push('Competitions');
+        setSelected(current => current && current.projectId === projectId
+          ? { ...current, competitions: result.competitions, rowVersion: result.rowVersion }
+          : current);
+      } catch (error) {
+        const parsed = parseApiError(error, 'Unable to update competitions.');
+        const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
+        setCompetitionError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
+        failureToast('the competitions were', isConflict, parsed.message);
+        return;
+      }
+    }
+
+    if (saved.length > 0) toast.success(saved.length > 1 ? 'Changes saved.' : `${saved[0]} updated.`);
+  }, [selected, updateAchievements, updateCompetitions, updateStartupIndustries]);
+
+  const downloadProjectData = useCallback(async () => {
+    if (exportProjectData.isPending) return;
+    try {
+      const blob = await exportProjectData.mutateAsync(query);
+      downloadBlob(blob, `project-data-${fileDateStamp()}.xlsx`);
+      toast.success('Project data report downloaded.');
+    } catch (error) {
+      toast.error(parseApiError(error, 'Failed to export the project data report.').message);
+    }
+  }, [exportProjectData, query]);
 
   const reloadSelected = useCallback(async () => {
     if (!selected) return;
@@ -199,7 +237,17 @@ export default function ProjectData() {
       <PageHeader
         title="Project Data"
         subtitle="Projects across semesters with their groups, industries, staff and achievements."
-      />
+      >
+        <Button
+          variant="outline"
+          icon={Download}
+          isLoading={exportProjectData.isPending}
+          onClick={() => { void downloadProjectData(); }}
+          title="Download an Excel report (overview, projects, summaries and competitions) of the projects matching the current search and filters"
+        >
+          Export Project Data
+        </Button>
+      </PageHeader>
 
       <ProjectDataSummaryCards
         summary={summary.data}
@@ -207,9 +255,9 @@ export default function ProjectData() {
         isError={summary.isError}
         isRefreshing={summary.isFetching && !summary.isPending}
         onRetry={() => { void summary.refetch(); }}
-        achievement={query.achievement}
+        achievements={query.achievement}
         hasFilters={hasActiveSearchOrFilters(query)}
-        onSelectAchievement={achievement => updateQuery({ achievement })}
+        onToggleAchievement={achievement => updateQuery({ achievement: toggleAchievement(query.achievement, achievement) })}
         onClearFilters={clearFilters}
       />
 
@@ -271,12 +319,13 @@ export default function ProjectData() {
       <ProjectDataDetailModal
         item={selected}
         canManage={canManage}
-        isSaving={updateAchievements.isPending || updateStartupIndustries.isPending}
+        isSaving={updateAchievements.isPending || updateStartupIndustries.isPending || updateCompetitions.isPending}
         isReloading={isReloading}
         error={saveError}
         onClose={closeDetail}
         onSave={changes => { void saveChanges(changes); }}
         industryError={industryError}
+        competitionError={competitionError}
         onReload={() => { void reloadSelected(); }}
       />
     </div>

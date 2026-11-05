@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
 
@@ -9,7 +11,17 @@ const tones = {
   inset: 'bg-slate-50 border border-slate-200',
 };
 
-const Card = ({ children, className, hover = true, padding = 'p-6', tone = 'default', ...props }) => {
+interface CardProps {
+  children?: ReactNode;
+  className?: string;
+  hover?: boolean;
+  padding?: string;
+  tone?: string;
+  // Remaining props (onClick, aria-*, ...) are passed to the underlying element.
+  [key: string]: any;
+}
+
+const Card = ({ children, className, hover = true, padding = 'p-6', tone = 'default', ...props }: CardProps) => {
   const Comp = hover && tone === 'default' ? motion.div : 'div';
   const motionProps = hover && tone === 'default' ? {
     whileHover: { y: -2, boxShadow: '0 8px 30px -6px rgb(0 0 0 / 0.1)' },
@@ -32,13 +44,13 @@ const Card = ({ children, className, hover = true, padding = 'p-6', tone = 'defa
   );
 };
 
-const CardHeader = ({ children, className }) => (
+const CardHeader = ({ children, className }: { children?: ReactNode; className?: string }) => (
   <div className={cn('flex items-center justify-between mb-5', className)}>
     {children}
   </div>
 );
 
-const CardTitle = ({ children, className, icon: Icon }) => (
+const CardTitle = ({ children, className, icon: Icon }: { children?: ReactNode; className?: string; icon?: LucideIcon }) => (
   <div className={cn('flex items-center gap-2.5', className)}>
     {Icon && (
       <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center">

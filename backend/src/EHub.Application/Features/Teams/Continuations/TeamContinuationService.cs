@@ -442,6 +442,8 @@ public sealed class TeamContinuationService : ITeamContinuationService
                 IsInternallyFunded = sourceProject.IsInternallyFunded,
                 IsExternallyFunded = sourceProject.IsExternallyFunded,
                 IsAwarded = sourceProject.IsAwarded,
+                IsPitching = sourceProject.IsPitching,
+                IsDemo = sourceProject.IsDemo,
                 AchievementNote = sourceProject.AchievementNote,
                 AchievementsUpdatedAt = sourceProject.AchievementsUpdatedAt,
                 AchievementsUpdatedBy = sourceProject.AchievementsUpdatedBy,

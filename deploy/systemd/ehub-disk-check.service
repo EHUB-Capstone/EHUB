@@ -1,0 +1,10 @@
+[Unit]
+Description=EHUB disk usage guard
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/ehub/app
+ExecStart=/bin/bash /opt/ehub/app/scripts/production/check-disk-usage.sh production
+TimeoutStartSec=120
+Nice=10

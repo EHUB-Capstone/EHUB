@@ -59,43 +59,52 @@ internal static class ProjectDataQuery
             query = query.Where(project => project.Team.Class.Course.Code.ToLower() == code);
         }
 
-        if (Normalize(request.Group) is { } group)
+        // Every multi-value filter below keeps a project when ANY of its selected values matches.
+        if (NormalizeAll(request.Group, value => value.ToLower()) is { Length: > 0 } groups)
         {
-            var normalizedGroup = group.ToLower();
             query = query.Where(project => project.Team.TeamMembers.Any(member =>
                 member.CountsTowardActiveTeam &&
                 member.ClassStudent.SemesterGroupName != null &&
-                member.ClassStudent.SemesterGroupName.Trim().ToLower() == normalizedGroup));
+                groups.Contains(member.ClassStudent.SemesterGroupName.Trim().ToLower())));
         }
 
-        if (Normalize(request.StartupIndustry) is { } industry)
+        if (NormalizeAll(request.StartupIndustry, value => value.ToLower()) is { Length: > 0 } industries)
         {
-            var normalizedIndustry = industry.ToLower();
             query = query.Where(project => project.ProjectTags.Any(tag =>
                 tag.TagType == ProjectTagType.StartupField &&
-                tag.TagName.ToLower() == normalizedIndustry));
+                industries.Contains(tag.TagName.ToLower())));
         }
 
-        if (request.LecturerId is { } lecturerId)
-            query = query.Where(TaughtBy(lecturerId));
+        if (DistinctIds(request.LecturerId) is { Length: > 0 } lecturerIds)
+            query = query.Where(TaughtByAny(lecturerIds));
 
-        if (request.MentorId is { } mentorId)
-            query = query.Where(ProjectDataMentorResolver.HasDisplayedMentor(mentorId));
+        if (DistinctIds(request.MentorId) is { Length: > 0 } mentorIds)
+            query = query.Where(ProjectDataMentorResolver.HasDisplayedMentorAny(mentorIds));
 
-        if (Normalize(request.Achievement) is { } achievement)
+        var labels = NormalizeAll(request.Achievement, value => ProjectAchievementMapping.Canonicalize(value) ?? "");
+        if (labels.Any(label => label.Length > 0))
         {
-            query = ProjectAchievementMapping.Canonicalize(achievement) switch
-            {
-                ProjectAchievementNames.Potential => query.Where(project => project.IsHighPotential),
-                ProjectAchievementNames.InternallyFunded => query.Where(project => project.IsInternallyFunded),
-                ProjectAchievementNames.ExternallyFunded => query.Where(project => project.IsExternallyFunded),
-                ProjectAchievementNames.Awarded => query.Where(project => project.IsAwarded),
-                _ => query,
-            };
+            var potential = labels.Contains(ProjectAchievementNames.Potential);
+            var internallyFunded = labels.Contains(ProjectAchievementNames.InternallyFunded);
+            var externallyFunded = labels.Contains(ProjectAchievementNames.ExternallyFunded);
+            var awarded = labels.Contains(ProjectAchievementNames.Awarded);
+            var pitching = labels.Contains(ProjectAchievementNames.Pitching);
+            var demo = labels.Contains(ProjectAchievementNames.Demo);
+            query = query.Where(project =>
+                potential && project.IsHighPotential ||
+                internallyFunded && project.IsInternallyFunded ||
+                externallyFunded && project.IsExternallyFunded ||
+                awarded && project.IsAwarded ||
+                pitching && project.IsPitching ||
+                demo && project.IsDemo);
         }
 
-        if (Normalize(request.Major)?.ToUpperInvariant() is { } major)
-            query = ApplyMajorFilter(query, major);
+        if (NormalizeAll(request.Major, value => value.ToUpperInvariant()) is { Length: > 0 } majors)
+            query = ApplyMajorFilter(query, majors);
+
+        // The competition filters describe one entry (e.g. FShark + Final + 2026), so they are checked together.
+        if (ProjectCompetitionMapping.EntryFilter(request) is { } competitionEntry)
+            query = query.Where(project => project.ProjectCompetitionEntries.AsQueryable().Any(competitionEntry));
 
         if (Normalize(request.Search) is { } search)
             query = ApplySearch(query, search.ToLower());
@@ -111,35 +120,39 @@ internal static class ProjectDataQuery
         (major == ProjectDataDistributionRules.UnspecifiedMajor || MajorCodes.IsValid(major));
 
     /// <summary>
-    /// Keeps projects with at least one active team member whose effective major is <paramref name="major"/>. The
-    /// effective major is the enrollment major, or the profile major when the enrollment one is blank or UNDECLARED
-    /// (<c>StudentEnrollmentRules.ResolveEffectiveMajorCode</c>), written inline because EF cannot translate that method.
-    /// UNSPECIFIED also keeps projects with no active members, like the distribution does.
+    /// Keeps projects with at least one active team member whose effective major is any of <paramref name="majors"/>
+    /// (upper-case codes). The effective major is the enrollment major, or the profile major when the enrollment one
+    /// is blank or UNDECLARED (<c>StudentEnrollmentRules.ResolveEffectiveMajorCode</c>), written inline because EF
+    /// cannot translate that method. UNSPECIFIED also keeps projects with no active members, like the distribution does.
     /// </summary>
-    private static IQueryable<Project> ApplyMajorFilter(IQueryable<Project> query, string major)
+    private static IQueryable<Project> ApplyMajorFilter(IQueryable<Project> query, string[] majors)
     {
         const string undeclared = "UNDECLARED";
 
-        if (major == ProjectDataDistributionRules.UnspecifiedMajor)
-        {
-            var valid = MajorCodes.All;
-            return query.Where(project =>
-                !project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam) ||
-                project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam &&
-                    !(valid.Contains(member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper()) ||
-                      ((member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == "" ||
-                        member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == undeclared) &&
-                       member.ClassStudent.Student.MajorCode != null &&
-                       valid.Contains(member.ClassStudent.Student.MajorCode.Trim().ToUpper())))));
-        }
+        var codes = majors.Where(major => major != ProjectDataDistributionRules.UnspecifiedMajor).ToArray();
+        var includesUnspecified = codes.Length != majors.Length;
 
-        return query.Where(project => project.Team.TeamMembers.Any(member =>
+        Expression<Func<Project, bool>> hasCode = project => project.Team.TeamMembers.Any(member =>
             member.CountsTowardActiveTeam &&
-            (member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == major ||
+            (codes.Contains(member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper()) ||
              ((member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == "" ||
                member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == undeclared) &&
               member.ClassStudent.Student.MajorCode != null &&
-              member.ClassStudent.Student.MajorCode.Trim().ToUpper() == major))));
+              codes.Contains(member.ClassStudent.Student.MajorCode.Trim().ToUpper()))));
+
+        if (!includesUnspecified) return query.Where(hasCode);
+
+        var valid = MajorCodes.All;
+        Expression<Func<Project, bool>> isUnspecified = project =>
+            !project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam) ||
+            project.Team.TeamMembers.Any(member => member.CountsTowardActiveTeam &&
+                !(valid.Contains(member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper()) ||
+                  ((member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == "" ||
+                    member.ClassStudent.MajorCodeAtEnrollment.Trim().ToUpper() == undeclared) &&
+                   member.ClassStudent.Student.MajorCode != null &&
+                   valid.Contains(member.ClassStudent.Student.MajorCode.Trim().ToUpper()))));
+
+        return query.Where(codes.Length == 0 ? isUnspecified : ProjectDataExpressions.Or(hasCode, isUnspecified));
     }
 
     /// <summary>
@@ -265,6 +278,22 @@ internal static class ProjectDataQuery
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
+    /// <summary>Most values one multi-select filter may carry; keeps the generated SQL and the URL bounded.</summary>
+    internal const int MaxFilterValues = 100;
+
+    /// <summary>Trims, drops blanks, applies <paramref name="transform"/> and removes duplicates; empty when nothing is set.</summary>
+    internal static string[] NormalizeAll(IEnumerable<string>? values, Func<string, string> transform) =>
+        values is null
+            ? []
+            : values
+                .Select(Normalize)
+                .OfType<string>()
+                .Select(transform)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+    internal static Guid[] DistinctIds(IEnumerable<Guid>? ids) => ids?.Distinct().ToArray() ?? [];
+
     private static IQueryable<Project> ApplySearch(IQueryable<Project> query, string term)
     {
         Expression<Func<Project, bool>> projectFields = project =>
@@ -277,7 +306,10 @@ internal static class ProjectDataQuery
             project.Team.Class.PrimaryLecturer != null &&
             project.Team.Class.PrimaryLecturer.FullName.ToLower().Contains(term) ||
             project.ProjectTags.Any(tag =>
-                tag.TagType == ProjectTagType.StartupField && tag.TagName.ToLower().Contains(term));
+                tag.TagType == ProjectTagType.StartupField && tag.TagName.ToLower().Contains(term)) ||
+            project.ProjectCompetitionEntries.Any(entry =>
+                entry.Competition.ToLower().Contains(term) ||
+                entry.OtherName != null && entry.OtherName.ToLower().Contains(term));
 
         return query.Where(ProjectDataExpressions.Or(
             projectFields,
@@ -289,4 +321,13 @@ internal static class ProjectDataQuery
         project =>
             project.Team.Class.PrimaryLecturerId == lecturerId ||
             project.Team.Class.ClassLecturers.Any(assignment => assignment.LecturerId == lecturerId);
+
+    /// <summary>Any of the lecturers is the primary lecturer of the class or one of its assigned lecturers.</summary>
+    private static Expression<Func<Project, bool>> TaughtByAny(Guid[] lecturerIds)
+    {
+        var ids = lecturerIds.Select(id => (Guid?)id).ToArray();
+        return project =>
+            ids.Contains(project.Team.Class.PrimaryLecturerId) ||
+            project.Team.Class.ClassLecturers.Any(assignment => lecturerIds.Contains(assignment.LecturerId));
+    }
 }

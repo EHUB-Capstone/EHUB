@@ -38,6 +38,7 @@ public sealed class ProjectDataItemResponse
     public ProjectDataMentorResponse? Mentor { get; init; }
     public ProjectDataMentorResponse? AcademicMentor { get; init; }
     public IReadOnlyCollection<string> Achievements { get; init; } = Array.Empty<string>();
+    public IReadOnlyCollection<ProjectCompetitionResponse> Competitions { get; init; } = Array.Empty<ProjectCompetitionResponse>();
     public string? AchievementNote { get; init; }
     public DateTime? AchievementsUpdatedAtUtc { get; init; }
     public ProjectDataPersonResponse? AchievementsUpdatedBy { get; init; }
@@ -52,6 +53,8 @@ public sealed class ProjectDataSummaryResponse
     public int InternallyFundedGroups { get; init; }
     public int ExternallyFundedGroups { get; init; }
     public int AwardedGroups { get; init; }
+    public int PitchingGroups { get; init; }
+    public int DemoGroups { get; init; }
 }
 
 public sealed class ProjectDataSubjectOptionResponse
@@ -77,6 +80,11 @@ public sealed class ProjectDataFilterOptionsResponse
     public IReadOnlyCollection<ProjectDataPersonResponse> Lecturers { get; init; } = Array.Empty<ProjectDataPersonResponse>();
     public IReadOnlyCollection<ProjectDataMentorOptionResponse> Mentors { get; init; } = Array.Empty<ProjectDataMentorOptionResponse>();
     public IReadOnlyCollection<string> Achievements { get; init; } = ProjectAchievementNames.All;
+    public IReadOnlyCollection<string> Competitions { get; init; } = ProjectCompetitionNames.All;
+    public IReadOnlyCollection<string> CompetitionStages { get; init; } = ProjectCompetitionStageNames.All;
+
+    /// <summary>Years in which a project of the scope entered a competition, newest first.</summary>
+    public IReadOnlyCollection<int> CompetitionYears { get; init; } = Array.Empty<int>();
 }
 
 public sealed class ProjectDataDistributionBucketResponse
@@ -113,7 +121,7 @@ public sealed class ProjectDataDistributionResponse
     public int UnspecifiedStartupIndustryCount { get; init; }
     public IReadOnlyCollection<ProjectDataDistributionBucketResponse> Outcomes { get; init; } = Array.Empty<ProjectDataDistributionBucketResponse>();
 
-    /// <summary>Projects with none of the Potential, Internally Funded, Externally Funded or Awarded labels.</summary>
+    /// <summary>Projects with none of the achievement labels (see <see cref="ProjectAchievementNames.All"/>).</summary>
     public int NoOutcomeCount { get; init; }
 }
 

@@ -17,6 +17,7 @@ import {
 } from '../../utils/projectDirectionSync';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import StartupIndustryPicker from './StartupIndustryPicker';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH } from '../../constants/projectProfile';
 
 const IndustryChips = ({ names }: { names?: string[] | null }) => (
   <div className="mt-1 flex flex-wrap gap-2">
@@ -232,8 +233,9 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
     .map((id) => industries.find((industry) => industry.id === id)?.name)
     .filter(Boolean);
   const valid = title.trim().length >= 3
+    && title.trim().length <= PROJECT_NAME_MAX_LENGTH
     && summary.trim().length >= 20
-    && summary.trim().length <= 2000
+    && summary.trim().length <= PROJECT_DESCRIPTION_MAX_LENGTH
     && selectedIndustryIds.length >= 1
     && selectedIndustryIds.length <= 3
     && !industriesLoading
@@ -325,9 +327,9 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       {loading ? <div className="flex min-h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : canEdit && editableState && editing ? (
         <div className="mt-4 space-y-3" aria-busy={busy || undefined}>
           <label className="text-xs font-semibold text-slate-600">Project Name</label>
-          <input value={title} onChange={event => setTitle(event.target.value)} disabled={busy} maxLength={200} placeholder="Project name" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
+          <input value={title} onChange={event => setTitle(event.target.value)} disabled={busy} maxLength={PROJECT_NAME_MAX_LENGTH} placeholder="Project name" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
           <label className="text-xs font-semibold text-slate-600">Project description</label>
-          <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={busy} maxLength={2000} rows={8} placeholder="Describe the project..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
+          <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={busy} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} rows={8} placeholder="Describe the project..." className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50 disabled:text-slate-500" />
           <div>
             <label id="direction-startup-industry-label" className="text-xs font-semibold text-slate-600">
               Startup Industry <span className="text-red-500">*</span>
@@ -351,7 +353,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
               />
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/2000 characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button><button type="button" onClick={submit} disabled={busy || !canSubmit} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><p className={`text-xs ${valid ? 'text-slate-500' : 'text-red-500'}`}>{summary.length}/{PROJECT_DESCRIPTION_MAX_LENGTH} characters · minimum 20</p><div className="flex gap-2"><button type="button" onClick={save} disabled={busy || !valid || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">{activeAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {activeAction === 'save' ? 'Saving...' : 'Save draft'}</button><button type="button" onClick={submit} disabled={busy || !canSubmit} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100">{activeAction === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {activeAction === 'submit' ? 'Submitting...' : 'Submit'}</button></div></div>
           {submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}
         </div>
       ) : (

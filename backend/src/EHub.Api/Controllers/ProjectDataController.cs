@@ -6,7 +6,9 @@ using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataTrends;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
+using EHub.Application.Features.ProjectData.ExportProjectData;
 using EHub.Application.Features.ProjectData.ManageAchievements;
+using EHub.Application.Features.ProjectData.ManageCompetitions;
 using EHub.Application.Features.ProjectData.ManageStartupIndustries;
 using EHub.Contracts.Common;
 using EHub.Contracts.ProjectData;
@@ -91,6 +93,34 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
         ToResponse(
             await handler.HandleAsync(projectId, request, UserId, Role, cancellationToken),
             "Project achievements updated.");
+
+    [HttpPut("{projectId:guid}/competitions")]
+    public async Task<IActionResult> UpdateCompetitions(
+        Guid projectId,
+        [FromBody] UpdateProjectCompetitionsRequest request,
+        [FromServices] IUpdateProjectCompetitionsCommandHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(projectId, request, UserId, Role, cancellationToken),
+            "Project competitions updated.");
+
+    /// <summary>Downloads the project data report (.xlsx) for the same scope, search and filters as the table.</summary>
+    [HttpGet("export")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> ExportProjectData(
+        [FromQuery] GetProjectDataRequest request,
+        [FromServices] IExportProjectDataQueryHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(request, UserId, Role, cancellationToken);
+        if (result.IsSuccess)
+            return File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+
+        var failure = ApiResponse<object>.FailureResponse(result.Error.Message, result.Error.Code);
+        return result.Error.Code == ErrorCodes.ProjectDataAccessDenied
+            ? StatusCode(StatusCodes.Status403Forbidden, failure)
+            : BadRequest(failure);
+    }
 
     [HttpGet("{projectId:guid}/startup-industries/history")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

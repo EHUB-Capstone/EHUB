@@ -493,10 +493,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         string? description,
         IReadOnlyCollection<string>? keywords)
     {
-        if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
-        if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
+        if ((projectName ?? string.Empty).Trim().Length is < 3 or > 100)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 100 characters.");
+        if ((description ?? string.Empty).Trim().Length is < 20 or > 300)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 300 characters.");
         return ValidateTags(keywords ?? Array.Empty<string>(), "keyword");
     }
 
@@ -506,10 +506,10 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
         string? zaloGroupUrl,
         IReadOnlyCollection<Guid> startupIndustryIds)
     {
-        if ((projectName ?? string.Empty).Trim().Length is < 3 or > 200)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 200 characters.");
-        if ((description ?? string.Empty).Trim().Length is < 20 or > 2_000)
-            return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 2000 characters.");
+        if ((projectName ?? string.Empty).Trim().Length is < 3 or > 100)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project name must be between 3 and 100 characters.");
+        if ((description ?? string.Empty).Trim().Length is < 20 or > 300)
+            return new Error(ErrorCodes.WorkspaceValidationError, "Project description must be between 20 and 300 characters.");
         var normalizedZaloGroupUrl = (zaloGroupUrl ?? string.Empty).Trim();
         if (normalizedZaloGroupUrl.Length == 0)
             return new Error(ErrorCodes.WorkspaceValidationError, "Zalo group link is required.");
