@@ -60,6 +60,9 @@ jobs:
       - name: Check staging shell scripts
         run: bash -n scripts/staging/*.sh
 
+      - name: Test disk hygiene (post-release cleanup and disk guard)
+        run: bash scripts/production/tests/test-disk-hygiene.sh
+
       - name: Prepare temporary TLS files for Nginx syntax check
         run: |
           mkdir -p "${RUNNER_TEMP}/letsencrypt/live/e-hub.com.vn"

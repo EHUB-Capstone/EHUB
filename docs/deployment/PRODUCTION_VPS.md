@@ -420,21 +420,35 @@ Stop application containers without deleting data:
 sudo docker compose --env-file .env.production -f docker-compose.production.yml stop frontend backend
 ```
 
-Every release leaves Docker build cache behind (tens of GB over a few weeks,
-far more than the old images). After a release is verified, remove cache older
-than one day; running containers, images and volumes are not touched:
+Every release leaves Docker build cache and one SHA-tagged image behind (about
+1 GB a day with staging auto-deploy). In November 2026 this took the 48 GB disk
+from 69% to 81% (18.7 GB of build cache plus about 100 old image tags); backups
+were not the cause (about 1 MB per dump).
+
+Since then both deploy scripts clean up after every SUCCESSFUL release
+(`cleanup_after_release`, shown as `==> [cleanup]` in the run log): build cache
+older than 72 hours, dangling images, and release tags that are not among the
+last 5 (staging) or 3 (production) successful releases in the deploy log. The
+current and previous commit are always kept, `docker rmi` is never forced, and a
+cleanup failure never fails a release. Containers and volumes (PostgreSQL,
+Ollama) are never touched.
+
+Manual fallback when the disk alert fires before the next release (nothing
+running is touched; the lock prevents a clash with a deploy or a backup):
 
 ```bash
 df -h /
-sudo docker builder prune --all -f --filter "until=24h"
+sudo docker system df
+sudo flock -w 120 /run/lock/ehub-deploy.lock docker builder prune --all -f --filter "until=24h"
 df -h /
 ```
 
-Run it once after the production deployment, not between staging and
-production (production reuses the cache staging just created). Do not use
-`docker image prune -a`: it deletes the previous release image needed for a
-rollback. Treat free disk space below about 8 GB as a reason to clean the cache
-before building.
+If more space is needed, list tags with `docker images ehub-backend` and remove
+old release tags one by one with `docker rmi <repo>:<tag>`; keep the running tag
+and the rollback point. Do not use `docker image prune -a` (it deletes the
+previous release image needed for a rollback) or `docker system prune --volumes`.
+Treat free disk space below about 8 GB as a reason to clean before building: the
+deploy scripts refuse to start below that.
 
 Never run `docker compose down -v` in production; `-v` deletes the PostgreSQL
 volume. Never expose ports 5432/8080, commit `.env.production`, use production
