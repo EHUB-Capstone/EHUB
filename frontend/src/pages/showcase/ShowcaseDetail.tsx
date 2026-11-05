@@ -7,13 +7,12 @@ import Card from '../../components/ui/Card';
 import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
+import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
-
-const formatDateTime = (value: string): string => new Date(value).toLocaleString();
 
 function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: string | null }) {
   if (!children?.trim()) return null;
@@ -73,7 +72,7 @@ export default function ShowcaseDetail() {
     );
   }
 
-  const { showcase, members, history, isOwner, canModerate, teamName } = detail.data;
+  const { showcase, members, isOwner, canModerate, teamName } = detail.data;
   const { profile } = showcase;
   const privileged = isOwner || canModerate;
   const navigationState = location.state as { showcaseBackTo?: unknown; showcaseBackLabel?: unknown } | null;
@@ -101,17 +100,13 @@ export default function ShowcaseDetail() {
         {backLabel}
       </Link>
 
-      <Card hover={false} padding="p-0" className="overflow-hidden">
-        <div className="relative h-28 overflow-hidden bg-secondary-50 sm:h-32">
-          <span aria-hidden="true" className="absolute -right-8 -top-12 h-44 w-44 rounded-full border-[22px] border-secondary-100" />
-          <span aria-hidden="true" className="absolute bottom-0 right-40 h-12 w-12 rounded-t-full bg-primary-200" />
-        </div>
-        <div className="px-5 pb-6 sm:px-8">
+      <Card hover={false} padding="p-5 sm:p-8">
+        <div>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
             {showcase.logoUrl ? (
-              <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="-mt-10 h-24 w-24 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-soft ring-4 ring-white sm:-mt-12 sm:h-28 sm:w-28" />
+              <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-soft sm:h-24 sm:w-24" />
             ) : (
-              <div className="-mt-10 grid h-24 w-24 shrink-0 place-items-center rounded-2xl border border-secondary-100 bg-white text-display text-secondary shadow-soft ring-4 ring-white sm:-mt-12 sm:h-28 sm:w-28" aria-hidden="true">
+              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border border-secondary-100 bg-secondary-50 text-heading text-secondary shadow-soft sm:h-24 sm:w-24" aria-hidden="true">
                 {profile.projectName.slice(0, 2).toUpperCase()}
               </div>
             )}
@@ -119,6 +114,7 @@ export default function ShowcaseDetail() {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
                 {privileged && <ShowcaseStatusBadge status={showcase.status} />}
+                {showcase.isFeatured && <Badge variant="brand" size="md">Featured</Badge>}
               </div>
               <h1 className="mt-2 break-words text-display text-secondary">{profile.projectName}</h1>
               <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-slate-600">
@@ -144,13 +140,16 @@ export default function ShowcaseDetail() {
           {canModerate && (
             <div className="mt-5 border-t border-slate-200 pt-4">
               <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
-              <ShowcaseModerationActions
-                showcaseId={showcase.id}
-                title={profile.projectName}
-                status={showcase.status}
-                wasEverPublished={showcase.publishedAt !== null}
-                onDecided={applyDecision}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <ShowcaseModerationActions
+                  showcaseId={showcase.id}
+                  title={profile.projectName}
+                  status={showcase.status}
+                  wasEverPublished={showcase.publishedAt !== null}
+                  onDecided={applyDecision}
+                />
+                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
+              </div>
             </div>
           )}
         </div>
@@ -168,7 +167,7 @@ export default function ShowcaseDetail() {
           {cover && (
             <section aria-label="Screenshots" className="space-y-3">
               <a href={cover.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-                <img src={cover.url} alt={cover.caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full object-cover" />
+                <img src={cover.url} alt={cover.caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full bg-slate-50 object-contain" />
                 <span className="sr-only">(opens full size in a new tab)</span>
               </a>
               {gallery.length > 0 && (
@@ -176,7 +175,7 @@ export default function ShowcaseDetail() {
                   {gallery.map((item) => (
                     <li key={item.id}>
                       <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-slate-200 transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-                        <img src={item.url} alt={item.caption ?? `${profile.projectName} screenshot`} loading="lazy" className="aspect-video w-full object-cover" />
+                        <img src={item.url} alt={item.caption ?? `${profile.projectName} screenshot`} loading="lazy" className="aspect-video w-full bg-slate-50 object-contain" />
                         <span className="sr-only">(opens full size in a new tab)</span>
                       </a>
                     </li>
@@ -195,26 +194,6 @@ export default function ShowcaseDetail() {
             </Card>
           )}
 
-          {privileged && history.length > 0 && (
-            <Card hover={false}>
-              <Card.Header>
-                <Card.Title>Review history</Card.Title>
-              </Card.Header>
-              <ol className="space-y-4 border-l-2 border-slate-200 pl-5">
-                {history.map((entry) => (
-                  <li key={`${entry.createdAt}-${entry.toStatus}`} className="relative text-body-sm">
-                    <span aria-hidden="true" className="absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
-                    <p className="text-slate-700">
-                      <span className="font-semibold text-secondary">{entry.actorName}</span>
-                      {' '}moved the page from {entry.fromStatus} to {entry.toStatus}
-                    </p>
-                    <p className="text-caption text-slate-500">{formatDateTime(entry.createdAt)}</p>
-                    {entry.note && <p className="mt-1 whitespace-pre-line text-slate-600">{entry.note}</p>}
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          )}
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6">

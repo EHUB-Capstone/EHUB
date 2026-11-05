@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Check, EyeOff, Eye, MessageSquareWarning, XCircle } from 'lucide-react';
 import Button from '../ui/Button';
@@ -41,6 +42,7 @@ interface ShowcaseModerationActionsProps {
 
 /** Decision buttons for a reviewer; only the actions the server would accept for the current status are shown. */
 export default function ShowcaseModerationActions({ showcaseId, title, status, wasEverPublished, onDecided }: ShowcaseModerationActionsProps) {
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState<ShowcaseDecision | null>(null);
   const [dialog, setDialog] = useState<DialogDecision | null>(null);
   const [note, setNote] = useState('');
@@ -53,6 +55,7 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
     setBusy(decision);
     try {
       const updated = await showcaseApi.decide(showcaseId, decision, text);
+      void queryClient.invalidateQueries({ queryKey: ['showcase'] });
       onDecided(updated);
       return true;
     } catch (error) {

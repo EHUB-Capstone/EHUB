@@ -10,6 +10,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
+import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
@@ -131,6 +132,8 @@ export default function ShowcaseModeration() {
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <ShowcaseStatusBadge status={item.status} />
                       <Badge variant="brand" size="md">{stageLabel(item.developmentStage)}</Badge>
+                      {item.isFeatured && <Badge variant="brand" size="sm">Featured</Badge>}
+                      {item.status === 'Published' && <ShowcaseFeaturedToggle compact showcaseId={item.id} title={item.projectName} isFeatured={item.isFeatured} onChanged={afterDecision} />}
                     </div>
                   </div>
                   <div className="relative z-10 mt-4 border-t border-slate-200 pt-4">

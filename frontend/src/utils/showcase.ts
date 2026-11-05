@@ -1,3 +1,4 @@
+import { isSupportedShowcaseVideo } from './showcaseVideo.ts';
 import { PROJECT_PROFILE_LABELS } from '../constants/projectProfile.ts';
 import type {
   SaveShowcaseRequest,
@@ -128,6 +129,7 @@ export const validateShowcaseForm = (values: ShowcaseFormValues): ShowcaseFormEr
     else if (link.label.trim().length > SHOWCASE_LIMITS.linkLabel) row.label = `Keep the label within ${SHOWCASE_LIMITS.linkLabel} characters.`;
     if (link.url.trim().length > SHOWCASE_LIMITS.linkUrl) row.url = `Keep the link within ${SHOWCASE_LIMITS.linkUrl} characters.`;
     else if (!isPublicWebUrl(link.url)) row.url = 'Enter a full link starting with https:// or http://.';
+    else if (link.linkType === 'Video' && !isSupportedShowcaseVideo(link.url)) row.url = 'Use an https link from YouTube or Vimeo for a video.';
     if (row.label || row.url) errors.linkRows[link.key] = row;
   }
   return errors;

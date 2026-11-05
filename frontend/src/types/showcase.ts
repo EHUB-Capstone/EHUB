@@ -5,10 +5,18 @@ export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
 export type ShowcaseDecision = 'approve' | 'request-changes' | 'reject' | 'hide' | 'unhide';
 
+export interface ShowcaseFeaturedDto {
+  id: string;
+  isFeatured: boolean;
+  featuredAt: string | null;
+  rowVersion: number;
+}
+
 export interface GetShowcasesRequest {
   search?: string;
   stage?: ShowcaseStage;
   industry?: string;
+  featured?: boolean;
   semesterId?: string;
   sort?: 'newest' | 'popular';
   page?: number;
@@ -22,10 +30,14 @@ export interface ShowcaseCardDto {
   logoUrl: string | null;
   developmentStage: ShowcaseStage;
   publishedAt: string | null;
+  isFeatured: boolean;
+  featuredAt: string | null;
   teamName: string;
   industries: string[];
   likeCount: number;
   commentCount: number;
+  /** Canonical YouTube or Vimeo watch URL of the page's first Video link, when it has a supported one. */
+  videoUrl?: string | null;
 }
 
 export interface ShowcaseDiscoveryPageDto {
@@ -79,6 +91,8 @@ export interface ShowcaseDto {
   showTeamMembers: boolean;
   reviewNote: string | null;
   publishedAt: string | null;
+  isFeatured: boolean;
+  featuredAt: string | null;
   viewCount: number;
   likeCount: number;
   commentCount: number;
@@ -134,6 +148,8 @@ export interface ShowcaseModerationItemDto {
   classCode: string;
   reviewNote: string | null;
   publishedAt: string | null;
+  isFeatured: boolean;
+  featuredAt: string | null;
   submittedOrUpdatedAt: string;
 }
 

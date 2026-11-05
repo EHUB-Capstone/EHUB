@@ -46,6 +46,8 @@ Cập nhật bảng này sau mỗi bước hoàn thành trên máy thật.
 | `scripts/production/backup-common.sh` | Hàm dùng chung (đọc cấu hình, gửi Discord, gọi rclone) |
 | `deploy/systemd/ehub-backup.{service,timer}` | Chạy backup mỗi ngày 02:00 (có chạy bù nếu VPS tắt đúng giờ đó) |
 | `deploy/systemd/ehub-backup-freshness.{service,timer}` | Kiểm tra mỗi ngày 09:00 |
+| `scripts/production/check-disk-usage.sh <production\|staging>` + `deploy/systemd/ehub-disk-check.{service,timer}` | Kiểm tra ổ đĩa mỗi giờ, cảnh báo 2 mức (75% và 90%) có thời gian chờ giữa hai lần báo |
+| `scripts/production/tests/test-disk-hygiene.sh` | Test offline (mock docker, df, curl) cho phần dọn sau deploy và cảnh báo ổ đĩa; chạy trong CI |
 | `deploy/backup/backup.env.example` | Mẫu cấu hình giá trị giả |
 
 Các giá trị bí mật nằm trong `/opt/ehub/backup.env` (quyền 600, chủ sở hữu root,
@@ -96,6 +98,21 @@ sudo systemctl start ehub-backup.service
 sudo journalctl -u ehub-backup.service -n 50 --no-pager
 ```
 
+### 4.4. Bật cảnh báo ổ đĩa theo giờ
+Job này chỉ đọc `df` và báo Discord, không xóa gì. Im lặng dưới 75%; từ 75% báo `[CANH BAO]`
+(tối đa 1 lần/24 giờ), từ 90% báo `[KHAN CAP]` (tối đa 1 lần/3 giờ). Ngưỡng đổi được bằng
+`DISK_ALERT_PERCENT`, `DISK_CRITICAL_PERCENT`, `DISK_WARN_COOLDOWN_HOURS`,
+`DISK_CRITICAL_COOLDOWN_HOURS` trong `/opt/ehub/backup.env` (mẫu ở `backup.env.example`).
+```bash
+sudo bash /opt/ehub/app/scripts/production/check-disk-usage.sh production
+sudo cp /opt/ehub/app/deploy/systemd/ehub-disk-check.service /opt/ehub/app/deploy/systemd/ehub-disk-check.timer \
+    /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ehub-disk-check.timer
+systemctl list-timers 'ehub-*'
+```
+Lệnh đầu phải in `OK: disk NN% ...` (hoặc gửi cảnh báo nếu ổ thực sự trên 75%).
+
 ## 5. Vận hành hằng ngày
 
 | Tin trên Discord | Ý nghĩa | Việc cần làm |
@@ -104,7 +121,8 @@ sudo journalctl -u ehub-backup.service -n 50 --no-pager
 | `[BO QUA] ...` | Có backup khác đang chạy (thường là lúc deploy) | Không, lần sau sẽ chạy lại |
 | `[LOI] ... buoc "<tên bước>" ...` | Backup thất bại ở bước đó | `sudo journalctl -u ehub-backup.service -n 100`, sửa rồi chạy lại |
 | `[CANH BAO] ... ban sao luu ... da N gio` | Quá 26 giờ không có backup mới | Kiểm tra `systemctl list-timers` và log |
-| `[CANH BAO] ... o dia ...` | Ổ đĩa vượt 75% | Dọn build cache (xem PRODUCTION_VPS.md mục 9) |
+| `[CANH BAO] ... o dia ...` | Ổ đĩa vượt 75% (báo tối đa 1 lần/24 giờ) | Chạy lệnh dọn thủ công ở PRODUCTION_VPS.md mục 9; deploy kế tiếp cũng tự dọn |
+| `[KHAN CAP] ... o dia ...` | Ổ đĩa vượt 90% (báo tối đa 1 lần/3 giờ) | Xử lý ngay: PostgreSQL có thể dừng khi ổ đầy. Dọn theo PRODUCTION_VPS.md mục 9, xem `sudo docker system df` |
 
 Lệnh hữu ích:
 ```bash

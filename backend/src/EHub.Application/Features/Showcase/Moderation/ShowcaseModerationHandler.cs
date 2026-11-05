@@ -157,6 +157,8 @@ public sealed class ShowcaseModerationHandler(
                 ClassCode = project?.ClassCode ?? string.Empty,
                 ReviewNote = showcase.ReviewNote,
                 PublishedAt = showcase.PublishedAt,
+                IsFeatured = showcase.IsFeatured,
+                FeaturedAt = showcase.FeaturedAt,
                 SubmittedOrUpdatedAt = showcase.UpdatedAt ?? showcase.CreatedAt
             };
         }).ToArray();
@@ -192,6 +194,19 @@ public sealed class ShowcaseModerationHandler(
 
     private void Transition(ShowcaseProject showcase, ShowcaseStatus to, string? note, Guid actorId, DateTime now)
     {
+        if (to == ShowcaseStatus.Hidden)
+        {
+            if (showcase.IsFeatured)
+            {
+                context.ShowcaseReviewHistories.Add(new ShowcaseReviewHistory
+                {
+                    ShowcaseProjectId = showcase.Id, FromStatus = showcase.Status, ToStatus = showcase.Status,
+                    Note = "Featured selection removed because the showcase was hidden.", ActorId = actorId, CreatedAt = now
+                });
+            }
+            showcase.IsFeatured = false;
+            showcase.FeaturedAt = null;
+        }
         context.ShowcaseReviewHistories.Add(new ShowcaseReviewHistory
         {
             ShowcaseProjectId = showcase.Id,

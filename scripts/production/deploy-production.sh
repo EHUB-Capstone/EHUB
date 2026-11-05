@@ -84,6 +84,78 @@ stage() {
     echo "==> [${STAGE}]"
 }
 
+# BEGIN docker-cleanup (identical in deploy-staging.sh and deploy-production.sh; keep both in sync)
+# Disk hygiene after a SUCCESSFUL release. Every release leaves build cache and one SHA-tagged image
+# behind (about 1 GB a day with staging auto-deploy); in November 2026 that took the 48 GB disk from
+# 69% to 81%. This only removes (1) build cache older than BUILD_CACHE_KEEP_HOURS, (2) dangling images,
+# and (3) release tags of THIS script's own image repositories that are not among the last N
+# successful releases in LOG_FILE. It never uses -f (docker refuses to remove an image a container
+# uses), never touches containers, volumes or other repositories, and a failure here must not turn
+# a successful release into a failed one.
+readonly BUILD_CACHE_KEEP_HOURS=72
+CLEANUP_KEPT_SHAS=()
+
+cleanup_load_kept_shas() {
+    local keep_count="$1" sha
+    mapfile -t CLEANUP_KEPT_SHAS < <(
+        sed -n 's/.* SUCCESS sha=\([0-9a-f]\{40\}\) .*/\1/p' "${LOG_FILE}" | tac | awk '!seen[$0]++' | head -n "${keep_count}"
+    )
+    # The commit just deployed and the one before it (the rollback point) are always protected.
+    for sha in "${TARGET_SHA}" "${PREVIOUS_SHA}"; do
+        if [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            CLEANUP_KEPT_SHAS+=("${sha}")
+        fi
+    done
+}
+
+# $1 = regex of release tags that may be removed, remaining arguments = image repositories.
+cleanup_release_images() {
+    local tag_regex="$1" repo tag sha protected removed=0 protected_count=0
+    shift
+    for repo in "$@"; do
+        while read -r tag; do
+            [[ "${tag}" =~ ${tag_regex} ]] || continue
+            protected="false"
+            for sha in "${CLEANUP_KEPT_SHAS[@]}"; do
+                if [[ "${tag}" == "${sha:0:${#tag}}" ]]; then
+                    protected="true"
+                    break
+                fi
+            done
+            if [[ "${protected}" == "true" ]]; then
+                protected_count=$(( protected_count + 1 ))
+                continue
+            fi
+            if docker rmi "${repo}:${tag}" > /dev/null 2>&1; then
+                removed=$(( removed + 1 ))
+            else
+                echo "kept (still in use): ${repo}:${tag}"
+            fi
+        done < <(docker images "${repo}" --format '{{.Tag}}')
+    done
+    echo "release image tags: removed ${removed}, protected ${protected_count}"
+}
+
+# $1 = number of releases to keep, $2 = removable tag regex, remaining = image repositories.
+cleanup_after_release() {
+    local keep_count="$1" tag_regex="$2" disk_before disk_after
+    shift 2
+    echo "==> [cleanup]"
+    disk_before="$(df --output=pcent / | tail -n 1 | tr -dc '0-9')"
+    docker builder prune --all -f --filter "until=${BUILD_CACHE_KEEP_HOURS}h" > /dev/null \
+        || echo "WARNING: build cache prune failed; ignored." >&2
+    docker image prune -f > /dev/null || echo "WARNING: dangling image prune failed; ignored." >&2
+    cleanup_load_kept_shas "${keep_count}"
+    if (( ${#CLEANUP_KEPT_SHAS[@]} < 2 )); then
+        echo "Fewer than 2 releases known from ${LOG_FILE}; leaving release image tags untouched."
+    else
+        cleanup_release_images "${tag_regex}" "$@"
+    fi
+    disk_after="$(df --output=pcent / | tail -n 1 | tr -dc '0-9')"
+    echo "disk usage: ${disk_before}% -> ${disk_after}%"
+}
+# END docker-cleanup
+
 finish() {
     # Give the mirror a moment to forward the last lines, then stop it.
     if [[ -n "${MIRROR_PID}" ]]; then
@@ -509,3 +581,10 @@ fi
 trap - ERR
 record "SUCCESS sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"
 echo "EHUB_DEPLOY_RESULT=success sha=${TARGET_SHA} previous=${PREVIOUS_SHA} gate=${GATE_RESULT} provider=${PROVIDER}"
+
+# Housekeeping runs after the result line and must never change the release outcome. Production keeps
+# the last 3 releases: current, the rollback point and one more. It deliberately does not manage
+# ehub-mentor-semantic, whose repository name is shared with staging.
+if ! cleanup_after_release 3 '^[0-9a-f]{12,40}$' ehub-backend ehub-frontend; then
+    echo "WARNING: post-release cleanup failed; the release itself succeeded." >&2
+fi

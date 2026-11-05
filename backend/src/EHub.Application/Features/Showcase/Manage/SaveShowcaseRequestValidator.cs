@@ -31,8 +31,15 @@ public sealed class SaveShowcaseRequestValidator : AbstractValidator<SaveShowcas
                 .MaximumLength(1000)
                 .Must(IsPublicWebUrl)
                 .WithMessage("Link must be a valid http or https URL.");
+            // A Video link is previewed inside the public feed, so only a YouTube or Vimeo https link is accepted.
+            link.RuleFor(item => item.Url)
+                .Must((item, url) => !IsVideoType(item.LinkType) || ShowcaseVideoLinks.IsSupported(url))
+                .WithMessage("A Video link must be an https YouTube or Vimeo link.");
         });
     }
+
+    private static bool IsVideoType(string? value) =>
+        Enum.TryParse<ShowcaseLinkType>(value, true, out var type) && type == ShowcaseLinkType.Video;
 
     /// <summary>Only plain http(s) URLs without embedded credentials are accepted (blocks javascript:, data:, etc.).</summary>
     internal static bool IsPublicWebUrl(string? value) =>

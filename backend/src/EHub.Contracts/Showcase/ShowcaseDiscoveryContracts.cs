@@ -5,6 +5,8 @@ public sealed class GetShowcasesRequest
     public string? Search { get; init; }
     public string? Stage { get; init; }
     public string? Industry { get; init; }
+    /// <summary>Omitted: all published pages; true: featured only; false: non-featured only.</summary>
+    public bool? Featured { get; init; }
     /// <summary>Semester of the newest project in the lineage.</summary>
     public Guid? SemesterId { get; init; }
     public string Sort { get; init; } = "newest";
@@ -20,10 +22,14 @@ public sealed class ShowcaseCardDto
     public string? LogoUrl { get; init; }
     public string DevelopmentStage { get; init; } = string.Empty;
     public DateTime? PublishedAt { get; init; }
+    public bool IsFeatured { get; init; }
+    public DateTime? FeaturedAt { get; init; }
     public string TeamName { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Industries { get; init; } = Array.Empty<string>();
     public int LikeCount { get; init; }
     public int CommentCount { get; init; }
+    /// <summary>Canonical YouTube or Vimeo watch URL of the page's first Video link; null when it has none that is supported.</summary>
+    public string? VideoUrl { get; set; }
 }
 
 public sealed class ShowcaseSemesterOptionDto

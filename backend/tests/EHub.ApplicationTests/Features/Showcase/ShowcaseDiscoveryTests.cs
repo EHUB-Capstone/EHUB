@@ -16,6 +16,34 @@ public sealed class ShowcaseDiscoveryTests
         new(db, new InMemorySearch(), new GetShowcasesRequestValidator());
 
     [Fact]
+    public async Task FeaturedFilter_ComposesWithStageSearchAndPaging_AndNeverIncludesHiddenPages()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var first = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var second = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var regular = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var hidden = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Hidden);
+        var now = DateTime.UtcNow;
+        foreach (var id in new[] { first.ShowcaseId, second.ShowcaseId, hidden.ShowcaseId })
+        {
+            var page = (await db.ShowcaseProjects.FindAsync(id))!;
+            page.IsFeatured = true;
+            page.FeaturedAt = now;
+        }
+        (await db.ShowcaseProjects.FindAsync(first.ShowcaseId))!.DevelopmentStage = ShowcaseDevelopmentStage.Mvp;
+        await db.SaveChangesAsync();
+        var featured = (await Handler(db).HandleAsync(new() { Featured = true, PageSize = 1, Page = 2 })).Value;
+        featured.TotalItems.Should().Be(2);
+        featured.Items.Should().ContainSingle().Which.IsFeatured.Should().BeTrue();
+        featured.Items.Single().FeaturedAt.Should().Be(now);
+        var mvp = (await Handler(db).HandleAsync(new() { Featured = true, Search = "GARDEN", Stage = "Mvp" })).Value;
+        mvp.Items.Should().ContainSingle().Which.Id.Should().Be(first.ShowcaseId);
+        var normal = (await Handler(db).HandleAsync(new() { Featured = false })).Value;
+        normal.Items.Should().ContainSingle().Which.Id.Should().Be(regular.ShowcaseId);
+        (await Handler(db).HandleAsync(new())).Value.TotalItems.Should().Be(3);
+    }
+
+    [Fact]
     public async Task FilterOptions_ReturnAllActiveCatalogIndustriesAndSemesters_WithoutAnyShowcase()
     {
         await using var db = ShowcaseTestData.NewContext();
@@ -65,6 +93,27 @@ public sealed class ShowcaseDiscoveryTests
         db.ChangeTracker.Entries().Should().BeEmpty();
         var json = System.Text.Json.JsonSerializer.Serialize(result.Value);
         json.Should().NotContain("ReviewNote").And.NotContain("History");
+    }
+
+    [Fact]
+    public async Task Card_ExposesOnlyTheFirstSupportedVideoLinkAsACanonicalUrl()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var supported = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var legacy = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var none = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        db.ShowcaseLinks.AddRange(
+            new ShowcaseLink { ShowcaseProjectId = supported.ShowcaseId, LinkType = ShowcaseLinkType.Website, Label = "Site", Url = "https://site.example.test", SortOrder = 0 },
+            new ShowcaseLink { ShowcaseProjectId = supported.ShowcaseId, LinkType = ShowcaseLinkType.Video, Label = "Demo", Url = "https://youtu.be/dQw4w9WgXcQ?t=5", SortOrder = 1 },
+            new ShowcaseLink { ShowcaseProjectId = legacy.ShowcaseId, LinkType = ShowcaseLinkType.Video, Label = "Old", Url = "https://example.test/old.mp4", SortOrder = 0 });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var items = (await Handler(db).HandleAsync(new())).Value.Items.ToDictionary(item => item.Id);
+
+        items[supported.ShowcaseId].VideoUrl.Should().Be("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        items[legacy.ShowcaseId].VideoUrl.Should().BeNull();
+        items[none.ShowcaseId].VideoUrl.Should().BeNull();
     }
 
     [Theory]
