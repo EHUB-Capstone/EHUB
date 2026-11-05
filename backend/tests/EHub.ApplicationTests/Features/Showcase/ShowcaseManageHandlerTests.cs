@@ -173,6 +173,42 @@ public sealed class ShowcaseManageHandlerTests
         db.ShowcaseProjects.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("https://example.test/video.mp4")]
+    [InlineData("http://youtu.be/dQw4w9WgXcQ")]
+    [InlineData("https://vimeo.com/channels/staffpicks")]
+    [InlineData("https://youtu.be.evil.example/dQw4w9WgXcQ")]
+    public async Task Create_RejectsVideoLinksFromOtherProviders(string url)
+    {
+        await using var db = Context();
+        var owner = await SeedProjectAsync(db);
+        var request = ValidRequest(owner.LineageId, links: [new ShowcaseLinkRequest { LinkType = "Video", Label = "Demo", Url = url }]);
+
+        var result = await Handler(db).CreateAsync(request, owner.UserId, SystemRoles.Student);
+
+        result.Error.Code.Should().Be(ErrorCodes.ShowcaseValidationError);
+        db.ShowcaseProjects.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("https://youtu.be/dQw4w9WgXcQ")]
+    [InlineData("https://vimeo.com/123456789")]
+    public async Task Create_AcceptsYouTubeAndVimeoVideoLinks_AndOtherTypesStayUnrestricted(string url)
+    {
+        await using var db = Context();
+        var owner = await SeedProjectAsync(db);
+        var request = ValidRequest(owner.LineageId, links:
+        [
+            new ShowcaseLinkRequest { LinkType = "Video", Label = "Demo", Url = url },
+            new ShowcaseLinkRequest { LinkType = "Website", Label = "Site", Url = "https://garden.example.test/video.mp4" }
+        ]);
+
+        var result = await Handler(db).CreateAsync(request, owner.UserId, SystemRoles.Student);
+
+        result.IsSuccess.Should().BeTrue();
+        db.ShowcaseLinks.Should().HaveCount(2);
+    }
+
     [Fact]
     public async Task Create_RejectsInvalidStageAndOverlongHighlights()
     {

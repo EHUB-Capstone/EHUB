@@ -10,6 +10,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
+import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
@@ -114,6 +115,7 @@ export default function ShowcaseModeration() {
                       <h2 className="mt-1 break-words text-subheading text-secondary">
                         <Link
                           to={`/showcase/${item.id}`}
+                          state={{ showcaseBackTo: '/showcase/moderation', showcaseBackLabel: 'Showcase Moderation' }}
                           className="after:absolute after:inset-0 after:content-[''] hover:text-primary-700 focus-visible:outline-none focus-visible:underline"
                         >
                           {item.projectName}
@@ -130,6 +132,8 @@ export default function ShowcaseModeration() {
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <ShowcaseStatusBadge status={item.status} />
                       <Badge variant="brand" size="md">{stageLabel(item.developmentStage)}</Badge>
+                      {item.isFeatured && <Badge variant="brand" size="sm">Featured</Badge>}
+                      {item.status === 'Published' && <ShowcaseFeaturedToggle compact showcaseId={item.id} title={item.projectName} isFeatured={item.isFeatured} onChanged={afterDecision} />}
                     </div>
                   </div>
                   <div className="relative z-10 mt-4 border-t border-slate-200 pt-4">
@@ -138,7 +142,6 @@ export default function ShowcaseModeration() {
                       title={item.projectName}
                       status={item.status}
                       wasEverPublished={item.publishedAt !== null}
-                      isFeatured={item.isFeatured}
                       onDecided={afterDecision}
                     />
                     {item.status === 'Draft' || (item.status === 'Hidden' && item.publishedAt === null) ? (

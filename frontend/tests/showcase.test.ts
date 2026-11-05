@@ -3,7 +3,15 @@ import test from 'node:test';
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
-import { discoveryRequest, discoveryPages } from '../src/utils/showcaseDiscovery.ts';
+import { discoveryRequest, discoveryPages, isNewlyPublished } from '../src/utils/showcaseDiscovery.ts';
+
+test('newly published rail includes only projects published in the preceding seven days', () => {
+  const now = Date.parse('2026-11-05T12:00:00Z');
+  assert.equal(isNewlyPublished('2026-10-29T12:00:00Z', now), true);
+  assert.equal(isNewlyPublished('2026-10-29T11:59:59Z', now), false);
+  assert.equal(isNewlyPublished('2026-11-06T12:00:00Z', now), false);
+  assert.equal(isNewlyPublished(null, now), false);
+});
 
 test('featured client calls POST/DELETE, unwraps selection and preserves discovery filters', async () => {
   const mock = new MockAdapter(axiosClient);

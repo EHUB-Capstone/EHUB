@@ -1,8 +1,16 @@
 import type { GetShowcasesRequest, ShowcaseStage } from '../types/showcase.ts';
 
 export const DISCOVERY_PAGE_SIZE = 8;
+const NEWLY_PUBLISHED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const stages: ShowcaseStage[] = ['Idea', 'Mvp', 'Beta', 'Launched'];
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when a published showcase belongs in the seven-day "Newly published" rail. */
+export function isNewlyPublished(publishedAt: string | null, now = Date.now()): boolean {
+  if (!publishedAt) return false;
+  const publishedTime = Date.parse(publishedAt);
+  return Number.isFinite(publishedTime) && publishedTime <= now && now - publishedTime <= NEWLY_PUBLISHED_WINDOW_MS;
+}
 
 export function discoveryRequest(params: URLSearchParams): GetShowcasesRequest {
   const stage = stages.find(value => value.toLowerCase() === params.get('stage')?.toLowerCase());

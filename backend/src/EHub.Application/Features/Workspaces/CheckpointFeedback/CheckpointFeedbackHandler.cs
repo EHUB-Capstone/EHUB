@@ -133,27 +133,27 @@ public sealed class CheckpointFeedbackHandler(IApplicationDbContext context, ICh
             }
             else if (rows.Count > 0) rows[^1][1] += $"\n{line}";
         }
-        using var workbook = new XLWorkbook(); var sheet = workbook.Worksheets.Add("Technical Review");
-        sheet.Cell(1, 1).Value = "STARTUP TEAM REVIEW"; sheet.Range(1, 1, 1, 4).Merge().Style.Font.SetBold().Font.SetFontSize(16); sheet.Range(1, 1, 1, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-        sheet.Cell(3, 1).Value = "Project / Team"; sheet.Cell(3, 2).Value = $"{team.Project?.Name ?? team.TeamName} / {team.TeamName}";
-        sheet.Cell(4, 1).Value = "Review date"; sheet.Cell(4, 2).Value = lines.ElementAtOrDefault(1)?.Replace("Review date: ", string.Empty) ?? string.Empty;
-        sheet.Cell(5, 1).Value = "Reviewer"; sheet.Cell(5, 2).Value = feedback.Creator?.FullName ?? "";
-        sheet.Cell(7, 1).Value = "Criteria"; sheet.Cell(7, 2).Value = "Assessment"; sheet.Cell(7, 3).Value = "Evidence"; sheet.Cell(7, 4).Value = "Feedback / issues to fix";
+        using var workbook = new XLWorkbook(); var sheet = workbook.Worksheets.Add("Đánh giá kỹ thuật");
+        sheet.Cell(1, 1).Value = "PHIẾU ĐÁNH GIÁ NHÓM KHỞI NGHIỆP"; sheet.Range(1, 1, 1, 4).Merge().Style.Font.SetBold().Font.SetFontSize(16); sheet.Range(1, 1, 1, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sheet.Cell(3, 1).Value = "Tên dự án / Nhóm"; sheet.Cell(3, 2).Value = $"{team.Project?.Name ?? team.TeamName} / {team.TeamName}";
+        sheet.Cell(4, 1).Value = "Ngày review"; sheet.Cell(4, 2).Value = lines.ElementAtOrDefault(1)?.Replace("Review date: ", string.Empty).Replace("Ngày review: ", string.Empty) ?? string.Empty;
+        sheet.Cell(5, 1).Value = "Giảng viên Review"; sheet.Cell(5, 2).Value = feedback.Creator?.FullName ?? "";
+        sheet.Cell(7, 1).Value = "Tiêu chí"; sheet.Cell(7, 2).Value = "Nội dung đánh giá"; sheet.Cell(7, 3).Value = "Minh chứng"; sheet.Cell(7, 4).Value = "Nhận xét/Lỗi cần sửa";
         sheet.Range(7, 1, 7, 4).Style.Font.SetBold(); sheet.Range(7, 1, 7, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF2CC");
-        var rowIndex = 8; foreach (var row in rows) { var labelAndEvidence = row[0].Split(" (", 2); sheet.Cell(rowIndex, 1).Value = labelAndEvidence[0]; sheet.Cell(rowIndex, 2).Value = AssessmentFor(labelAndEvidence[0]); sheet.Cell(rowIndex, 3).Value = labelAndEvidence.Length > 1 ? labelAndEvidence[1].TrimEnd(')') : string.Empty; sheet.Cell(rowIndex++, 4).Value = row[1]; }
+        var rowIndex = 8; foreach (var row in rows) { var labelAndEvidence = row[0].Split(" (", 2); var criterion = labelAndEvidence[0].Trim(); sheet.Cell(rowIndex, 1).Value = criterion; sheet.Cell(rowIndex, 2).Value = AssessmentFor(criterion); sheet.Cell(rowIndex, 3).Value = labelAndEvidence.Length > 1 ? labelAndEvidence[1].TrimEnd(')') : string.Empty; sheet.Cell(rowIndex++, 4).Value = row[1]; }
         sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.OutsideBorder = XLBorderStyleValues.Thin; sheet.Range(7, 1, Math.Max(7, rowIndex - 1), 4).Style.Border.InsideBorder = XLBorderStyleValues.Thin; sheet.Columns().AdjustToContents(); sheet.Column(2).Width = 45; sheet.Column(4).Width = 55; sheet.Range(1, 1, rowIndex, 4).Style.Alignment.WrapText = true;
         using var stream = new MemoryStream(); workbook.SaveAs(stream);
-        var fileName = $"{Safe(feedback.Creator?.FullName ?? "Lecturer")}_{Safe(team.Class.Course.Code)}_{Safe(team.TeamName)}_Review Startup_{Safe(team.Class.Semester.Code)}.xlsx";
+        var fileName = $"{Safe(feedback.Creator?.FullName ?? "Giang_vien")}_{Safe(team.Class.Course.Code)}_{Safe(team.TeamName)}_Danh_gia_khoi_nghiep_{Safe(team.Class.Semester.Code)}.xlsx";
         return Result.Success((stream.ToArray(), ExcelContentType, fileName));
     }
     private static string Safe(string value) => string.Concat(value.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
     private static string AssessmentFor(string criterion) => criterion switch
     {
-        "Core functionality" => "The core user flow works and meets the selected requirements.",
-        "Interface and user experience" => "Easy to understand and use, with an appropriate display across devices.",
-        "Technology and architecture" => "The chosen technology is suitable and the team can explain how the system works.",
-        "Data and basic security" => "Input validation, appropriate permissions, and protection for passwords and API keys.",
-        "Testing and improvement" => "Core functions are tested; issues are logged and verified after fixes.",
+        "Core functionality" or "Chức năng chính" => "Luồng sử dụng cốt lõi chạy được, đáp ứng nhu cầu đã chọn.",
+        "Interface and user experience" or "Giao diện và trải nghiệm" => "Dễ hiểu, dễ thao tác, hiển thị phù hợp trên điện thoại.",
+        "Technology and architecture" or "Công nghệ và cấu trúc" => "Công nghệ phù hợp, nhóm giải thích được cách hệ thống hoạt động.",
+        "Data and basic security" or "Dữ liệu và bảo mật cơ bản" => "Kiểm tra dữ liệu nhập, phân quyền phù hợp, bảo vệ mật khẩu và API key.",
+        "Testing and improvement" or "Kiểm thử và cải tiến" => "Có kiểm thử chức năng chính, ghi nhận lỗi và kiểm tra lại sau sửa.",
         _ => string.Empty
     };
 

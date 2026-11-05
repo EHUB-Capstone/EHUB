@@ -370,7 +370,7 @@ export default function ShowcaseEditor() {
                         </div>
                         <Input aria-label={`Link ${index + 1} label`} placeholder="Label" value={link.label} error={rowErrors?.label}
                           onChange={(event) => setLink(link.key, { label: event.target.value })} />
-                        <Input aria-label={`Link ${index + 1} address`} placeholder="https://" inputMode="url" value={link.url} error={rowErrors?.url}
+                        <Input aria-label={`Link ${index + 1} address`} placeholder={link.linkType === 'Video' ? 'https://www.youtube.com/watch?v=… or https://vimeo.com/…' : 'https://'} inputMode="url" value={link.url} error={rowErrors?.url}
                           onChange={(event) => setLink(link.key, { url: event.target.value })} />
                         <Button
                           variant="ghost"

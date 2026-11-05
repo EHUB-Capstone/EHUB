@@ -36,6 +36,8 @@ export interface ShowcaseCardDto {
   industries: string[];
   likeCount: number;
   commentCount: number;
+  /** Canonical YouTube or Vimeo watch URL of the page's first Video link, when it has a supported one. */
+  videoUrl?: string | null;
 }
 
 export interface ShowcaseDiscoveryPageDto {

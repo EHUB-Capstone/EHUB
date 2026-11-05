@@ -95,6 +95,27 @@ public sealed class ShowcaseDiscoveryTests
         json.Should().NotContain("ReviewNote").And.NotContain("History");
     }
 
+    [Fact]
+    public async Task Card_ExposesOnlyTheFirstSupportedVideoLinkAsACanonicalUrl()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var supported = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var legacy = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var none = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        db.ShowcaseLinks.AddRange(
+            new ShowcaseLink { ShowcaseProjectId = supported.ShowcaseId, LinkType = ShowcaseLinkType.Website, Label = "Site", Url = "https://site.example.test", SortOrder = 0 },
+            new ShowcaseLink { ShowcaseProjectId = supported.ShowcaseId, LinkType = ShowcaseLinkType.Video, Label = "Demo", Url = "https://youtu.be/dQw4w9WgXcQ?t=5", SortOrder = 1 },
+            new ShowcaseLink { ShowcaseProjectId = legacy.ShowcaseId, LinkType = ShowcaseLinkType.Video, Label = "Old", Url = "https://example.test/old.mp4", SortOrder = 0 });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var items = (await Handler(db).HandleAsync(new())).Value.Items.ToDictionary(item => item.Id);
+
+        items[supported.ShowcaseId].VideoUrl.Should().Be("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        items[legacy.ShowcaseId].VideoUrl.Should().BeNull();
+        items[none.ShowcaseId].VideoUrl.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(" gArDeN ", 1)]
     [InlineData("AUTOMATICALLY", 1)]

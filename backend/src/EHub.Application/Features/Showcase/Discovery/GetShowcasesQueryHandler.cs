@@ -67,8 +67,12 @@ public sealed class GetShowcasesQueryHandler(
                 Industries = row.Project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField)
                     .OrderBy(tag => tag.TagName).Select(tag => tag.TagName).ToArray(),
                 LikeCount = row.Showcase.LikeCount,
-                CommentCount = row.Showcase.CommentCount
+                CommentCount = row.Showcase.CommentCount,
+                VideoUrl = row.Showcase.Links.Where(link => link.LinkType == ShowcaseLinkType.Video)
+                    .OrderBy(link => link.SortOrder).ThenBy(link => link.Id).Select(link => link.Url).FirstOrDefault()
             }).ToListAsync(cancellationToken);
+        // Links saved before the provider rule existed are dropped here instead of being sent to the feed.
+        foreach (var item in items) item.VideoUrl = ShowcaseVideoLinks.Normalize(item.VideoUrl);
 
         return Result.Success(new PagedResponse<ShowcaseCardDto>
         {

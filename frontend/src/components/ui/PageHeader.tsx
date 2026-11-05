@@ -65,8 +65,8 @@ const PageHeader = ({
               <span className={cn(
                 'text-overline uppercase',
                 i === breadcrumb.length - 1
-                  ? 'text-primary-700'
-                  : 'text-slate-500 hover:text-slate-700 cursor-pointer transition-colors'
+                  ? 'text-primary-700 dark:text-primary-300'
+                  : 'text-slate-500 hover:text-slate-700 cursor-pointer transition-colors dark:text-slate-400 dark:hover:text-slate-200'
               )}>
                 {crumb}
               </span>
@@ -80,7 +80,7 @@ const PageHeader = ({
         <div className="flex items-start gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-heading sm:text-display text-secondary tracking-tight">{title}</h1>
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight dark:text-white">{title}</h1>
               {badge && (
                 <span className={cn(
                   'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border',
@@ -91,7 +91,7 @@ const PageHeader = ({
               )}
             </div>
             {subtitle && (
-              <p className="text-slate-600 mt-1 text-body leading-relaxed">{subtitle}</p>
+              <p className="text-slate-600 mt-1 text-body leading-relaxed dark:text-slate-300">{subtitle}</p>
             )}
           </div>
         </div>

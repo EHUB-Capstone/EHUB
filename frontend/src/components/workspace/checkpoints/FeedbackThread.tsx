@@ -13,15 +13,15 @@ import AutoSizeTextarea from '../../ui/AutoSizeTextarea';
 const submitForm = (event) => event.currentTarget.form?.requestSubmit();
 
 const TECHNICAL_REVIEW_CRITERIA = [
-  { key: 'mainFunction', label: 'Core functionality', evidence: 'Live demo', description: 'The core user flow works and meets the selected requirements.' },
-  { key: 'interface', label: 'Interface and user experience', evidence: 'Desktop or mobile testing', description: 'Easy to understand and use, with an appropriate display across devices.' },
-  { key: 'technology', label: 'Technology and architecture', evidence: 'Architecture diagram and source code', description: 'The chosen technology is suitable and the team can explain how the system works.' },
-  { key: 'security', label: 'Data and basic security', evidence: 'Data handling and access-control demo', description: 'Input validation, appropriate permissions, and protection for passwords and API keys.' },
-  { key: 'testing', label: 'Testing and improvement', evidence: 'Test checklist and issue list', description: 'Core functions are tested; issues are logged and verified after fixes.' },
+  { key: 'mainFunction', label: 'Chức năng chính', evidence: 'Demo trực tiếp', description: 'Luồng sử dụng cốt lõi chạy được, đáp ứng nhu cầu đã chọn.' },
+  { key: 'interface', label: 'Giao diện và trải nghiệm', evidence: 'Thử trên máy tính hoặc điện thoại', description: 'Dễ hiểu, dễ thao tác, hiển thị phù hợp trên điện thoại.' },
+  { key: 'technology', label: 'Công nghệ và cấu trúc', evidence: 'Sơ đồ đơn giản, mã nguồn', description: 'Công nghệ phù hợp, nhóm giải thích được cách hệ thống hoạt động.' },
+  { key: 'security', label: 'Dữ liệu và bảo mật cơ bản', evidence: 'Demo xử lý dữ liệu và quyền truy cập', description: 'Kiểm tra dữ liệu nhập, phân quyền phù hợp, bảo vệ mật khẩu và API key.' },
+  { key: 'testing', label: 'Kiểm thử và cải tiến', evidence: 'Checklist kiểm thử, danh sách lỗi', description: 'Có kiểm thử chức năng chính, ghi nhận lỗi và kiểm tra lại sau sửa.' },
 ];
 
 function FeedbackModeSwitch({ value, onChange }) {
-  return <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 p-1" role="group" aria-label="Feedback type">
+  return <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 p-1" role="group" aria-label="Loại phản hồi">
     <button type="button" onClick={() => onChange('regular')} aria-pressed={value === 'regular'} className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${value === 'regular' ? 'bg-secondary text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Regular feedback</button>
     <button type="button" onClick={() => onChange('technical')} aria-pressed={value === 'technical'} className={`rounded-full px-3 py-1.5 text-caption font-bold transition ${value === 'technical' ? 'bg-secondary text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Technical review</button>
   </div>;
@@ -37,21 +37,21 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
   const submitTechnicalReview = async (event) => {
     event.preventDefault();
     if (!hasValidReviews || sending) return;
-    const reviewedAt = new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date());
+    const reviewedAt = new Intl.DateTimeFormat('vi-VN').format(new Date());
     const rows = TECHNICAL_REVIEW_CRITERIA
       .map(({ key, label, evidence }) => `• ${label} (${evidence}): ${reviews[key].trim()}`)
       .join('\n');
-    const comment = `TECHNICAL REVIEW\nReview date: ${reviewedAt}\nReviewer: ${user?.name || 'IT Mentor'}\n\n${rows}`;
+    const comment = `TECHNICAL REVIEW\nNgày review: ${reviewedAt}\nGiảng viên review: ${user?.name || 'Mentor IT'}\n\n${rows}`;
 
     setSending(true);
     try {
       const res = await checkpointApi.addFeedback(teamId, checkpointNumber, { comment });
-      toast.success('Technical review submitted.');
+      toast.success('Đã gửi đánh giá kỹ thuật.');
       setReviews(Object.fromEntries(TECHNICAL_REVIEW_CRITERIA.map(({ key }) => [key, ''])));
       onPosted?.(res?.data);
       setExpanded(false);
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Unable to submit the technical review.');
+      toast.error(err?.response?.data?.error || 'Không thể gửi đánh giá kỹ thuật.');
     } finally {
       setSending(false);
     }
@@ -65,11 +65,11 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
             <ClipboardCheck className="h-4 w-4" />
           </span>
           <div>
-            <h4 className="text-body-sm font-bold text-slate-900">Technical review form</h4>
-            <p className="mt-0.5 text-caption text-slate-600">Use this when this checkpoint needs a structured technical review.</p>
+            <h4 className="text-body-sm font-bold text-slate-900">Phiếu đánh giá kỹ thuật</h4>
+            <p className="mt-0.5 text-caption text-slate-600">Dùng khi checkpoint cần đánh giá kỹ thuật theo từng tiêu chí.</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1 text-caption font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> {new Intl.DateTimeFormat('en-US').format(new Date())} {expanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}</span>
+        <span className="inline-flex items-center gap-1 text-caption font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> {new Intl.DateTimeFormat('vi-VN').format(new Date())} {expanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}</span>
       </button>
       {expanded && <><div className="divide-y divide-slate-100">
         {TECHNICAL_REVIEW_CRITERIA.map(({ key, label, evidence, description }) => (
@@ -77,28 +77,28 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
             <div>
               <p className="text-body-sm font-semibold text-slate-800">{label}</p>
               <p className="mt-0.5 text-caption leading-5 text-slate-500">{description}</p>
-              <p className="mt-1 text-caption font-medium text-primary-700">Evidence: {evidence}</p>
+              <p className="mt-1 text-caption font-medium text-primary-700">Minh chứng: {evidence}</p>
             </div>
             <label className="block">
-              <span className="sr-only">Feedback or issues to fix for {label}</span>
+              <span className="sr-only">Nhận xét hoặc lỗi cần sửa cho {label}</span>
               <textarea
                 value={reviews[key]}
                 onChange={(event) => setReviews((current) => ({ ...current, [key]: event.target.value }))}
                 required
                 minLength={3}
                 rows={3}
-                placeholder="Feedback / issues to fix…"
+                placeholder="Nhập nhận xét hoặc lỗi cần sửa…"
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-body-sm leading-5 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary-100"
               />
-              <span className="mt-1 block text-right text-caption text-slate-400">{reviews[key].length} characters</span>
+              <span className="mt-1 block text-right text-caption text-slate-400">{reviews[key].length} ký tự</span>
             </label>
           </div>
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
-        <p className="text-caption text-slate-500">Each item requires at least 3 characters.</p>
+        <p className="text-caption text-slate-500">Mỗi mục cần ít nhất 3 ký tự.</p>
         <button type="submit" disabled={!hasValidReviews || sending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-body-sm font-semibold text-white shadow-sm transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">
-          <Send className="h-3.5 w-3.5" /> {sending ? 'Submitting…' : 'Submit review'}
+          <Send className="h-3.5 w-3.5" /> {sending ? 'Đang gửi…' : 'Gửi đánh giá'}
         </button>
       </div>
       </>}
@@ -115,21 +115,21 @@ function FeedbackEditor({ feedback, teamId, checkpointNumber, onSaved, onCancel,
     setSaving(true);
     try {
       const response = await checkpointApi.updateFeedback(teamId, checkpointNumber, feedback._id, { comment: value.trim() });
-      toast.success('Feedback updated.');
+      toast.success('Đã cập nhật phản hồi.');
       onSaved?.(response?.data);
     } catch (error) {
-      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Unable to update feedback.');
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Không thể cập nhật phản hồi.');
     } finally {
       setSaving(false);
     }
   };
 
   return <form onSubmit={save} className={framed ? 'mt-2 rounded-xl border border-primary-200 bg-primary-50/40 p-3' : 'mt-2'}>
-    <label className="block text-caption font-semibold text-slate-700" htmlFor={`feedback-edit-${feedback._id}`}>Edit feedback</label>
+    <label className="block text-caption font-semibold text-slate-700" htmlFor={`feedback-edit-${feedback._id}`}>Chỉnh sửa phản hồi</label>
     <AutoSizeTextarea id={`feedback-edit-${feedback._id}`} autoFocus minRows={3} maxRows={18} value={value} onChange={(event) => setValue(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-body-sm leading-5 text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary-100" />
     <div className="mt-2 flex justify-end gap-2">
-      <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-      <button type="submit" disabled={!value.trim() || saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
+      <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Hủy</button>
+      <button type="submit" disabled={!value.trim() || saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
     </div>
   </form>;
 }
@@ -160,8 +160,8 @@ function TechnicalReviewDisplay({ content }) {
     return items;
   }, []);
   return <div className="overflow-hidden rounded-lg border border-primary-100 bg-white">
-    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p>{overallNote && <p className="mt-1 text-caption text-slate-700"><span className="font-semibold">Overall note:</span> {overallNote}</p>}</div>
-    <div className="divide-y divide-slate-100">{rows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><p className="text-caption whitespace-pre-wrap break-words text-slate-600">{row.review}</p></div>; })}</div>
+    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Đánh giá kỹ thuật</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p>{overallNote && <p className="mt-1 text-caption text-slate-700"><span className="font-semibold">Nhận xét chung:</span> {overallNote}</p>}</div>
+    <div className="divide-y divide-slate-100">{rows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Nội dung đánh giá:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Minh chứng: {row.evidence}</p></div><p className="text-caption whitespace-pre-wrap break-words text-slate-600">{row.review}</p></div>; })}</div>
   </div>;
 }
 
@@ -186,19 +186,19 @@ function TechnicalReviewEditor({ feedback, teamId, checkpointNumber, onSaved, on
     setSaving(true);
     try {
       const response = await checkpointApi.updateFeedback(teamId, checkpointNumber, feedback._id, { comment });
-      toast.success('Technical review updated.');
+      toast.success('Đã cập nhật đánh giá kỹ thuật.');
       onSaved?.(response?.data);
     } catch (error) {
-      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Unable to update technical review.');
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Không thể cập nhật đánh giá kỹ thuật.');
     } finally {
       setSaving(false);
     }
   };
 
   return <form onSubmit={save} className="overflow-hidden rounded-lg border border-primary-100 bg-white">
-    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Technical review</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p></div>
-    <div className="divide-y divide-slate-100">{parsedRows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Assessment:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Evidence: {row.evidence}</p></div><textarea value={reviews[row.label] || ''} onChange={(event) => setReviews((current) => ({ ...current, [row.label]: event.target.value }))} minLength={3} required rows={3} aria-label={`Feedback for ${row.label}`} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-caption leading-5 text-slate-700 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary-100" /></div>; })}</div>
-    <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-3 py-2"><button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Cancel</button><button type="submit" disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button></div>
+    <div className="border-b border-primary-100 bg-primary-50 px-3 py-2"><p className="text-caption font-bold text-primary-700">Đánh giá kỹ thuật</p><p className="text-caption text-slate-600">{metadata.join(' · ')}</p></div>
+    <div className="divide-y divide-slate-100">{parsedRows.map((row) => { const criterion = TECHNICAL_REVIEW_CRITERIA.find((item) => item.label === row.label); return <div key={row.label} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4"><div><p className="text-caption font-semibold text-slate-800">{row.label}</p><p className="mt-0.5 text-caption leading-5 text-slate-500"><span className="font-semibold text-slate-600">Nội dung đánh giá:</span> {criterion?.description || '—'}</p><p className="mt-1 text-caption text-primary-700">Minh chứng: {row.evidence}</p></div><textarea value={reviews[row.label] || ''} onChange={(event) => setReviews((current) => ({ ...current, [row.label]: event.target.value }))} minLength={3} required rows={3} aria-label={`Nhận xét cho ${row.label}`} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-caption leading-5 text-slate-700 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary-100" /></div>; })}</div>
+    <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-3 py-2"><button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-caption font-semibold text-slate-700 hover:bg-slate-50">Hủy</button><button type="submit" disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-caption font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Đang lưu…' : 'Lưu thay đổi'}</button></div>
   </form>;
 }
 
@@ -256,7 +256,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
     try {
       const { blob, fileName } = await checkpointApi.exportTechnicalReview(teamId, checkpointNumber, comment._id);
       const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url);
-    } catch { toast.error('Unable to export the technical review.'); }
+    } catch { toast.error('Không thể xuất phiếu đánh giá kỹ thuật.'); }
   };
 
   const handleReply = async (e) => {
@@ -268,12 +268,12 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
         comment: text.trim(),
         parentFeedbackId: comment._id,
       });
-      toast.success('Reply posted!');
+      toast.success('Đã gửi phản hồi.');
       setText('');
       setOpen(false);
       onPosted?.(res?.data);
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to post reply.');
+      toast.error(err?.response?.data?.error || 'Không thể gửi phản hồi.');
     } finally {
       setSending(false);
     }
@@ -323,8 +323,8 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
             value={text}
             onChange={(e) => setText(e.target.value)}
             submitOnEnter={submitForm}
-            aria-label="Write a reply"
-            placeholder="Write a reply…"
+            aria-label="Viết phản hồi"
+            placeholder="Viết phản hồi…"
             className="flex-1 text-xs leading-5 border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-400 bg-white"
           />
           <button
@@ -367,11 +367,11 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
     setSending(true);
     try {
       const res = await checkpointApi.addFeedback(teamId, checkpointNumber, { comment: text.trim() });
-      toast.success('Feedback posted!');
+      toast.success('Đã gửi phản hồi.');
       setText('');
       handlePosted(res?.data);
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to post feedback.');
+      toast.error(err?.response?.data?.error || 'Không thể gửi phản hồi.');
     } finally {
       setSending(false);
     }
@@ -399,7 +399,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
       {/* Comment list */}
       {roots.length === 0 ? (
         <div className="text-center py-10 text-slate-400 text-sm bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
-          No feedback yet. Be the first to comment!
+          Chưa có phản hồi. Hãy là người đầu tiên phản hồi!
         </div>
       ) : (
         <div ref={feedbackListRef} className={`space-y-5 overflow-y-auto pr-1 scrollbar-thin ${fullHeight ? 'max-h-[min(50vh,480px)]' : 'max-h-[340px]'}`}>
@@ -420,12 +420,12 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
 
       {isMentor && feedbackType === 'technical' ? (
         createPortal(
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Technical review form">
-            <button type="button" className="absolute inset-0 cursor-default" aria-label="Close technical review form" onClick={() => setFeedbackType('regular')} />
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Phiếu đánh giá kỹ thuật">
+            <button type="button" className="absolute inset-0 cursor-default" aria-label="Đóng phiếu đánh giá kỹ thuật" onClick={() => setFeedbackType('regular')} />
             <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                <div><h3 className="text-subheading font-bold text-slate-900">Technical review form</h3><p className="mt-0.5 text-caption text-slate-500">Complete the review for this checkpoint.</p></div>
-                <button type="button" onClick={() => setFeedbackType('regular')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close technical review form"><X className="h-5 w-5" /></button>
+                <div><h3 className="text-subheading font-bold text-slate-900">Phiếu đánh giá kỹ thuật</h3><p className="mt-0.5 text-caption text-slate-500">Hoàn thành đánh giá cho checkpoint này.</p></div>
+                <button type="button" onClick={() => setFeedbackType('regular')} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Đóng phiếu đánh giá kỹ thuật"><X className="h-5 w-5" /></button>
               </div>
               <div className="overflow-y-auto p-5"><TechnicalReviewForm teamId={teamId} checkpointNumber={checkpointNumber} onPosted={(feedback) => { handlePosted(feedback); setFeedbackType('regular'); }} /></div>
             </div>
@@ -435,7 +435,7 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
       ) : <form onSubmit={handlePost} className="flex gap-3 items-start pt-1">
         <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} />
         <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <label className="block text-caption font-semibold text-slate-700" htmlFor="regular-feedback">Your feedback</label>
+          <label className="block text-caption font-semibold text-slate-700" htmlFor="regular-feedback">Phản hồi của bạn</label>
           <AutoSizeTextarea
             id="regular-feedback"
             minRows={2}
@@ -443,13 +443,13 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
             value={text}
             onChange={(e) => setText(e.target.value)}
             submitOnEnter={submitForm}
-            aria-label="Your feedback"
-            placeholder="Share feedback or ask a question about this checkpoint…"
+            aria-label="Phản hồi của bạn"
+            placeholder="Chia sẻ phản hồi hoặc đặt câu hỏi về checkpoint này…"
             className="mt-1 w-full resize-none border-0 bg-transparent px-0 py-1 text-body-sm leading-relaxed outline-none placeholder:text-slate-400 focus:ring-0"
           />
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
             {isMentor ? <FeedbackModeSwitch value="regular" onChange={setFeedbackType} /> : <span className="text-caption text-slate-400"></span>}
-            <button type="submit" disabled={!text.trim() || sending} aria-label="Post feedback" title="Post feedback" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-sm transition hover:bg-primary-600 disabled:opacity-40">
+            <button type="submit" disabled={!text.trim() || sending} aria-label="Gửi phản hồi" title="Gửi phản hồi" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-sm transition hover:bg-primary-600 disabled:opacity-40">
               <Send className="h-4 w-4" />
             </button>
           </div>
