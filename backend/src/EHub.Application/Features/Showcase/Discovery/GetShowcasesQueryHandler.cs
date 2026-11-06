@@ -68,6 +68,8 @@ public sealed class GetShowcasesQueryHandler(
                     .OrderBy(tag => tag.TagName).Select(tag => tag.TagName).ToArray(),
                 LikeCount = row.Showcase.LikeCount,
                 CommentCount = row.Showcase.CommentCount,
+                CoverUrl = row.Showcase.Media.Where(media => media.MediaType == ShowcaseMediaType.Image)
+                    .OrderBy(media => media.SortOrder).ThenBy(media => media.Id).Select(media => media.Url).FirstOrDefault(),
                 VideoUrl = row.Showcase.Links.Where(link => link.LinkType == ShowcaseLinkType.Video)
                     .OrderBy(link => link.SortOrder).ThenBy(link => link.Id).Select(link => link.Url).FirstOrDefault()
             }).ToListAsync(cancellationToken);

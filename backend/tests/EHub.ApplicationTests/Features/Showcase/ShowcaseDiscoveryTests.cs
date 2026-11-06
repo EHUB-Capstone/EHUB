@@ -116,6 +116,25 @@ public sealed class ShowcaseDiscoveryTests
         items[none.ShowcaseId].VideoUrl.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Card_ExposesTheFirstUploadedImageAsCover_AndNothingWhenThereIsNone()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var withImages = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var withoutImages = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        db.ShowcaseMedia.AddRange(
+            new ShowcaseMedia { ShowcaseProjectId = withImages.ShowcaseId, MediaType = ShowcaseMediaType.Video, Url = "https://cdn.example.test/clip.mp4", SortOrder = 0 },
+            new ShowcaseMedia { ShowcaseProjectId = withImages.ShowcaseId, MediaType = ShowcaseMediaType.Image, Url = "https://cdn.example.test/second.png", SortOrder = 2 },
+            new ShowcaseMedia { ShowcaseProjectId = withImages.ShowcaseId, MediaType = ShowcaseMediaType.Image, Url = "https://cdn.example.test/first.png", SortOrder = 1 });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var items = (await Handler(db).HandleAsync(new())).Value.Items.ToDictionary(item => item.Id);
+
+        items[withImages.ShowcaseId].CoverUrl.Should().Be("https://cdn.example.test/first.png");
+        items[withoutImages.ShowcaseId].CoverUrl.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(" gArDeN ", 1)]
     [InlineData("AUTOMATICALLY", 1)]

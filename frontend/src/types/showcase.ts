@@ -38,6 +38,8 @@ export interface ShowcaseCardDto {
   commentCount: number;
   /** Canonical YouTube or Vimeo watch URL of the page's first Video link, when it has a supported one. */
   videoUrl?: string | null;
+  /** The page's first uploaded image, used as the preview of a feed post. */
+  coverUrl?: string | null;
 }
 
 export interface ShowcaseDiscoveryPageDto {

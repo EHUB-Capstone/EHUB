@@ -30,6 +30,8 @@ public sealed class ShowcaseCardDto
     public int CommentCount { get; init; }
     /// <summary>Canonical YouTube or Vimeo watch URL of the page's first Video link; null when it has none that is supported.</summary>
     public string? VideoUrl { get; set; }
+    /// <summary>The page's first uploaded image, shown as the preview of a feed post; null when it has none.</summary>
+    public string? CoverUrl { get; init; }
 }
 
 public sealed class ShowcaseSemesterOptionDto
