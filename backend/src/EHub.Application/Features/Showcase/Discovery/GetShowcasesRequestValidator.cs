@@ -16,7 +16,8 @@ public sealed class GetShowcasesRequestValidator : AbstractValidator<GetShowcase
         RuleFor(request => request.SemesterId).NotEqual(Guid.Empty).When(request => request.SemesterId.HasValue);
         RuleFor(request => request.Sort).Must(value =>
             string.Equals(value?.Trim(), "newest", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value?.Trim(), "popular", StringComparison.OrdinalIgnoreCase));
+            string.Equals(value?.Trim(), "popular", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value?.Trim(), "trending", StringComparison.OrdinalIgnoreCase));
         RuleFor(request => request.Page).InclusiveBetween(1, int.MaxValue / 50);
         RuleFor(request => request.PageSize).InclusiveBetween(1, 50);
     }

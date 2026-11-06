@@ -27,6 +27,8 @@ public sealed class ShowcaseCardDto
     public string TeamName { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Industries { get; init; } = Array.Empty<string>();
     public int LikeCount { get; init; }
+    public bool HasUpvoted { get; init; }
+    public bool IsOwner { get; init; }
     public int CommentCount { get; init; }
     /// <summary>Canonical YouTube or Vimeo watch URL of the page's first Video link; null when it has none that is supported.</summary>
     public string? VideoUrl { get; set; }

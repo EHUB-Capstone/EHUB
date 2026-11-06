@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Domain.Enums;
@@ -13,10 +14,11 @@ namespace EHub.Application.Features.Showcase.Discovery;
 public sealed class GetShowcasesQueryHandler(
     IApplicationDbContext context,
     IShowcaseProjectSearch search,
-    IValidator<GetShowcasesRequest> validator) : IGetShowcasesQueryHandler
+    IValidator<GetShowcasesRequest> validator,
+    IDateTimeProvider time) : IGetShowcasesQueryHandler
 {
     public async Task<Result<PagedResponse<ShowcaseCardDto>>> HandleAsync(
-        GetShowcasesRequest request, CancellationToken cancellationToken = default)
+        GetShowcasesRequest request, Guid viewerId = default, string viewerRole = "", CancellationToken cancellationToken = default)
     {
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
@@ -49,10 +51,42 @@ public sealed class GetShowcasesQueryHandler(
         }
 
         var total = await query.CountAsync(cancellationToken);
-        var ordered = string.Equals(request.Sort.Trim(), "popular", StringComparison.OrdinalIgnoreCase)
-            ? query.OrderByDescending(row => row.Showcase.LikeCount).ThenByDescending(row => row.Showcase.PublishedAt).ThenBy(row => row.Showcase.Id)
-            : query.OrderByDescending(row => row.Showcase.PublishedAt).ThenBy(row => row.Showcase.Id);
-        var items = await ordered.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
+        var sort = request.Sort.Trim();
+        var ordered = query.OrderByDescending(row => row.Showcase.PublishedAt);
+        if (string.Equals(sort, "trending", StringComparison.OrdinalIgnoreCase))
+        {
+            var now = time.UtcNow;
+            var todayUtc = DateOnly.FromDateTime(now);
+            var oneDayAgo = now.AddDays(-1);
+            var twoDaysAgo = now.AddDays(-2);
+            var threeDaysAgo = now.AddDays(-3);
+            var fourDaysAgo = now.AddDays(-4);
+            var fiveDaysAgo = now.AddDays(-5);
+
+            // Use timestamp comparisons so PostgreSQL can rank the entire filtered set before paging.
+            ordered = query.OrderByDescending(row => (long)row.Showcase.LikeCount
+                + 3L * context.ShowcaseUpvotes.LongCount(vote =>
+                    vote.ShowcaseProjectId == row.Showcase.Id && vote.CreatedAt >= oneDayAgo && vote.CreatedAt <= now)
+                + 0.5 * Math.Sqrt(context.ShowcaseViewsDaily.LongCount(view =>
+                    view.ShowcaseProjectId == row.Showcase.Id && view.ViewDateUtc == todayUtc))
+                + (row.Showcase.PublishedAt > now ? 0
+                    : row.Showcase.PublishedAt > oneDayAgo ? 5
+                    : row.Showcase.PublishedAt > twoDaysAgo ? 4
+                    : row.Showcase.PublishedAt > threeDaysAgo ? 3
+                    : row.Showcase.PublishedAt > fourDaysAgo ? 2
+                    : row.Showcase.PublishedAt > fiveDaysAgo ? 1
+                    : 0))
+                .ThenByDescending(row => row.Showcase.PublishedAt.HasValue)
+                .ThenByDescending(row => row.Showcase.PublishedAt);
+        }
+        else if (string.Equals(sort, "popular", StringComparison.OrdinalIgnoreCase))
+        {
+            ordered = query.OrderByDescending(row => row.Showcase.LikeCount).ThenByDescending(row => row.Showcase.PublishedAt);
+        }
+
+        var ownedProjects = ShowcaseAccess.OwnedProjects(context, viewerId);
+        var viewerIsStudent = ShowcaseAccess.IsStudent(viewerRole);
+        var items = await ordered.ThenBy(row => row.Showcase.Id).Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
             .Select(row => new ShowcaseCardDto
             {
                 Id = row.Showcase.Id,
@@ -67,6 +101,8 @@ public sealed class GetShowcasesQueryHandler(
                 Industries = row.Project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField)
                     .OrderBy(tag => tag.TagName).Select(tag => tag.TagName).ToArray(),
                 LikeCount = row.Showcase.LikeCount,
+                HasUpvoted = context.ShowcaseUpvotes.Any(vote => vote.ShowcaseProjectId == row.Showcase.Id && vote.UserId == viewerId),
+                IsOwner = viewerIsStudent && ownedProjects.Any(project => project.ProjectLineageId == row.Showcase.ProjectLineageId),
                 CommentCount = row.Showcase.CommentCount,
                 VideoUrl = row.Showcase.Links.Where(link => link.LinkType == ShowcaseLinkType.Video)
                     .OrderBy(link => link.SortOrder).ThenBy(link => link.Id).Select(link => link.Url).FirstOrDefault()

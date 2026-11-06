@@ -5488,6 +5488,48 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("showcase_review_histories", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseUpvote", b =>
+                {
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.HasKey("ShowcaseProjectId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("showcase_upvotes", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseViewDaily", b =>
+                {
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateOnly>("ViewDateUtc")
+                        .HasColumnType("date")
+                        .HasColumnName("view_date_utc");
+
+                    b.HasKey("ShowcaseProjectId", "UserId", "ViewDateUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("showcase_view_daily", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9119,6 +9161,36 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("ShowcaseProject");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseUpvote", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseViewDaily", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>

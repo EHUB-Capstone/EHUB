@@ -5,6 +5,8 @@ using EHub.Application.Features.Showcase.Moderation;
 using EHub.Application.Features.Showcase.Query;
 using EHub.Application.Features.Showcase.Discovery;
 using EHub.Application.Features.Showcase.Featured;
+using EHub.Application.Features.Showcase.Upvote;
+using EHub.Application.Features.Showcase.Views;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Shared.Constants;
@@ -21,10 +23,20 @@ namespace EHub.Api.Controllers;
 public sealed class ShowcaseController(ICurrentUserService currentUser) : ControllerBase
 {
     private const long MaximumUploadRequestBytes = 6 * 1024 * 1024;
+    private static readonly string[] UpvoteRolePriority = [SystemRoles.Admin, SystemRoles.Lecturer, SystemRoles.Mentor, SystemRoles.Student];
 
     private Guid UserId => currentUser.UserId ?? Guid.Empty;
 
     private string Role => currentUser.Roles.FirstOrDefault(role => SystemRoles.All.Contains(role, StringComparer.OrdinalIgnoreCase)) ?? string.Empty;
+
+    private string UpvoteRole
+    {
+        get
+        {
+            var roles = currentUser.Roles;
+            return UpvoteRolePriority.FirstOrDefault(role => roles.Contains(role, StringComparer.OrdinalIgnoreCase)) ?? string.Empty;
+        }
+    }
 
     [HttpGet]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -32,7 +44,7 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         [FromQuery] GetShowcasesRequest request,
         [FromServices] IGetShowcasesQueryHandler handler,
         CancellationToken cancellationToken) =>
-        ToResponse(await handler.HandleAsync(request, cancellationToken), "Showcase projects retrieved.");
+        ToResponse(await handler.HandleAsync(request, UserId, UpvoteRole, cancellationToken), "Showcase projects retrieved.");
 
     [HttpGet("filter-options")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -54,6 +66,21 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
 
     private string FeaturedRole => currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
         ?? currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)) ?? Role;
+
+    [HttpPost("{id:guid}/upvote")]
+    public async Task<IActionResult> Upvote(
+        Guid id, [FromServices] IShowcaseUpvoteHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SetAsync(id, UserId, UpvoteRole, true, cancellationToken), "Showcase upvoted.");
+
+    [HttpDelete("{id:guid}/upvote")]
+    public async Task<IActionResult> RemoveUpvote(
+        Guid id, [FromServices] IShowcaseUpvoteHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SetAsync(id, UserId, UpvoteRole, false, cancellationToken), "Showcase upvote removed.");
+
+    [HttpPost("{id:guid}/view")]
+    public async Task<IActionResult> RecordView(
+        Guid id, [FromServices] IShowcaseViewHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.RecordAsync(id, UserId, Role, cancellationToken), "Showcase view processed.");
 
     [HttpGet("mine")]
     [Authorize(Policy = SystemPolicies.StudentOnly)]
@@ -213,6 +240,7 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         var body = ApiResponse<object>.FailureResponse(error.Message, error.Code);
         return error.Code switch
         {
+            ErrorCodes.CommonUnauthorizedError => Unauthorized(body),
             ErrorCodes.ShowcaseNotFound => NotFound(body),
             ErrorCodes.ShowcaseAccessDenied => StatusCode(StatusCodes.Status403Forbidden, body),
             ErrorCodes.ShowcaseAlreadyExists or

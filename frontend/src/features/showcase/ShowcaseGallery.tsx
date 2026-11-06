@@ -8,6 +8,7 @@ import Input from '../../components/ui/Input';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import PageHeader from '../../components/ui/PageHeader';
 import { showcaseApi } from '../../api/showcaseApi';
+import { useAuthContext } from '../../context/AuthContext';
 import type { GetShowcasesRequest, ShowcaseCardDto } from '../../types/showcase';
 import { SHOWCASE_STAGES, stageLabel } from '../../utils/showcase';
 import { discoveryPages, discoveryRequest, isNewlyPublished } from '../../utils/showcaseDiscovery';
@@ -82,12 +83,13 @@ function RailList({ query, items, backTo, emptyHidden = true, loadingLabel, erro
 
 export default function ShowcaseGallery(): React.ReactElement {
   const [params, setParams] = useSearchParams();
+  const { user } = useAuthContext();
   const location = useLocation();
   const backTo = `${location.pathname}${location.search}`;
   const request = discoveryRequest(params);
   const keyword = params.get('q') ?? '';
   const [searchReset, setSearchReset] = useState(0);
-  const gallery = useQuery({ queryKey: ['showcase', 'discovery', request], queryFn: ({ signal }) => showcaseApi.list(request, signal), staleTime: 0 });
+  const gallery = useQuery({ queryKey: ['showcase', 'discovery', user?.id, user?.role, request], queryFn: ({ signal }) => showcaseApi.list(request, signal), staleTime: 0 });
   const options = useQuery({ queryKey: ['showcase', 'filter-options'], queryFn: ({ signal }) => showcaseApi.getFilterOptions(signal), staleTime: 0 });
   const featuredRequest: GetShowcasesRequest = { featured: true, sort: 'newest', page: 1, pageSize: 3 };
   const newestRequest: GetShowcasesRequest = { sort: 'newest', page: 1, pageSize: 3 };
@@ -95,7 +97,13 @@ export default function ShowcaseGallery(): React.ReactElement {
   const newest = useQuery({ queryKey: ['showcase', 'newly-published'], queryFn: ({ signal }) => showcaseApi.list(newestRequest, signal), staleTime: 0 });
   const newlyPublished = (newest.data?.items ?? []).filter(project => isNewlyPublished(project.publishedAt));
 
-  const updateParam = (key: string, value: string) => setParams(current => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); if (key !== 'page') next.delete('page'); return next; });
+  const updateParam = (key: string, value: string) => setParams(current => {
+    const next = new URLSearchParams(current);
+    if (value) next.set(key, value); else next.delete(key);
+    if (key === 'sort') next.delete('tab');
+    if (key !== 'page') next.delete('page');
+    return next;
+  });
   const clearFilters = () => { setSearchReset(current => current + 1); setParams(current => { const next = new URLSearchParams(current); for (const key of ['q', 'stage', 'industry', 'semesterId', 'featured', 'sort', 'page']) next.delete(key); return next; }); };
   const removeFilter = (key: string) => { if (key === 'q') setSearchReset(current => current + 1); updateParam(key, ''); };
 
@@ -103,7 +111,7 @@ export default function ShowcaseGallery(): React.ReactElement {
   const totalPages = gallery.data?.totalPages ?? 0;
   const page = request.page ?? 1;
   const isFeaturedOnly = request.featured === true;
-  const isPopular = request.sort === 'popular';
+  const isPopular = request.sort === 'trending';
   const hasFilters = Boolean(request.search || request.stage || request.industry || request.semesterId || request.featured !== undefined || isPopular);
   const semesterName = (id: string) => { const semester = options.data?.semesters.find(item => item.id === id); return semester ? (semester.code || semester.name) : 'Selected semester'; };
   const activeFilters = [
@@ -138,7 +146,7 @@ export default function ShowcaseGallery(): React.ReactElement {
             <div className="space-y-0.5">
               <RailButton icon={LayoutGrid} active={!isFeaturedOnly && !isPopular} onClick={() => setParams(current => { const next = new URLSearchParams(current); for (const key of ['featured', 'sort', 'page']) next.delete(key); return next; })}>All projects</RailButton>
               <RailButton icon={Star} active={isFeaturedOnly} onClick={() => updateParam('featured', isFeaturedOnly ? '' : 'true')}>Faculty selected</RailButton>
-              <RailButton icon={Flame} active={isPopular} onClick={() => updateParam('sort', isPopular ? '' : 'popular')}>Most popular</RailButton>
+              <RailButton icon={Flame} active={isPopular} onClick={() => updateParam('sort', isPopular ? '' : 'trending')}>Most popular</RailButton>
             </div>
           </section>
 
@@ -182,7 +190,7 @@ export default function ShowcaseGallery(): React.ReactElement {
               : gallery.isError
                 ? <ErrorState title="Could not load projects" message={parseApiError(gallery.error, 'Please try loading projects again.').message} onRetry={() => { void gallery.refetch(); }} />
                 : items.length > 0
-                  ? <div aria-label="Published projects" className="space-y-5">{items.map(project => <ProjectSummaryCard key={project.id} project={project} backTo={backTo} backLabel="Project Showcase" />)}</div>
+                  ? <div aria-label="Published projects" className="space-y-5">{items.map(project => <ProjectSummaryCard key={`${project.id}:${user?.id}:${user?.role}`} project={project} backTo={backTo} backLabel="Project Showcase" />)}</div>
                   : (
                     <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center dark:border-slate-600 dark:bg-secondary-800">
                       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-700"><SearchX className="h-6 w-6" aria-hidden="true" /></span>

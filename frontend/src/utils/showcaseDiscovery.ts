@@ -17,12 +17,13 @@ export function discoveryRequest(params: URLSearchParams): GetShowcasesRequest {
   const semesterId = params.get('semesterId') ?? '';
   const page = Number(params.get('page'));
   const featured = params.get('featured');
+  const sort = params.get('sort');
   return {
     search: params.get('q')?.trim().slice(0, 100) || undefined,
     stage,
     industry: params.get('industry')?.trim().slice(0, 100) || undefined,
     semesterId: guid.test(semesterId) && !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(semesterId) ? semesterId : undefined,
-    sort: params.get('tab') !== 'new' && params.get('sort') === 'popular' ? 'popular' : 'newest',
+    sort: params.get('tab') !== 'new' && (sort === 'popular' || sort === 'trending') ? 'trending' : 'newest',
     page: Number.isSafeInteger(page) && page >= 1 && page <= Math.floor(2147483647 / 50) ? page : 1,
     pageSize: DISCOVERY_PAGE_SIZE,
     ...(featured === 'true' || featured === 'false' ? { featured: featured === 'true' } : {}),

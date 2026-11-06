@@ -1,6 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ExternalLink, Eye, Flame, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ExternalLink, Eye, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -9,8 +10,11 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
 import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
+import ShowcaseUpvoteButton from '../../components/showcase/ShowcaseUpvoteButton';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 import { showcaseApi } from '../../api/showcaseApi';
+import { useAuthContext } from '../../context/AuthContext';
+import type { ShowcaseDetailDto } from '../../types/showcase';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 
@@ -40,13 +44,44 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
 export default function ShowcaseDetail() {
   const { id = '' } = useParams();
   const location = useLocation();
+  const { user } = useAuthContext();
+  const viewerId = user?.id;
+  const viewerRole = user?.role;
   const queryClient = useQueryClient();
   const detail = useQuery({
-    queryKey: ['showcase', 'detail', id],
+    queryKey: ['showcase', 'detail', id, viewerId, viewerRole],
     queryFn: ({ signal }) => showcaseApi.get(id, signal),
     staleTime: 0,
     retry: (count, error) => parseApiError(error, '').code !== SHOWCASE_ERROR_CODES.notFound && count < 1,
   });
+  const trackedVisit = useRef('');
+  const visitKey = `${location.key}:${id}:${viewerId}:${viewerRole}`;
+  const shouldTrack = Boolean(viewerId) && detail.isSuccess &&
+    detail.data.showcase.status === 'Published' && !detail.data.isOwner;
+
+  useEffect(() => {
+    if (!shouldTrack || trackedVisit.current === visitKey) return;
+
+    const controller = new AbortController();
+    // Let effect cleanup cancel the probe mount before sending a request in React Strict Mode.
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      trackedVisit.current = visitKey;
+      void showcaseApi.recordView(id, controller.signal)
+        .then(({ viewCount }) => {
+          if (controller.signal.aborted) return;
+          queryClient.setQueryData<ShowcaseDetailDto>(['showcase', 'detail', id, viewerId, viewerRole], current => {
+            if (!current || current.showcase.viewCount >= viewCount) return current;
+            return { ...current, showcase: { ...current.showcase, viewCount } };
+          });
+        })
+        .catch(() => {
+          // Tracking is best effort; the detail query owns the page's error state.
+        });
+    });
+
+    return () => controller.abort();
+  }, [id, queryClient, shouldTrack, viewerId, viewerRole, visitKey]);
 
   if (detail.isPending) {
     return (
@@ -72,7 +107,7 @@ export default function ShowcaseDetail() {
     );
   }
 
-  const { showcase, members, isOwner, canModerate, teamName } = detail.data;
+  const { showcase, members, isOwner, hasUpvoted, canModerate, teamName } = detail.data;
   const { profile } = showcase;
   const privileged = isOwner || canModerate;
   const navigationState = location.state as { showcaseBackTo?: unknown; showcaseBackLabel?: unknown } | null;
@@ -133,7 +168,15 @@ export default function ShowcaseDetail() {
 
           <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-4">
             <Stat icon={Eye} label="views" value={showcase.viewCount} />
-            <Stat icon={Flame} label="interested" value={showcase.likeCount} />
+            <ShowcaseUpvoteButton
+              key={`${showcase.id}:${user?.id}:${user?.role}`}
+              showcaseId={showcase.id}
+              likeCount={showcase.likeCount}
+              hasUpvoted={hasUpvoted}
+              isOwner={isOwner}
+              isPublished={showcase.status === 'Published'}
+              showLabel
+            />
             <Stat icon={MessageSquare} label="comments" value={showcase.commentCount} />
           </div>
 

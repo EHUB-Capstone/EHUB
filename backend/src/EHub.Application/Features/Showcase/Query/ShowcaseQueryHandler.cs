@@ -12,10 +12,17 @@ public sealed class ShowcaseQueryHandler(IApplicationDbContext context) : IShowc
     public async Task<Result<ShowcaseDetailDto>> GetAsync(
         Guid showcaseId, Guid userId, string role, CancellationToken cancellationToken = default)
     {
-        var showcase = await context.ShowcaseProjects.AsNoTracking()
+        var page = await context.ShowcaseProjects.AsNoTracking()
+            .Where(item => item.Id == showcaseId)
             .Include(item => item.Links).Include(item => item.Media)
-            .FirstOrDefaultAsync(item => item.Id == showcaseId, cancellationToken);
-        if (showcase is null) return NotFound();
+            .Select(item => new
+            {
+                Showcase = item,
+                HasUpvoted = context.ShowcaseUpvotes.Any(vote => vote.ShowcaseProjectId == item.Id && vote.UserId == userId)
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (page is null) return NotFound();
+        var showcase = page.Showcase;
 
         var isOwner = ShowcaseAccess.IsStudent(role) &&
                       await ShowcaseAccess.OwnsLineageAsync(context, showcase.ProjectLineageId, userId, cancellationToken);
@@ -62,6 +69,7 @@ public sealed class ShowcaseQueryHandler(IApplicationDbContext context) : IShowc
             Members = members,
             History = history,
             IsOwner = isOwner,
+            HasUpvoted = page.HasUpvoted,
             CanModerate = canModerate
         });
     }

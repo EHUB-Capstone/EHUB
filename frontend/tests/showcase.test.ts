@@ -5,6 +5,20 @@ import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
 import { discoveryRequest, discoveryPages, isNewlyPublished } from '../src/utils/showcaseDiscovery.ts';
 
+test('showcase view client returns the current counter and accepts an abort signal', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const controller = new AbortController();
+  mock.onPost('/showcase/s1/view').reply(200, { data: { viewCount: 8 } });
+  try {
+    assert.deepEqual(await showcaseApi.recordView('s1', controller.signal), { viewCount: 8 });
+    assert.equal(mock.history.post[0].signal, controller.signal);
+    controller.abort();
+    await assert.rejects(showcaseApi.recordView('s1', controller.signal));
+  } finally {
+    mock.restore();
+  }
+});
+
 test('newly published rail includes only projects published in the preceding seven days', () => {
   const now = Date.parse('2026-11-05T12:00:00Z');
   assert.equal(isNewlyPublished('2026-10-29T12:00:00Z', now), true);
@@ -35,13 +49,14 @@ test('featured client calls POST/DELETE, unwraps selection and preserves discove
 test('discovery URL maps to server filters and rejects obsolete stages, sorts and invalid paging', () => {
   const semesterId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   const request = discoveryRequest(new URLSearchParams({ q: ' garden ', stage: 'MVP', industry: ' HealthTech ', semesterId, sort: 'popular', page: '2' }));
-  assert.deepEqual(request, { search: 'garden', stage: 'Mvp', industry: 'HealthTech', semesterId, sort: 'popular', page: 2, pageSize: 8 });
+  assert.deepEqual(request, { search: 'garden', stage: 'Mvp', industry: 'HealthTech', semesterId, sort: 'trending', page: 2, pageSize: 8 });
   const invalid = discoveryRequest(new URLSearchParams('stage=Prototype&sort=name&semesterId=FA2026&page=-1'));
   assert.equal(invalid.stage, undefined);
   assert.equal(invalid.semesterId, undefined);
   assert.equal(invalid.sort, 'newest');
   assert.equal(invalid.page, 1);
   assert.equal(discoveryRequest(new URLSearchParams('sort=popular&tab=new')).sort, 'newest');
+  assert.equal(discoveryRequest(new URLSearchParams('sort=trending')).sort, 'trending');
   assert.equal(discoveryRequest(new URLSearchParams('page=999999999999')).page, 1);
   assert.equal(discoveryRequest(new URLSearchParams({ q: 'x'.repeat(101) })).search?.length, 100);
   assert.equal(discoveryRequest(new URLSearchParams('featured=true')).featured, true);
@@ -57,7 +72,7 @@ test('discovery pagination stays bounded for large server result sets', () => {
 
 test('discovery client forwards filters and unwraps list, options and detail; errors remain failures', async () => {
   const mock = new MockAdapter(axiosClient);
-  const params = discoveryRequest(new URLSearchParams('q=garden&page=2'));
+  const params = discoveryRequest(new URLSearchParams('q=garden&sort=trending&page=2'));
   const page = { items: [], pageIndex: 2, pageSize: 8, totalItems: 0, totalPages: 0 };
   const options = { industries: ['HealthTech'], semesters: [{ id: 's1', code: 'FA26', name: 'Fall 2026' }] };
   mock.onGet('/showcase', { params }).reply(200, { data: page });
@@ -66,6 +81,7 @@ test('discovery client forwards filters and unwraps list, options and detail; er
   mock.onGet('/showcase/missing').reply(404, { message: 'Not found' });
   try {
     assert.deepEqual(await showcaseApi.list(params), page);
+    assert.equal(mock.history.get[0].params.sort, 'trending');
     assert.deepEqual(await showcaseApi.getFilterOptions(), options);
     assert.equal((await showcaseApi.get('published-id')).teamName, 'Real team');
     await assert.rejects(showcaseApi.get('missing'));
@@ -91,6 +107,7 @@ import {
   isPublicWebUrl,
   missingForReview,
   moderationActionsFor,
+  optimisticShowcaseUpvote,
   projectProfilePath,
   toSaveRequest,
   validateImageFile,
@@ -99,6 +116,31 @@ import {
 import { validateProjectProfile, validateProjectWorkspace } from '../src/utils/projectWorkspace.ts';
 import { createReleaseFeatureFlags } from '../src/config/releaseFeatureFlags.ts';
 import type { ShowcaseDto } from '../src/types/showcase.ts';
+
+test('optimistic showcase upvote adds and removes one without mutating the confirmed vote', () => {
+  const confirmed = { hasUpvoted: false, likeCount: 5 };
+  const added = optimisticShowcaseUpvote(confirmed);
+  assert.deepEqual(added, { hasUpvoted: true, likeCount: 6 });
+  assert.deepEqual(optimisticShowcaseUpvote(added), confirmed);
+  assert.deepEqual(confirmed, { hasUpvoted: false, likeCount: 5 });
+  assert.deepEqual(optimisticShowcaseUpvote({ hasUpvoted: true, likeCount: 0 }), { hasUpvoted: false, likeCount: 0 });
+});
+
+test('showcase upvote client sends POST to vote and DELETE to remove', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const voted = { hasUpvoted: true, likeCount: 6 };
+  const cleared = { hasUpvoted: false, likeCount: 5 };
+  mock.onPost('/showcase/s1/upvote').reply(200, { data: voted });
+  mock.onDelete('/showcase/s1/upvote').reply(200, { data: cleared });
+  mock.onPost('/showcase/owner/upvote').reply(403, { message: 'Forbidden' });
+  try {
+    assert.deepEqual(await showcaseApi.setUpvote('s1', true), voted);
+    assert.deepEqual(await showcaseApi.setUpvote('s1', false), cleared);
+    await assert.rejects(showcaseApi.setUpvote('owner', true));
+  } finally {
+    mock.restore();
+  }
+});
 
 const showcase = (overrides: Partial<ShowcaseDto> = {}): ShowcaseDto => ({
   id: 's1',

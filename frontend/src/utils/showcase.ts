@@ -7,7 +7,15 @@ import type {
   ShowcaseStage,
   ShowcaseProfileDto,
   ShowcaseStatus,
+  ShowcaseUpvoteDto,
 } from '../types/showcase.ts';
+
+export function optimisticShowcaseUpvote({ likeCount, hasUpvoted }: ShowcaseUpvoteDto): ShowcaseUpvoteDto {
+  return {
+    likeCount: Math.max(0, likeCount + (hasUpvoted ? -1 : 1)),
+    hasUpvoted: !hasUpvoted,
+  };
+}
 
 /** Server limits (SaveShowcaseRequestValidator, ShowcaseManageHandler). The server stays the authority. */
 export const SHOWCASE_LIMITS = {
