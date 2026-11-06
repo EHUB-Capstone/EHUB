@@ -231,6 +231,7 @@ public sealed class ShowcaseManageHandlerTests
         var showcase = await SeedShowcaseAsync(db, owner.LineageId, ShowcaseStatus.Draft);
         var request = ValidRequest(owner.LineageId, highlights: "Updated highlights", links:
         [
+            new ShowcaseLinkRequest { LinkType = "Website", Label = "Website", Url = "https://garden.example.test" },
             new ShowcaseLinkRequest { LinkType = "Demo", Label = "Demo", Url = "https://demo.example.test" }
         ]);
 
@@ -238,7 +239,9 @@ public sealed class ShowcaseManageHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Highlights.Should().Be("Updated highlights");
-        (await db.ShowcaseLinks.ToListAsync()).Should().ContainSingle().Which.Url.Should().Be("https://demo.example.test");
+        var storedLinks = await db.ShowcaseLinks.AsNoTracking().OrderBy(link => link.SortOrder).ToListAsync();
+        storedLinks.Select(link => link.Url).Should().Equal(request.Links.Select(link => link.Url));
+        result.Value.Links.Select(link => link.Id).Should().Equal(storedLinks.Select(link => link.Id));
         db.ShowcaseReviewHistories.Should().BeEmpty();
     }
 

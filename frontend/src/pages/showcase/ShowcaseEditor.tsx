@@ -60,7 +60,7 @@ export default function ShowcaseEditor() {
   const [errors, setErrors] = useState<ShowcaseFormErrors>({ linkRows: {} });
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'logo' | 'media' | null>(null);
   const [removeMediaId, setRemoveMediaId] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -138,6 +138,7 @@ export default function ShowcaseEditor() {
   if (form === null) return null;
 
   const locked = showcase !== null && !showcase.canEdit;
+  const uploading = uploadTarget !== null;
   const media = showcase?.media ?? [];
   const missing = missingForReview(entry.profile);
 
@@ -183,7 +184,7 @@ export default function ShowcaseEditor() {
     if (target === 'media' && media.length + files.length > SHOWCASE_LIMITS.images) {
       toast.error(`A page can have at most ${SHOWCASE_LIMITS.images} images.`);
     }
-    setUploading(true);
+    setUploadTarget(target);
     try {
       for (const file of chosen) {
         const problem = validateImageFile(file);
@@ -203,12 +204,12 @@ export default function ShowcaseEditor() {
           reportError(error, `Unable to upload ${file.name}.`);
         }
       }
-    } finally {
       // An upload changes the page on the server, so reload to pick up the new version number before the next save.
       await mine.refetch();
-      setUploading(false);
-      if (logoInput.current) logoInput.current.value = '';
-      if (mediaInput.current) mediaInput.current.value = '';
+    } finally {
+      const input = target === 'logo' ? logoInput.current : mediaInput.current;
+      if (input) input.value = '';
+      setUploadTarget(null);
     }
   };
 
@@ -456,7 +457,7 @@ export default function ShowcaseEditor() {
                     )}
                     <input ref={logoInput} type="file" accept=".png,.jpg,.jpeg,.webp" className="sr-only" id="showcase-logo-input" aria-label="Choose a logo image" tabIndex={-1} disabled={locked || uploading}
                       onChange={(event) => { void uploadImages(event.target.files, 'logo'); }} />
-                    <Button size="sm" variant="outline" disabled={locked || uploading} isLoading={uploading} onClick={() => logoInput.current?.click()}>
+                    <Button size="sm" variant="outline" disabled={locked || uploading} isLoading={uploadTarget === 'logo'} onClick={() => logoInput.current?.click()}>
                       {showcase.logoUrl ? 'Replace logo' : 'Upload logo'}
                     </Button>
                   </div>
@@ -489,7 +490,7 @@ export default function ShowcaseEditor() {
                     disabled={locked || uploading || media.length >= SHOWCASE_LIMITS.images}
                     onChange={(event) => { void uploadImages(event.target.files, 'media'); }} />
                   <Button size="sm" variant="outline" icon={ImagePlus} disabled={locked || uploading || media.length >= SHOWCASE_LIMITS.images}
-                    isLoading={uploading} onClick={() => mediaInput.current?.click()}>
+                    isLoading={uploadTarget === 'media'} onClick={() => mediaInput.current?.click()}>
                     Add screenshots
                   </Button>
                   <p className="mt-2 text-caption text-slate-600">PNG, JPG or WEBP, up to 5 MB each.</p>
