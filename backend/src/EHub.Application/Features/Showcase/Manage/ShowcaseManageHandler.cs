@@ -126,10 +126,9 @@ public sealed class ShowcaseManageHandler(
         foreach (var link in previousLinks) showcase.Links.Remove(link);
         foreach (var link in BuildLinks(request))
         {
-            // Links carry a client-generated key, so they must be added explicitly or EF would treat them as existing rows.
+            // Links have generated keys. Adding them explicitly lets EF track the inserts and populate showcase.Links.
             link.ShowcaseProjectId = showcase.Id;
             context.ShowcaseLinks.Add(link);
-            showcase.Links.Add(link);
         }
         showcase.UpdatedBy = userId;
 
