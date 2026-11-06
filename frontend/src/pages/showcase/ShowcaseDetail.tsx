@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ExternalLink, Eye, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ExternalLink, Eye, Flame, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -33,10 +33,9 @@ function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: 
 
 function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
-    <div className="flex items-center gap-2 text-body-sm text-slate-600">
-      <Icon className="h-4 w-4 text-slate-400" aria-hidden="true" />
-      <span className="font-semibold text-secondary">{value.toLocaleString()}</span>
-      <span>{label}</span>
+    <div className="flex flex-col items-center px-2 py-3 text-caption text-slate-500">
+      <span className="text-heading text-secondary">{value.toLocaleString()}</span>
+      <span className="mt-0.5 inline-flex items-center gap-1"><Icon className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />{label}</span>
     </div>
   );
 }
@@ -135,68 +134,36 @@ export default function ShowcaseDetail() {
         {backLabel}
       </Link>
 
-      <Card hover={false} padding="p-5 sm:p-8">
-        <div>
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
-            {showcase.logoUrl ? (
-              <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-soft sm:h-24 sm:w-24" />
-            ) : (
-              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border border-secondary-100 bg-secondary-50 text-heading text-secondary shadow-soft sm:h-24 sm:w-24" aria-hidden="true">
-                {profile.projectName.slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1 sm:pb-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
-                {privileged && <ShowcaseStatusBadge status={showcase.status} />}
-                {showcase.isFeatured && <Badge variant="brand" size="md">Featured</Badge>}
-              </div>
-              <h1 className="mt-2 break-words text-display text-secondary">{profile.projectName}</h1>
-              <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-slate-600">
-                <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
-                {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />Published {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
-              </p>
-            </div>
-            {isOwner && showcase.canEdit && (
-              <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
-                <Button variant="outline" icon={Pencil}>Edit page</Button>
-              </Link>
-            )}
-          </div>
-
-          {profile.description && <p className="mt-5 max-w-3xl text-body-lg leading-relaxed text-slate-600">{profile.description}</p>}
-
-          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-4">
-            <Stat icon={Eye} label="views" value={showcase.viewCount} />
-            <ShowcaseUpvoteButton
-              key={`${showcase.id}:${user?.id}:${user?.role}`}
-              showcaseId={showcase.id}
-              likeCount={showcase.likeCount}
-              hasUpvoted={hasUpvoted}
-              isOwner={isOwner}
-              isPublished={showcase.status === 'Published'}
-              showLabel
-            />
-            <Stat icon={MessageSquare} label="comments" value={showcase.commentCount} />
-          </div>
-
-          {canModerate && (
-            <div className="mt-5 border-t border-slate-200 pt-4">
-              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <ShowcaseModerationActions
-                  showcaseId={showcase.id}
-                  title={profile.projectName}
-                  status={showcase.status}
-                  wasEverPublished={showcase.publishedAt !== null}
-                  onDecided={applyDecision}
-                />
-                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
-              </div>
+      <header className="space-y-4">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          {showcase.logoUrl ? (
+            <img src={showcase.logoUrl} alt={`${profile.projectName} logo`} className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-soft sm:h-22 sm:w-22" />
+          ) : (
+            <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border border-secondary-100 bg-secondary-50 text-heading text-secondary shadow-soft sm:h-22 sm:w-22" aria-hidden="true">
+              {profile.projectName.slice(0, 2).toUpperCase()}
             </div>
           )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
+              {privileged && <ShowcaseStatusBadge status={showcase.status} />}
+              {showcase.isFeatured && <Badge variant="brand" size="md">Featured</Badge>}
+            </div>
+            <h1 className="mt-1.5 break-words text-display text-secondary">{profile.projectName}</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-slate-600">
+              <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
+              {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />Published {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
+            </p>
+          </div>
+          {isOwner && showcase.canEdit && (
+            <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
+              <Button variant="outline" icon={Pencil}>Edit page</Button>
+            </Link>
+          )}
         </div>
-      </Card>
+
+        {profile.description && <p className="max-w-3xl text-body-lg leading-relaxed text-slate-600">{profile.description}</p>}
+      </header>
 
       {privileged && showcase.reviewNote && (
         <div role="note" className="rounded-xl border border-warning-light bg-warning-50 px-4 py-3 text-body text-warning-dark">
@@ -229,7 +196,7 @@ export default function ShowcaseDetail() {
           )}
 
           {hasStory && (
-            <Card hover={false} className="space-y-7">
+            <Card hover={false} className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
               <StoryBlock icon={Target} title={PROJECT_PROFILE_LABELS.problem}>{profile.problem}</StoryBlock>
               <StoryBlock icon={UserRound} title={PROJECT_PROFILE_LABELS.targetUsers}>{profile.targetUsers}</StoryBlock>
               <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
@@ -239,7 +206,41 @@ export default function ShowcaseDetail() {
 
         </div>
 
-        <aside className="space-y-6 lg:sticky lg:top-6">
+        <aside className="space-y-4 lg:sticky lg:top-6">
+          <Card hover={false} padding="p-5">
+            <div className="grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 text-center">
+              <Stat icon={Eye} label="Views" value={showcase.viewCount} />
+              <Stat icon={Flame} label="Upvotes" value={showcase.likeCount} />
+              <Stat icon={MessageSquare} label="Comments" value={showcase.commentCount} />
+            </div>
+            <ShowcaseUpvoteButton
+              key={`${showcase.id}:${user?.id}:${user?.role}`}
+              showcaseId={showcase.id}
+              likeCount={showcase.likeCount}
+              hasUpvoted={hasUpvoted}
+              isOwner={isOwner}
+              isPublished={showcase.status === 'Published'}
+              showLabel
+              className="mt-3 w-full justify-center border border-primary-200 bg-primary-50 text-primary-800"
+            />
+          </Card>
+
+          {canModerate && (
+            <div className="rounded-xl border border-dashed border-secondary-200 bg-secondary-50 p-4">
+              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <ShowcaseModerationActions
+                  showcaseId={showcase.id}
+                  title={profile.projectName}
+                  status={showcase.status}
+                  wasEverPublished={showcase.publishedAt !== null}
+                  onDecided={applyDecision}
+                />
+                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
+              </div>
+            </div>
+          )}
+
           {showcase.links.length > 0 && (
             <Card hover={false} padding="p-5">
               <Card.Header className="mb-3">
