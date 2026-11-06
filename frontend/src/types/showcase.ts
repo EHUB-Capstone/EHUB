@@ -12,13 +12,18 @@ export interface ShowcaseFeaturedDto {
   rowVersion: number;
 }
 
+export interface ShowcaseUpvoteDto {
+  likeCount: number;
+  hasUpvoted: boolean;
+}
+
 export interface GetShowcasesRequest {
   search?: string;
   stage?: ShowcaseStage;
   industry?: string;
   featured?: boolean;
   semesterId?: string;
-  sort?: 'newest' | 'popular';
+  sort?: 'newest' | 'popular' | 'trending';
   page?: number;
   pageSize?: number;
 }
@@ -35,6 +40,8 @@ export interface ShowcaseCardDto {
   teamName: string;
   industries: string[];
   likeCount: number;
+  hasUpvoted: boolean;
+  isOwner: boolean;
   commentCount: number;
   /** Canonical YouTube or Vimeo watch URL of the page's first Video link, when it has a supported one. */
   videoUrl?: string | null;
@@ -134,6 +141,7 @@ export interface ShowcaseDetailDto {
   members: ShowcaseTeamMemberDto[];
   history: ShowcaseHistoryDto[];
   isOwner: boolean;
+  hasUpvoted: boolean;
   canModerate: boolean;
 }
 

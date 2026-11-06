@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Persistence;
+using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Showcase.Discovery;
 using EHub.Contracts.Showcase;
 using EHub.Domain.Entities;
@@ -12,8 +13,10 @@ namespace EHub.ApplicationTests.Features.Showcase;
 
 public sealed class ShowcaseDiscoveryTests
 {
-    private static GetShowcasesQueryHandler Handler(AppDbContext db) =>
-        new(db, new InMemorySearch(), new GetShowcasesRequestValidator());
+    private static GetShowcasesQueryHandler Handler(AppDbContext db, DateTime? now = null) =>
+        new(db, new InMemorySearch(), new GetShowcasesRequestValidator(), new FixedClock(now ?? DateTime.UtcNow));
+
+    private sealed record FixedClock(DateTime UtcNow) : IDateTimeProvider;
 
     [Fact]
     public async Task FeaturedFilter_ComposesWithStageSearchAndPaging_AndNeverIncludesHiddenPages()
@@ -208,6 +211,47 @@ public sealed class ShowcaseDiscoveryTests
         await db.SaveChangesAsync();
         var expected = rows.OrderBy(row => row.Id).Select(row => row.Id);
         (await Handler(db).HandleAsync(new())).Value.Items.Select(row => row.Id).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task Trending_UsesRecentVotesAndFreshness_AndBreaksTiesBeforePaging()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc);
+        var recent = await AddPageAsync(now.AddDays(-7), 5);
+        var freshA = await AddPageAsync(now.AddHours(-1), 6);
+        var freshB = await AddPageAsync(now.AddHours(-1), 6);
+        var oneDay = await AddPageAsync(now.AddDays(-1), 6);
+        var fiveDays = await AddPageAsync(now.AddDays(-5), 10);
+        var unknownDate = await AddPageAsync(null, 10);
+        await AddPageAsync(now, 100, ShowcaseStatus.Hidden);
+
+        AddVote(recent, now.AddDays(-1));
+        AddVote(recent, now.AddHours(-2));
+        AddVote(fiveDays, now.AddDays(-1).AddSeconds(-1));
+        AddVote(fiveDays, now.AddSeconds(1));
+        await db.SaveChangesAsync();
+
+        var handler = Handler(db, now);
+        var firstPage = (await handler.HandleAsync(new() { Sort = " Trending ", PageSize = 3 })).Value;
+        var secondPage = (await handler.HandleAsync(new() { Sort = "trending", Page = 2, PageSize = 3 })).Value;
+        var equalTime = new[] { freshA, freshB }.Order().ToArray();
+
+        firstPage.TotalItems.Should().Be(6);
+        // The recent project scores 11: below the newer ties, but above the 10-point group.
+        firstPage.Items.Select(item => item.Id).Should().Equal(equalTime[0], equalTime[1], recent);
+        secondPage.Items.Select(item => item.Id).Should().Equal(oneDay, fiveDays, unknownDate);
+
+        async Task<Guid> AddPageAsync(DateTime? publishedAt, int likes, ShowcaseStatus status = ShowcaseStatus.Published)
+        {
+            var seed = await ShowcaseTestData.SeedAsync(db, status, publishedAt: publishedAt);
+            var showcase = (await db.ShowcaseProjects.FindAsync(seed.ShowcaseId))!;
+            showcase.LikeCount = likes;
+            return showcase.Id;
+        }
+
+        void AddVote(Guid showcaseId, DateTime createdAt) =>
+            db.ShowcaseUpvotes.Add(new ShowcaseUpvote { ShowcaseProjectId = showcaseId, UserId = Guid.NewGuid(), CreatedAt = createdAt });
     }
 
     [Theory]

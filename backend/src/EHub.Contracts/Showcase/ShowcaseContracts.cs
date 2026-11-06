@@ -141,6 +141,7 @@ public sealed class ShowcaseDetailDto
     /// <summary>Review trail; empty for ordinary viewers.</summary>
     public IReadOnlyCollection<ShowcaseHistoryDto> History { get; init; } = Array.Empty<ShowcaseHistoryDto>();
     public bool IsOwner { get; init; }
+    public bool HasUpvoted { get; init; }
     public bool CanModerate { get; init; }
 }
 

@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUpRight, CalendarDays, Flame, MessageSquare, Star, Users } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, MessageSquare, Star, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Badge from '../../../components/ui/Badge';
 import Card from '../../../components/ui/Card';
+import ShowcaseUpvoteButton from '../../../components/showcase/ShowcaseUpvoteButton';
 import type { ShowcaseCardDto } from '../../../types/showcase';
 import { stageLabel } from '../../../utils/showcase';
 import { cn } from '../../../utils/cn';
@@ -76,7 +77,13 @@ export default function ProjectSummaryCard({ project, secondaryAction, backTo, b
       <ProjectMedia id={project.id} name={project.projectName} video={video} coverUrl={coverUrl} active={active} />
 
       <div className={cn('mt-3 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 text-body-sm font-medium dark:divide-slate-700 dark:border-slate-700')}>
-        <span className="flex min-h-11 items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300"><Flame className="h-4 w-4 text-primary" aria-hidden="true" />{project.likeCount}<span className="sr-only"> interested</span></span>
+        <ShowcaseUpvoteButton
+          showcaseId={project.id}
+          likeCount={project.likeCount}
+          hasUpvoted={project.hasUpvoted}
+          isOwner={project.isOwner}
+          className="relative z-10 h-11 w-full rounded-none"
+        />
         <span className="flex min-h-11 items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300"><MessageSquare className="h-4 w-4 text-slate-400" aria-hidden="true" />{project.commentCount}<span className="sr-only"> comments</span></span>
         <span className="flex min-h-11 items-center justify-center gap-1 font-semibold text-primary-700 dark:text-primary-300">View project <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" /></span>
       </div>

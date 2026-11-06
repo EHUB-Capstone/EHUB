@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
+using EHub.Application.Features.Showcase.Upvote;
 using EHub.Infrastructure.Persistence;
 using EHub.Infrastructure.Persistence.Repositories;
 using EHub.Infrastructure.Identity;
@@ -60,6 +61,7 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddScoped<IShowcaseProjectSearch, ShowcaseProjectSearch>();
+        services.AddScoped<IShowcaseUpvoteStore, ShowcaseUpvoteStore>();
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<MentorAdminSessionCleanupService>();

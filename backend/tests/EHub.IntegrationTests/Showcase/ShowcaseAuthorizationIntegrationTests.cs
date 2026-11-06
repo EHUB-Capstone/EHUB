@@ -29,6 +29,8 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("GET", "/api/showcase/filter-options")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
+    [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/upvote")]
+    [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/upvote")]
     [InlineData("GET", "/api/showcase/mine")]
     [InlineData("POST", "/api/showcase")]
     [InlineData("PUT", "/api/showcase/00000000-0000-0000-0000-000000000001")]
@@ -131,7 +133,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("page=0")]
     [InlineData("pageSize=51")]
     [InlineData("stage=Prototype")]
-    [InlineData("sort=trending")]
+    [InlineData("sort=invalid")]
     [InlineData("semesterId=invalid")]
     public async Task Discovery_InvalidQueryReturnsBadRequest(string query)
     {

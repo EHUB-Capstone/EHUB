@@ -185,6 +185,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Showcase.Query.IShowcaseQueryHandler, EHub.Application.Features.Showcase.Query.ShowcaseQueryHandler>();
         services.AddScoped<EHub.Application.Features.Showcase.Discovery.IGetShowcasesQueryHandler, EHub.Application.Features.Showcase.Discovery.GetShowcasesQueryHandler>();
         services.AddScoped<EHub.Application.Features.Showcase.Featured.IShowcaseFeaturedHandler, EHub.Application.Features.Showcase.Featured.ShowcaseFeaturedHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Upvote.IShowcaseUpvoteHandler, EHub.Application.Features.Showcase.Upvote.ShowcaseUpvoteHandler>();
 
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();
