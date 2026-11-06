@@ -104,6 +104,8 @@ public sealed class GetShowcasesQueryHandler(
                 HasUpvoted = context.ShowcaseUpvotes.Any(vote => vote.ShowcaseProjectId == row.Showcase.Id && vote.UserId == viewerId),
                 IsOwner = viewerIsStudent && ownedProjects.Any(project => project.ProjectLineageId == row.Showcase.ProjectLineageId),
                 CommentCount = row.Showcase.CommentCount,
+                CoverUrl = row.Showcase.Media.Where(media => media.MediaType == ShowcaseMediaType.Image)
+                    .OrderBy(media => media.SortOrder).ThenBy(media => media.Id).Select(media => media.Url).FirstOrDefault(),
                 VideoUrl = row.Showcase.Links.Where(link => link.LinkType == ShowcaseLinkType.Video)
                     .OrderBy(link => link.SortOrder).ThenBy(link => link.Id).Select(link => link.Url).FirstOrDefault()
             }).ToListAsync(cancellationToken);

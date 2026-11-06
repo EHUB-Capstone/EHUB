@@ -17,7 +17,7 @@ interface ProjectSummaryCardProps {
   /** The discovery URL to return to after visiting the project detail. */
   backTo?: string;
   backLabel?: string;
-  /** A preview image of the project. The post has no image area when it is missing; the logo is never used here. */
+  /** Overrides the preview image of the project card. The post has no image area when there is none; the logo is never used here. */
   coverUrl?: string | null;
   /** Overrides the video link of the project card; it takes the image area and plays muted while the card is hovered or focused. */
   videoUrl?: string | null;
@@ -74,7 +74,7 @@ export default function ProjectSummaryCard({ project, secondaryAction, backTo, b
         )}
       </div>
 
-      <ProjectMedia id={project.id} name={project.projectName} video={video} coverUrl={coverUrl} active={active} />
+      <ProjectMedia id={project.id} name={project.projectName} video={video} coverUrl={coverUrl ?? project.coverUrl} active={active} />
 
       <div className={cn('mt-3 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 text-body-sm font-medium dark:divide-slate-700 dark:border-slate-700')}>
         <ShowcaseUpvoteButton
