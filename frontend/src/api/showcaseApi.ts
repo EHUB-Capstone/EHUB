@@ -14,6 +14,7 @@ import type {
   ShowcaseModerationPageDto,
   ShowcaseStatus,
   ShowcaseUpvoteDto,
+  ShowcaseViewDto,
 } from '../types/showcase.ts';
 
 // axiosClient resolves to the response body, so each call yields the ApiEnvelope.
@@ -28,6 +29,8 @@ const imageForm = (file: File): FormData => {
 const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 
 export const showcaseApi = {
+  recordView: (id: string, signal?: AbortSignal) =>
+    unwrap<ShowcaseViewDto>(axiosClient.post(`/showcase/${id}/view`, undefined, { signal })),
   setUpvote: (id: string, hasUpvoted: boolean) =>
     unwrap<ShowcaseUpvoteDto>(hasUpvoted
       ? axiosClient.post(`/showcase/${id}/upvote`)

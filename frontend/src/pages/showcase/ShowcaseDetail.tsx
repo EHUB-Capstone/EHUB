@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CalendarDays, ExternalLink, Eye, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
@@ -13,6 +14,7 @@ import ShowcaseUpvoteButton from '../../components/showcase/ShowcaseUpvoteButton
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 import { showcaseApi } from '../../api/showcaseApi';
 import { useAuthContext } from '../../context/AuthContext';
+import type { ShowcaseDetailDto } from '../../types/showcase';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 
@@ -43,13 +45,43 @@ export default function ShowcaseDetail() {
   const { id = '' } = useParams();
   const location = useLocation();
   const { user } = useAuthContext();
+  const viewerId = user?.id;
+  const viewerRole = user?.role;
   const queryClient = useQueryClient();
   const detail = useQuery({
-    queryKey: ['showcase', 'detail', id, user?.id, user?.role],
+    queryKey: ['showcase', 'detail', id, viewerId, viewerRole],
     queryFn: ({ signal }) => showcaseApi.get(id, signal),
     staleTime: 0,
     retry: (count, error) => parseApiError(error, '').code !== SHOWCASE_ERROR_CODES.notFound && count < 1,
   });
+  const trackedVisit = useRef('');
+  const visitKey = `${location.key}:${id}:${viewerId}:${viewerRole}`;
+  const shouldTrack = Boolean(viewerId) && detail.isSuccess &&
+    detail.data.showcase.status === 'Published' && !detail.data.isOwner;
+
+  useEffect(() => {
+    if (!shouldTrack || trackedVisit.current === visitKey) return;
+
+    const controller = new AbortController();
+    // Let effect cleanup cancel the probe mount before sending a request in React Strict Mode.
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      trackedVisit.current = visitKey;
+      void showcaseApi.recordView(id, controller.signal)
+        .then(({ viewCount }) => {
+          if (controller.signal.aborted) return;
+          queryClient.setQueryData<ShowcaseDetailDto>(['showcase', 'detail', id, viewerId, viewerRole], current => {
+            if (!current || current.showcase.viewCount >= viewCount) return current;
+            return { ...current, showcase: { ...current.showcase, viewCount } };
+          });
+        })
+        .catch(() => {
+          // Tracking is best effort; the detail query owns the page's error state.
+        });
+    });
+
+    return () => controller.abort();
+  }, [id, queryClient, shouldTrack, viewerId, viewerRole, visitKey]);
 
   if (detail.isPending) {
     return (

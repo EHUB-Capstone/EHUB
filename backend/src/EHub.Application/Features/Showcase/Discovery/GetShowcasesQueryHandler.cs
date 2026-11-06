@@ -56,6 +56,7 @@ public sealed class GetShowcasesQueryHandler(
         if (string.Equals(sort, "trending", StringComparison.OrdinalIgnoreCase))
         {
             var now = time.UtcNow;
+            var todayUtc = DateOnly.FromDateTime(now);
             var oneDayAgo = now.AddDays(-1);
             var twoDaysAgo = now.AddDays(-2);
             var threeDaysAgo = now.AddDays(-3);
@@ -66,6 +67,8 @@ public sealed class GetShowcasesQueryHandler(
             ordered = query.OrderByDescending(row => (long)row.Showcase.LikeCount
                 + 3L * context.ShowcaseUpvotes.LongCount(vote =>
                     vote.ShowcaseProjectId == row.Showcase.Id && vote.CreatedAt >= oneDayAgo && vote.CreatedAt <= now)
+                + 0.5 * Math.Sqrt(context.ShowcaseViewsDaily.LongCount(view =>
+                    view.ShowcaseProjectId == row.Showcase.Id && view.ViewDateUtc == todayUtc))
                 + (row.Showcase.PublishedAt > now ? 0
                     : row.Showcase.PublishedAt > oneDayAgo ? 5
                     : row.Showcase.PublishedAt > twoDaysAgo ? 4

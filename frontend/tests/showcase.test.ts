@@ -5,6 +5,20 @@ import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
 import { discoveryRequest, discoveryPages, isNewlyPublished } from '../src/utils/showcaseDiscovery.ts';
 
+test('showcase view client returns the current counter and accepts an abort signal', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const controller = new AbortController();
+  mock.onPost('/showcase/s1/view').reply(200, { data: { viewCount: 8 } });
+  try {
+    assert.deepEqual(await showcaseApi.recordView('s1', controller.signal), { viewCount: 8 });
+    assert.equal(mock.history.post[0].signal, controller.signal);
+    controller.abort();
+    await assert.rejects(showcaseApi.recordView('s1', controller.signal));
+  } finally {
+    mock.restore();
+  }
+});
+
 test('newly published rail includes only projects published in the preceding seven days', () => {
   const now = Date.parse('2026-11-05T12:00:00Z');
   assert.equal(isNewlyPublished('2026-10-29T12:00:00Z', now), true);

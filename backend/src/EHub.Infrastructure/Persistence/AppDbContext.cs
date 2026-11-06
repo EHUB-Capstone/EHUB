@@ -111,6 +111,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments => Set<ProductFeedbackAttachment>();
     public DbSet<ShowcaseProject> ShowcaseProjects => Set<ShowcaseProject>();
     public DbSet<ShowcaseUpvote> ShowcaseUpvotes => Set<ShowcaseUpvote>();
+    public DbSet<ShowcaseViewDaily> ShowcaseViewsDaily => Set<ShowcaseViewDaily>();
     public DbSet<ShowcaseLink> ShowcaseLinks => Set<ShowcaseLink>();
     public DbSet<ShowcaseMedia> ShowcaseMedia => Set<ShowcaseMedia>();
     public DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories => Set<ShowcaseReviewHistory>();

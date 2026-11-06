@@ -17,6 +17,10 @@ export interface ShowcaseUpvoteDto {
   hasUpvoted: boolean;
 }
 
+export interface ShowcaseViewDto {
+  viewCount: number;
+}
+
 export interface GetShowcasesRequest {
   search?: string;
   stage?: ShowcaseStage;

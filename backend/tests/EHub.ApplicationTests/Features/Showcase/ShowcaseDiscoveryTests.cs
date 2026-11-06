@@ -254,6 +254,46 @@ public sealed class ShowcaseDiscoveryTests
             db.ShowcaseUpvotes.Add(new ShowcaseUpvote { ShowcaseProjectId = showcaseId, UserId = Guid.NewGuid(), CreatedAt = createdAt });
     }
 
+    [Fact]
+    public async Task Trending_UsesFractionalSquareRootBonusForViewsFromTheCurrentUtcDay()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc);
+        var today = DateOnly.FromDateTime(now);
+        var viewed = await AddPageAsync(8, 5);
+        var priorViews = await AddPageAsync(7, 6);
+        var leading = await AddPageAsync(6, 7);
+        AddViews(viewed, today, 9);
+        AddViews(priorViews, today.AddDays(-1), 4);
+        AddViews(priorViews, today.AddDays(1), 4);
+        await db.SaveChangesAsync();
+
+        var handler = Handler(db, now);
+        var firstPage = (await handler.HandleAsync(new() { Sort = "trending", PageSize = 2 })).Value;
+        var secondPage = (await handler.HandleAsync(new() { Sort = "trending", PageSize = 2, Page = 2 })).Value;
+
+        // The three scores are 7, 6.5 and 6. The fractional bonus must survive paging and sorting.
+        firstPage.Items.Select(item => item.Id).Should().Equal(leading, viewed);
+        secondPage.Items.Select(item => item.Id).Should().Equal(priorViews);
+
+        async Task<Guid> AddPageAsync(int daysOld, int likes)
+        {
+            var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-daysOld));
+            (await db.ShowcaseProjects.FindAsync(seed.ShowcaseId))!.LikeCount = likes;
+            return seed.ShowcaseId;
+        }
+
+        void AddViews(Guid showcaseId, DateOnly date, int count)
+        {
+            db.ShowcaseViewsDaily.AddRange(Enumerable.Range(0, count).Select(_ => new ShowcaseViewDaily
+            {
+                ShowcaseProjectId = showcaseId,
+                UserId = Guid.NewGuid(),
+                ViewDateUtc = date
+            }));
+        }
+    }
+
     [Theory]
     [InlineData(0, 20, "newest", "Idea")]
     [InlineData(1, 51, "newest", "Idea")]

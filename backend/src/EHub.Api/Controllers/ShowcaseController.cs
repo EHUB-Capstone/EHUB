@@ -6,6 +6,7 @@ using EHub.Application.Features.Showcase.Query;
 using EHub.Application.Features.Showcase.Discovery;
 using EHub.Application.Features.Showcase.Featured;
 using EHub.Application.Features.Showcase.Upvote;
+using EHub.Application.Features.Showcase.Views;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Shared.Constants;
@@ -75,6 +76,11 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     public async Task<IActionResult> RemoveUpvote(
         Guid id, [FromServices] IShowcaseUpvoteHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.SetAsync(id, UserId, UpvoteRole, false, cancellationToken), "Showcase upvote removed.");
+
+    [HttpPost("{id:guid}/view")]
+    public async Task<IActionResult> RecordView(
+        Guid id, [FromServices] IShowcaseViewHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.RecordAsync(id, UserId, Role, cancellationToken), "Showcase view processed.");
 
     [HttpGet("mine")]
     [Authorize(Policy = SystemPolicies.StudentOnly)]

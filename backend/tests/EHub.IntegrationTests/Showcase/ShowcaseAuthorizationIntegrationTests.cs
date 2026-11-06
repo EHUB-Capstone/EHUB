@@ -31,6 +31,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/upvote")]
     [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/upvote")]
+    [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/view")]
     [InlineData("GET", "/api/showcase/mine")]
     [InlineData("POST", "/api/showcase")]
     [InlineData("PUT", "/api/showcase/00000000-0000-0000-0000-000000000001")]
