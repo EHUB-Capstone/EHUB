@@ -156,4 +156,7 @@ public sealed class MyShowcaseEntryDto
     public string TeamName { get; init; } = string.Empty;
     public ShowcaseProfileDto Profile { get; init; } = new();
     public ShowcaseDto? Showcase { get; init; }
+
+    /// <summary>Status changes of the page, newest first, with the feedback the reviewer left.</summary>
+    public IReadOnlyCollection<ShowcaseHistoryDto> History { get; init; } = Array.Empty<ShowcaseHistoryDto>();
 }

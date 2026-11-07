@@ -49,6 +49,25 @@ public sealed class ShowcaseManageHandler(
             .Where(item => lineageIds.Contains(item.ProjectLineageId))
             .ToListAsync(cancellationToken);
 
+        var showcaseIds = showcases.Select(item => item.Id).ToList();
+        // Changes where the status stayed the same are internal notes (e.g. featured removal), not for the team.
+        var histories = await context.ShowcaseReviewHistories.AsNoTracking()
+            .Where(item => showcaseIds.Contains(item.ShowcaseProjectId) && item.FromStatus != item.ToStatus)
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => new
+            {
+                item.ShowcaseProjectId,
+                Entry = new ShowcaseHistoryDto
+                {
+                    FromStatus = item.FromStatus.ToString(),
+                    ToStatus = item.ToStatus.ToString(),
+                    Note = item.Note,
+                    ActorName = item.Actor.FullName,
+                    CreatedAt = item.CreatedAt
+                }
+            })
+            .ToListAsync(cancellationToken);
+
         IReadOnlyCollection<MyShowcaseEntryDto> entries = projects.Select(project =>
         {
             var showcase = showcases.FirstOrDefault(item => item.ProjectLineageId == project.ProjectLineageId);
@@ -60,7 +79,10 @@ public sealed class ShowcaseManageHandler(
                 TeamId = project.TeamId,
                 TeamName = project.TeamName,
                 Profile = profile,
-                Showcase = showcase is null ? null : ShowcaseMapper.ToDto(showcase, profile, canEdit: true)
+                Showcase = showcase is null ? null : ShowcaseMapper.ToDto(showcase, profile, canEdit: true),
+                History = showcase is null
+                    ? []
+                    : histories.Where(item => item.ShowcaseProjectId == showcase.Id).Select(item => item.Entry).ToArray()
             };
         }).ToArray();
 

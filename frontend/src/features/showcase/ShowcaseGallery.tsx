@@ -11,7 +11,7 @@ import { showcaseApi } from '../../api/showcaseApi';
 import { useAuthContext } from '../../context/AuthContext';
 import type { GetShowcasesRequest, ShowcaseCardDto } from '../../types/showcase';
 import { SHOWCASE_STAGES, stageLabel } from '../../utils/showcase';
-import { discoveryPages, discoveryRequest, isNewlyPublished } from '../../utils/showcaseDiscovery';
+import { discoveryPages, discoveryRequest, isNewlyPublished, NEWLY_PUBLISHED_COUNT, NEWLY_PUBLISHED_FETCH_LIMIT } from '../../utils/showcaseDiscovery';
 import { parseApiError } from '../../utils/apiError';
 import { cn } from '../../utils/cn';
 import ProjectRailItem from './components/ProjectRailItem';
@@ -91,11 +91,12 @@ export default function ShowcaseGallery(): React.ReactElement {
   const [searchReset, setSearchReset] = useState(0);
   const gallery = useQuery({ queryKey: ['showcase', 'discovery', user?.id, user?.role, request], queryFn: ({ signal }) => showcaseApi.list(request, signal), staleTime: 0 });
   const options = useQuery({ queryKey: ['showcase', 'filter-options'], queryFn: ({ signal }) => showcaseApi.getFilterOptions(signal), staleTime: 0 });
-  const featuredRequest: GetShowcasesRequest = { featured: true, sort: 'newest', page: 1, pageSize: 3 };
-  const newestRequest: GetShowcasesRequest = { sort: 'newest', page: 1, pageSize: 3 };
-  const featured = useQuery({ queryKey: ['showcase', 'featured'], queryFn: ({ signal }) => showcaseApi.list(featuredRequest, signal), staleTime: 0 });
+  const newestRequest: GetShowcasesRequest = { sort: 'newest', page: 1, pageSize: NEWLY_PUBLISHED_FETCH_LIMIT };
   const newest = useQuery({ queryKey: ['showcase', 'newly-published'], queryFn: ({ signal }) => showcaseApi.list(newestRequest, signal), staleTime: 0 });
-  const newlyPublished = (newest.data?.items ?? []).filter(project => isNewlyPublished(project.publishedAt));
+  const [newestExpanded, setNewestExpanded] = useState(false);
+  const newlyPublishedAll = (newest.data?.items ?? []).filter(project => isNewlyPublished(project.publishedAt));
+  const newlyPublished = newestExpanded ? newlyPublishedAll : newlyPublishedAll.slice(0, NEWLY_PUBLISHED_COUNT);
+  const hiddenNewCount = newlyPublishedAll.length - NEWLY_PUBLISHED_COUNT;
 
   const updateParam = (key: string, value: string) => setParams(current => {
     const next = new URLSearchParams(current);
@@ -213,14 +214,14 @@ export default function ShowcaseGallery(): React.ReactElement {
 
         {/* Right rail: curated highlights (stacks under the feed on smaller screens). */}
         <aside aria-label="Highlights" className="space-y-4 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-6 xl:self-start">
-          {!(featured.isSuccess && featured.data.items.length === 0) && (
-            <RailCard id="featured-projects-heading" title="Featured by faculty">
-              <RailList query={featured} backTo={backTo} loadingLabel="Loading featured projects" errorTitle="Could not load featured projects." />
-            </RailCard>
-          )}
-          {!(newest.isSuccess && newlyPublished.length === 0) && (
+          {!(newest.isSuccess && newlyPublishedAll.length === 0) && (
             <RailCard id="newly-published-heading" title="Newly published">
               <RailList query={newest} items={newlyPublished} backTo={backTo} loadingLabel="Loading newly published projects" errorTitle="Could not load newly published projects." />
+              {hiddenNewCount > 0 && (
+                <Button variant="ghost-primary" size="sm" className="mt-1 w-full" aria-expanded={newestExpanded} onClick={() => setNewestExpanded(current => !current)}>
+                  {newestExpanded ? 'Show less' : `View more (${hiddenNewCount})`}
+                </Button>
+              )}
             </RailCard>
           )}
         </aside>

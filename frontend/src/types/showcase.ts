@@ -1,9 +1,9 @@
 // Mirrors EHub.Contracts/Showcase/ShowcaseContracts.cs. Keep both in sync.
 
-export type ShowcaseStatus = 'Draft' | 'PendingReview' | 'ChangesRequested' | 'Published' | 'Hidden';
+export type ShowcaseStatus = 'Draft' | 'PendingReview' | 'Published' | 'Hidden';
 export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
-export type ShowcaseDecision = 'approve' | 'request-changes' | 'reject' | 'hide' | 'unhide';
+export type ShowcaseDecision = 'approve' | 'reject' | 'hide' | 'unhide';
 
 export interface ShowcaseFeaturedDto {
   id: string;
@@ -125,6 +125,8 @@ export interface MyShowcaseEntryDto {
   teamName: string;
   profile: ShowcaseProfileDto;
   showcase: ShowcaseDto | null;
+  /** Status changes of the page, newest first, with the reviewer's feedback. */
+  history: ShowcaseHistoryDto[];
 }
 
 export interface ShowcaseTeamMemberDto {

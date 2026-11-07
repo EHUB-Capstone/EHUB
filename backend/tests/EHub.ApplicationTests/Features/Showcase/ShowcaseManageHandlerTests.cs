@@ -48,6 +48,44 @@ public sealed class ShowcaseManageHandlerTests
     }
 
     [Fact]
+    public async Task GetMine_ReturnsReviewHistoryNewestFirst_WithLecturerFeedbackAndTime()
+    {
+        await using var db = Context();
+        var owner = await SeedProjectAsync(db);
+        var showcase = await SeedShowcaseAsync(db, owner.LineageId, ShowcaseStatus.Draft);
+        var lecturer = await ShowcaseTestData.AddUserAsync(db, "Dr. Lan");
+        var student = await ShowcaseTestData.AddUserAsync(db, "Student");
+        var submittedAt = new DateTime(2026, 11, 3, 8, 0, 0, DateTimeKind.Utc);
+        var rejectedAt = submittedAt.AddDays(1);
+        db.ShowcaseReviewHistories.AddRange(
+            new ShowcaseReviewHistory
+            {
+                ShowcaseProjectId = showcase.Id, FromStatus = ShowcaseStatus.Draft, ToStatus = ShowcaseStatus.PendingReview,
+                Note = "Submitted for review.", ActorId = student.Id, CreatedAt = submittedAt
+            },
+            new ShowcaseReviewHistory
+            {
+                ShowcaseProjectId = showcase.Id, FromStatus = ShowcaseStatus.PendingReview, ToStatus = ShowcaseStatus.Draft,
+                Note = "Add a demo link.", ActorId = lecturer.Id, CreatedAt = rejectedAt
+            },
+            new ShowcaseReviewHistory
+            {
+                ShowcaseProjectId = showcase.Id, FromStatus = ShowcaseStatus.Published, ToStatus = ShowcaseStatus.Published,
+                Note = "Featured selection removed.", ActorId = lecturer.Id, CreatedAt = rejectedAt.AddHours(1)
+            });
+        await db.SaveChangesAsync();
+
+        var result = await Handler(db).GetMineAsync(owner.UserId, SystemRoles.Student);
+
+        var history = result.Value.Single().History;
+        history.Should().HaveCount(2, "internal notes that do not change the status are not for the team");
+        history.First().Note.Should().Be("Add a demo link.");
+        history.First().ActorName.Should().Be("Dr. Lan");
+        history.First().CreatedAt.Should().Be(rejectedAt);
+        history.Last().ToStatus.Should().Be(nameof(ShowcaseStatus.PendingReview));
+    }
+
+    [Fact]
     public async Task ShowcaseShowsTheCurrentProjectProfile_NotACopyTakenAtCreation()
     {
         await using var db = Context();

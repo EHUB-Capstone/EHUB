@@ -6,7 +6,6 @@ namespace EHub.Application.Features.Showcase.Moderation;
 public enum ShowcaseModerationAction
 {
     Approve,
-    RequestChanges,
     Reject,
     Hide,
     Unhide

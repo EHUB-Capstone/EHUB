@@ -268,7 +268,7 @@ export default function ShowcaseEditor() {
       <PageHeader
         title={showcase ? 'Edit showcase page' : 'Create showcase page'}
         subtitle={`${entry.profile.projectName} · ${entry.teamName}`}
-        breadcrumb={['Showcase', 'My Showcase', 'Editor']}
+        breadcrumb={[{ label: 'Showcase', to: '/showcase' }, { label: 'My Showcase', to: '/showcase/manage' }, 'Editor']}
       />
 
       {conflict && (
@@ -278,7 +278,7 @@ export default function ShowcaseEditor() {
         </div>
       )}
 
-      {showcase?.reviewNote && ['ChangesRequested', 'Draft', 'Hidden'].includes(showcase.status) && (
+      {showcase?.reviewNote && ['Draft', 'Hidden'].includes(showcase.status) && (
         <div role="note" className="mb-6 rounded-xl border border-warning-light bg-warning-50 px-4 py-3 text-body text-warning-dark">
           <p className="font-semibold">Reviewer note</p>
           <p className="mt-1 whitespace-pre-line">{showcase.reviewNote}</p>

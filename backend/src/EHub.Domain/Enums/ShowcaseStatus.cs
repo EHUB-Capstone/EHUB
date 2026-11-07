@@ -4,7 +4,6 @@ public enum ShowcaseStatus
 {
     Draft,
     PendingReview,
-    ChangesRequested,
     Published,
     Hidden
 }

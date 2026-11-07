@@ -19,11 +19,10 @@ import { cn } from '../../utils/cn';
 import type { ShowcaseStatus } from '../../types/showcase';
 
 const PAGE_SIZE = 20;
-const TABS: ShowcaseStatus[] = ['PendingReview', 'ChangesRequested', 'Published', 'Hidden', 'Draft'];
+const TABS: ShowcaseStatus[] = ['PendingReview', 'Published', 'Hidden', 'Draft'];
 
 const EMPTY_COPY: Record<ShowcaseStatus, string> = {
   PendingReview: 'No pages are waiting for review.',
-  ChangesRequested: 'No pages are waiting for the team to make changes.',
   Published: 'No pages are published yet.',
   Hidden: 'No pages are hidden.',
   Draft: 'No pages are in draft.',
@@ -59,7 +58,7 @@ export default function ShowcaseModeration() {
       <PageHeader
         title="Showcase Moderation"
         subtitle="Review the project pages teams want to publish. Lecturers see their own classes; administrators see every page."
-        breadcrumb={['Showcase', 'Moderation']}
+        breadcrumb={[{ label: 'Showcase', to: '/showcase' }, 'Moderation']}
       />
 
       <div role="tablist" aria-label="Page status" className="mb-5 flex flex-wrap gap-2">
