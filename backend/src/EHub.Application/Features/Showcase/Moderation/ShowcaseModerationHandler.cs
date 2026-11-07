@@ -26,7 +26,7 @@ public sealed class ShowcaseModerationHandler(
         var showcase = await LoadOwnedAsync(showcaseId, userId, cancellationToken);
         if (showcase is null) return NotFound<ShowcaseDto>();
 
-        if (showcase.Status is not (ShowcaseStatus.Draft or ShowcaseStatus.ChangesRequested or ShowcaseStatus.Hidden))
+        if (showcase.Status is not (ShowcaseStatus.Draft or ShowcaseStatus.Hidden))
             return InvalidState<ShowcaseDto>($"A page in status {showcase.Status} cannot be submitted for review.");
         if (!request.AcknowledgedPublishWarning)
             return Invalid<ShowcaseDto>("Confirm that the content may be shown publicly before submitting.");
@@ -174,8 +174,6 @@ public sealed class ShowcaseModerationHandler(
     {
         [ShowcaseModerationAction.Approve] = new(ShowcaseStatus.PendingReview, ShowcaseStatus.Published, "approved", false,
             "Approved for publication.", "Your showcase page was approved", "It is now visible to the E-HUB community."),
-        [ShowcaseModerationAction.RequestChanges] = new(ShowcaseStatus.PendingReview, ShowcaseStatus.ChangesRequested, "sent back for changes", true,
-            "Changes requested.", "Changes requested for your showcase page", "The reviewer asked for changes before it can be published."),
         [ShowcaseModerationAction.Reject] = new(ShowcaseStatus.PendingReview, ShowcaseStatus.Draft, "rejected", true,
             "Rejected.", "Your showcase page was not approved", "It was returned to draft and is not public."),
         [ShowcaseModerationAction.Hide] = new(ShowcaseStatus.Published, ShowcaseStatus.Hidden, "hidden", true,

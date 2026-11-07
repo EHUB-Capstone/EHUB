@@ -1,6 +1,10 @@
 import type { GetShowcasesRequest, ShowcaseStage } from '../types/showcase.ts';
 
 export const DISCOVERY_PAGE_SIZE = 8;
+/** How many projects the "Newly published" rail shows before "View more". */
+export const NEWLY_PUBLISHED_COUNT = 5;
+/** Upper bound of projects requested for the rail; the API allows at most 50 per page. */
+export const NEWLY_PUBLISHED_FETCH_LIMIT = 50;
 const NEWLY_PUBLISHED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const stages: ShowcaseStage[] = ['Idea', 'Mvp', 'Beta', 'Launched'];
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

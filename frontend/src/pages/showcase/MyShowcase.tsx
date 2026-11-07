@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Rocket } from 'lucide-react';
+import { ArrowUpRight, Globe, Rocket } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import PageHeader from '../../components/ui/PageHeader';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import Badge from '../../components/ui/Badge';
+import ShowcaseReviewHistory, { ShowcaseLatestFeedback } from '../../components/showcase/ShowcaseReviewHistory';
+import { SHOWCASE_ROW_ACTION } from '../../components/showcase/rowActionStyles';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
@@ -24,7 +26,7 @@ export default function MyShowcase() {
       <PageHeader
         title="My Showcase"
         subtitle="Introduce your project to the E-HUB community. A lecturer or administrator reviews every page before it goes public."
-        breadcrumb={['Showcase', 'My Showcase']}
+        breadcrumb={[{ label: 'Showcase', to: '/showcase' }, 'My Showcase']}
       />
 
       {mine.isPending && (
@@ -74,11 +76,6 @@ export default function MyShowcase() {
                       {!showcase && (
                         <p className="mt-1 text-body-sm text-slate-600">No showcase page yet. Create one to introduce this project.</p>
                       )}
-                      {showcase?.status === 'ChangesRequested' && showcase.reviewNote && (
-                        <p className="mt-3 rounded-lg border border-warning-light bg-warning-50 px-3 py-2 text-body-sm text-warning-dark">
-                          Reviewer note: {showcase.reviewNote}
-                        </p>
-                      )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                       {showcase ? (
@@ -100,14 +97,15 @@ export default function MyShowcase() {
                       <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                     </span>
                   </div>
-                  {showcase?.status === 'Published' && (
-                    <Link
-                      to={`/showcase/${showcase.id}`}
-                      className="relative z-10 mt-3 inline-flex text-body-sm font-semibold text-primary-700 hover:underline"
-                    >
-                      View public page
-                    </Link>
-                  )}
+                  {showcase && <ShowcaseLatestFeedback history={entry.history} status={showcase.status} />}
+                  <ShowcaseReviewHistory history={entry.history}>
+                    {showcase?.status === 'Published' && (
+                      <Link to={`/showcase/${showcase.id}`} className={SHOWCASE_ROW_ACTION.brand}>
+                        <Globe className="h-4 w-4" aria-hidden="true" />
+                        View public page
+                      </Link>
+                    )}
+                  </ShowcaseReviewHistory>
                 </Card>
               </li>
             );

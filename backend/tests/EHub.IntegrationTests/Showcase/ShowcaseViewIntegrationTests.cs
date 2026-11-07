@@ -67,7 +67,7 @@ public sealed class ShowcaseViewIntegrationTests(CustomWebApplicationFactory fac
         WithShowcasesAsync(async scenario =>
         {
             var id = scenario.First.Id;
-            foreach (var status in new[] { ShowcaseStatus.Draft, ShowcaseStatus.PendingReview, ShowcaseStatus.ChangesRequested, ShowcaseStatus.Hidden })
+            foreach (var status in new[] { ShowcaseStatus.Draft, ShowcaseStatus.PendingReview, ShowcaseStatus.Hidden })
             {
                 await scenario.Db.ShowcaseProjects.Where(page => page.Id == id)
                     .ExecuteUpdateAsync(setters => setters.SetProperty(page => page.Status, status));

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check, EyeOff, Eye, MessageSquareWarning, XCircle } from 'lucide-react';
+import { Check, EyeOff, Eye, XCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { showcaseApi } from '../../api/showcaseApi';
@@ -9,15 +9,9 @@ import { moderationActionsFor } from '../../utils/showcase';
 import { parseApiError } from '../../utils/apiError';
 import type { ShowcaseDecision, ShowcaseDto, ShowcaseStatus } from '../../types/showcase';
 
-type DialogDecision = Extract<ShowcaseDecision, 'request-changes' | 'reject' | 'hide'>;
+type DialogDecision = Extract<ShowcaseDecision, 'reject' | 'hide'>;
 
 const DIALOGS: Record<DialogDecision, { title: string; description: string; confirm: string; success: string }> = {
-  'request-changes': {
-    title: 'Request changes',
-    description: 'The team will be notified and can edit and resubmit the page. Explain what needs to change.',
-    confirm: 'Send request',
-    success: 'Changes requested.',
-  },
   reject: {
     title: 'Reject this page',
     description: 'The page returns to draft and stays private. Explain why it cannot be published.',
@@ -89,11 +83,8 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
         {actions.includes('unhide') && (
           <Button size="sm" variant="secondary" icon={Eye} isLoading={busy === 'unhide'} disabled={busy !== null} onClick={() => quick('unhide')}>Show again</Button>
         )}
-        {actions.includes('request-changes') && (
-          <Button size="sm" variant="outline" icon={MessageSquareWarning} disabled={busy !== null} onClick={() => setDialog('request-changes')}>Request changes</Button>
-        )}
         {actions.includes('reject') && (
-          <Button size="sm" variant="danger-outline" icon={XCircle} disabled={busy !== null} onClick={() => setDialog('reject')}>Reject</Button>
+          <Button size="sm" variant="danger-outline" icon={XCircle} disabled={busy !== null} onClick={() => setDialog('reject')}>Reject Project</Button>
         )}
         {actions.includes('hide') && (
           <Button size="sm" variant="danger-outline" icon={EyeOff} disabled={busy !== null} onClick={() => setDialog('hide')}>Hide</Button>

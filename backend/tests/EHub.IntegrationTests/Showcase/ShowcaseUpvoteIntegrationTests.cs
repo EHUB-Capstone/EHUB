@@ -70,7 +70,7 @@ public sealed class ShowcaseUpvoteIntegrationTests(CustomWebApplicationFactory f
             (await scenario.ReadAsync<ShowcaseDetailDto>($"/api/showcase/{scenario.First.Id}", scenario.Owner))
                 .Showcase.LikeCount.Should().Be(0);
 
-            foreach (var status in new[] { ShowcaseStatus.Draft, ShowcaseStatus.PendingReview, ShowcaseStatus.ChangesRequested, ShowcaseStatus.Hidden })
+            foreach (var status in new[] { ShowcaseStatus.Draft, ShowcaseStatus.PendingReview, ShowcaseStatus.Hidden })
             {
                 await scenario.Db.ShowcaseProjects.Where(item => item.Id == scenario.Second.Id)
                     .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Status, status));

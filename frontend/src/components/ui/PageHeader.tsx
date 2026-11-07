@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import Button from './Button';
 import type { ButtonSize, ButtonVariant } from './Button';
@@ -28,10 +29,13 @@ interface PageAction {
   className?: string;
 }
 
+/** A breadcrumb entry; entries with `to` (except the last, which is the current page) are links. */
+export type BreadcrumbItem = string | { label: string; to?: string };
+
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  breadcrumb?: string[];
+  breadcrumb?: BreadcrumbItem[];
   action?: PageAction;
   actions?: PageAction[];
   badge?: { text: string; className?: string };
@@ -59,19 +63,27 @@ const PageHeader = ({
       {/* Breadcrumb */}
       {breadcrumb && breadcrumb.length > 0 && (
         <nav className="flex items-center gap-1 mb-2" aria-label="Breadcrumb">
-          {breadcrumb.map((crumb, i) => (
-            <span key={crumb} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
-              <span className={cn(
-                'text-overline uppercase',
-                i === breadcrumb.length - 1
-                  ? 'text-primary-700 dark:text-primary-300'
-                  : 'text-slate-500 hover:text-slate-700 cursor-pointer transition-colors dark:text-slate-400 dark:hover:text-slate-200'
-              )}>
-                {crumb}
+          {breadcrumb.map((crumb, i) => {
+            const label = typeof crumb === 'string' ? crumb : crumb.label;
+            const to = typeof crumb === 'string' ? undefined : crumb.to;
+            const isLast = i === breadcrumb.length - 1;
+            const className = cn(
+              'text-overline uppercase',
+              isLast
+                ? 'text-primary-700 dark:text-primary-300'
+                : 'text-slate-500 hover:text-slate-700 cursor-pointer transition-colors dark:text-slate-400 dark:hover:text-slate-200'
+            );
+            return (
+              <span key={`${label}-${i}`} className="flex items-center gap-1">
+                {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />}
+                {to && !isLast ? (
+                  <Link to={to} className={cn(className, 'rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600')}>{label}</Link>
+                ) : (
+                  <span className={className} aria-current={isLast ? 'page' : undefined}>{label}</span>
+                )}
               </span>
-            </span>
-          ))}
+            );
+          })}
         </nav>
       )}
 

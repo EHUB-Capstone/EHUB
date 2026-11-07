@@ -38,7 +38,6 @@ public sealed class ShowcaseQueryHandlerTests
     [Theory]
     [InlineData(ShowcaseStatus.Draft)]
     [InlineData(ShowcaseStatus.PendingReview)]
-    [InlineData(ShowcaseStatus.ChangesRequested)]
     [InlineData(ShowcaseStatus.Hidden)]
     public async Task UnpublishedPage_LooksMissingToEveryoneOutsideTheTeamAndReviewScope(ShowcaseStatus status)
     {
@@ -60,7 +59,7 @@ public sealed class ShowcaseQueryHandlerTests
     public async Task Owner_SeesTheirDraft_WithReviewNoteAndHistory()
     {
         await using var db = ShowcaseTestData.NewContext();
-        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.ChangesRequested, showTeamMembers: false);
+        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Draft, showTeamMembers: false);
         var page = await db.ShowcaseProjects.FindAsync(seed.ShowcaseId);
         page!.ReviewNote = "Add a demo link.";
         await AddHistoryAsync(db, seed.ShowcaseId, seed.LecturerUserId);

@@ -41,7 +41,6 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/withdraw")]
     [InlineData("GET", "/api/showcase/moderation")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/approve")]
-    [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/request-changes")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/reject")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/hide")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/unhide")]

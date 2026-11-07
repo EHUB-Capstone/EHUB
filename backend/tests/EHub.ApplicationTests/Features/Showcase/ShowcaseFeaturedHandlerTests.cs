@@ -97,7 +97,6 @@ public sealed class ShowcaseFeaturedHandlerTests
     [Theory]
     [InlineData(ShowcaseStatus.Draft)]
     [InlineData(ShowcaseStatus.PendingReview)]
-    [InlineData(ShowcaseStatus.ChangesRequested)]
     [InlineData(ShowcaseStatus.Hidden)]
     public async Task UnpublishedPages_RejectBothActions(ShowcaseStatus status)
     {

@@ -284,19 +284,18 @@ test('links to the Project Profile page of the team', () => {
 });
 
 test('mirrors the status rules for owners', () => {
-  assert.deepEqual(['Draft', 'ChangesRequested', 'Hidden'].map((status) => canSubmitForReview(status as never)), [true, true, true]);
+  assert.deepEqual(['Draft', 'Hidden'].map((status) => canSubmitForReview(status as never)), [true, true]);
   assert.deepEqual(['PendingReview', 'Published'].map((status) => canSubmitForReview(status as never)), [false, false]);
   assert.deepEqual(['Published', 'PendingReview'].map((status) => canWithdraw(status as never)), [true, true]);
-  assert.deepEqual(['Draft', 'Hidden', 'ChangesRequested'].map((status) => canWithdraw(status as never)), [false, false, false]);
+  assert.deepEqual(['Draft', 'Hidden'].map((status) => canWithdraw(status as never)), [false, false]);
 });
 
 test('mirrors the decisions a reviewer may take', () => {
-  assert.deepEqual(moderationActionsFor('PendingReview', false), ['approve', 'request-changes', 'reject']);
+  assert.deepEqual(moderationActionsFor('PendingReview', false), ['approve', 'reject']);
   assert.deepEqual(moderationActionsFor('Published', true), ['hide']);
   assert.deepEqual(moderationActionsFor('Hidden', true), ['unhide']);
   assert.deepEqual(moderationActionsFor('Hidden', false), []);
   assert.deepEqual(moderationActionsFor('Draft', false), []);
-  assert.deepEqual(moderationActionsFor('ChangesRequested', true), []);
 });
 
 test('checks image type and size before uploading', () => {

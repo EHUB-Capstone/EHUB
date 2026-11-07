@@ -21,7 +21,6 @@ public sealed class ShowcaseModerationHandlerTests
 
     [Theory]
     [InlineData(ShowcaseStatus.Draft)]
-    [InlineData(ShowcaseStatus.ChangesRequested)]
     [InlineData(ShowcaseStatus.Hidden)]
     public async Task Submit_MovesEditablePagesToPendingReview_AndNotifiesTheClassLecturer(ShowcaseStatus from)
     {
@@ -169,7 +168,6 @@ public sealed class ShowcaseModerationHandlerTests
     }
 
     [Theory]
-    [InlineData(ShowcaseModerationAction.RequestChanges, ShowcaseStatus.PendingReview, ShowcaseStatus.ChangesRequested)]
     [InlineData(ShowcaseModerationAction.Reject, ShowcaseStatus.PendingReview, ShowcaseStatus.Draft)]
     [InlineData(ShowcaseModerationAction.Hide, ShowcaseStatus.Published, ShowcaseStatus.Hidden)]
     public async Task NegativeDecisions_RequireANote_AndStoreItForTheTeam(

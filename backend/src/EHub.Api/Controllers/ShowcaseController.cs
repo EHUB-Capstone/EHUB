@@ -192,13 +192,6 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         [FromServices] IShowcaseModerationHandler handler, CancellationToken cancellationToken) =>
         Decide(handler, id, ShowcaseModerationAction.Approve, request, "Showcase approved.", cancellationToken);
 
-    [HttpPost("{id:guid}/request-changes")]
-    [Authorize(Policy = SystemPolicies.StaffOnly)]
-    public Task<IActionResult> RequestChanges(
-        Guid id, [FromBody] ShowcaseDecisionRequest request,
-        [FromServices] IShowcaseModerationHandler handler, CancellationToken cancellationToken) =>
-        Decide(handler, id, ShowcaseModerationAction.RequestChanges, request, "Changes requested.", cancellationToken);
-
     [HttpPost("{id:guid}/reject")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
     public Task<IActionResult> Reject(

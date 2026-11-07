@@ -40,7 +40,6 @@ export type ShowcaseTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 export const SHOWCASE_STATUS_META: Record<ShowcaseStatus, { label: string; tone: ShowcaseTone; description: string }> = {
   Draft: { label: 'Draft', tone: 'neutral', description: 'Only your team can see this page.' },
   PendingReview: { label: 'Pending review', tone: 'info', description: 'Waiting for a lecturer or administrator to review it.' },
-  ChangesRequested: { label: 'Changes requested', tone: 'warning', description: 'A reviewer asked for changes before it can be published.' },
   Published: { label: 'Published', tone: 'success', description: 'Visible to signed-in E-HUB users.' },
   Hidden: { label: 'Hidden', tone: 'neutral', description: 'Not visible to the community.' },
 };
@@ -169,16 +168,16 @@ export const missingForReview = (profile: Pick<ShowcaseProfileDto, 'description'
 /** Route of the Project Profile page, where the shared fields are edited. */
 export const projectProfilePath = (teamId: string): string => `/student/workspace/project-profile/${teamId}`;
 
-const SUBMITTABLE: ReadonlySet<ShowcaseStatus> = new Set(['Draft', 'ChangesRequested', 'Hidden']);
+const SUBMITTABLE: ReadonlySet<ShowcaseStatus> = new Set(['Draft', 'Hidden']);
 const WITHDRAWABLE: ReadonlySet<ShowcaseStatus> = new Set(['Published', 'PendingReview']);
 
 export const canSubmitForReview = (status: ShowcaseStatus): boolean => SUBMITTABLE.has(status);
 export const canWithdraw = (status: ShowcaseStatus): boolean => WITHDRAWABLE.has(status);
 
 /** Moderation actions available for a page in the given status (mirrors ShowcaseModerationHandler rules). */
-export const moderationActionsFor = (status: ShowcaseStatus, wasEverPublished: boolean): Array<'approve' | 'request-changes' | 'reject' | 'hide' | 'unhide'> => {
+export const moderationActionsFor = (status: ShowcaseStatus, wasEverPublished: boolean): Array<'approve' | 'reject' | 'hide' | 'unhide'> => {
   switch (status) {
-    case 'PendingReview': return ['approve', 'request-changes', 'reject'];
+    case 'PendingReview': return ['approve', 'reject'];
     case 'Published': return ['hide'];
     case 'Hidden': return wasEverPublished ? ['unhide'] : [];
     default: return [];
