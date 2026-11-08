@@ -1,4 +1,4 @@
-export const WORKSPACE_TABS = ['overview', 'roadmap', 'shortcut', 'history'] as const;
+export const WORKSPACE_TABS = ['overview', 'feedback', 'roadmap', 'shortcut', 'history'] as const;
 
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 

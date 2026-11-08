@@ -153,6 +153,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Teams.ManageTeams.ITeamManagementHandler, EHub.Application.Features.Teams.ManageTeams.TeamManagementHandler>();
         services.AddScoped<EHub.Application.Features.Teams.Continuations.ITeamContinuationService, EHub.Application.Features.Teams.Continuations.TeamContinuationService>();
         services.AddScoped<EHub.Application.Features.Teams.Lineage.ITeamLineageHandler, EHub.Application.Features.Teams.Lineage.TeamLineageHandler>();
+        services.AddScoped<EHub.Application.Features.Teams.FeedbackOverview.ITeamFeedbackOverviewHandler, EHub.Application.Features.Teams.FeedbackOverview.TeamFeedbackOverviewHandler>();
         services.AddScoped<EHub.Application.Features.Teams.MentorAssignments.IMentorAssignmentHandler, EHub.Application.Features.Teams.MentorAssignments.MentorAssignmentHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamProposals.ITeamProposalHandler, EHub.Application.Features.Teams.TeamProposals.TeamProposalHandler>();
         services.AddScoped<EHub.Application.Features.Teams.TeamFormations.ITeamFormationHandler, EHub.Application.Features.Teams.TeamFormations.TeamFormationHandler>();

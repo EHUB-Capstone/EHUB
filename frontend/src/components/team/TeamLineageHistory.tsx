@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Crown, Loader2, RefreshCw } from 'lucide-react';
 import { teamLineageApi } from '../../api/teamLineageApi';
 import type { TeamLineage, TeamLineageSubmission, TeamLineageTerm } from '../../types/teamLineage';
@@ -17,23 +17,33 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
   const [open, setOpen] = useState(false);
   const [submissions, setSubmissions] = useState<SubmissionState | null>(null);
 
-  const loadSubmissions = useCallback(async (signal?: AbortSignal) => {
+  const controllerRef = useRef<AbortController | null>(null);
+  const requestedRef = useRef(false);
+
+  const loadSubmissions = useCallback(async () => {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setSubmissions({ status: 'loading' });
     try {
-      const response = await teamLineageApi.getTermSubmissions(teamId, term.teamId, { signal });
+      const response = await teamLineageApi.getTermSubmissions(teamId, term.teamId, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setSubmissions({ status: 'ready', items: response.data ?? [] });
     } catch (error: unknown) {
-      if ((error as { code?: string })?.code === 'ERR_CANCELED') return;
+      if (controller.signal.aborted || (error as { code?: string })?.code === 'ERR_CANCELED') return;
       setSubmissions({ status: 'error', message: parseApiError(error, 'Unable to load submissions.').message });
     }
   }, [teamId, term.teamId]);
 
+  // Load once, the first time the card is opened. Loading state must not be an effect dependency,
+  // otherwise its own update would trigger the cleanup and abort the request in flight.
   useEffect(() => {
-    if (!open || !term.canViewSubmissions || submissions) return undefined;
-    const controller = new AbortController();
-    void loadSubmissions(controller.signal);
-    return () => controller.abort();
-  }, [open, term.canViewSubmissions, submissions, loadSubmissions]);
+    if (!open || !term.canViewSubmissions || requestedRef.current) return;
+    requestedRef.current = true;
+    void loadSubmissions();
+  }, [open, term.canViewSubmissions, loadSubmissions]);
+
+  useEffect(() => () => controllerRef.current?.abort(), []);
 
   return (
     <li className="rounded-xl border border-slate-200 bg-white">

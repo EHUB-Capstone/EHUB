@@ -288,7 +288,7 @@ for (const status of ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'CANCELLED',
 test('new tasks default to To Do', () => {
   assert.equal(weeklyTaskSavePayload(null, draft).status, 'TODO');
 });
-for (const tab of ['overview', 'roadmap', 'shortcut'] as const) {
+for (const tab of ['overview', 'feedback', 'roadmap', 'shortcut'] as const) {
   test(`URL restores ${tab} after reload`, () => {
     const search = workspaceTabSearch('?tab=roadmap&teamId=team-1', tab);
     assert.equal(resolveWorkspaceTab(search), tab);

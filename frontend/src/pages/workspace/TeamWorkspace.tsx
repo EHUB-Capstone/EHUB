@@ -14,6 +14,7 @@ import SprintPanel from '../../components/workspace/SprintPanel';
 import WeeklyRoadmapPlanner from '../../components/workspace/WeeklyRoadmapPlanner';
 import QuickShortcuts from '../../components/workspace/shortcuts/QuickShortcuts';
 import TeamLineageHistory from '../../components/team/TeamLineageHistory';
+import TeamFeedbackOverview from '../../components/workspace/TeamFeedbackOverview';
 import CheckpointSection from '../../components/workspace/checkpoints/CheckpointSection';
 import WorkspaceSelector from '../../components/workspace/WorkspaceSelector';
 import ProjectDirectionCard from '../../components/workspace/ProjectDirectionCard';
@@ -304,6 +305,7 @@ export default function TeamWorkspace() {
       <div className="flex border-b border-slate-200 overflow-x-auto">
         {[
           { key: 'overview', label: 'Workspace Overview' },
+          { key: 'feedback', label: 'Feedback Overview' },
           { key: 'roadmap', label: 'Weekly Roadmap' },
           { key: 'shortcut', label: 'Quick Shortcuts' },
           { key: 'history', label: 'Semester History' },
@@ -451,6 +453,14 @@ export default function TeamWorkspace() {
 
       {activeTab === 'shortcut' && (
         <QuickShortcuts teamId={team._id} isEditable={isEditable && !isReadOnly} isReadOnly={isReadOnly} />
+      )}
+
+      {activeTab === 'feedback' && (
+        <TeamFeedbackOverview
+          key={team._id}
+          teamId={String(team._id)}
+          onOpenCheckpoints={() => setActiveTab('overview')}
+        />
       )}
 
       {activeTab === 'history' && (
