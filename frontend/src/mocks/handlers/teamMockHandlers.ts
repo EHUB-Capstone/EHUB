@@ -182,6 +182,55 @@ function registerTeamQueries(mock: MockAdapter): void {
     return ok([], 'Team term submissions retrieved.');
   });
 
+  // Sample data only; the real endpoint filters by role on the server (mentors receive only their own threads, never scores).
+  mock.onGet(/^\/teams\/[^/]+\/feedback-overview$/).reply((config) => {
+    const team = teamById(routeId(config, /^\/teams\/([^/]+)\/feedback-overview$/));
+    const state = getMockState();
+    const user = state.users.find(item => item.id === state.sessionUserId);
+    if (!user) return failure(401, 'UNAUTHORIZED', 'Authentication is required.');
+    if (!team) return failure(404, 'TEAM_NOT_FOUND', 'Team not found.');
+    if (!canReadTeam(team)) return failure(403, 'CLASS_ACCESS_DENIED', 'You cannot view the feedback of this team.');
+    const isMentor = user.role === 'MENTOR';
+    const staffThread = {
+      id: `${team.id}-feedback-1`,
+      content: 'Please clarify the target customer segment before the next checkpoint.',
+      isTechnicalReview: false,
+      resolved: false,
+      createdAt: '2026-10-01T08:00:00Z',
+      submissionVersion: 1,
+      author: { id: 'mock-lecturer', name: 'Lecturer', role: 'Lecturer' },
+      replies: [],
+    };
+    const mentorThread = {
+      ...staffThread,
+      id: `${team.id}-feedback-2`,
+      content: 'Consider validating the pricing assumption with five interviews.',
+      author: { id: user.id, name: user.name, role: 'Mentor' },
+    };
+    return ok({
+      teamId: team.id,
+      teamName: team.teamName,
+      checkpoints: [{
+        checkpointId: `${team.id}-checkpoint-1`,
+        checkpointNumber: 1,
+        title: 'Problem definition',
+        threads: isMentor ? [mentorThread] : [staffThread],
+        evaluations: isMentor ? [] : [{
+          id: `${team.id}-evaluation-1`,
+          status: 'Published',
+          evaluator: { id: 'mock-lecturer', name: 'Lecturer', role: 'Lecturer' },
+          overallFeedback: 'Clear problem statement with room to improve the market analysis.',
+          strengths: 'Well researched pain points.',
+          weaknesses: null,
+          suggestions: 'Add market size estimates.',
+          submittedAt: '2026-10-02T08:00:00Z',
+          publishedAt: '2026-10-03T08:00:00Z',
+          criterionComments: [{ criterionName: 'Problem fit', comment: 'Good fit with the target users.' }],
+        }],
+      }],
+    }, 'Team feedback overview retrieved.');
+  });
+
   mock.onGet('/admin/team-continuity').reply(() => {
     const state = getMockState();
     const user = state.users.find(item => item.id === state.sessionUserId);

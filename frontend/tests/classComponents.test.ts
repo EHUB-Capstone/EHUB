@@ -196,7 +196,7 @@ test('evaluation rankings are restricted to admin and lecturer roles', () => {
 });
 
 test('workspace keeps evaluation inside checkpoints and removes standalone evaluation and mentoring tabs', () => {
-  assert.deepEqual(WORKSPACE_TABS, ['overview', 'roadmap', 'shortcut', 'history']);
+  assert.deepEqual(WORKSPACE_TABS, ['overview', 'feedback', 'roadmap', 'shortcut', 'history']);
   assert.equal(resolveWorkspaceTab('?tab=roadmap'), 'roadmap');
   assert.equal(resolveWorkspaceTab('?tab=evaluation'), 'overview');
   assert.equal(resolveWorkspaceTab('?tab=mentoring'), 'overview');

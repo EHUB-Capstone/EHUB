@@ -1,4 +1,5 @@
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Teams.FeedbackOverview;
 using EHub.Application.Features.Teams.Lineage;
 using EHub.Application.Features.Teams.ManageTeams;
 using EHub.Application.Features.Teams.MentorAssignments;
@@ -144,6 +145,13 @@ public sealed class TeamsController : ControllerBase
     [HttpGet("teams/{teamId:guid}/lineage/{termTeamId:guid}/submissions")]
     public async Task<IActionResult> GetTeamLineageSubmissions(Guid teamId, Guid termTeamId, [FromServices] ITeamLineageHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetTermSubmissionsAsync(teamId, termTeamId, UserId, Role, cancellationToken), "Team term submissions retrieved.");
+
+    [HttpGet("teams/{teamId:guid}/feedback-overview")]
+    public async Task<IActionResult> GetTeamFeedbackOverview(Guid teamId, [FromServices] ITeamFeedbackOverviewHandler handler, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        return ToResponse(await handler.GetAsync(teamId, UserId, Role, cancellationToken), "Team feedback overview retrieved.");
+    }
 
     [HttpGet("admin/team-continuity")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
