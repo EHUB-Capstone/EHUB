@@ -13,6 +13,8 @@ interface ShowcaseUpvoteButtonProps extends ShowcaseUpvoteDto {
   isOwner: boolean;
   isPublished?: boolean;
   showLabel?: boolean;
+  /** Counter-tile look (number above its label), to sit in a row of counters. */
+  tile?: boolean;
   className?: string;
 }
 
@@ -23,6 +25,7 @@ export default function ShowcaseUpvoteButton({
   isOwner,
   isPublished = true,
   showLabel = false,
+  tile = false,
   className,
 }: ShowcaseUpvoteButtonProps) {
   const queryClient = useQueryClient();
@@ -85,9 +88,21 @@ export default function ShowcaseUpvoteButton({
         vote.mutate(optimisticShowcaseUpvote(current));
       }}
     >
-      {!pendingVote && <Flame className={cn('h-4 w-4 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
-      {current.likeCount.toLocaleString()}
-      {showLabel && <span>interested</span>}
+      {tile ? (
+        <>
+          <span className="text-heading text-secondary">{current.likeCount.toLocaleString()}</span>
+          <span className="inline-flex items-center gap-1 text-caption font-medium text-primary-700">
+            {!pendingVote && <Flame className={cn('h-3.5 w-3.5 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
+            Interested
+          </span>
+        </>
+      ) : (
+        <>
+          {!pendingVote && <Flame className={cn('h-4 w-4 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
+          {current.likeCount.toLocaleString()}
+          {showLabel && <span>interested</span>}
+        </>
+      )}
     </Button>
   );
 }

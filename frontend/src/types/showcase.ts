@@ -21,6 +21,57 @@ export interface ShowcaseViewDto {
   viewCount: number;
 }
 
+export interface ShowcaseInsightsDayDto {
+  date: string;
+  views: number;
+  upvotes: number;
+  comments: number;
+}
+
+export interface ShowcaseInsightsPeriodDto {
+  views: number;
+  upvotes: number;
+  comments: number;
+}
+
+export interface ShowcaseInsightsDto {
+  viewCount: number;
+  upvoteCount: number;
+  commentCount: number;
+  /** The last fourteen UTC days, oldest first. */
+  daily: ShowcaseInsightsDayDto[];
+  /** Totals of the fourteen UTC days before `daily`, to show the trend. */
+  previous: ShowcaseInsightsPeriodDto;
+}
+
+export interface CreateShowcaseCommentRequest {
+  content: string;
+  parentCommentId?: string | null;
+}
+
+export interface ShowcaseCommentDto {
+  id: string;
+  parentCommentId: string | null;
+  content: string;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  isTeamReply: boolean;
+  createdAt: string;
+  /** True for the author, administrators and the lecturers of the class. */
+  canDelete: boolean;
+  /** All replies of this comment; `replies` holds only the oldest few. */
+  replyCount: number;
+  replies: ShowcaseCommentDto[];
+}
+
+export interface ShowcaseCommentPageDto {
+  items: ShowcaseCommentDto[];
+  pageIndex: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 export interface GetShowcasesRequest {
   search?: string;
   stage?: ShowcaseStage;

@@ -15,6 +15,10 @@ import type {
   ShowcaseStatus,
   ShowcaseUpvoteDto,
   ShowcaseViewDto,
+  ShowcaseInsightsDto,
+  ShowcaseCommentDto,
+  ShowcaseCommentPageDto,
+  CreateShowcaseCommentRequest,
 } from '../types/showcase.ts';
 
 // axiosClient resolves to the response body, so each call yields the ApiEnvelope.
@@ -31,6 +35,16 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 export const showcaseApi = {
   recordView: (id: string, signal?: AbortSignal) =>
     unwrap<ShowcaseViewDto>(axiosClient.post(`/showcase/${id}/view`, undefined, { signal })),
+  getInsights: (id: string, signal?: AbortSignal) =>
+    unwrap<ShowcaseInsightsDto>(axiosClient.get(`/showcase/${id}/insights`, { signal })),
+  getComments: (id: string, page: number, pageSize: number, signal?: AbortSignal) =>
+    unwrap<ShowcaseCommentPageDto>(axiosClient.get(`/showcase/${id}/comments`, { params: { page, pageSize }, signal })),
+  getCommentReplies: (id: string, commentId: string, page: number, pageSize: number, signal?: AbortSignal) =>
+    unwrap<ShowcaseCommentPageDto>(axiosClient.get(`/showcase/${id}/comments/${commentId}/replies`, { params: { page, pageSize }, signal })),
+  createComment: (id: string, body: CreateShowcaseCommentRequest) =>
+    unwrap<ShowcaseCommentDto>(axiosClient.post(`/showcase/${id}/comments`, body)),
+  deleteComment: (id: string, commentId: string) =>
+    unwrap<null>(axiosClient.delete(`/showcase/${id}/comments/${commentId}`)),
   setUpvote: (id: string, hasUpvoted: boolean) =>
     unwrap<ShowcaseUpvoteDto>(hasUpvoted
       ? axiosClient.post(`/showcase/${id}/upvote`)

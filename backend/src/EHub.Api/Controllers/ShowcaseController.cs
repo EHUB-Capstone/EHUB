@@ -7,6 +7,10 @@ using EHub.Application.Features.Showcase.Discovery;
 using EHub.Application.Features.Showcase.Featured;
 using EHub.Application.Features.Showcase.Upvote;
 using EHub.Application.Features.Showcase.Views;
+using EHub.Application.Features.Showcase.Insights;
+using EHub.Application.Features.Showcase.Comments;
+using EHub.Api.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Shared.Constants;
@@ -81,6 +85,38 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     public async Task<IActionResult> RecordView(
         Guid id, [FromServices] IShowcaseViewHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.RecordAsync(id, UserId, Role, cancellationToken), "Showcase view processed.");
+
+    [HttpGet("{id:guid}/insights")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> Insights(
+        Guid id, [FromServices] IShowcaseInsightsHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetAsync(id, UserId, cancellationToken), "Showcase insights retrieved.");
+
+    [HttpGet("{id:guid}/comments")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> Comments(
+        Guid id, [FromQuery] int page, [FromQuery] int pageSize,
+        [FromServices] IShowcaseCommentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(id, page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize, UserId, Role, cancellationToken), "Showcase comments retrieved.");
+
+    [HttpGet("{id:guid}/comments/{commentId:guid}/replies")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> CommentReplies(
+        Guid id, Guid commentId, [FromQuery] int page, [FromQuery] int pageSize,
+        [FromServices] IShowcaseCommentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListRepliesAsync(id, commentId, page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize, UserId, Role, cancellationToken), "Showcase replies retrieved.");
+
+    [HttpPost("{id:guid}/comments")]
+    [EnableRateLimiting(ShowcaseCommentRateLimitPolicies.Create)]
+    public async Task<IActionResult> CreateComment(
+        Guid id, [FromBody] CreateShowcaseCommentRequest request,
+        [FromServices] IShowcaseCommentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Showcase comment created.");
+
+    [HttpDelete("{id:guid}/comments/{commentId:guid}")]
+    public async Task<IActionResult> DeleteComment(
+        Guid id, Guid commentId, [FromServices] IShowcaseCommentHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteAsync(id, commentId, UserId, Role, cancellationToken), "Showcase comment removed.");
 
     [HttpGet("mine")]
     [Authorize(Policy = SystemPolicies.StudentOnly)]
@@ -235,6 +271,7 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         {
             ErrorCodes.CommonUnauthorizedError => Unauthorized(body),
             ErrorCodes.ShowcaseNotFound => NotFound(body),
+            ErrorCodes.ShowcaseCommentNotFound => NotFound(body),
             ErrorCodes.ShowcaseAccessDenied => StatusCode(StatusCodes.Status403Forbidden, body),
             ErrorCodes.ShowcaseAlreadyExists or
             ErrorCodes.ShowcaseInvalidState or

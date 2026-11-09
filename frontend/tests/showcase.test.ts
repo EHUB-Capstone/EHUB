@@ -19,6 +19,17 @@ test('showcase view client returns the current counter and accepts an abort sign
   }
 });
 
+test('showcase insights client gets the owner-only fourteen-day snapshot', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const controller = new AbortController();
+  const insights = { viewCount: 12, upvoteCount: 3, commentCount: 2, daily: [] };
+  mock.onGet('/showcase/s1/insights').reply(200, { data: insights });
+  try {
+    assert.deepEqual(await showcaseApi.getInsights('s1', controller.signal), insights);
+    assert.equal(mock.history.get[0].signal, controller.signal);
+  } finally { mock.restore(); }
+});
+
 test('newly published rail includes only projects published in the preceding seven days', () => {
   const now = Date.parse('2026-11-05T12:00:00Z');
   assert.equal(isNewlyPublished('2026-10-29T12:00:00Z', now), true);
@@ -112,6 +123,9 @@ import {
   toSaveRequest,
   validateImageFile,
   validateShowcaseForm,
+  insightsDelta,
+  insightsTotal,
+  timeAgo,
 } from '../src/utils/showcase.ts';
 import { validateProjectProfile, validateProjectWorkspace } from '../src/utils/projectWorkspace.ts';
 import { createReleaseFeatureFlags } from '../src/config/releaseFeatureFlags.ts';
@@ -310,4 +324,52 @@ test('checks image type and size before uploading', () => {
 test('can be switched off with the release feature flag', () => {
   assert.equal(createReleaseFeatureFlags({}).showcase, true);
   assert.equal(createReleaseFeatureFlags({ VITE_FEATURE_SHOWCASE: 'false' }).showcase, false);
+});
+
+test('shows how long ago a comment was written, and its date after a week', () => {
+  const now = Date.parse('2026-11-09T12:00:00Z');
+  assert.equal(timeAgo('2026-11-09T11:59:40Z', now), 'just now');
+  assert.equal(timeAgo('2026-11-09T11:59:00Z', now), '1 minute ago');
+  assert.equal(timeAgo('2026-11-09T11:15:00Z', now), '45 minutes ago');
+  assert.equal(timeAgo('2026-11-09T10:00:00Z', now), '2 hours ago');
+  assert.equal(timeAgo('2026-11-06T12:00:00Z', now), '3 days ago');
+  assert.equal(timeAgo('2026-11-09T12:05:00Z', now), 'just now', 'a clock that runs ahead never shows a negative time');
+  assert.equal(timeAgo('not a date', now), '');
+  assert.match(timeAgo('2026-10-01T12:00:00Z', now), /2026/);
+});
+
+test('summarises fourteen days of insights and the trend against the fourteen before', () => {
+  const daily = [
+    { views: 4, upvotes: 1, comments: 0 },
+    { views: 6, upvotes: 0, comments: 2 },
+    { views: 0, upvotes: 2, comments: 0 },
+  ];
+  assert.equal(insightsTotal(daily, 'views'), 10);
+  assert.equal(insightsTotal(daily, 'upvotes'), 3);
+  assert.equal(insightsTotal(daily, 'comments'), 2);
+  assert.equal(insightsTotal([], 'views'), 0);
+
+  assert.deepEqual(insightsDelta(34, 10), { label: '+24', direction: 'up' });
+  assert.deepEqual(insightsDelta(2, 5), { label: '-3', direction: 'down' });
+  assert.deepEqual(insightsDelta(7, 7), { label: 'no change', direction: 'flat' });
+  assert.deepEqual(insightsDelta(1500, 0), { label: '+' + (1500).toLocaleString(), direction: 'up' });
+});
+
+test('comment client pages threads and replies, posts and removes a comment', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const thread = { id: 'c1', parentCommentId: null, content: 'Nice', authorName: 'Chi', authorAvatarUrl: null, isTeamReply: false, createdAt: '2026-11-09T10:00:00Z', canDelete: true, replyCount: 5, replies: [] };
+  const page = (items: unknown[]) => ({ data: { items, pageIndex: 1, pageSize: 10, totalItems: items.length, totalPages: 1 } });
+  mock.onGet('/showcase/s1/comments').reply(200, page([thread]));
+  mock.onGet('/showcase/s1/comments/c1/replies').reply(200, page([]));
+  mock.onPost('/showcase/s1/comments').reply(200, { data: { ...thread, id: 'c2' } });
+  mock.onDelete('/showcase/s1/comments/c1').reply(200, { data: null });
+  try {
+    assert.equal((await showcaseApi.getComments('s1', 2, 10)).items[0].replyCount, 5);
+    assert.deepEqual(mock.history.get[0].params, { page: 2, pageSize: 10 });
+    await showcaseApi.getCommentReplies('s1', 'c1', 1, 20);
+    assert.deepEqual(mock.history.get[1].params, { page: 1, pageSize: 20 });
+    assert.equal((await showcaseApi.createComment('s1', { content: 'Hi', parentCommentId: 'c1' })).id, 'c2');
+    assert.deepEqual(JSON.parse(mock.history.post[0].data), { content: 'Hi', parentCommentId: 'c1' });
+    assert.equal(await showcaseApi.deleteComment('s1', 'c1'), null);
+  } finally { mock.restore(); }
 });

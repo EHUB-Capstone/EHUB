@@ -94,6 +94,7 @@ public interface IApplicationDbContext
     DbSet<ProductFeedback> ProductFeedbacks { get; }
     DbSet<ProductFeedbackAttachment> ProductFeedbackAttachments { get; }
     DbSet<ShowcaseProject> ShowcaseProjects { get; }
+    DbSet<ShowcaseComment> ShowcaseComments { get; }
     DbSet<ShowcaseUpvote> ShowcaseUpvotes { get; }
     DbSet<ShowcaseViewDaily> ShowcaseViewsDaily { get; }
     DbSet<ShowcaseLink> ShowcaseLinks { get; }
