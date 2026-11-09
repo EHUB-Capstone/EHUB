@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import ShowcaseReviewHistory, { ShowcaseLatestFeedback } from '../../components/showcase/ShowcaseReviewHistory';
 import { SHOWCASE_ROW_ACTION } from '../../components/showcase/rowActionStyles';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
+import ShowcaseInsights from '../../components/showcase/ShowcaseInsights';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_STATUS_META, stageLabel } from '../../utils/showcase';
@@ -88,6 +89,7 @@ export default function MyShowcase() {
                       )}
                     </div>
                   </div>
+                  {showcase?.publishedAt && <ShowcaseInsights showcaseId={showcase.id} />}
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
                     <p className="text-body-sm text-slate-600">
                       {showcase ? SHOWCASE_STATUS_META[showcase.status].description : 'Starts as a private draft.'}

@@ -115,6 +115,134 @@ public sealed class ShowcaseViewIntegrationTests(CustomWebApplicationFactory fac
             }
         });
 
+    [Fact]
+    public Task Insights_AreVisibleOnlyToActiveOwners_AndReturnTotalsAndFourteenDays() =>
+        WithShowcasesAsync(async scenario =>
+        {
+            scenario.First.ViewCount = 12;
+            scenario.First.LikeCount = 3;
+            scenario.First.CommentCount = 2;
+            scenario.Db.ShowcaseUpvotes.AddRange(
+                new ShowcaseUpvote { ShowcaseProjectId = scenario.First.Id, UserId = scenario.Viewer.Id, CreatedAt = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc) },
+                new ShowcaseUpvote { ShowcaseProjectId = scenario.First.Id, UserId = scenario.OtherViewer.Id, CreatedAt = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc) });
+            scenario.Db.ShowcaseViewsDaily.Add(new ShowcaseViewDaily { ShowcaseProjectId = scenario.First.Id, UserId = scenario.Viewer.Id, ViewDateUtc = new DateOnly(2026, 11, 5) });
+            await scenario.Db.SaveChangesAsync();
+
+            using var ownerResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/insights", scenario.Owner);
+            ownerResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var insights = (await ownerResponse.Content.ReadFromJsonAsync<ApiResponse<ShowcaseInsightsDto>>())!.Data!;
+            (insights.ViewCount, insights.UpvoteCount, insights.CommentCount).Should().Be((12, 3, 2));
+            insights.Daily.Should().HaveCount(14);
+            insights.Daily.Select(day => day.Date).Should().Equal(Enumerable.Range(0, 14).Select(offset => new DateOnly(2026, 10, 24).AddDays(offset)));
+            insights.Daily.Single(day => day.Date == new DateOnly(2026, 11, 5)).Views.Should().Be(1);
+            insights.Daily.Single(day => day.Date == new DateOnly(2026, 11, 6)).Upvotes.Should().Be(1);
+            insights.Daily.Should().OnlyContain(day => day.Comments == 0);
+            // 20 Oct falls in the fourteen days before the window (10 Oct to 23 Oct).
+            (insights.Previous.Views, insights.Previous.Upvotes, insights.Previous.Comments).Should().Be((0, 1, 0));
+
+            using var outsiderResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/insights", scenario.Viewer);
+            outsiderResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        });
+
+    [Fact]
+    public Task Comments_AllowNestedReplies_SoftDeleteAndQueueTeamNotification() =>
+        WithShowcasesAsync(async scenario =>
+        {
+            async Task<ShowcaseCommentDto> CreateAsync(User user, string content, Guid? parentCommentId = null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/showcase/{scenario.First.Id}/comments")
+                {
+                    Content = JsonContent.Create(new CreateShowcaseCommentRequest { Content = content, ParentCommentId = parentCommentId })
+                };
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", scenario.Tokens.GenerateAccessToken(user, [SystemRoles.Student]).Token);
+                using var response = await scenario.Client.SendAsync(request);
+                response.StatusCode.Should().Be(HttpStatusCode.OK);
+                return (await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseCommentDto>>())!.Data!;
+            }
+
+            var root = await CreateAsync(scenario.Viewer, "A useful project");
+            root.IsTeamReply.Should().BeFalse();
+            var reply = await CreateAsync(scenario.Owner, "Thank you", root.Id);
+            reply.IsTeamReply.Should().BeTrue();
+            var nestedReply = await CreateAsync(scenario.OtherViewer, "A follow-up", reply.Id);
+            nestedReply.ParentCommentId.Should().Be(root.Id, "answering a reply joins the thread of its parent");
+            using var listResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/comments", scenario.Viewer);
+            listResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var page = (await listResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCommentDto>>>())!.Data!;
+            var thread = page.Items.Single();
+            thread.ReplyCount.Should().Be(2);
+            thread.Replies.Select(item => item.Id).Should().Equal(reply.Id, nestedReply.Id);
+            thread.Replies.Should().OnlyContain(item => item.Replies.Count == 0);
+            thread.CanDelete.Should().BeTrue("the viewer wrote the first comment");
+            thread.Replies.Should().OnlyContain(item => !item.CanDelete, "the viewer did not write the replies");
+            (await scenario.Db.ShowcaseProjects.Where(item => item.Id == scenario.First.Id).Select(item => item.CommentCount).SingleAsync()).Should().Be(3);
+            // The owner is the only team member, so their own reply notifies nobody: two of the three comments queue a notification.
+            (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == scenario.First.Id)).Should().Be(2);
+
+            using var deleteResponse = await scenario.SendAsync(HttpMethod.Delete, $"/api/showcase/{scenario.First.Id}/comments/{root.Id}", scenario.Viewer);
+            deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            // Removing a comment removes its whole thread, so no reply stays hidden but counted.
+            (await scenario.Db.ShowcaseComments.IgnoreQueryFilters().Where(item => new[] { root.Id, reply.Id, nestedReply.Id }.Contains(item.Id)).ToListAsync())
+                .Should().HaveCount(3).And.OnlyContain(item => item.IsDeleted);
+            (await scenario.Db.ShowcaseProjects.Where(item => item.Id == scenario.First.Id).Select(item => item.CommentCount).SingleAsync()).Should().Be(0);
+            using var afterDelete = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/comments", scenario.Viewer);
+            (await afterDelete.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCommentDto>>>())!.Data!.Items.Should().BeEmpty();
+        });
+
+    [Fact]
+    public Task Comments_CountStaysExact_WhenManyArePostedAtTheSameTime() =>
+        WithShowcasesAsync(async scenario =>
+        {
+            var tasks = Enumerable.Range(0, 6).Select(async index =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/showcase/{scenario.First.Id}/comments")
+                {
+                    Content = JsonContent.Create(new CreateShowcaseCommentRequest { Content = $"Parallel {index}" })
+                };
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", scenario.Tokens.GenerateAccessToken(scenario.Viewer, [SystemRoles.Student]).Token);
+                using var response = await scenario.Client.SendAsync(request);
+                return response.StatusCode;
+            });
+            (await Task.WhenAll(tasks)).Should().OnlyContain(status => status == HttpStatusCode.OK);
+            (await scenario.Db.ShowcaseProjects.Where(item => item.Id == scenario.First.Id).Select(item => item.CommentCount).SingleAsync()).Should().Be(6);
+        });
+
+    [Fact]
+    public Task Comments_ListOnlyTheFirstRepliesOfEachThread_AndLoadTheRestOnDemand() =>
+        WithShowcasesAsync(async scenario =>
+        {
+            async Task<ShowcaseCommentDto> CreateAsync(User user, string content, Guid? parentCommentId = null)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/showcase/{scenario.First.Id}/comments")
+                {
+                    Content = JsonContent.Create(new CreateShowcaseCommentRequest { Content = content, ParentCommentId = parentCommentId })
+                };
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", scenario.Tokens.GenerateAccessToken(user, [SystemRoles.Student]).Token);
+                using var response = await scenario.Client.SendAsync(request);
+                response.StatusCode.Should().Be(HttpStatusCode.OK);
+                return (await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseCommentDto>>())!.Data!;
+            }
+
+            var root = await CreateAsync(scenario.Viewer, "Thread start");
+            var replyIds = new List<Guid>();
+            for (var index = 1; index <= 5; index++) replyIds.Add((await CreateAsync(scenario.Owner, $"Reply {index}", root.Id)).Id);
+
+            using var listResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/comments", scenario.Viewer);
+            var thread = (await listResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCommentDto>>>())!.Data!.Items.Single();
+            thread.ReplyCount.Should().Be(5);
+            thread.Replies.Select(item => item.Id).Should().Equal(replyIds.Take(3), "the oldest three come with the list");
+
+            using var moreResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/comments/{root.Id}/replies?page=2&pageSize=2", scenario.Viewer);
+            moreResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var more = (await moreResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCommentDto>>>())!.Data!;
+            more.TotalItems.Should().Be(5);
+            more.Items.Select(item => item.Id).Should().Equal(replyIds.Skip(2).Take(2));
+
+            // Only the start of a thread has replies to list.
+            using var notAThread = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase/{scenario.First.Id}/comments/{replyIds[0]}/replies", scenario.Viewer);
+            notAThread.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        });
+
     private async Task WithShowcasesAsync(Func<Scenario, Task> run)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -177,6 +305,10 @@ public sealed class ShowcaseViewIntegrationTests(CustomWebApplicationFactory fac
             var teamIds = new[] { firstTeam.Id, secondTeam.Id };
             var userIds = new[] { owner.Id, viewer.Id, otherViewer.Id };
             await db.ShowcaseViewsDaily.Where(view => showcaseIds.Contains(view.ShowcaseProjectId)).ExecuteDeleteAsync();
+            await db.ShowcaseUpvotes.Where(vote => showcaseIds.Contains(vote.ShowcaseProjectId)).ExecuteDeleteAsync();
+            await db.ShowcaseComments.Where(comment => showcaseIds.Contains(comment.ShowcaseProjectId)).ExecuteDeleteAsync();
+            await db.OutboxMessages.Where(message => showcaseIds.Contains(message.AggregateId) && message.AggregateType == "Showcase").ExecuteDeleteAsync();
+            await db.Notifications.Where(notification => userIds.Contains(notification.RecipientUserId)).ExecuteDeleteAsync();
             await db.TeamMembers.Where(member => teamIds.Contains(member.TeamId)).ExecuteDeleteAsync();
             await db.ClassStudents.Where(item => item.ClassId == @class.Id).ExecuteDeleteAsync();
             db.ShowcaseProjects.RemoveRange(await db.ShowcaseProjects.Where(item => showcaseIds.Contains(item.Id)).ToListAsync());

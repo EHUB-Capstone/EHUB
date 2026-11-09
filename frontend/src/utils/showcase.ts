@@ -26,6 +26,7 @@ export const SHOWCASE_LIMITS = {
   images: 8,
   imageBytes: 5 * 1024 * 1024,
   note: 1000,
+  comment: 2000,
 } as const;
 
 export const SHOWCASE_ERROR_CODES = {
@@ -193,4 +194,35 @@ export const validateImageFile = (file: { name: string; size: number }): string 
   if (file.size <= 0) return 'This image is empty.';
   if (file.size > SHOWCASE_LIMITS.imageBytes) return 'Images must be 5 MB or smaller.';
   return null;
+};
+
+/** "5 minutes ago" style label; falls back to the date once it is a week old. */
+export const timeAgo = (iso: string, now: number = Date.now()): string => {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return '';
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
+  if (seconds < 60) return 'just now';
+  const plural = (value: number, unit: string) => `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return plural(minutes, 'minute');
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return plural(hours, 'hour');
+  const days = Math.floor(hours / 24);
+  if (days < 7) return plural(days, 'day');
+  return new Date(then).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+export type InsightsMetric = 'views' | 'upvotes' | 'comments';
+
+/** Sum of one metric over the fourteen shown days. */
+export const insightsTotal = (daily: ReadonlyArray<Record<InsightsMetric, number>>, metric: InsightsMetric): number =>
+  daily.reduce((sum, day) => sum + day[metric], 0);
+
+/** Trend label against the previous fourteen days, e.g. "+24", "-3" or "no change". */
+export const insightsDelta = (current: number, previous: number): { label: string; direction: 'up' | 'down' | 'flat' } => {
+  const difference = current - previous;
+  if (difference === 0) return { label: 'no change', direction: 'flat' };
+  return difference > 0
+    ? { label: `+${difference.toLocaleString()}`, direction: 'up' }
+    : { label: `-${Math.abs(difference).toLocaleString()}`, direction: 'down' };
 };

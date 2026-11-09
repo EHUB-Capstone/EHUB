@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ExternalLink, Eye, Flame, Lightbulb, MessageSquare, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ExternalLink, Eye, Lightbulb, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -9,6 +9,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
 import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
+import ShowcaseComments from '../../components/showcase/ShowcaseComments';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import ShowcaseUpvoteButton from '../../components/showcase/ShowcaseUpvoteButton';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
@@ -18,14 +19,16 @@ import type { ShowcaseDetailDto } from '../../types/showcase';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 
-function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: string | null }) {
-  if (!children?.trim()) return null;
+function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+  if (typeof children === 'string' ? !children.trim() : !children) return null;
   return (
     <section className="flex gap-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700" aria-hidden="true"><Icon className="h-5 w-5" /></span>
       <div className="min-w-0 flex-1">
         <h2 className="text-subheading text-secondary">{title}</h2>
-        <p className="mt-1.5 whitespace-pre-line text-body-lg leading-relaxed text-slate-600">{children}</p>
+        {typeof children === 'string'
+          ? <p className="mt-1.5 whitespace-pre-line text-body-lg leading-relaxed text-slate-600">{children}</p>
+          : <div className="mt-1.5">{children}</div>}
       </div>
     </section>
   );
@@ -84,7 +87,7 @@ export default function ShowcaseDetail() {
 
   if (detail.isPending) {
     return (
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 sm:py-8" role="status" aria-label="Loading showcase page">
+      <main className="mx-auto max-w-[88rem] space-y-4 px-4 py-6 sm:px-6 sm:py-8 lg:px-8" role="status" aria-label="Loading showcase page">
         <LoadingSkeleton variant="card" />
         <LoadingSkeleton lines={6} />
       </main>
@@ -94,7 +97,7 @@ export default function ShowcaseDetail() {
   if (detail.isError) {
     const notFound = parseApiError(detail.error, '').code === SHOWCASE_ERROR_CODES.notFound;
     return (
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <ErrorState
           title={notFound ? 'This page is not available' : 'Could not load this page'}
           message={notFound
@@ -117,7 +120,7 @@ export default function ShowcaseDetail() {
   const backTo = suppliedBackTo ?? (isOwner ? '/showcase/manage' : canModerate ? '/showcase/moderation' : '/showcase');
   const backLabel = suppliedBackLabel ?? (isOwner ? 'My Showcase' : canModerate ? 'Showcase Moderation' : 'Project Showcase');
   const [cover, ...gallery] = showcase.media;
-  const hasStory = [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
+  const hasStory = showcase.links.length > 0 || [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
 
   const applyDecision = () => {
     void queryClient.invalidateQueries({ queryKey: ['showcase', 'moderation'] });
@@ -125,7 +128,7 @@ export default function ShowcaseDetail() {
   };
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto max-w-[88rem] space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Link
         to={backTo}
         className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-700 hover:underline"
@@ -199,74 +202,53 @@ export default function ShowcaseDetail() {
             <Card hover={false} className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
               <StoryBlock icon={Target} title={PROJECT_PROFILE_LABELS.problem}>{profile.problem}</StoryBlock>
               <StoryBlock icon={UserRound} title={PROJECT_PROFILE_LABELS.targetUsers}>{profile.targetUsers}</StoryBlock>
-              <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
+              <div className="space-y-7">
+                <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
+                {showcase.links.length > 0 && (
+                  <StoryBlock icon={ExternalLink} title="Links">
+                    <ul className="space-y-2">
+                      {showcase.links.map((link) => (
+                        <li key={link.id}>
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-h-10 w-full items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-body-sm font-semibold text-primary-800 transition-colors hover:border-primary-300 hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
+                          >
+                            <span className="min-w-0 flex-1 truncate">{link.label}</span>
+                            <span className="shrink-0 border-l border-primary-200 pl-2 text-caption font-medium text-slate-600">{link.linkType}</span>
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="sr-only">(opens in a new tab)</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </StoryBlock>
+                )}
+              </div>
               <StoryBlock icon={Sparkles} title="What makes it different">{showcase.highlights}</StoryBlock>
             </Card>
           )}
 
+          {showcase.status === 'Published' && <ShowcaseComments showcaseId={showcase.id} commentCount={showcase.commentCount} />}
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-6">
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-6">
           <Card hover={false} padding="p-5">
-            <div className="grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 text-center">
+            <div className="grid grid-cols-2 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 text-center">
               <Stat icon={Eye} label="Views" value={showcase.viewCount} />
-              <Stat icon={Flame} label="Upvotes" value={showcase.likeCount} />
-              <Stat icon={MessageSquare} label="Comments" value={showcase.commentCount} />
+              <ShowcaseUpvoteButton
+                key={`${showcase.id}:${user?.id}:${user?.role}`}
+                showcaseId={showcase.id}
+                likeCount={showcase.likeCount}
+                hasUpvoted={hasUpvoted}
+                isOwner={isOwner}
+                isPublished={showcase.status === 'Published'}
+                tile
+                className="h-auto w-full flex-col gap-0 rounded-none px-2 py-3"
+              />
             </div>
-            <ShowcaseUpvoteButton
-              key={`${showcase.id}:${user?.id}:${user?.role}`}
-              showcaseId={showcase.id}
-              likeCount={showcase.likeCount}
-              hasUpvoted={hasUpvoted}
-              isOwner={isOwner}
-              isPublished={showcase.status === 'Published'}
-              showLabel
-              className="mt-3 w-full justify-center border border-primary-200 bg-primary-50 text-primary-800"
-            />
           </Card>
-
-          {canModerate && (
-            <div className="rounded-xl border border-dashed border-secondary-200 bg-secondary-50 p-4">
-              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <ShowcaseModerationActions
-                  showcaseId={showcase.id}
-                  title={profile.projectName}
-                  status={showcase.status}
-                  wasEverPublished={showcase.publishedAt !== null}
-                  onDecided={applyDecision}
-                />
-                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
-              </div>
-            </div>
-          )}
-
-          {showcase.links.length > 0 && (
-            <Card hover={false} padding="p-5">
-              <Card.Header className="mb-3">
-                <Card.Title icon={ExternalLink}>Links</Card.Title>
-              </Card.Header>
-              <ul className="space-y-2">
-                {showcase.links.map((link) => (
-                  <li key={link.id}>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-body-sm font-medium text-slate-700 transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
-                    >
-                      <span className="min-w-0 truncate">{link.label}</span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-caption text-slate-500">
-                        {link.linkType}
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      </span>
-                      <span className="sr-only">(opens in a new tab)</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
 
           {members.length > 0 && (
             <Card hover={false} padding="p-5">
@@ -291,6 +273,22 @@ export default function ShowcaseDetail() {
                 ))}
               </ul>
             </Card>
+          )}
+
+          {canModerate && (
+            <div className="rounded-xl border border-dashed border-secondary-200 bg-secondary-50 p-4">
+              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <ShowcaseModerationActions
+                  showcaseId={showcase.id}
+                  title={profile.projectName}
+                  status={showcase.status}
+                  wasEverPublished={showcase.publishedAt !== null}
+                  onDecided={applyDecision}
+                />
+                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
+              </div>
+            </div>
           )}
         </aside>
       </div>
