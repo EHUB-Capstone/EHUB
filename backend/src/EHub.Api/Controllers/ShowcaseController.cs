@@ -9,6 +9,7 @@ using EHub.Application.Features.Showcase.Upvote;
 using EHub.Application.Features.Showcase.Views;
 using EHub.Application.Features.Showcase.Insights;
 using EHub.Application.Features.Showcase.Comments;
+using EHub.Application.Features.Showcase.Reports;
 using EHub.Api.Extensions;
 using Microsoft.AspNetCore.RateLimiting;
 using EHub.Contracts.Common;
@@ -98,6 +99,29 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         Guid id, [FromQuery] int page, [FromQuery] int pageSize,
         [FromServices] IShowcaseCommentHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ListAsync(id, page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize, UserId, Role, cancellationToken), "Showcase comments retrieved.");
+
+    [HttpPost("{id:guid}/reports")]
+    [EnableRateLimiting(ShowcaseReportRateLimitPolicies.Create)]
+    public async Task<IActionResult> CreateReport(
+        Guid id, [FromBody] CreateShowcaseReportRequest request,
+        [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Report submitted.");
+
+    [HttpGet("reports")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> Reports(
+        [FromQuery] string? status, [FromQuery] int page, [FromQuery] int pageSize,
+        [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(status, page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize,
+            UserId, FeaturedRole, cancellationToken), "Showcase reports retrieved.");
+
+    [HttpPost("reports/{reportId:guid}/resolve")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> ResolveReport(
+        Guid reportId, [FromBody] ResolveShowcaseReportRequest request,
+        [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ResolveAsync(reportId, request, UserId, FeaturedRole, cancellationToken), "Report resolved.");
 
     [HttpGet("{id:guid}/comments/{commentId:guid}/replies")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -272,8 +296,10 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
             ErrorCodes.CommonUnauthorizedError => Unauthorized(body),
             ErrorCodes.ShowcaseNotFound => NotFound(body),
             ErrorCodes.ShowcaseCommentNotFound => NotFound(body),
+            ErrorCodes.ShowcaseReportNotFound => NotFound(body),
             ErrorCodes.ShowcaseAccessDenied => StatusCode(StatusCodes.Status403Forbidden, body),
             ErrorCodes.ShowcaseAlreadyExists or
+            ErrorCodes.ShowcaseReportAlreadyExists or
             ErrorCodes.ShowcaseInvalidState or
             ErrorCodes.ShowcaseConcurrencyConflict => Conflict(body),
             ErrorCodes.ShowcaseImageUploadFailed => StatusCode(StatusCodes.Status502BadGateway, body),

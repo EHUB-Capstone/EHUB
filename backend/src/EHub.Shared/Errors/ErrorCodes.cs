@@ -172,6 +172,8 @@ public static class ErrorCodes
     public const string ShowcaseAlreadyExists = "SHOWCASE_ALREADY_EXISTS";
     public const string ShowcaseInvalidState = "SHOWCASE_INVALID_STATE";
     public const string ShowcaseCommentNotFound = "SHOWCASE_COMMENT_NOT_FOUND";
+    public const string ShowcaseReportNotFound = "SHOWCASE_REPORT_NOT_FOUND";
+    public const string ShowcaseReportAlreadyExists = "SHOWCASE_REPORT_ALREADY_EXISTS";
     public const string ShowcaseCommentInvalid = "SHOWCASE_COMMENT_INVALID";
     public const string ShowcaseConcurrencyConflict = "SHOWCASE_CONCURRENCY_CONFLICT";
     public const string ShowcaseImageUploadFailed = "SHOWCASE_IMAGE_UPLOAD_FAILED";
