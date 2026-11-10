@@ -100,6 +100,29 @@ public sealed class OllamaCheckpointSummarizer(
         }
     }
 
+    public async Task<SummarizerHealth> CheckHealthAsync(CancellationToken cancellationToken)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            // The list of pulled models: cheap, and it does not load anything into memory.
+            using var response = await client.GetAsync("api/tags", limit.Token);
+            if (!response.IsSuccessStatusCode) return new SummarizerHealth(false, false);
+            await using var stream = await response.Content.ReadAsStreamAsync(limit.Token);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: limit.Token);
+            var available = json.RootElement.ValueKind == JsonValueKind.Object &&
+                json.RootElement.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Array &&
+                models.EnumerateArray().Any(model => model.TryGetProperty("name", out var name) &&
+                    string.Equals(name.GetString(), ModelName, StringComparison.OrdinalIgnoreCase));
+            return new SummarizerHealth(true, available);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return new SummarizerHealth(false, false);
+        }
+    }
+
     private static Result<string> Unreachable() => Result.Failure<string>(ErrorCodes.WorkspaceSummaryModelUnreachable,
         "The AI summary service is temporarily unavailable.");
 
@@ -117,4 +140,7 @@ public sealed class DisabledCheckpointSummarizer : ICheckpointSummarizer
         Task.FromResult(Result.Failure<string>(ErrorCodes.WorkspaceSummaryDisabled, "AI summaries are not enabled on this server."));
 
     public Task WarmUpAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<SummarizerHealth> CheckHealthAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new SummarizerHealth(false, false));
 }

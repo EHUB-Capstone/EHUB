@@ -254,6 +254,31 @@ public sealed class WorkspaceCheckpointsController(
             : ToErrorResponse(result.Error);
     }
 
+    /// <summary>What changed in the files the team uploaded again, compared with their previous versions.</summary>
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/changes")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    [EnableRateLimiting(CheckpointSummaryRateLimitPolicies.Compare)]
+    public async Task<IActionResult> GetVersionChanges(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointVersionChangesHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceCheckpointVersionChangesResponse>.SuccessResponse(result.Value, "Version changes retrieved."));
+    }
+
+    /// <summary>Figures this checkpoint states differently from the team's earlier checkpoints.</summary>
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/figure-history")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> GetFigureHistory(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointFigureHistoryHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceCheckpointFigureHistoryResponse>.SuccessResponse(result.Value, "Figure history retrieved."));
+    }
+
     [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/cancel")]
     [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
     public async Task<IActionResult> CancelAiSummary(Guid teamId, int checkpointNumber,
@@ -263,6 +288,72 @@ public sealed class WorkspaceCheckpointsController(
         return result.IsSuccess
             ? Ok(ApiResponse<WorkspaceCheckpointSummaryResponse>.SuccessResponse(result.Value, "AI summary cancelled."))
             : ToErrorResponse(result.Error);
+    }
+
+    /// <summary>Tells the app whether to show anything AI-related at all; answered from the server's own setting.</summary>
+    [HttpGet("ai-summary/status")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public IActionResult GetAiSummaryStatus([FromServices] EHub.Application.Features.Workspaces.ReviewDesk.IReviewDeskHandler handler)
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceAiSummaryStatusResponse>.SuccessResponse(
+            new WorkspaceAiSummaryStatusResponse { Enabled = handler.Enabled }, "AI summary status retrieved."));
+    }
+
+    /// <summary>The reviewer's own verdict on one finished file summary (useful or not, with a fixed reason).</summary>
+    [HttpPut("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/files/{fileId:guid}/feedback")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> SetAiSummaryFeedback(Guid teamId, int checkpointNumber, Guid fileId,
+        [FromBody] SetCheckpointSummaryFeedbackRequest request,
+        [FromServices] ICheckpointSummaryFeedbackHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.SetAsync(teamId, checkpointNumber, fileId, request, UserId, Role, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<WorkspaceSummaryFeedback>.SuccessResponse(result.Value, "AI summary feedback saved."))
+            : ToErrorResponse(result.Error);
+    }
+
+    [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/files/{fileId:guid}/feedback")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> ClearAiSummaryFeedback(Guid teamId, int checkpointNumber, Guid fileId,
+        [FromServices] ICheckpointSummaryFeedbackHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.ClearAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
+        return result.IsSuccess ? NoContent() : ToErrorResponse(result.Error);
+    }
+
+    /// <summary>Why summaries are slow or failing: model server, circuit, queue and error codes. Administrators only.</summary>
+    [HttpGet("ai-summary/diagnostics")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    [EnableRateLimiting(CheckpointSummaryRateLimitPolicies.Diagnostics)]
+    public async Task<IActionResult> GetAiSummaryDiagnostics(
+        [FromServices] ICheckpointSummaryDiagnosticsHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceCheckpointSummaryDiagnosticsResponse>.SuccessResponse(result.Value, "AI summary diagnostics retrieved."));
+    }
+
+    /// <summary>The reviewer's starting page: their classes and the teams that need a look today.</summary>
+    [HttpGet("review-desk")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> GetReviewDesk(
+        [FromServices] EHub.Application.Features.Workspaces.ReviewDesk.IReviewDeskHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetDeskAsync(UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceReviewDeskResponse>.SuccessResponse(result.Value, "Review desk retrieved."));
+    }
+
+    [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/review-seen")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> MarkReviewSeen(Guid teamId, int checkpointNumber,
+        [FromServices] EHub.Application.Features.Workspaces.ReviewDesk.IReviewDeskHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.MarkSeenAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        return result.IsSuccess ? NoContent() : ToErrorResponse(result.Error);
     }
 
     [HttpGet("classes/{classId:guid}/students/{studentId:guid}/previous-scores")]

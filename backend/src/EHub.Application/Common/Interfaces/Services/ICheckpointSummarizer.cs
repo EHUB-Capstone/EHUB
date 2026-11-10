@@ -19,4 +19,14 @@ public interface ICheckpointSummarizer
     /// pay the load time. Best effort: failures are ignored.
     /// </summary>
     Task WarmUpAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks the model server whether it answers and has <see cref="ModelName"/>, for the administrators' diagnostics page. It
+    /// never loads the model or sends a document. The default says "all well" so a test double does not have to implement it.
+    /// </summary>
+    Task<SummarizerHealth> CheckHealthAsync(CancellationToken cancellationToken) => Task.FromResult(new SummarizerHealth(true, true));
 }
+
+/// <param name="Reachable">The model server answered.</param>
+/// <param name="ModelAvailable">The configured model has been pulled into it (a missing model fails every request).</param>
+public sealed record SummarizerHealth(bool Reachable, bool ModelAvailable);
