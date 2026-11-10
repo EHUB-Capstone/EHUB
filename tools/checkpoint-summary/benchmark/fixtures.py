@@ -162,7 +162,9 @@ SUBMISSIONS = [
             ]},
         ],
         "links": [{"name": "Figma prototype", "url": "https://www.figma.com/proto/demo-petcare"}],
-        "truth": ["Covered", "Covered", "Partial", "NotFound"],
+        # The fourth item is Partial: the prototype click test (6/8 finished in under 2 minutes) is a result, but the real trial with
+        # spas is only planned.
+        "truth": ["Covered", "Covered", "Partial", "Partial"],
         "facts": [["60"], ["figma"], ["hoa hồng"], ["spa"]],
     },
     {
@@ -241,3 +243,8 @@ SUBMISSIONS.append({
     "truth": ["Covered", "Covered", "Covered", "Covered"],
     "facts": [["1,8 tỷ", "1.8 tỷ"], ["500 triệu"], ["12%", "12 %"], ["đại sứ"], ["gps"]],
 })
+
+# Fixtures modelled on the text quirks of PDFs exported from design tools (see the module for what each one stresses).
+from fixtures_export_quirks import EXPORT_QUIRK_SUBMISSIONS  # noqa: E402
+
+SUBMISSIONS.extend(EXPORT_QUIRK_SUBMISSIONS)

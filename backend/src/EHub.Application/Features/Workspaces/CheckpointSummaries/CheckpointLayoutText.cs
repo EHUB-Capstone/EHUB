@@ -76,14 +76,26 @@ internal static partial class CheckpointLayoutText
             // "đầ u" for "đầu": a lone "u" never stands as a Vietnamese word, unlike "i", "y" and "o".
             var joins = ConsonantEndings.Contains(lower) || (upper && VowelEndings.Contains(lower)) || (!upper && lower == "u");
             return joins ? ending : match.Value;
-        }), match => match.Groups["onset"].Value + match.Groups["vowel"].Value);
+        }), match =>
+        {
+            var onset = match.Groups["onset"].Value;
+            var vowel = match.Groups["vowel"].Value;
+            // "Phương án B ở trên": a single capital letter followed by a lower-case word is a label, not half of a syllable.
+            if (onset.Length == 1 && char.IsUpper(onset[0]) && char.IsLower(vowel[0])) return match.Value;
+            return onset + vowel + match.Groups["tail"].Value;
+        });
 
     /// <summary>"6. DEMO6. DEMO6. DEMO" → "6. DEMO". Only text with letters, so "2020" stays a year.</summary>
     internal static string CollapseRepeat(string line)
     {
         var match = RepeatedLine().Match(line);
-        return match.Success && match.Groups["unit"].Value.Any(char.IsLetter) ? match.Groups["unit"].Value.Trim() : line;
+        return match.Success && IsRepeatableUnit(match.Groups["unit"].Value) ? match.Groups["unit"].Value.Trim() : line;
     }
+
+    // Text repeats by design; a figure ("60,4%60,4%60,4%", "3.23 / 53.23 / 5") repeats when a stat card draws its number in layers.
+    // A bare number such as "2020" is never collapsed: it needs a percent sign or a slash to count as a figure.
+    private static bool IsRepeatableUnit(string unit) =>
+        unit.Any(char.IsLetter) || (unit.Any(char.IsDigit) && unit.IndexOfAny(['%', '/']) >= 0);
 
     /// <summary>Joins visual lines back into sentences: a lower-case continuation, a line after a comma, or capitals.</summary>
     internal static IEnumerable<string> JoinBrokenLines(IReadOnlyList<string> lines)
@@ -123,7 +135,9 @@ internal static partial class CheckpointLayoutText
 
     // "gi á trị" for "giá trị": a lone accented vowel right after a bare consonant cluster. After a word with a vowel it is
     // an ordinary word ("ở"), so only consonant-only tokens qualify.
-    [GeneratedRegex(@"(?<![\p{L}])(?<onset>gi|qu|ngh|ng|nh|th|tr|ch|kh|ph|gh|[bcdđghklmnprstvx]) (?<vowel>[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ])(?![\p{L}])")]
+    // The vowel may be followed by the rest of the word ("Qu ản", "Đ ỘNG": the ending was already joined), but a unit after a
+    // number ("5 m ở ngoài") is not an onset.
+    [GeneratedRegex(@"(?<![\p{L}])(?<!\d )(?<onset>gi|qu|ngh|ng|nh|th|tr|ch|kh|ph|gh|[bcdđghklmnprstvx]) (?<vowel>[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ])(?<tail>\p{L}{0,3})(?![\p{L}])", RegexOptions.IgnoreCase)]
     private static partial Regex LoneVowel();
 
     [GeneratedRegex(@"^(?<unit>.{3,}?)\k<unit>+$")]

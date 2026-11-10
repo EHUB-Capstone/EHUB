@@ -24,6 +24,14 @@ internal sealed partial class CheckpointSummaryGrounding
         "tài", "liệu", "nội", "dung", "chính", "the", "and", "of", "for", "to", "in", "a", "an", "with", "on", "by"
     };
 
+    private static readonly HashSet<string> CountedUnits = new(StringComparer.Ordinal)
+    {
+        "người", "nhân", "khách", "học", "sinh", "doanh", "nhà", "cửa", "users", "user", "people", "customers", "students", "companies", "stores"
+    };
+
+    private static readonly HashSet<string> MoneyUnits = new(StringComparer.Ordinal)
+        { "đồng", "vnd", "vnđ", "đ", "usd", "k", "nghìn", "ngàn", "triệu", "tỷ", "đô" };
+
     private readonly HashSet<string> _words;
     private readonly IReadOnlyList<string> _sentences;
     private readonly string _text;
@@ -40,7 +48,7 @@ internal sealed partial class CheckpointSummaryGrounding
 
     public bool Supports(string sentence)
     {
-        if (MisusesMarketSize(sentence) || QuotesSlogan(sentence) || InventsCurrency(sentence)) return false;
+        if (MisusesMarketSize(sentence) || QuotesSlogan(sentence) || InventsCurrency(sentence) || ReadsMoneyAsCount(sentence)) return false;
         // "Giải pháp: …" — the label the model puts in front is not a claim about the file.
         var claim = Label().Replace(sentence, string.Empty, 1);
         var words = Words(claim).Where(word => !FunctionWords.Contains(word)).Distinct(StringComparer.Ordinal).ToArray();
@@ -93,6 +101,25 @@ internal sealed partial class CheckpointSummaryGrounding
             var inSource = _sentences.Where(source => AnyAmount().Matches(source).Any(match => AmountNumber(match.Groups["number"].Value) == number)).ToArray();
             if (inSource.Length > 0 && !inSource.Any(source => DollarAmount().Matches(source).Any(match => AmountNumber(match.Groups["number"].Value) == number)))
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when the sentence counts people or places with a number the file gives only as an amount of money: a plan of
+    /// "gói 99.000 đồng mỗi tháng" turned into "mở rộng sang 99.000 người". A number the file also gives for that kind of
+    /// thing ("99.000 người dùng") is fine.
+    /// </summary>
+    public bool ReadsMoneyAsCount(string sentence)
+    {
+        foreach (Match claimed in NumberWithUnit().Matches(sentence))
+        {
+            if (!CountedUnits.Contains(claimed.Groups["unit"].Value.ToLowerInvariant())) continue;
+            var number = claimed.Groups["number"].Value;
+            var units = _sentences.SelectMany(source => NumberWithUnit().Matches(source).Cast<Match>())
+                .Where(match => match.Groups["number"].Value == number)
+                .Select(match => match.Groups["unit"].Value.ToLowerInvariant()).ToArray();
+            if (units.Length > 0 && !units.Any(CountedUnits.Contains) && units.Any(MoneyUnits.Contains)) return true;
         }
         return false;
     }
@@ -152,6 +179,9 @@ internal sealed partial class CheckpointSummaryGrounding
 
     [GeneratedRegex(@"^\s*\p{L}[\p{L} ]{1,30}:\s+")]
     private static partial Regex Label();
+
+    [GeneratedRegex(@"(?<number>\d+(?:[.,]\d+)*)\s*(?<unit>\p{L}+)", RegexOptions.CultureInvariant)]
+    private static partial Regex NumberWithUnit();
 
     [GeneratedRegex(@"\d[\d.,]*\s*[-–—]\s*\d[\d.,]*")]
     private static partial Regex Range();

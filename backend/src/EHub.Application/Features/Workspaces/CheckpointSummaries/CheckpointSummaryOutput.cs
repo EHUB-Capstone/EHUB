@@ -42,6 +42,9 @@ internal static class CheckpointSummaryOutput
                     .Select(CheckpointSummaryText.AsTeamQuestion).OfType<string>().Take(CheckpointSummaryLimits.MaxQuestions).ToArray();
             if (grounding is not null)
                 questions = questions.Where(question => !grounding.MisusesMarketSize(question) && !grounding.AssumesUnseenFact(question)).ToArray();
+            // What the file leaves out of a covered rubric criterion comes first: that question rests on the quick view, not on the model.
+            questions = CheckpointGapQuestions.From(preview.Requirements, preview.LittleText)
+                .Concat(questions).Take(CheckpointSummaryLimits.MaxQuestions).ToArray();
             return new WorkspaceFileSummaryContent
             {
                 Overview = CheckpointSummaryText.Clip(overviewText, CheckpointSummaryLimits.MaxOverviewCharacters),
@@ -53,6 +56,7 @@ internal static class CheckpointSummaryOutput
                 StatusItems = preview.StatusItems,
                 Figures = preview.Figures,
                 IgnoredInstructions = preview.IgnoredInstructions,
+                HighlightPages = preview.HighlightPages,
                 LittleText = preview.LittleText
             };
         }
@@ -67,7 +71,13 @@ internal static class CheckpointSummaryOutput
     /// </summary>
     public static IReadOnlyList<WorkspaceCheckpointRequirementFinding> Combine(
         IReadOnlyList<ChecklistItem> checklist,
-        IReadOnlyList<(string FileName, IReadOnlyCollection<WorkspaceFileRequirementFinding> Findings)> files)
+        IReadOnlyList<(string FileName, IReadOnlyCollection<WorkspaceFileRequirementFinding> Findings)> files) =>
+        CombineWithFiles(checklist, files.Select(file => ((Guid?)null, file.FileName, file.Findings)).ToArray());
+
+    /// <summary>As above, with the id of each file so the quote can be opened at its page.</summary>
+    public static IReadOnlyList<WorkspaceCheckpointRequirementFinding> CombineWithFiles(
+        IReadOnlyList<ChecklistItem> checklist,
+        IReadOnlyList<(Guid? FileId, string FileName, IReadOnlyCollection<WorkspaceFileRequirementFinding> Findings)> files)
     {
         return checklist.Select(item =>
         {
@@ -76,7 +86,7 @@ internal static class CheckpointSummaryOutput
             var applicable = files.Where(file => !file.Findings.Any(finding =>
                 finding.Index == item.Index && !string.Equals(finding.Title, item.Title, StringComparison.Ordinal))).ToArray();
             var matches = applicable
-                .Select(file => (file.FileName, Finding: file.Findings.FirstOrDefault(finding => finding.Index == item.Index)))
+                .Select(file => (file.FileId, file.FileName, Finding: file.Findings.FirstOrDefault(finding => finding.Index == item.Index)))
                 .Where(match => match.Finding is not null)
                 .ToArray();
             // The file that mentions most of what the criterion expects is quoted; files are listed newest first, so
@@ -98,7 +108,9 @@ internal static class CheckpointSummaryOutput
                 Title = item.Title,
                 Finding = finding,
                 Evidence = related.Finding?.Evidence,
+                EvidencePage = related.Finding?.EvidencePage,
                 Source = related.Finding is null ? null : related.FileName,
+                SourceFileId = related.Finding is null ? null : related.FileId,
                 Weight = item.Weight,
                 Assessment = item.Assessment,
                 Cues = MergeCues(matches.Select(match => match.Finding!.Cues))
