@@ -1,6 +1,6 @@
 // @ts-nocheck
 // src/components/workspace/checkpoints/FeedbackThread.jsx
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, CornerDownRight, Calendar, ClipboardCheck, Download, Pencil, Send, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -341,7 +341,8 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
 }
 
 // ─── Main FeedbackThread component ───────────────────────────────────────────
-export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, onPosted, onDeleted, fullHeight = false }) {
+// `insertText` ({ id, text }) puts a passage into the new-comment box, e.g. a quote from the AI summary card; each new id inserts once.
+export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, onPosted, onDeleted, fullHeight = false, insertText = null }) {
   const { user } = useAuth();
   const [text,    setText]    = useState('');
   const [sending, setSending] = useState(false);
@@ -349,6 +350,19 @@ export default function FeedbackThread({ feedbacks, teamId, checkpointNumber, on
   const [deleting, setDeleting] = useState(false);
   const [feedbackType, setFeedbackType] = useState('regular');
   const feedbackListRef = useRef(null);
+  useEffect(() => {
+    if (!insertText?.text) return;
+    setFeedbackType('regular');
+    setText((current) => (current.trim() ? `${current.trimEnd()}
+${insertText.text}` : insertText.text));
+    // The box exists after the state change is painted.
+    window.setTimeout(() => {
+      const box = document.getElementById('regular-feedback');
+      box?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      box?.focus();
+    }, 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insertText?.id]);
   const isMentor = user?.role?.toUpperCase() === 'MENTOR';
 
   const roots   = feedbacks.filter((f) => !f.parentFeedbackId || !feedbacks.some((parent) => parent._id === f.parentFeedbackId));

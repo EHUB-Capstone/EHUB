@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import ReviewInboxCard from '../../components/workspace/ReviewInboxCard';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -297,6 +298,8 @@ const LecturerDashboard = () => {
         onClassChange={handleClassChange}
         onReset={resetFilters}
       />
+
+      <ReviewInboxCard />
 
       <div className={`space-y-6 ${updating ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`} aria-busy={updating}>
       <section aria-label="Academic overview metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

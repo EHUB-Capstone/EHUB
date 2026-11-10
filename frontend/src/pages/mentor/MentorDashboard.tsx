@@ -10,6 +10,7 @@ import StatCard from '../../components/ui/StatCard';
 import ProgressBar from '../../components/ui/ProgressBar';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import ReviewInboxCard from '../../components/workspace/ReviewInboxCard';
 import {
   Users, ClipboardList, TrendingUp, CheckCircle, Calendar,
   ArrowRight, Zap, Star, AlertCircle
@@ -42,6 +43,8 @@ const MentorDashboard = () => {
         </div>
         <Button variant="primary" size="sm" icon={Calendar} onClick={() => navigate('/sessions')}>Schedule Session</Button>
       </motion.div>
+
+      <ReviewInboxCard />
 
       {/* Stats */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

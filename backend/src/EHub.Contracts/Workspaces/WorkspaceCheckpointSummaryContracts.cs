@@ -51,6 +51,9 @@ public sealed class WorkspaceFileSummary
     public bool InputTruncated { get; init; }
 
     public WorkspaceFileSummaryContent? Content { get; init; }
+
+    /// <summary>The signed-in reviewer's own verdict on this summary; null when they have not rated it.</summary>
+    public WorkspaceSummaryFeedback? MyFeedback { get; init; }
 }
 
 public sealed class WorkspaceFileSummaryContent
@@ -75,6 +78,9 @@ public sealed class WorkspaceFileSummaryContent
 
     /// <summary>Sentences addressed to the AI (orders, requests for a grade) that were left out before summarising.</summary>
     public int IgnoredInstructions { get; init; }
+
+    /// <summary>The page or slide of each key sentence, in the same order as <see cref="Highlights"/>; 0 when it cannot be told.</summary>
+    public IReadOnlyCollection<int> HighlightPages { get; init; } = Array.Empty<int>();
 
     /// <summary>The file is mostly images or diagrams; only its titles and few lines of text were read.</summary>
     public bool LittleText { get; init; }
@@ -127,6 +133,9 @@ public sealed class WorkspaceFilePreview
     /// <summary>Sentences addressed to the AI (orders, requests for a grade) that were left out before summarising.</summary>
     public int IgnoredInstructions { get; init; }
 
+    /// <summary>The page or slide of each key sentence, in the same order as <see cref="Highlights"/>; 0 when it cannot be told.</summary>
+    public IReadOnlyCollection<int> HighlightPages { get; init; } = Array.Empty<int>();
+
     /// <summary>The file is mostly images or diagrams; only its titles and few lines of text were read.</summary>
     public bool LittleText { get; init; }
 }
@@ -148,6 +157,9 @@ public sealed class WorkspaceFileRequirementFinding
 
     /// <summary>A sentence quoted from the file; null for NotFound and Unclear.</summary>
     public string? Evidence { get; init; }
+
+    /// <summary>The page or slide of <see cref="Evidence"/> (PDF and slides only), when it can be told.</summary>
+    public int? EvidencePage { get; init; }
 
     /// <summary>Share of the checkpoint grade (percent), for a rubric criterion.</summary>
     public decimal? Weight { get; init; }
@@ -186,8 +198,14 @@ public sealed class WorkspaceCheckpointRequirementFinding
 
     public string? Evidence { get; init; }
 
+    /// <summary>The page or slide of <see cref="Evidence"/> (PDF and slides only), when it can be told.</summary>
+    public int? EvidencePage { get; init; }
+
     /// <summary>The file the evidence was quoted from.</summary>
     public string? Source { get; init; }
+
+    /// <summary>The id of <see cref="Source"/>, so the screen can open it at <see cref="EvidencePage"/>.</summary>
+    public Guid? SourceFileId { get; init; }
 
     /// <summary>Share of the checkpoint grade (percent), for a rubric criterion.</summary>
     public decimal? Weight { get; init; }
@@ -212,4 +230,70 @@ public sealed class WorkspaceCheckpointSummaryLink
 public sealed class RequestCheckpointSummaryRequest
 {
     public IReadOnlyCollection<Guid> FileIds { get; init; } = Array.Empty<Guid>();
+}
+
+/// <summary>
+/// What changed in the files a team uploaded again for a checkpoint: each file is compared with its previous version.
+/// Worked out from the text of the two versions, not by a model.
+/// </summary>
+public sealed class WorkspaceCheckpointVersionChangesResponse
+{
+    public int CheckpointNumber { get; init; }
+    public IReadOnlyCollection<WorkspaceFileVersionChangeDto> Files { get; init; } = Array.Empty<WorkspaceFileVersionChangeDto>();
+}
+
+public sealed class WorkspaceFileVersionChangeDto
+{
+    /// <summary>The newest version of the file.</summary>
+    public Guid FileId { get; init; }
+    public string FileName { get; init; } = string.Empty;
+    public int FromVersion { get; init; }
+    public int ToVersion { get; init; }
+
+    /// <summary>Compared, Unchanged (same text), NewFile (no earlier version) or Unreadable (one version has no readable text).</summary>
+    public string Status { get; init; } = string.Empty;
+
+    public int AddedCount { get; init; }
+    public int RemovedCount { get; init; }
+    public int ChangedCount { get; init; }
+
+    /// <summary>Sentences found word for word in both versions, as a share of the newer one.</summary>
+    public int UnchangedPercent { get; init; }
+
+    /// <summary>The most telling changes: reworded sentences that changed a number first, then added and removed ones.</summary>
+    public IReadOnlyCollection<WorkspaceVersionChangeItemDto> Items { get; init; } = Array.Empty<WorkspaceVersionChangeItemDto>();
+}
+
+public sealed class WorkspaceVersionChangeItemDto
+{
+    /// <summary>Added, Removed or Changed.</summary>
+    public string Kind { get; init; } = string.Empty;
+
+    /// <summary>The sentence as it reads now (Added, Changed) or as it read before (Removed).</summary>
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>The earlier wording (Changed).</summary>
+    public string? Before { get; init; }
+
+    /// <summary>The page or slide of <see cref="Text"/> in the version it comes from; null for Word documents.</summary>
+    public int? Page { get; init; }
+
+    public bool FiguresChanged { get; init; }
+}
+
+/// <summary>
+/// Figures this checkpoint states differently from the team's earlier checkpoints. Found without the model from the figures
+/// already taken from each file; each value's source reads "CP2 · plan.pdf".
+/// </summary>
+public sealed class WorkspaceCheckpointFigureHistoryResponse
+{
+    public int CheckpointNumber { get; init; }
+
+    /// <summary>The earlier checkpoints that had files to compare with (empty when this is the first one or nothing was uploaded before).</summary>
+    public IReadOnlyCollection<int> ComparedCheckpoints { get; init; } = Array.Empty<int>();
+
+    public IReadOnlyCollection<WorkspaceFigureConflict> Conflicts { get; init; } = Array.Empty<WorkspaceFigureConflict>();
+
+    /// <summary>Files of earlier checkpoints with no figures yet (not read), named so a missing warning is not taken as "nothing wrong".</summary>
+    public IReadOnlyCollection<string> UncheckedFiles { get; init; } = Array.Empty<string>();
 }

@@ -499,5 +499,82 @@ Giao diện hiện một ghi chú cho người xem: "This file has N sentence(s)
 - Không chặn nội dung nói về AI thông thường ("Sử dụng AI hỗ trợ cảnh báo trùng đề tài", "tích điểm, 10 điểm đổi một món").
 - Giới hạn: bộ lọc dựa trên mẫu câu, nên cách diễn đạt lạ vẫn có thể lọt; system prompt vẫn dặn mô hình coi file là dữ liệu.
 
+## Gói nâng cấp 1 (trải nghiệm giảng viên)
+
+- **Giao diện tiếng Việt:** toàn bộ thẻ AI (nhãn, trạng thái, gợi ý, thông báo lỗi) đã Việt hóa.
+- **Trích dẫn có số trang, bấm là mở đúng trang:** bộ đọc PDF/PPTX giữ chữ theo từng trang hoặc slide (`ExtractedText.PageTexts`).
+  `CheckpointPageLocator` tìm trang của câu trích bằng phần đầu câu, bỏ qua khoảng trắng và dấu câu, nên vẫn khớp sau khi chữ đã
+  được nối dòng hoặc sửa âm tiết. Kết quả lưu ở `evidencePage` (mỗi tiêu chí), `highlightPages` (câu then chốt) và, ở phần tổng hợp,
+  `sourceFileId`. Giao diện hiện "Mở Slide 7" / "Mở Trang 12" và mở trình xem file đúng trang. File Word không có trang (số trang
+  phụ thuộc cách hiển thị), nên chỉ có nút "Mở file". Thử trên 4 PDF thật, file EXE201 CP1 và các file mẫu: 100% câu trích của
+  PDF/PPTX tìm được trang. Bản tóm tắt làm trước đây chưa có trang cho tới khi tóm tắt lại.
+- **Nút hành động trên từng câu trích:** "Sao chép" (kèm tên file và trang) và "Chèn vào góp ý" (đưa câu trích vào ô góp ý của
+  checkpoint, chuyển về chế độ phản hồi thường).
+- **Thời gian còn lại:** hiện "Còn khoảng N phút" khi có file đang chờ hoặc đang tóm tắt (ước lượng khoảng 1 phút mỗi file).
+- Số thứ tự tiêu chí chạy liên tục theo thứ tự hiển thị (sửa lỗi 9, 10, 11, 12, 1, 2…).
+
 Còn lại: câu hỏi chung chung do mô hình viết, cụm từ vô nghĩa của mô hình ("đào tập trung"), chữ dính nhau do PDF
 ("Logisticstích") và nhận biết các file thuộc sản phẩm khác nhau trong cùng một checkpoint.
+
+## Gói nâng cấp 2: Review Inbox (thu gọn từ Review Desk)
+
+Dành cho admin, giảng viên và mentor (sinh viên không thấy). Không còn trang riêng `/review-desk` hay mục sidebar, vì trùng với tab Overview/Checkpoint của My Classes.
+
+- **Widget "Needs a look today"** trên Dashboard của Lecturer và Mentor: tối đa 8 mục trên màn hình, xếp theo quá hạn, bản nộp mới (mới nhất trước), sắp đến hạn (48 giờ). Cửa sổ xét 14 ngày. Bấm vào mở thẳng checkpoint của nhóm (`/workspace/teams/{id}?checkpoint=N`).
+- **Nhãn "New version"** cạnh tên nhóm trong bảng tab Checkpoint của lớp (My Classes).
+- **Đã xem**: bảng `checkpoint_review_markers` (user, team, checkpoint, phiên bản đã xem), migration `AddCheckpointReviewMarkers`. Mở checkpoint của nhóm gọi `POST .../review-seen` để xóa "New version" cho riêng người xem đó.
+- **Phạm vi**: admin tất cả; giảng viên lớp mình phụ trách (chính hoặc `ClassLecturers`); mentor chỉ nhóm được gán đang hoạt động. Id lạ/không có quyền trả `WorkspaceAccessDenied`.
+- **Endpoint**: `GET /api/workspace/checkpoints/ai-summary/status`, `GET .../review-desk`, `POST .../teams/{teamId}/checkpoints/{n}/review-seen` (204).
+- **Bật/tắt theo môi trường**: toàn bộ phần này theo `CHECKPOINT_SUMMARY_PROVIDER`. Khi tắt (production), `review-desk`, `review-seen` trả `WorkspaceSummaryDisabled` (503) và `ai-summary/status` trả `enabled=false`. Frontend đọc status một lần; `false` thì widget, nhãn New version và lời gọi `review-seen` đều không xuất hiện hay không được gửi. Bảng `checkpoint_review_markers` vẫn được tạo trên production nhưng luôn rỗng.
+- **Thông báo (2.3)**: không thêm digest hằng ngày. Thông báo từng bài nộp tới giảng viên chính đã có sẵn (`SubmissionSubmitted`); giảng viên phụ và mentor xem qua widget. Có thể thêm digest sau nếu cần.
+
+## Gói nâng cấp 3: So sánh phiên bản nộp
+
+Khi nhóm nộp lại một file (cùng tên, phiên bản mới), người chấm xem được nhóm đã đổi gì so với bản trước.
+
+- **Vị trí**: khối "Thay đổi so với bản trước" trong thẻ AI của checkpoint, chỉ hiện khi AI bật và có file nộp lại. Chỉ tải khi người chấm bấm "So sánh", nên không tốn gì lúc mở trang.
+- **Cách tính (không dùng mô hình, không bịa)**: đọc lại chữ của hai bản (cùng đường làm sạch/chặn câu ra lệnh như tóm tắt), tách thành câu; câu giống hệt thì bỏ; câu được viết lại (giống từ ≥ 55%) ghép với câu cũ thành "Sửa"; còn lại là "Thêm" hoặc "Bỏ". Câu sửa mà đổi số liệu được đánh dấu "Đổi số liệu" và xếp trước. Mục "Thêm/Sửa" mở được đúng trang/slide của bản mới.
+- **Ghép file**: theo tên file (không phân biệt hoa thường). File chỉ xuất hiện từ phiên bản 2 trở đi là "File mới". Bản không đọc được (scan, có mật khẩu, mất khỏi kho) báo "không đọc được" thay vì so nửa chừng. Tối đa 5 file được so mỗi lần, mỗi loại hiện tối đa 8 mục.
+- **Endpoint**: `GET /api/workspace/checkpoints/teams/{teamId}/checkpoints/{n}/ai-summary/changes` (chỉ Admin/Lecturer/Mentor có quyền với nhóm; sinh viên bị từ chối; giới hạn tần suất riêng theo người dùng, cùng mức với yêu cầu tóm tắt). Khi AI tắt trả `WorkspaceSummaryDisabled` (503), giao diện không hiện khối này.
+- **Không đổi schema**: không có migration; không lưu kết quả, mỗi lần so sánh đọc lại file hiện có.
+- **Giới hạn đã biết**: file đổi tên giữa hai lần nộp sẽ bị coi là file mới; so sánh theo câu nên đoạn bị chia lại câu có thể hiện thành "Thêm" + "Bỏ"; chưa so sánh được liên kết.
+
+## Gói nâng cấp 4: Nhất quán số liệu giữa các checkpoint
+
+Cảnh báo khi checkpoint hiện tại ghi một con số khác với những gì nhóm đã nộp ở checkpoint trước (ví dụ khảo sát 51 người ở CP2, 52 người ở CP3).
+
+- **Vị trí**: khối "Số liệu khác với các checkpoint trước" trong thẻ AI, tự tải khi mở thẻ (checkpoint từ số 2 trở đi, AI bật). Có câu "Đã đối chiếu số liệu với CP1, CP2: không thấy chỗ nào lệch" khi không có gì; file của checkpoint trước chưa có số liệu được nêu tên thay vì bỏ qua âm thầm.
+- **Cách tính (không dùng mô hình, không tải lại file)**: dùng lại các câu có số liệu mà bản xem nhanh/tóm tắt đã lưu cho từng file (bản mới nhất của mỗi file). So checkpoint hiện tại lần lượt với từng checkpoint trước bằng bộ so sánh số liệu giữa các file (quy mô mẫu và phần trăm cùng nội dung). Không báo lại chỗ hai checkpoint cũ lệch nhau, và không báo chỗ lệch ngay trong checkpoint hiện tại (đã có mục riêng). Tối đa 6 cảnh báo.
+- **Endpoint**: `GET /api/workspace/checkpoints/teams/{teamId}/checkpoints/{n}/ai-summary/figure-history` (Admin/Lecturer/Mentor có quyền với nhóm; sinh viên bị từ chối; AI tắt trả 503).
+- **Không đổi schema**, không lưu kết quả.
+- **Giới hạn đã biết**: chỉ so được file đã có bản xem nhanh/tóm tắt; số liệu có thể đổi hợp lý giữa các checkpoint nên giao diện chỉ khuyên hỏi nhóm, không kết luận ai sai; chỉ nhận ra hai dạng số liệu (quy mô mẫu, phần trăm).
+
+## Bộ file mẫu mô phỏng PDF xuất từ công cụ thiết kế
+
+Bộ mẫu trong `tools/checkpoint-summary/benchmark` có thêm F12-F16 (`fixtures_export_quirks.py`), dựng lại các lỗi văn bản hay gặp ở bài nộp thật (slide xuất PDF, dashboard khảo sát, báo cáo thị trường). **Toàn bộ tên, số liệu và nội dung là bịa**; bài nộp thật chỉ được dùng để quan sát dạng lỗi, không được sao chép vào repo.
+
+| Mẫu | Dạng bài | Điều kiểm tra |
+|---|---|---|
+| F12 | Pitch deck song ngữ Việt/Anh | Tiêu đề lặp 3 lần, chữ Việt bị tách ở dấu thanh, đối thủ và kế hoạch nhóm phải báo NotFound |
+| F13 | Báo cáo khảo sát (48) + slide (N = 47) trong cùng checkpoint | Hai file nêu quy mô mẫu khác nhau, bảng dữ liệu mỗi ô một dòng, thẻ số liệu lặp 3 lần |
+| F14 | Báo cáo nghiên cứu thị trường A4 | Bằng chứng gián tiếp (proxy): khảo sát chỉ Partial, chưa có khách trả phí |
+| F15 | Persona và hành trình người dùng | Bảng rộng, emoji làm đầu dòng, chữ cách ký tự |
+| F16 | Bản demo gần như chỉ có hình | Vài chữ mỗi slide: không được báo Covered chỉ vì có một vài con số |
+
+Các lỗi trên được khóa bằng test xác định (không cần mô hình) trong `CheckpointSlideExportQuirksTests`: số liệu bị vẽ lặp lớp ("60,4%60,4%60,4%", "3.23 / 53.23 / 5") được gộp thành một, và chữ tách ở dấu thanh với phụ âm đầu viết hoa ("Qu ả n", "CH Ủ Đ Ộ NG") được nối lại. Chưa xử lý: từ tách sau nguyên âm có dấu ở phụ âm đầu là một chữ cái hoa ("T ự" đứng trước chữ thường, vì lẫn với nhãn như "phương án B ở trên"), từ tách sau vần đã có nguyên âm ("đi ể m"), và dấu thanh bị mất hẳn ("TÔ I" thay cho "TỐI").
+
+Lưu ý khi đọc kết quả `bench.py`: script này để mô hình tự gán Covered/Partial/NotFound, còn backend thật không làm vậy. Trạng thái từng yêu cầu do luật quyết (`CheckpointSummaryEvidence.Find`), mô hình chỉ viết phần tóm tắt, và mọi câu của mô hình phải qua `CheckpointSummaryGrounding`. Vì thế "Báo Covered sai" của benchmark là mức xấu nhất, không phải hành vi trên staging. Lớp kiểm tra thật được khóa bằng `CheckpointNoCompetitorFindingsTests`: bài không nêu đối thủ hay phân công không bị coi là có, và số tiền ("gói 99.000 đồng") không được đọc thành số người ("99.000 người").
+
+## Đo backend bằng C# và câu hỏi do luật tạo (prompt v11)
+
+- **Bộ đánh giá C# (`CheckpointPipelineEvaluation`)**: chạy bài mẫu F01-F16 qua đúng mã production, không gọi mô hình, rồi so với đáp án mẫu. Cách chạy và mốc đo
+  (tìm đúng 32/32 yêu cầu đã làm; báo "liên quan" sai 4/22 yêu cầu chưa làm) nằm trong `AI_CHECKPOINT_SUMMARY_HANDOVER.md`, mục 9. Để dùng chung đường xử lý chữ
+  với production, phần làm sạch trong `CheckpointFileText.ReadAsync` được tách thành `CheckpointFileText.Prepare`.
+- **Câu hỏi do luật tạo (`CheckpointGapQuestions`)**: với tiêu chí rubric đã được file phủ nhưng còn thiếu một dấu hiệu của mức Excellent, thêm câu hỏi cố định như
+  "Nhóm đã có hành trình khách hàng (CJM) chưa?". Câu này đứng trước câu hỏi của mô hình; tổng tối đa 2; không hỏi khi file ít chữ.
+- **`PromptVersion` lên `v11`**: lời văn prompt không đổi, nhưng các sửa chữ PDF, kiểm tra "tiền không phải số người" và câu hỏi mới chỉ áp cho bản tạo mới, nên bản `v10` được tạo lại khi người xem bấm.
+- Lần chạy cục bộ: UnitTests 141, ApplicationTests 1136, IntegrationTests 617 (kể cả test mô hình thật qwen3.5:2b), frontend 606, `npm run build` đạt.
+- **Sửa ba ca "MVP hoặc prototype" báo sai** (bộ đánh giá C#: sai từ 4/22 xuống 0/21, vẫn tìm đúng 32/32; đáp án mẫu F05 đổi NotFound → Partial vì bài có kết quả thử prototype 6/8): dòng bìa dạng nhãn ("Instructor: …") không làm bằng chứng; câu mục tiêu/kế hoạch ("xác định MVP") và tiêu đề một từ ("DEMO") không làm bằng chứng sản phẩm đã xây. Khóa bằng `CheckpointProductEvidenceTests`.
+- **Cầu dao khi Ollama sập (`CheckpointSummaryCircuitBreaker`)** và **endpoint chẩn đoán cho Admin (`GET /api/workspace/checkpoints/ai-summary/diagnostics`)**: xem `AI_CHECKPOINT_SUMMARY_HANDOVER.md`, mục 4.3 và 8. Test: `CheckpointSummaryCircuitBreakerTests` (4), `CheckpointSummaryCircuitIntegrationTests` (4, PostgreSQL). `ICheckpointSummarizer` có thêm `CheckHealthAsync` (mặc định "ổn" để test double không phải cài).
+- **Dọn bản tóm tắt khi file bị xóa (L10)** và **nút phản hồi "hữu ích / chưa hữu ích" (L11, bảng `checkpoint_summary_feedback`, migration `AddCheckpointSummaryFeedback`)**: xem `AI_CHECKPOINT_SUMMARY_HANDOVER.md`, mục 7.4. Test: `CheckpointSummaryDataIntegrationTests` (5, PostgreSQL), frontend `tests/checkpointSummary.test.ts` (thêm 4). Đã xem thử giao diện bằng mock (bấm 👎, chọn lý do, 375 px không tràn ngang). Tổng kết local: UnitTests 141, ApplicationTests 1151, IntegrationTests 625 (4 bỏ qua), frontend 610.
+- **Giao diện chẩn đoán cho Admin (thẻ "AI summary health" trên Admin Overview)**: dùng `GET .../ai-summary/diagnostics`; xem mục 3.2 và 8 của `AI_CHECKPOINT_SUMMARY_HANDOVER.md`. Endpoint này có policy giới hạn tần suất riêng (120 lần/giờ/admin). Test: `tests/summaryDiagnostics.test.ts` (4). Đã xem thử bằng mock (trạng thái Healthy và Not working, 375 px không tràn ngang). Lần chạy cục bộ: UnitTests 141, ApplicationTests 1150 (1 bỏ qua), IntegrationTests 625 (4 bỏ qua), frontend 614.

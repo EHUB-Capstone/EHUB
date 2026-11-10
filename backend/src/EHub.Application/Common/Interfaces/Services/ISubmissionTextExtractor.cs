@@ -4,7 +4,8 @@ namespace EHub.Application.Common.Interfaces.Services;
 
 /// <param name="Text">The document's text, at most the requested number of characters.</param>
 /// <param name="Pages">PDF pages or slides read (0 for Word documents, which have no fixed pages).</param>
-public sealed record ExtractedText(string Text, int Pages);
+/// <param name="PageTexts">The text of each page (PDF) or slide (PPTX) in order, when the format has pages; null otherwise.</param>
+public sealed record ExtractedText(string Text, int Pages, IReadOnlyList<string>? PageTexts = null);
 
 public interface ISubmissionTextExtractor
 {

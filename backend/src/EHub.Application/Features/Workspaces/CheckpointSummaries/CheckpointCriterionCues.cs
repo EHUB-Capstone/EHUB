@@ -143,6 +143,9 @@ internal static class CheckpointCriterionCues
 
     private const int MaximumTermsPerConcept = 2;
 
+    /// <summary>The name of every concept the dictionary knows (so each one can be given a Vietnamese name for questions).</summary>
+    public static IEnumerable<string> Labels => Concepts.Select(concept => concept.Label);
+
     /// <summary>Whether an accent-free sentence mentions one concept (a competitor row is not about the customers' problem).</summary>
     public static bool Mentions(string label, string normalisedSentence) =>
         Concepts.First(item => item.Label == label).Terms.IsMatch(normalisedSentence);

@@ -267,6 +267,19 @@ internal static partial class CheckpointSummaryText
     internal static bool IsDeferral(string normalised) => Deferral().IsMatch(normalised);
 
     /// <summary>
+    /// A "who and for which course" line of a cover page ("Instructor: …", "Giảng viên: …", "Lớp: …"). It names people and
+    /// courses, so a word in it ("Demo" as a name) says nothing about the work. Only a label followed by a colon counts: a
+    /// sentence that merely starts with "Mentor" ("Mentor góp ý rằng…") is content.
+    /// </summary>
+    internal static bool IsCoverMetadata(string sentence) => CoverMetadata().IsMatch(sentence);
+
+    /// <summary>
+    /// Accent-free text that says the product is to be defined, planned or aimed for ("xác định MVP", "mục tiêu: hoàn thành
+    /// prototype"). A criterion about a product that was built is not shown by a goal.
+    /// </summary>
+    internal static bool IsProductPlan(string normalised) => ProductPlan().IsMatch(normalised);
+
+    /// <summary>
     /// A question for the team, or null when the model wrote something else: a statement about what "the document" lacks
     /// ("Tài liệu chưa nêu rõ…", also wrong when the file does say it), a question about the document, or no question at all.
     /// </summary>
@@ -385,6 +398,14 @@ internal static partial class CheckpointSummaryText
     [GeneratedRegex(@"(?<![a-z0-9])(?:se|dang|sap) (?:hoan thien|bo sung|cap nhat)(?![a-z0-9]).*(?:\bsau\b|con lai|noi dung)",
         RegexOptions.CultureInvariant)]
     private static partial Regex Deferral();
+
+    [GeneratedRegex(@"^\s*(?:instructors?|supervisors?|lecturers?|mentors?|advisors?|course|class|semester|giảng viên|giáo viên hướng dẫn|gvhd|môn học|lớp|học kỳ)\s*:",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CoverMetadata();
+
+    [GeneratedRegex(@"(?<![a-z0-9])(?:muc tieu|xac dinh|dinh hinh|de xuat|se (?:xay dung|lam|phat trien|ra mat)|objectives?|goals?|aims? to|to define)(?![a-z0-9]).{0,80}?(?<![a-z0-9])(?:mvp|prototype|demo|ban mau|san pham)",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ProductPlan();
 
     [GeneratedRegex(@"^(?:theo|trong) (?:tài liệu|báo cáo)\s*,?\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex LeadingAccordingTo();

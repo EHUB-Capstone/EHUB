@@ -71,7 +71,8 @@ def main():
         manifest.append({"id": item["id"], "title": item["title"], "checkpoint": item["checkpoint"],
                          "requirements": CHECKPOINTS[item["checkpoint"]], "files": names,
                          "links": item["links"], "truth": item["truth"], "facts": item["facts"],
-                         "injection": item.get("injection", [])})
+                         "injection": item.get("injection", []),
+                         "figure_conflicts": item.get("figure_conflicts", [])})
     (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote {len(manifest)} submissions to {root}")
 

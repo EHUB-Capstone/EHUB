@@ -31,7 +31,8 @@ public sealed class CheckpointSummaryGenerator(
     CheckpointSummarySettings settings,
     CheckpointSummaryTopics topics,
     ICheckpointSummaryCancellation cancellations,
-    ILogger<CheckpointSummaryGenerator> logger) : ICheckpointSummaryGenerator
+    ILogger<CheckpointSummaryGenerator> logger,
+    CheckpointSummaryCircuitBreaker? breaker = null) : ICheckpointSummaryGenerator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -49,6 +50,8 @@ public sealed class CheckpointSummaryGenerator(
             .Select(item => new { item.Id, item.SubmissionFileId, item.CheckpointId, item.AttemptCount })
             .FirstOrDefaultAsync(cancellationToken);
         if (candidate is null) return false;
+        // The model keeps failing: leave the file where it is (and its attempts untouched) until the cool-down is over.
+        if (breaker is not null && !breaker.AllowRequest(nowUtc)) return false;
 
         // The lease doubles as the ownership token checked when saving. PostgreSQL keeps microseconds, so round to them
         // or the saved value would never equal the one held here.
@@ -97,6 +100,7 @@ public sealed class CheckpointSummaryGenerator(
 
         if (result.IsSuccess)
         {
+            breaker?.RecordSuccess();
             var finishedAt = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
             await context.SubmissionFileSummaries
                 .Where(item => item.Id == candidate.Id && item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc == leaseUntil)
@@ -115,7 +119,16 @@ public sealed class CheckpointSummaryGenerator(
             return true;
         }
 
-        await RecordFailureAsync(candidate.Id, candidate.AttemptCount + 1, leaseUntil, result.Error, nowUtc, cancellationToken);
+        // Only a model that cannot be reached or does not answer counts against the circuit; an unreadable file or a bad answer says
+        // nothing about whether the model is up, so those outcomes leave the circuit as it is.
+        DateTime? pausedUntil = null;
+        if (breaker is not null && result.Error.Code is ErrorCodes.WorkspaceSummaryModelUnreachable or ErrorCodes.WorkspaceSummaryModelTimeout)
+        {
+            breaker.RecordFailure(nowUtc);
+            var snapshot = breaker.Snapshot(nowUtc);
+            if (snapshot.State == CheckpointCircuitState.Open) pausedUntil = snapshot.OpenUntilUtc;
+        }
+        await RecordFailureAsync(candidate.Id, candidate.AttemptCount + 1, leaseUntil, result.Error, nowUtc, pausedUntil, cancellationToken);
         return true;
     }
 
@@ -130,7 +143,7 @@ public sealed class CheckpointSummaryGenerator(
         var text = read.Value.Text;
 
         // The quick view needs no model. Saving it first lets the screen show it while the model is still writing.
-        var preview = CheckpointSummaryEvidence.Preview(text, checklist, topics, read.Value.LittleText, read.Value.IgnoredInstructions);
+        var preview = CheckpointSummaryEvidence.Preview(text, checklist, topics, read.Value.LittleText, read.Value.IgnoredInstructions, read.Value.Pages);
         var previewJson = JsonSerializer.Serialize(preview, JsonOptions);
         await context.SubmissionFileSummaries
             .Where(item => item.Id == summaryId)
@@ -162,8 +175,21 @@ public sealed class CheckpointSummaryGenerator(
     }
 
     private async Task RecordFailureAsync(
-        Guid summaryId, int attempts, DateTime leaseUntil, Error error, DateTime nowUtc, CancellationToken cancellationToken)
+        Guid summaryId, int attempts, DateTime leaseUntil, Error error, DateTime nowUtc, DateTime? pausedUntil, CancellationToken cancellationToken)
     {
+        if (pausedUntil is { } resumeAt)
+        {
+            // The circuit is open: this was the model's fault, not the file's, so the file keeps the attempts it had and waits.
+            await context.SubmissionFileSummaries
+                .Where(item => item.Id == summaryId && item.Status == CheckpointSummaryStatus.Processing && item.NextAttemptAtUtc == leaseUntil)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.Status, CheckpointSummaryStatus.Pending)
+                    .SetProperty(item => item.NextAttemptAtUtc, resumeAt)
+                    .SetProperty(item => item.LastErrorCode, error.Code), cancellationToken);
+            logger.LogWarning("File summary {SummaryId} waits for the model (circuit open until {ResumeAt:O}): {Code}.", summaryId, resumeAt, error.Code);
+            return;
+        }
+
         // Missing or unreadable content will not improve with retries; an unreachable model or storage might, so
         // those are retried for much longer (a model container restart takes minutes).
         var permanent = error.Code is ErrorCodes.WorkspaceSummaryNoContent or ErrorCodes.WorkspaceSummaryUnreadable;

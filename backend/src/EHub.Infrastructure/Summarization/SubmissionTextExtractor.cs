@@ -55,15 +55,18 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
         using var document = PdfDocument.Open(content);
         if (document.IsEncrypted) throw new InvalidDataException();
         var text = new StringBuilder();
+        var pageTexts = new List<string>();
         var pages = 0;
         foreach (var page in document.GetPages().Take(MaximumPdfPages))
         {
             cancellationToken.ThrowIfCancellationRequested();
             pages++;
-            text.AppendLine(ContentOrderTextExtractor.GetText(page));
+            var pageText = ContentOrderTextExtractor.GetText(page);
+            pageTexts.Add(pageText);
+            text.AppendLine(pageText);
             if (text.Length >= maxCharacters) break;
         }
-        return new ExtractedText(Limit(text, maxCharacters), pages);
+        return new ExtractedText(Limit(text, maxCharacters), pages, pageTexts);
     }
 
     private static string ReadDocx(byte[] content, int maxCharacters, CancellationToken cancellationToken)
@@ -91,6 +94,7 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
     {
         using var zip = new ZipArchive(new MemoryStream(content, writable: false), ZipArchiveMode.Read);
         var text = new StringBuilder();
+        var slideTexts = new List<string>();
         var number = 0;
         foreach (var path in SlidePaths(zip).Take(MaximumSlides))
         {
@@ -99,15 +103,19 @@ public sealed partial class SubmissionTextExtractor : ISubmissionTextExtractor
             if (slide is null) continue;
             number++;
             text.Append("[Slide ").Append(number).Append("]\n");
+            var slideText = new StringBuilder();
             foreach (var paragraph in slide.Descendants(Drawing + "p"))
             {
                 var line = string.Concat(paragraph.Descendants(Drawing + "t").Select(item => item.Value));
-                if (!string.IsNullOrWhiteSpace(line)) text.Append(line).Append('\n');
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                text.Append(line).Append('\n');
+                slideText.Append(line).Append('\n');
             }
             text.Append('\n');
+            slideTexts.Add(slideText.ToString());
             if (text.Length >= maxCharacters) break;
         }
-        return new ExtractedText(Limit(text, maxCharacters), number);
+        return new ExtractedText(Limit(text, maxCharacters), number, slideTexts);
     }
 
     /// <summary>Slides in presentation order (the file numbering changes meaning once slides are reordered).</summary>

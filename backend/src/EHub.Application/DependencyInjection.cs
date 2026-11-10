@@ -172,9 +172,14 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointFeedback.ICheckpointFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointFeedback.CheckpointFeedbackHandler>();
         // CheckpointSummarySettings, the summarizer and the text extractor are registered by Infrastructure.
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.ReviewDesk.IReviewDeskHandler, EHub.Application.Features.Workspaces.ReviewDesk.ReviewDeskHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryDiagnosticsHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryDiagnosticsHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryFeedbackHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryFeedbackHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryGenerator, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryGenerator>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointSummaryPreviewer, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryPreviewer>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointFileText>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointFigureHistoryHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointFigureHistoryHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointVersionChangesHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointVersionChangesHandler>();
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();

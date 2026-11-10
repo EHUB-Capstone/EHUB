@@ -37,7 +37,7 @@ public sealed class CheckpointSummaryHandler(
         // Switched off for this environment: the screen hides the feature, so no file or earlier summary is returned.
         if (!settings.Enabled)
             return Result.Success(new WorkspaceCheckpointSummaryResponse { CheckpointNumber = checkpointNumber, Enabled = false });
-        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, cancellationToken));
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, userId, cancellationToken));
     }
 
     public async Task<Result<WorkspaceCheckpointSummaryResponse>> RequestAsync(
@@ -130,7 +130,7 @@ public sealed class CheckpointSummaryHandler(
             queueSignal.Signal();
         }
 
-        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, checkpoint, cancellationToken));
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, checkpoint, userId, cancellationToken));
     }
 
     public async Task<Result<WorkspaceCheckpointSummaryResponse>> CancelAsync(
@@ -158,17 +158,24 @@ public sealed class CheckpointSummaryHandler(
         // Abort the model call if this instance's worker is running it.
         foreach (var id in runningIds) cancellations.Cancel(id);
 
-        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, cancellationToken));
+        return Result.Success(await BuildResponseAsync(teamId, checkpointNumber, access.Value, userId, cancellationToken));
     }
 
     private async Task<WorkspaceCheckpointSummaryResponse> BuildResponseAsync(
-        Guid teamId, int checkpointNumber, Checkpoint checkpoint, CancellationToken cancellationToken)
+        Guid teamId, int checkpointNumber, Checkpoint checkpoint, Guid userId, CancellationToken cancellationToken)
     {
         var source = await CheckpointSummarySource.LoadAsync(context, teamId, checkpoint, cancellationToken);
         var fileIds = source.Files.Select(file => file.Id).ToArray();
         var summaries = await context.SubmissionFileSummaries.AsNoTracking()
             .Where(item => fileIds.Contains(item.SubmissionFileId))
             .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
+        // Only the signed-in reviewer's own verdicts are read; nobody sees what a colleague thought of a summary.
+        var summaryIds = summaries.Values.Select(item => item.Id).ToArray();
+        var ownFeedback = summaryIds.Length == 0 ? new Dictionary<Guid, WorkspaceSummaryFeedback>()
+            : await context.CheckpointSummaryFeedbacks.AsNoTracking()
+                .Where(item => item.UserId == userId && summaryIds.Contains(item.SubmissionFileSummaryId))
+                .ToDictionaryAsync(item => item.SubmissionFileSummaryId,
+                    item => new WorkspaceSummaryFeedback { Rating = item.Rating.ToString(), Reason = item.Reason }, cancellationToken);
         // The shared queue is bounded (MaxQueuedSummaries plus MaxQueuedAutomaticSummaries), so its order is read once;
         // it mirrors the worker's order: reviewers' requests, then automatic ones.
         var queue = summaries.Values.Any(item => item.Status == CheckpointSummaryStatus.Pending)
@@ -199,7 +206,8 @@ public sealed class CheckpointSummaryHandler(
                 GeneratedAt = summary?.GeneratedAtUtc,
                 ErrorCode = summary?.Status == CheckpointSummaryStatus.Failed ? summary.LastErrorCode : null,
                 InputTruncated = content is not null && summary!.InputTruncated,
-                Content = content
+                Content = content,
+                MyFeedback = summary is not null && ownFeedback.TryGetValue(summary.Id, out var verdict) ? verdict : null
             };
         }).ToArray();
 
@@ -209,10 +217,10 @@ public sealed class CheckpointSummaryHandler(
             Enabled = settings.Enabled,
             FilePromptCharacters = settings.FilePromptCharacters,
             Files = files,
-            Requirements = CheckpointSummaryOutput.Combine(source.Checklist,
-                files.Select(file => (file.Name, Findings: file.Content?.Requirements ?? file.Preview?.Requirements))
+            Requirements = CheckpointSummaryOutput.CombineWithFiles(source.Checklist,
+                files.Select(file => (FileId: (Guid?)file.FileId, file.Name, Findings: file.Content?.Requirements ?? file.Preview?.Requirements))
                     .Where(file => file.Findings is not null)
-                    .Select(file => (file.Name, file.Findings!)).ToArray()),
+                    .Select(file => (file.FileId, file.Name, file.Findings!)).ToArray()),
             Conflicts = CheckpointCrossFileFigures.Compare(files
                 .Select(file => (file.Name, Figures: file.Content?.Figures ?? file.Preview?.Figures))
                 .Where(file => file.Figures is { Count: > 0 })

@@ -47,7 +47,7 @@ public sealed class CheckpointSummaryPreviewer(
             if (read.IsSuccess)
             {
                 var checklist = await CheckpointSummarySource.ChecklistAsync(context, checkpoint, cancellationToken);
-                previewJson = JsonSerializer.Serialize(CheckpointSummaryEvidence.Preview(read.Value.Text, checklist, topics, read.Value.LittleText, read.Value.IgnoredInstructions), JsonOptions);
+                previewJson = JsonSerializer.Serialize(CheckpointSummaryEvidence.Preview(read.Value.Text, checklist, topics, read.Value.LittleText, read.Value.IgnoredInstructions, read.Value.Pages), JsonOptions);
             }
             else if (read.Error.Code == ErrorCodes.WorkspaceSummaryStorageUnavailable)
             {

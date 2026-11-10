@@ -216,6 +216,8 @@ public static class DependencyInjection
             catch (Exception) { return EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics.None; }
         });
         services.AddSingleton<ICheckpointSummaryCancellation, CheckpointSummaryCancellation>();
+        // One per instance: it remembers whether the model has been answering, so the worker can pause while it is down.
+        services.AddSingleton<EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryCircuitBreaker>();
         if (!enabled)
         {
             services.AddSingleton<ICheckpointSummarizer, EHub.Infrastructure.Summarization.DisabledCheckpointSummarizer>();

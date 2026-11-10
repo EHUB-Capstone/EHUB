@@ -425,6 +425,8 @@ const mockPreviewPolls = new Map<string, number>();
 // spends a few seconds Pending and Processing before it is Ready, so the polling screen can be exercised without a model.
 const MOCK_SUMMARY_STEP_MS = 6_000;
 const mockFileSummaries = new Map<string, { startsAt: number; cancelledAt?: number }>();
+// The signed-in reviewer's verdict on a file's summary, by file id.
+const mockSummaryFeedback = new Map<string, { rating: string; reason: string | null }>();
 
 function mockFileStatus(fileId: string, now = Date.now()) {
   const entry = mockFileSummaries.get(fileId);
@@ -465,6 +467,7 @@ function mockSummary(teamId: string, number: number) {
     title,
     finding: index === 0 && position === 0 ? 'Related' : 'NotFound',
     evidence: index === 0 && position === 0 ? highlights[0] : null,
+    evidencePage: index === 0 && position === 0 ? 2 : null,
     weight: null,
     assessment: 'Document',
     cues: [],
@@ -494,12 +497,14 @@ function mockSummary(teamId: string, number: number) {
           'Doanh thu dự kiến từ phí hoa hồng 8% trên mỗi đơn.',
         ],
         highlights,
+        highlightPages: [1, 2],
         requirements: findingsFor(position),
         conflicts: mockConflicts,
         statusItems: mockStatus,
         littleText: false,
         questions: ['Nhóm đã kiểm chứng mức phí hoa hồng 8% với nhà cung cấp dịch vụ nào chưa?'],
       },
+      myFeedback: status === 'Ready' ? mockSummaryFeedback.get(file._id) ?? null : null,
     };
   });
   const ready = fileSummaries.filter((file) => file.content);
@@ -517,7 +522,9 @@ function mockSummary(teamId: string, number: number) {
         title,
         finding: related ? 'Related' : findings.length ? 'NotFound' : 'NotChecked',
         evidence: related?.content!.requirements[index].evidence ?? null,
+        evidencePage: related?.content!.requirements[index].evidencePage ?? null,
         source: related?.name ?? null,
+        sourceFileId: related?.fileId ?? null,
       };
     }),
     // Two summarised files that give different sample sizes, as the server reports them.
@@ -1605,6 +1612,192 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       startsAt += MOCK_SUMMARY_STEP_MS;
     }
     return [202, { success: true, message: 'AI summary queued.', code: null, data: mockSummary(teamId, checkpointNumber), errors: null }];
+  });
+
+  // The review inbox: the teams the signed-in staff member reviews that need a look, and what they have opened.
+  const seenByReviewer = new Map<string, number>();
+  const reviewerTeams = () => {
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (!user || user.role === 'STUDENT') return null;
+    return state.teams.filter((team) => team.status === 'Active' && canAccessCheckpointTeam(team.id));
+  };
+  const latestVersionOf = (teamId: string, checkpointNumber: number) =>
+    Math.max(0, ...filesForCheckpoint(teamId, checkpointNumber).map((file) => file.versionNumber ?? 1));
+  const lastUploadOf = (teamId: string, checkpointNumber: number) =>
+    filesForCheckpoint(teamId, checkpointNumber).map((file) => file.uploadedAt).sort().pop() ?? null;
+
+  // Like the server: the status is always answered, and the desk does not exist while AI summaries are off.
+  mock.onGet('/workspace/checkpoints/ai-summary/status').reply(() =>
+    (reviewerTeams() ? ok({ enabled: !getMockState().checkpointSummaryDisabled }, 'AI summary status retrieved.') : failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access.')));
+
+  mock.onGet('/workspace/checkpoints/review-desk').reply(() => {
+    const off = summaryDisabledFailure();
+    if (off) return off;
+    const teams = reviewerTeams();
+    if (!teams) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to the review desk.');
+    const state = getMockState();
+    const now = Date.now();
+    const classes = [...new Set(teams.map((team) => team.classId))].map((classId) => state.classes.find((item) => item.id === classId)).filter(Boolean);
+    const inbox = [];
+    for (const cls of classes) {
+      for (const checkpoint of checkpointDefinitionsForClass(cls!)) {
+        const end = scheduleFor(cls!.id, checkpoint.id)?.endDateUtc ?? null;
+        for (const team of teams.filter((item) => item.classId === cls!.id)) {
+          const version = latestVersionOf(team.id, checkpoint.number);
+          const base = { teamId: team.id, teamCode: team.teamCode, teamName: team.teamName, classId: cls!.id, classCode: cls!.classCode, checkpointNumber: checkpoint.number, versionNumber: version || null, dueAtUtc: end };
+          if (version > 0 && (seenByReviewer.get(`${team.id}:${checkpoint.number}`) ?? 0) < version)
+            inbox.push({ ...base, reason: 'NewVersion', submittedAtUtc: lastUploadOf(team.id, checkpoint.number) });
+          else if (version === 0 && end && Date.parse(end) < now) inbox.push({ ...base, reason: 'Overdue', submittedAtUtc: null });
+        }
+      }
+    }
+    return ok({ inbox }, 'Review desk retrieved.');
+  });
+
+  const seenRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/review-seen$/;
+  mock.onPost(seenRoute).reply((config) => {
+    const off = summaryDisabledFailure();
+    if (off) return off;
+    const [, teamId = '', number = '1'] = config.url?.match(seenRoute) || [];
+    if (!reviewerTeams()?.some((team) => team.id === teamId)) return failure(403, 'WORKSPACE_ACCESS_DENIED', 'You do not have access to this team workspace.');
+    seenByReviewer.set(`${teamId}:${number}`, latestVersionOf(teamId, Number(number)));
+    return [204];
+  });
+
+  // Figures against the team's earlier checkpoints. The mock team has no earlier uploads except in checkpoint 2, which disagrees with 1.
+  const historyRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/figure-history$/;
+  mock.onGet(historyRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(historyRoute) || [];
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    const disabled = summaryDisabledFailure();
+    if (disabled) return disabled;
+    const current = Number(number);
+    const earlier = [1, 2, 3, 4].filter((item) => item < current && filesForCheckpoint(teamId, item).length > 0);
+    return ok({
+      checkpointNumber: current,
+      comparedCheckpoints: earlier,
+      conflicts: earlier.length === 0 ? [] : [{
+        subject: 'Survey sample size',
+        values: [
+          { value: '51', quote: 'Quy mô mẫu hợp lệ: N = 51 nhân sự trong lĩnh vực Logistics.', source: `CP${earlier[0]} · slides.pdf` },
+          { value: '52', quote: '52 Doanh nghiệp tham gia khảo sát từ Forwarder, 3PL, Express và XNK.', source: `CP${current} · report.pdf` },
+        ],
+      }],
+      uncheckedFiles: [],
+    }, 'Figure history retrieved.');
+  });
+
+  // What changed in files uploaded again: each file is paired with its previous version by name, like the server does.
+  const changesRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/changes$/;
+  mock.onGet(changesRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(changesRoute) || [];
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    const disabled = summaryDisabledFailure();
+    if (disabled) return disabled;
+    const byName = new Map<string, MockCheckpointFile[]>();
+    for (const file of filesForCheckpoint(teamId, Number(number))) {
+      const key = file.originalName.trim().toLowerCase();
+      byName.set(key, [...(byName.get(key) ?? []), file].sort((left, right) => (right.versionNumber ?? 1) - (left.versionNumber ?? 1)));
+    }
+    const files = [...byName.values()].flatMap((versions) => {
+      const [current, previous] = versions;
+      if (!previous) {
+        return (current.versionNumber ?? 1) > 1
+          ? [{ fileId: current._id, fileName: current.originalName, fromVersion: 0, toVersion: current.versionNumber ?? 1, status: 'NewFile', addedCount: 0, removedCount: 0, changedCount: 0, unchangedPercent: 0, items: [] }]
+          : [];
+      }
+      return [{
+        fileId: current._id, fileName: current.originalName, fromVersion: previous.versionNumber ?? 1, toVersion: current.versionNumber ?? 2,
+        status: 'Compared', addedCount: 1, removedCount: 1, changedCount: 1, unchangedPercent: 82,
+        items: [
+          { kind: 'Changed', text: 'Nhóm khảo sát 320 sinh viên tại TP.HCM.', before: 'Nhóm khảo sát 150 sinh viên tại TP.HCM.', page: 2, figuresChanged: true },
+          { kind: 'Added', text: 'Mô hình doanh thu dựa trên gói đăng ký hằng tháng.', page: 4, figuresChanged: false },
+          { kind: 'Removed', text: 'Kế hoạch gọi vốn dự kiến 200 triệu đồng.', page: 5, figuresChanged: false },
+        ],
+      }];
+    });
+    return ok({ checkpointNumber: Number(number), files }, 'Version changes retrieved.');
+  });
+
+  // The reviewer's own verdict on a finished summary. Like the server: only the fixed ratings and reasons, and only for a
+  // summary that is Ready in this checkpoint.
+  const feedbackRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/files\/([^/]+)\/feedback$/;
+  const FEEDBACK_REASONS = ['Inaccurate', 'MissingKeyPoint', 'WrongEvidence', 'Other'];
+  const feedbackTarget = (url: string | undefined) => {
+    const [, teamId = '', number = '1', fileId = ''] = url?.match(feedbackRoute) || [];
+    const disabled = summaryDisabledFailure();
+    if (disabled) return { error: disabled };
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return { error: denied };
+    const known = filesForCheckpoint(teamId, Number(number)).some((file) => file._id === fileId);
+    return known && mockFileStatus(fileId) === 'Ready'
+      ? { fileId }
+      : { error: failure(404, 'WORKSPACE_NOT_FOUND', 'Only a finished summary of this checkpoint can be rated.') };
+  };
+  mock.onPut(feedbackRoute).reply((config) => {
+    const target = feedbackTarget(config.url);
+    if (target.error) return target.error;
+    const body = parseBody(config) as { rating?: string; reason?: string | null };
+    const reason = body.reason ? String(body.reason) : null;
+    if (body.rating !== 'Helpful' && body.rating !== 'NotHelpful')
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Rating must be Helpful or NotHelpful.');
+    if (reason !== null && (body.rating !== 'NotHelpful' || !FEEDBACK_REASONS.includes(reason)))
+      return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'That reason cannot be used.');
+    mockSummaryFeedback.set(target.fileId!, { rating: body.rating, reason });
+    return ok({ rating: body.rating, reason }, 'AI summary feedback saved.');
+  });
+  mock.onDelete(feedbackRoute).reply((config) => {
+    const target = feedbackTarget(config.url);
+    if (target.error) return target.error;
+    mockSummaryFeedback.delete(target.fileId!);
+    return [204];
+  });
+
+  // Administrators only, like the server: counts and codes, nothing from a submission. The mock reports the real state of its own
+  // per-file summaries; checkpointSummaryModelDown simulates an outage.
+  mock.onGet('/workspace/checkpoints/ai-summary/diagnostics').reply(() => {
+    const state = getMockState();
+    const user = state.users.find((item) => item.id === state.sessionUserId);
+    if (!user || user.role !== 'ADMIN') return failure(403, 'WORKSPACE_ACCESS_DENIED', 'Only administrators can see this.');
+    const off = summaryDisabledFailure();
+    if (off) return off;
+    const now = Date.now();
+    const statuses = [...mockFileSummaries.keys()].map((id) => mockFileStatus(id, now));
+    const count = (status: string) => statuses.filter((item) => item === status).length;
+    const down = Boolean(state.checkpointSummaryModelDown);
+    const verdicts = [...mockSummaryFeedback.values()];
+    return ok({
+      enabled: true,
+      model: 'qwen3.5:2b-q4_K_M',
+      promptVersion: 'v11',
+      autoSummarize: true,
+      modelReachable: !down,
+      modelAvailable: !down,
+      circuit: down ? 'Open' : 'Closed',
+      consecutiveModelFailures: down ? 3 : 0,
+      circuitOpenUntilUtc: down ? new Date(now + 120_000).toISOString() : null,
+      lastModelFailureUtc: down ? new Date(now - 30_000).toISOString() : null,
+      pendingRequested: count('Pending'),
+      pendingAutomatic: 0,
+      processing: count('Processing'),
+      expiredLeases: 0,
+      ready: count('Ready'),
+      failed: down ? 2 : 0,
+      cancelled: count('Cancelled'),
+      oldestPendingSeconds: count('Pending') > 0 ? 90 : null,
+      lastGeneratedAtUtc: count('Ready') > 0 ? new Date(now - 60_000).toISOString() : null,
+      failuresByCode: down ? [{ errorCode: 'WORKSPACE_SUMMARY_MODEL_UNREACHABLE', count: 2 }] : [],
+      feedbackByPromptVersion: verdicts.length === 0 ? [] : [{
+        promptVersion: 'v11',
+        helpful: verdicts.filter((item) => item.rating === 'Helpful').length,
+        notHelpful: verdicts.filter((item) => item.rating === 'NotHelpful').length,
+      }],
+      maxRequestedQueue: 30,
+      maxAutomaticQueue: 200,
+    }, 'AI summary diagnostics retrieved.');
   });
 
   const cancelRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/cancel$/;

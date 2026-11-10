@@ -524,6 +524,153 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("checkpoints", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.CheckpointReviewMarker", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CheckpointId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checkpoint_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime>("SeenAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("seen_at_utc");
+
+                    b.Property<int>("SeenVersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("seen_version_number");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("team_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckpointId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("UserId", "TeamId", "CheckpointId")
+                        .IsUnique();
+
+                    b.ToTable("checkpoint_review_markers", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.CheckpointSummaryFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("model");
+
+                    b.Property<string>("PromptVersion")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("prompt_version");
+
+                    b.Property<string>("Rating")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("rating");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("SubmissionFileSummaryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_file_summary_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PromptVersion", "Rating");
+
+                    b.HasIndex("SubmissionFileSummaryId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("checkpoint_summary_feedback", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.Class", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8235,6 +8382,48 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("Creator");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.CheckpointReviewMarker", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.Checkpoint", "Checkpoint")
+                        .WithMany()
+                        .HasForeignKey("CheckpointId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Checkpoint");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.CheckpointSummaryFeedback", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.SubmissionFileSummary", "SubmissionFileSummary")
+                        .WithMany()
+                        .HasForeignKey("SubmissionFileSummaryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SubmissionFileSummary");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.Class", b =>

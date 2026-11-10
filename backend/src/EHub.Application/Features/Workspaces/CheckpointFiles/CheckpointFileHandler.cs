@@ -187,6 +187,7 @@ public sealed class CheckpointFileHandler(
         if (file is null) return Result.Failure(ErrorCodes.CommonNotFoundError, "Submitted file was not found.");
         if (file.UploadedById != userId) return Result.Failure(ErrorCodes.WorkspaceAccessDenied, "You can only delete files you uploaded.");
         file.IsDeleted = true; file.DeletedAt = now; file.DeletedBy = userId;
+        await RemoveSummaryAsync(fileId, userId, now, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
 
         var isR2 = file.StorageProvider == SubmissionStorageProvider.R2;
@@ -196,6 +197,23 @@ public sealed class CheckpointFileHandler(
             await DeleteStoredAsync(isR2, file.PreviewPdfPublicId, cancellationToken);
         }
         return Result.Success();
+    }
+
+    /// <summary>
+    /// The stored file is erased with the file, so what the AI made from it goes too: the summary and quick view quote the
+    /// student's text. The row is kept (hidden) so a worker that is reading the file right now finds nothing to update, and so
+    /// reviewers' feedback on it stays countable; it holds no text any more. Saved together with the file's own deletion.
+    /// </summary>
+    private async Task RemoveSummaryAsync(Guid fileId, Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        var summary = await context.SubmissionFileSummaries.FirstOrDefaultAsync(item => item.SubmissionFileId == fileId, cancellationToken);
+        if (summary is null) return;
+        summary.ContentJson = null;
+        summary.PreviewJson = null;
+        summary.NextAttemptAtUtc = null;
+        if (summary.Status is CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing)
+            summary.Status = CheckpointSummaryStatus.Cancelled;
+        summary.IsDeleted = true; summary.DeletedAt = now; summary.DeletedBy = userId;
     }
 
     private async Task<Result<byte[]>> ReadOriginalAsync(SubmissionFile file, CancellationToken cancellationToken)

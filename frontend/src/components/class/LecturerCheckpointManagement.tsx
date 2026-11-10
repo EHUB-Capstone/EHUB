@@ -28,6 +28,9 @@ import {
   parseCheckpointLocalDateTime,
 } from '../../utils/checkpointDateTime';
 import CheckpointDateTimeField from './CheckpointDateTimeField';
+import Badge from '../ui/Badge';
+import { useReviewInbox } from '../../hooks/useReviewInbox';
+import { teamCheckpointPath } from '../../utils/reviewDesk';
 import Modal from '../ui/Modal';
 import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFilePreviewModal';
 import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
@@ -102,6 +105,13 @@ export default function LecturerCheckpointManagement({
     file: { _id: string; originalName: string };
   } | null>(null);
   const gradingDialogRef = useRef<CheckpointGradingDialogHandle>(null);
+
+  // Teams with a version this reviewer has not opened. Empty (and never requested) while AI summaries are off.
+  const { items: inboxItems } = useReviewInbox();
+  const newVersionKeys = useMemo(
+    () => new Set(inboxItems.filter((entry) => entry.reason === 'NewVersion').map((entry) => `${entry.teamId}:${entry.checkpointNumber}`)),
+    [inboxItems],
+  );
 
   useEffect(() => {
     setSelectedClassId(initialClassId);
@@ -371,7 +381,10 @@ export default function LecturerCheckpointManagement({
                   return (
                   <tr key={`${item.teamId}-${item.checkpointId}`} className="hover:bg-slate-50/70">
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">{item.classCode}</td>
-                    <td className="px-4 py-3 text-slate-700">{item.teamName}</td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {item.teamName}
+                      {newVersionKeys.has(`${item.teamId}:${item.checkpointNumber}`) && <span className="ml-2 align-middle"><Badge variant="info">New version</Badge></span>}
+                    </td>
                     <td className="min-w-52 px-4 py-3 text-slate-700">{formatLecturerCheckpointName(item.checkpointNumber)}</td>
                     <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyles[item.status] || statusStyles.NotScheduled}`}>{item.status}</span></td>
                     <td className="min-w-72 max-w-96 px-4 py-3 text-slate-600">
@@ -432,7 +445,7 @@ export default function LecturerCheckpointManagement({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link
-                          to={`/workspace/teams/${item.teamId}`}
+                          to={teamCheckpointPath(item.teamId, item.checkpointNumber)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary-700"
                         >
                           <ExternalLink className="h-3.5 w-3.5" /> View

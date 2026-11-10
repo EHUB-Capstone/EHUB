@@ -45,14 +45,14 @@ public sealed partial class TeamWorkflowIntegrationTests
 
     private static CheckpointSummaryGenerator CreateSummaryGenerator(
         UploadFixture fixture, ICheckpointSummarizer summarizer, CheckpointSummarySettings? settings = null,
-        ICheckpointSummaryCancellation? cancellations = null)
+        ICheckpointSummaryCancellation? cancellations = null, CheckpointSummaryCircuitBreaker? breaker = null)
     {
         fixture.Context.ChangeTracker.Clear();
         var used = settings ?? EnabledSummaries;
         return new CheckpointSummaryGenerator(fixture.Context,
             new CheckpointFileText(fixture.Context, fixture.Storage, new InMemoryCheckpointStorage(), new SubmissionTextExtractor(), used),
             summarizer, fixture.Clock, used, CheckpointSummaryTopics.None,
-            cancellations ?? new CheckpointSummaryCancellation(), NullLogger<CheckpointSummaryGenerator>.Instance);
+            cancellations ?? new CheckpointSummaryCancellation(), NullLogger<CheckpointSummaryGenerator>.Instance, breaker);
     }
 
     private static RequestCheckpointSummaryRequest Files(params Guid[] ids) => new() { FileIds = ids };
@@ -237,7 +237,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var stored = await LoadFileSummaryAsync(fixture, plan.Id);
         stored.Status.Should().Be(CheckpointSummaryStatus.Ready);
         stored.Model.Should().Be("scripted-model");
-        stored.PromptVersion.Should().Be("v10");
+        stored.PromptVersion.Should().Be("v11");
         stored.PreviewJson.Should().NotBeNull();
 
         var read = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.MentorUserId, SystemRoles.Mentor);

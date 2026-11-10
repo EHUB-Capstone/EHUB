@@ -52,17 +52,29 @@ internal static class CheckpointSummaryEvidence
 
     public static WorkspaceFilePreview Preview(
         string fileText, IReadOnlyList<ChecklistItem> checklist, CheckpointSummaryTopics topics, bool littleText = false,
-        int ignoredInstructions = 0) => new()
+        int ignoredInstructions = 0, CheckpointPageLocator? pages = null)
     {
-        Highlights = CheckpointSummaryText.Highlights(fileText, ChecklistTerms(checklist), HighlightsPerFile)
+        var highlights = CheckpointSummaryText.Highlights(fileText, ChecklistTerms(checklist), HighlightsPerFile)
             .Select(text => CheckpointSummaryText.Clip(text, CheckpointSummaryLimits.MaxEvidenceCharacters))
-            .ToArray(),
-        Requirements = Find(fileText, checklist, topics),
-        Conflicts = CheckpointFigureConflicts.Find(fileText),
-        StatusItems = CheckpointStatusLines.Find(fileText),
-        Figures = CheckpointCrossFileFigures.Collect(fileText),
-        IgnoredInstructions = ignoredInstructions,
-        LittleText = littleText
+            .ToArray();
+        var requirements = Find(fileText, checklist, topics);
+        return new WorkspaceFilePreview
+        {
+            Highlights = highlights,
+            HighlightPages = pages is null ? [] : highlights.Select(text => pages.Locate(text) ?? 0).ToArray(),
+            Requirements = pages is null ? requirements : requirements.Select(finding => WithPage(finding, pages.Locate(finding.Evidence))).ToArray(),
+            Conflicts = CheckpointFigureConflicts.Find(fileText),
+            StatusItems = CheckpointStatusLines.Find(fileText),
+            Figures = CheckpointCrossFileFigures.Collect(fileText),
+            IgnoredInstructions = ignoredInstructions,
+            LittleText = littleText
+        };
+    }
+
+    private static WorkspaceFileRequirementFinding WithPage(WorkspaceFileRequirementFinding finding, int? page) => new()
+    {
+        Index = finding.Index, Kind = finding.Kind, Title = finding.Title, Finding = finding.Finding, Evidence = finding.Evidence,
+        EvidencePage = page, Weight = finding.Weight, Assessment = finding.Assessment, Cues = finding.Cues
     };
 
     /// <summary>
@@ -91,7 +103,7 @@ internal static class CheckpointSummaryEvidence
         // Lines that are never evidence for any criterion: questions (an item of a survey, not what the team found), a
         // chart's labels read as one line, and runs of capitals (report titles, glued labels).
         var neverQuoted = sentences.Select((sentence, position) => sentence.EndsWith('?') || CheckpointSummaryText.IsLabelStrip(sentence) ||
-            CheckpointSummaryText.IsInterfaceText(sentence) ||
+            CheckpointSummaryText.IsInterfaceText(sentence) || CheckpointSummaryText.IsCoverMetadata(sentence) ||
             // "Nhóm sẽ hoàn thiện lộ trình và các phần còn lại sau" says the roadmap is not there yet.
             CheckpointSummaryText.IsDeferral(MentorRankingFeatures.Normalize(sentence)) ||
             (!prepared[position].Title && !prepared[position].Short && CheckpointSummaryText.IsMostlyCapitals(sentence))).ToArray();
@@ -135,9 +147,13 @@ internal static class CheckpointSummaryEvidence
             // ask for competitors is not shown by a row of the competitor table.
             var wantsProblemOnly = wanted.Contains("Problem") && !wanted.Any(ActionConcepts.Contains);
             var wantsCompetitors = wanted.Contains("Competitors");
+            // A criterion about a product that was built is not shown by a goal ("xác định MVP") or by a one-word title ("DEMO"):
+            // a slide titled only "DEMO" on a deck of pictures shows nothing the reader can check.
+            var wantsProduct = wanted.Contains("Product / demo");
             // Lines that cannot be evidence for this criterion at all: they neither score nor count as a mention. A weak quote
             // would mislead more than no quote.
             var hidden = Enumerable.Range(0, sentences.Count).Select(position => contents[position] || neverQuoted[position] ||
+                (wantsProduct && CheckpointSummaryText.IsProductPlan(normalised[position])) ||
                 (wantsProblemOnly && CheckpointSummaryText.IsRecommendation(normalised[position])) ||
                 (!wantsCompetitors && CheckpointCriterionCues.Mentions("Competitors", normalised[position]))).ToArray();
             var own = prepared.Select((sentence, position) => hidden[position] ? 0 :
@@ -171,7 +187,10 @@ internal static class CheckpointSummaryEvidence
             if (best >= 0 && quoted.Contains(best)) best = -1;
             if (best >= 0) quoted.Add(best);
             // How the data was collected is not a mention of the problem; it counts only for a criterion about research.
-            var cueHidden = hidden.Select((line, position) => line || (!wantsResearch && CheckpointSummaryText.IsMethodology(sentences[position]))).ToArray();
+            // A one-word title ("DEMO") still lends its weight to the lines under it when quotes are chosen, but alone it is no
+            // proof that a product exists, so it is not a mention either.
+            var cueHidden = hidden.Select((line, position) => line || (!wantsResearch && CheckpointSummaryText.IsMethodology(sentences[position])) ||
+                (wantsProduct && sentences[position].Split(' ', StringSplitOptions.RemoveEmptyEntries).Length == 1)).ToArray();
             var cues = CheckpointCriterionCues.Find(item.Title, item.Excellent ?? item.Description, sentences, normalised, cueHidden, hollow);
             // A mentioned thing is also related content: "Not found" next to "Mentioned: Target customer" contradicts itself.
             // Its sentence is quoted when there is one; a mention under a heading with nothing to quote is reported without.
