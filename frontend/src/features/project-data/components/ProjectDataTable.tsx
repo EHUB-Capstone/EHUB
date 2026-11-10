@@ -3,6 +3,8 @@ import Button from '../../../components/ui/Button';
 import { cn } from '../../../utils/cn';
 import {
   PROJECT_DATA_EMPTY_VALUE,
+  SHOWCASE_METRICS_REFERENCE_NOTE,
+  displayShowcaseMetric,
   displayList,
   displayText,
   mentorName,
@@ -101,10 +103,15 @@ export default function ProjectDataTable({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
+      <div className="space-y-1 px-4 py-3 text-caption text-slate-600">
+        <p><span className="font-semibold">Tương tác Showcase. </span>{SHOWCASE_METRICS_REFERENCE_NOTE}</p>
+        <p>Tổng tương tác hiện tại của dự án qua các học kỳ, gồm cả trang chưa công khai hoặc đã ẩn.</p>
+      </div>
       <div className="relative" aria-busy={isRefreshing}>
-        {/* Desktop and tablet: the full eleven-column table. */}
+        {/* Desktop and tablet: the full table, including reference-only showcase counters. */}
         <div className={cn('hidden overflow-x-auto transition-opacity md:block', isRefreshing && 'opacity-60')} tabIndex={0} aria-label="Scrollable project data table">
           <table className="w-full min-w-[1380px] border-collapse">
+            <caption className="sr-only">Project Data</caption>
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
                 <SortHeader label="Semester" field="semester" query={query} onSort={onSort} />
@@ -118,6 +125,9 @@ export default function ProjectDataTable({
                 <th scope="col" className={headerClass}>Mentor - GV</th>
                 <th scope="col" className={headerClass}>Achievements</th>
                 <th scope="col" className={headerClass}>Competitions</th>
+                <th scope="col" className={headerClass}>Showcase views</th>
+                <th scope="col" className={headerClass}>Showcase upvotes</th>
+                <th scope="col" className={headerClass}>Showcase comments</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -140,6 +150,9 @@ export default function ProjectDataTable({
                   <td className={cellClass}><MentorLabel mentor={item.academicMentor} /></td>
                   <td className={cellClass}><ProjectAchievementBadges achievements={item.achievements} /></td>
                   <td className={cn(cellClass, 'min-w-[12rem]')}><ProjectCompetitionBadges competitions={item.competitions} /></td>
+                  <td className={cn(cellClass, 'tabular-nums')}>{displayShowcaseMetric(item.showcaseMetrics?.viewCount)}</td>
+                  <td className={cn(cellClass, 'tabular-nums')}>{displayShowcaseMetric(item.showcaseMetrics?.upvoteCount)}</td>
+                  <td className={cn(cellClass, 'tabular-nums')}>{displayShowcaseMetric(item.showcaseMetrics?.commentCount)}</td>
                 </tr>
               ))}
             </tbody>

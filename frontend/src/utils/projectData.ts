@@ -34,6 +34,10 @@ export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
 export const PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH = 500;
 export const PROJECT_DATA_SEARCH_DEBOUNCE_MS = 300;
 export const PROJECT_DATA_EMPTY_VALUE = '-';
+export const SHOWCASE_METRICS_REFERENCE_NOTE = 'Chỉ mang tính tham khảo, không dùng để xếp hạng hay trao giải.';
+
+export const displayShowcaseMetric = (value: number | null | undefined): string =>
+  value == null ? '—' : value.toLocaleString('en-US');
 
 /** Most values one multi-select filter carries; the API rejects more, and it keeps shared links short. */
 export const PROJECT_DATA_MAX_FILTER_VALUES = 100;

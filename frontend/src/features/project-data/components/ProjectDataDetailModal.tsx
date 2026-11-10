@@ -9,6 +9,8 @@ import type { ProjectAchievement, ProjectCompetitionEntryPayload, ProjectDataIte
 import {
   PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH,
   PROJECT_DATA_EMPTY_VALUE,
+  SHOWCASE_METRICS_REFERENCE_NOTE,
+  displayShowcaseMetric,
   describeCompetitionDraft,
   describeIndustryDraft,
   displayText,
@@ -249,6 +251,17 @@ export default function ProjectDataDetailModal({
               </Field>
             </div>
           </dl>
+
+          <section aria-label="Showcase interaction reference" className="space-y-3">
+            <h3 className="text-subheading font-semibold text-secondary">Tương tác Showcase</h3>
+            <p className="text-caption text-slate-600">{SHOWCASE_METRICS_REFERENCE_NOTE}</p>
+            <p className="text-caption text-slate-600">Tổng tương tác hiện tại của dự án qua các học kỳ, gồm cả trang chưa công khai hoặc đã ẩn.</p>
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Showcase views">{displayShowcaseMetric(item.showcaseMetrics?.viewCount)}</Field>
+              <Field label="Showcase upvotes">{displayShowcaseMetric(item.showcaseMetrics?.upvoteCount)}</Field>
+              <Field label="Showcase comments">{displayShowcaseMetric(item.showcaseMetrics?.commentCount)}</Field>
+            </dl>
+          </section>
 
           {canManage && <ProjectStartupIndustryHistory key={item.projectId} projectId={item.projectId} rowVersion={item.rowVersion} />}
 
