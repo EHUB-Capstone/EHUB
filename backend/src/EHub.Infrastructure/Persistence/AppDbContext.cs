@@ -67,6 +67,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<SubmissionRequirementContent> SubmissionRequirementContents => Set<SubmissionRequirementContent>();
     public DbSet<SubmissionFeedback> SubmissionFeedbacks => Set<SubmissionFeedback>();
     public DbSet<SubmissionFileSummary> SubmissionFileSummaries => Set<SubmissionFileSummary>();
+    public DbSet<CheckpointReviewMarker> CheckpointReviewMarkers => Set<CheckpointReviewMarker>();
+    public DbSet<CheckpointSummaryFeedback> CheckpointSummaryFeedbacks => Set<CheckpointSummaryFeedback>();
     public DbSet<Rubric> Rubrics => Set<Rubric>();
     public DbSet<RubricCriterion> RubricCriteria => Set<RubricCriterion>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
