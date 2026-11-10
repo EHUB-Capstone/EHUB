@@ -5237,23 +5237,73 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseComment", b =>
                 {
-                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid").HasColumnName("id");
-                    b.Property<Guid>("AuthorUserId").HasColumnType("uuid").HasColumnName("author_user_id");
-                    b.Property<string>("Content").IsRequired().HasMaxLength(2000).HasColumnType("character varying(2000)").HasColumnName("content");
-                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
-                    b.Property<Guid?>("CreatedBy").HasColumnType("uuid").HasColumnName("created_by");
-                    b.Property<DateTime?>("DeletedAt").HasColumnType("timestamp with time zone").HasColumnName("deleted_at");
-                    b.Property<Guid?>("DeletedBy").HasColumnType("uuid").HasColumnName("deleted_by");
-                    b.Property<bool>("IsDeleted").ValueGeneratedOnAdd().HasColumnType("boolean").HasDefaultValue(false).HasColumnName("is_deleted");
-                    b.Property<bool>("IsTeamReply").ValueGeneratedOnAdd().HasColumnType("boolean").HasDefaultValue(false).HasColumnName("is_team_reply");
-                    b.Property<Guid?>("ParentCommentId").HasColumnType("uuid").HasColumnName("parent_comment_id");
-                    b.Property<Guid>("ShowcaseProjectId").HasColumnType("uuid").HasColumnName("showcase_project_id");
-                    b.Property<DateTime?>("UpdatedAt").HasColumnType("timestamp with time zone").HasColumnName("updated_at");
-                    b.Property<Guid?>("UpdatedBy").HasColumnType("uuid").HasColumnName("updated_by");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_user_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsTeamReply")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_team_reply");
+
+                    b.Property<Guid?>("ParentCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_comment_id");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
                     b.HasKey("Id");
+
                     b.HasIndex("AuthorUserId");
+
                     b.HasIndex("ParentCommentId");
+
                     b.HasIndex("ShowcaseProjectId", "CreatedAt");
+
                     b.ToTable("showcase_comments", (string)null);
                 });
 
@@ -5463,6 +5513,86 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("showcase_projects", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("ReporterUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reporter_user_id");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_user_id");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("ShowcaseProjectId");
+
+                    b.HasIndex("ReporterUserId", "CommentId")
+                        .IsUnique()
+                        .HasFilter("comment_id IS NOT NULL");
+
+                    b.HasIndex("ReporterUserId", "ShowcaseProjectId")
+                        .IsUnique()
+                        .HasFilter("comment_id IS NULL");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("showcase_reports", (string)null);
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReviewHistory", b =>
@@ -9146,11 +9276,27 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseComment", b =>
                 {
-                    b.HasOne("EHub.Domain.Entities.User", "AuthorUser").WithMany().HasForeignKey("AuthorUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", "ParentComment").WithMany("Replies").HasForeignKey("ParentCommentId").OnDelete(DeleteBehavior.Restrict);
-                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", "ShowcaseProject").WithMany().HasForeignKey("ShowcaseProjectId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("EHub.Domain.Entities.User", "AuthorUser")
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", "ParentComment")
+                        .WithMany("Replies")
+                        .HasForeignKey("ParentCommentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", "ShowcaseProject")
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("AuthorUser");
+
                     b.Navigation("ParentComment");
+
                     b.Navigation("ShowcaseProject");
                 });
 
@@ -9174,6 +9320,31 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("ShowcaseProject");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReport", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReporterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReviewHistory", b =>
@@ -10025,6 +10196,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("StaffAssignments");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseComment", b =>
+                {
+                    b.Navigation("Replies");
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseProject", b =>
