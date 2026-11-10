@@ -65,6 +65,8 @@ interface CheckpointFilePreviewModalProps {
   teamId: string;
   checkpointNumber: number;
   file: PreviewFile | null;
+  /** Page (or slide) to scroll to once the document is shown, e.g. where a quoted sentence of an AI summary is. */
+  initialPage?: number;
   onClose: () => void;
 }
 
@@ -212,6 +214,7 @@ export default function CheckpointFilePreviewModal({
   teamId,
   checkpointNumber,
   file,
+  initialPage,
   onClose,
 }: CheckpointFilePreviewModalProps) {
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
@@ -541,6 +544,29 @@ export default function CheckpointFilePreviewModal({
   useEffect(() => () => {
     if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
   }, []);
+
+  // Open at the requested page. Pages are placeholders until painted, so their elements exist as soon as the document is shown;
+  // retry briefly in case the viewer has not registered them yet.
+  useEffect(() => {
+    if (!initialPage || initialPage < 2 || !pdfDocument || !firstPageSize) return undefined;
+    const target = Math.min(initialPage, pdfDocument.numPages);
+    let attempts = 0;
+    let timer: number | undefined;
+    const scrollToTarget = () => {
+      const pageElement = pageElementsRef.current.get(target);
+      const documentArea = documentAreaRef.current;
+      if (pageElement && documentArea) {
+        const top = pageElement.getBoundingClientRect().top - documentArea.getBoundingClientRect().top + documentArea.scrollTop - 24;
+        documentArea.scrollTo({ top: Math.max(top, 0), behavior: 'auto' });
+        setCurrentPage(target);
+        return;
+      }
+      attempts += 1;
+      if (attempts < 20) timer = window.setTimeout(scrollToTarget, 100);
+    };
+    timer = window.setTimeout(scrollToTarget, 50);
+    return () => window.clearTimeout(timer);
+  }, [initialPage, pdfDocument, firstPageSize]);
 
   if (!file) return null;
 

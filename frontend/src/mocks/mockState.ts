@@ -358,6 +358,8 @@ export interface MockApiState {
   checkpointLinks: Record<string, MockCheckpointLink[]>;
   /** Simulates an environment with AI checkpoint summaries switched off (Summarization:Provider=Disabled). */
   checkpointSummaryDisabled?: boolean;
+  /** Makes the mock administrators' diagnostics report a model server that is not answering. */
+  checkpointSummaryModelDown?: boolean;
   courseAssessmentScores: Record<string, number>;
   courseAssessmentMemberScores: Record<string, number>;
   evaluationPublicationStatuses: Record<string, 'SUBMITTED' | 'PUBLISHED'>;

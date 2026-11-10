@@ -27,6 +27,8 @@ export interface FileRequirementFinding {
   title: string;
   finding: Exclude<RequirementFinding, 'NotChecked'>;
   evidence: string | null;
+  /** The page (PDF) or slide (PPTX) of the evidence, when it can be told. */
+  evidencePage?: number | null;
   /** Share of the checkpoint grade, in percent (criteria only). */
   weight?: number | null;
   assessment?: CriterionAssessment;
@@ -51,6 +53,8 @@ export interface StatusItem {
 /** Worked out from the file text without the AI model, so it is available seconds after a file is queued. */
 export interface FilePreview {
   highlights: string[];
+  /** The page or slide of each key sentence (0 when unknown), in the same order. */
+  highlightPages?: number[];
   requirements: FileRequirementFinding[];
   /** Figures the file states twice with different values, found without the AI model. */
   conflicts: FigureConflict[];
@@ -67,6 +71,8 @@ export interface FileSummaryContent {
   keyPoints: string[];
   /** The file's most informative sentences, quoted as written. */
   highlights: string[];
+  /** The page or slide of each key sentence (0 when unknown), in the same order. */
+  highlightPages?: number[];
   requirements: FileRequirementFinding[];
   questions: string[];
   /** Figures the file states twice with different values, found without the AI model. */
@@ -77,6 +83,16 @@ export interface FileSummaryContent {
   ignoredInstructions?: number;
   /** Mostly images or diagrams: only titles and a few lines of text could be read. */
   littleText: boolean;
+}
+
+export type SummaryFeedbackRating = 'Helpful' | 'NotHelpful';
+export type SummaryFeedbackReason = 'Inaccurate' | 'MissingKeyPoint' | 'WrongEvidence' | 'Other';
+
+/** The signed-in reviewer's own verdict on a file summary; other reviewers' verdicts are never sent. */
+export interface SummaryFeedback {
+  rating: SummaryFeedbackRating;
+  /** Only with NotHelpful, one of a fixed list. */
+  reason: SummaryFeedbackReason | null;
 }
 
 export interface FileSummary {
@@ -96,6 +112,8 @@ export interface FileSummary {
   errorCode: string | null;
   inputTruncated: boolean;
   content: FileSummaryContent | null;
+  /** The signed-in reviewer's verdict on this summary; null when they have not rated it. */
+  myFeedback?: SummaryFeedback | null;
 }
 
 export interface CheckpointRequirementFinding {
@@ -104,8 +122,12 @@ export interface CheckpointRequirementFinding {
   title: string;
   finding: RequirementFinding;
   evidence: string | null;
+  /** The page (PDF) or slide (PPTX) of the evidence, when it can be told. */
+  evidencePage?: number | null;
   /** The file the evidence was quoted from. */
   source: string | null;
+  /** The id of that file, so it can be opened at the evidence page. */
+  sourceFileId?: string | null;
   weight?: number | null;
   assessment?: CriterionAssessment;
   cues?: CriterionCue[];
@@ -126,4 +148,94 @@ export interface CheckpointSummary {
   /** Figures that two files state differently (a sample of 51 and of 52), found without the AI model. */
   conflicts?: FigureConflict[];
   links: CheckpointSummaryLink[];
+}
+
+/** Mirrors WorkspaceCheckpointVersionChangesResponse: what changed in files the team uploaded again. Worked out from the text, not by the AI. */
+export type VersionChangeStatus = 'Compared' | 'Unchanged' | 'NewFile' | 'Unreadable';
+export type VersionChangeKind = 'Added' | 'Removed' | 'Changed';
+
+export interface VersionChangeItem {
+  kind: VersionChangeKind;
+  /** The sentence as it reads now (Added, Changed) or as it read before (Removed). */
+  text: string;
+  /** The earlier wording (Changed). */
+  before?: string | null;
+  page?: number | null;
+  figuresChanged: boolean;
+}
+
+export interface FileVersionChange {
+  /** The newest version of the file. */
+  fileId: string;
+  fileName: string;
+  fromVersion: number;
+  toVersion: number;
+  status: VersionChangeStatus;
+  addedCount: number;
+  removedCount: number;
+  changedCount: number;
+  unchangedPercent: number;
+  items: VersionChangeItem[];
+}
+
+export interface CheckpointVersionChanges {
+  checkpointNumber: number;
+  files: FileVersionChange[];
+}
+
+/** Mirrors WorkspaceCheckpointFigureHistoryResponse: figures this checkpoint states differently from the team's earlier checkpoints. */
+export interface CheckpointFigureHistory {
+  checkpointNumber: number;
+  /** Earlier checkpoints that had files to compare with; empty when there is nothing earlier. */
+  comparedCheckpoints: number[];
+  conflicts: FigureConflict[];
+  /** Files of earlier checkpoints with no figures yet, named so a missing warning is not read as "all consistent". */
+  uncheckedFiles: string[];
+}
+
+export type SummaryCircuitState = 'Closed' | 'Open' | 'HalfOpen';
+
+export interface SummaryFailureCount {
+  errorCode: string;
+  count: number;
+}
+
+export interface SummaryFeedbackCount {
+  promptVersion: string;
+  helpful: number;
+  notHelpful: number;
+}
+
+/**
+ * Mirrors WorkspaceCheckpointSummaryDiagnosticsResponse, for administrators only: counts and error codes, never a file name or any
+ * text from a submission.
+ */
+export interface SummaryDiagnostics {
+  enabled: boolean;
+  model: string;
+  promptVersion: string;
+  autoSummarize: boolean;
+  /** The model server answered a request when this was read. */
+  modelReachable: boolean;
+  /** The configured model has been pulled into the model server. */
+  modelAvailable: boolean;
+  /** Kept in memory by one API instance. */
+  circuit: SummaryCircuitState;
+  consecutiveModelFailures: number;
+  circuitOpenUntilUtc: string | null;
+  lastModelFailureUtc: string | null;
+  pendingRequested: number;
+  pendingAutomatic: number;
+  processing: number;
+  /** Files being processed whose lease has run out; the worker takes them again. */
+  expiredLeases: number;
+  ready: number;
+  failed: number;
+  cancelled: number;
+  oldestPendingSeconds: number | null;
+  lastGeneratedAtUtc: string | null;
+  failuresByCode: SummaryFailureCount[];
+  feedbackByPromptVersion: SummaryFeedbackCount[];
+  maxRequestedQueue: number;
+  maxAutomaticQueue: number;
 }

@@ -16,6 +16,8 @@ import CheckpointSubmissionCard from './CheckpointSubmissionCard';
 import CheckpointFilePreviewModal from './CheckpointFilePreviewModal';
 import FeedbackThread from './FeedbackThread';
 import CheckpointAiSummaryCard from './CheckpointAiSummaryCard';
+import { reviewDeskApi } from '../../../api/reviewDeskApi';
+import { useAiSummaryEnabled } from '../../../hooks/useAiSummaryEnabled';
 import { canViewCheckpointSummary } from '../../../utils/checkpointSummary';
 import EvaluationPanel from '../EvaluationPanel';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
@@ -55,6 +57,7 @@ export default function CheckpointPanel({
   onRequirementsSaved,
 }) {
   const { user } = useAuth();
+  const aiSummaryEnabled = useAiSummaryEnabled();
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -62,6 +65,9 @@ export default function CheckpointPanel({
   const [submissionMeta, setSubmissionMeta] = useState({ status: null, submittedAt: null });
   const [downloadingId, setDownloadingId] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
+  // Page to open the preview at, and a passage to put into the comment box (both come from the AI summary card).
+  const [previewPage, setPreviewPage] = useState(undefined);
+  const [quoteForFeedback, setQuoteForFeedback] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [editingLink, setEditingLink] = useState(null);
@@ -122,6 +128,12 @@ export default function CheckpointPanel({
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // A reviewer who opens the checkpoint has seen the newest version; the review desk then stops listing it as new for them.
+  useEffect(() => {
+    if (!aiSummaryEnabled || !canViewCheckpointSummary(user?.role) || !teamId || !checkpoint?.number) return;
+    reviewDeskApi.markSeen(String(teamId), checkpoint.number).catch(() => { /* a missed marker only keeps the team listed */ });
+  }, [aiSummaryEnabled, teamId, checkpoint?.number, user?.role]);
 
   useEffect(() => subscribeProjectDirectionRealtime((event) => {
     if (event.eventType === 'CheckpointFeedbackPosted'
@@ -229,7 +241,8 @@ export default function CheckpointPanel({
           <div className="absolute -top-20 right-0 w-72 h-72 rounded-full bg-amber-100/50 blur-3xl pointer-events-none" />
 
           <div className="relative px-5 sm:px-8 lg:px-10 py-5 lg:py-6 max-w-7xl mx-auto w-full">
-            <div className="flex items-start gap-3 sm:gap-4">
+            {/* On a wide screen the counters sit at the right of the title, so the page below starts higher; on a narrow one they wrap under it. */}
+            <div className="flex flex-wrap lg:flex-nowrap items-start gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={requestClose}
@@ -275,38 +288,38 @@ export default function CheckpointPanel({
                 </div>
               </div>
 
+              <div className="order-4 lg:order-3 mt-1 lg:mt-1 flex w-full lg:w-auto lg:max-w-[340px] flex-wrap lg:justify-end gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                  <FileText className="w-3.5 h-3.5" />
+                  {loading ? '…' : `${files.length} file${files.length !== 1 ? 's' : ''}`}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                  <Link2 className="w-3.5 h-3.5" />
+                  {loading ? '…' : `${links.length} link${links.length !== 1 ? 's' : ''}`}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  {loading ? '…' : `${feedbacks.length} feedback`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowEvaluation((current) => !current)}
+                  aria-expanded={showEvaluation}
+                  aria-controls="checkpoint-evaluation-panel"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary-700 transition hover:bg-orange-100"
+                >
+                  {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+                  {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={requestClose}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary-700 shadow-sm flex items-center justify-center transition-all shrink-0"
+                className="order-3 lg:order-4 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary-700 shadow-sm flex items-center justify-center transition-all shrink-0"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-4">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
-                <FileText className="w-3.5 h-3.5" />
-                {loading ? '…' : `${files.length} file${files.length !== 1 ? 's' : ''}`}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
-                <Link2 className="w-3.5 h-3.5" />
-                {loading ? '…' : `${links.length} link${links.length !== 1 ? 's' : ''}`}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 border border-orange-200/70 text-slate-700 text-xs font-semibold shadow-sm">
-                <MessageSquare className="w-3.5 h-3.5" />
-                {loading ? '…' : `${feedbacks.length} feedback`}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowEvaluation((current) => !current)}
-                aria-expanded={showEvaluation}
-                aria-controls="checkpoint-evaluation-panel"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary-700 transition hover:bg-orange-100"
-              >
-                {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-                {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
               </button>
             </div>
           </div>
@@ -316,7 +329,7 @@ export default function CheckpointPanel({
         <div className="relative flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
           {/* Rubric sidebar */}
           {checkpoint.rubrics?.length > 0 && (
-            <aside className={`lg:w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
+            <aside className={`lg:w-[340px] xl:w-[360px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
               <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-3">
                 <section className="space-y-3">
                   <SectionTitle icon={Award}>Evaluation rubric</SectionTitle>
@@ -361,7 +374,7 @@ export default function CheckpointPanel({
                 downloadingId={downloadingId}
                 editingLink={editingLink}
                 onRefresh={refreshQuietly}
-                onPreview={setPreviewFile}
+                onPreview={(file) => { setPreviewPage(undefined); setPreviewFile(file); }}
                 onDownload={handleDownload}
                 onRequestDeleteFile={setDeleteTarget}
                 onRequestDeleteLink={setDeleteLinkTarget}
@@ -370,7 +383,12 @@ export default function CheckpointPanel({
               />
 
               {canViewCheckpointSummary(user?.role) && (
-                <CheckpointAiSummaryCard teamId={String(teamId)} checkpointNumber={checkpoint.number} />
+                <CheckpointAiSummaryCard
+                  teamId={String(teamId)}
+                  checkpointNumber={checkpoint.number}
+                  onOpenFile={(file, page) => { setPreviewPage(page); setPreviewFile({ _id: file.id, originalName: file.name }); }}
+                  onQuote={(text) => setQuoteForFeedback({ id: Date.now(), text })}
+                />
               )}
 
               <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm space-y-4 pb-2">
@@ -394,6 +412,7 @@ export default function CheckpointPanel({
                       onPosted={addFeedback}
                       onDeleted={removeFeedback}
                       fullHeight
+                      insertText={quoteForFeedback}
                     />
                   )}
                 </div>
@@ -488,7 +507,8 @@ export default function CheckpointPanel({
         teamId={String(teamId)}
         checkpointNumber={checkpoint.number}
         file={previewFile}
-        onClose={() => setPreviewFile(null)}
+        initialPage={previewPage}
+        onClose={() => { setPreviewFile(null); setPreviewPage(undefined); }}
       />
     </div>
   );

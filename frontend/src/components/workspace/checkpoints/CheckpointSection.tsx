@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Startup checkpoints — overview grid + full-screen detail panel
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Flag, Loader2, Target } from 'lucide-react';
 import { checkpointApi } from '../../../api/checkpointApi';
 import CheckpointCard from './CheckpointCard';
@@ -23,6 +24,9 @@ export default function CheckpointSection({
   const [loading, setLoading] = useState(true);
   const [selectedNumber, setSelectedNumber] = useState(null);
   const [error, setError] = useState('');
+  // The review desk links here with ?checkpoint=N: open that checkpoint once, as soon as the list is known.
+  const [searchParams] = useSearchParams();
+  const openedFromLinkRef = useRef(false);
 
   const fetchStats = useCallback(async (silent = false) => {
     if (!teamId) return;
@@ -51,6 +55,16 @@ export default function CheckpointSection({
       if (!silent) setLoading(false);
     }
   }, [teamId]);
+
+  useEffect(() => {
+    const wanted = Number(searchParams.get('checkpoint'));
+    if (openedFromLinkRef.current || !wanted || loading) return;
+    if (configs.some((checkpoint) => checkpoint.number === wanted)) {
+      openedFromLinkRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedNumber(wanted);
+    }
+  }, [configs, loading, searchParams]);
 
   useEffect(() => {
     // Fetch checkpoint progress whenever the selected team changes.
