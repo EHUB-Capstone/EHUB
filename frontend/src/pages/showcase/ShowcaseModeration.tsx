@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
@@ -12,6 +12,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
 import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
+import ShowcaseReports from '../../components/showcase/ShowcaseReports';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_STATUS_META, stageLabel } from '../../utils/showcase';
@@ -19,7 +20,8 @@ import { cn } from '../../utils/cn';
 import type { ShowcaseStatus } from '../../types/showcase';
 
 const PAGE_SIZE = 20;
-const TABS: ShowcaseStatus[] = ['PendingReview', 'Published', 'Hidden', 'Draft'];
+type ModerationTab = ShowcaseStatus | 'Reports';
+const TABS: ModerationTab[] = ['PendingReview', 'Published', 'Hidden', 'Draft', 'Reports'];
 
 const EMPTY_COPY: Record<ShowcaseStatus, string> = {
   PendingReview: 'No pages are waiting for review.',
@@ -30,19 +32,23 @@ const EMPTY_COPY: Record<ShowcaseStatus, string> = {
 
 export default function ShowcaseModeration() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<ShowcaseStatus>('PendingReview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [status, setStatus] = useState<ModerationTab>(searchParams.get('tab') === 'reports' ? 'Reports' : 'PendingReview');
   const [page, setPage] = useState(1);
 
   const queue = useQuery({
     queryKey: ['showcase', 'moderation', status, page],
-    queryFn: ({ signal }) => showcaseApi.getModerationQueue({ status, page, pageSize: PAGE_SIZE }, signal),
+    queryFn: ({ signal }) => showcaseApi.getModerationQueue({ status: status === 'Reports' ? undefined : status, page, pageSize: PAGE_SIZE }, signal),
+    enabled: status !== 'Reports',
     placeholderData: keepPreviousData,
     staleTime: 0,
   });
 
-  const changeStatus = (next: ShowcaseStatus) => {
+  const changeStatus = (next: ModerationTab) => {
     setStatus(next);
     setPage(1);
+    if (next === 'Reports') setSearchParams({ tab: 'reports' });
+    else setSearchParams({});
   };
 
   const afterDecision = () => {
@@ -76,19 +82,21 @@ export default function ShowcaseModeration() {
                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
             )}
           >
-            {SHOWCASE_STATUS_META[tab].label}
+            {tab === 'Reports' ? 'Reports' : SHOWCASE_STATUS_META[tab].label}
           </button>
         ))}
       </div>
 
-      {queue.isPending && (
+      {status === 'Reports' && <ShowcaseReports />}
+
+      {status !== 'Reports' && queue.isPending && (
         <div className="space-y-4" role="status" aria-label="Loading showcase pages">
           <LoadingSkeleton variant="card" />
           <LoadingSkeleton variant="card" />
         </div>
       )}
 
-      {queue.isError && (
+      {status !== 'Reports' && queue.isError && (
         <ErrorState
           title="Could not load the review queue"
           message={parseApiError(queue.error, 'Failed to load showcase pages.').message}
@@ -96,13 +104,13 @@ export default function ShowcaseModeration() {
         />
       )}
 
-      {queue.isSuccess && queue.data.items.length === 0 && (
+      {status !== 'Reports' && queue.isSuccess && queue.data.items.length === 0 && (
         <Card hover={false}>
           <EmptyState icon={ClipboardCheck} title="Nothing here" description={EMPTY_COPY[status]} />
         </Card>
       )}
 
-      {queue.isSuccess && queue.data.items.length > 0 && (
+      {status !== 'Reports' && queue.isSuccess && queue.data.items.length > 0 && (
         <>
           <ul className={cn('space-y-4', queue.isPlaceholderData && 'opacity-60')} aria-busy={queue.isPlaceholderData}>
             {queue.data.items.map((item) => (

@@ -1,6 +1,8 @@
 // Mirrors EHub.Contracts/Showcase/ShowcaseContracts.cs. Keep both in sync.
 
 export type ShowcaseStatus = 'Draft' | 'PendingReview' | 'Published' | 'Hidden';
+export type ShowcaseReportStatus = 'Open' | 'Dismissed' | 'ActionTaken';
+export type ShowcaseReportReason = 'Spam' | 'Harassment' | 'InappropriateContent' | 'CopyrightViolation' | 'Other';
 export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
 export type ShowcaseDecision = 'approve' | 'reject' | 'hide' | 'unhide';
@@ -47,6 +49,42 @@ export interface ShowcaseInsightsDto {
 export interface CreateShowcaseCommentRequest {
   content: string;
   parentCommentId?: string | null;
+}
+
+export interface CreateShowcaseReportRequest {
+  commentId?: string | null;
+  reason: ShowcaseReportReason;
+  note?: string | null;
+}
+
+export interface ResolveShowcaseReportRequest {
+  status: Extract<ShowcaseReportStatus, 'Dismissed' | 'ActionTaken'>;
+  resolutionNote?: string | null;
+}
+
+export interface ShowcaseReportReceiptDto {
+  id: string;
+  showcaseProjectId: string;
+  commentId: string | null;
+  status: ShowcaseReportStatus;
+  createdAt: string;
+}
+
+export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
+  reason: ShowcaseReportReason;
+  note: string | null;
+  resolvedByUserId: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  reportCount: number;
+}
+
+export interface ShowcaseReportPageDto {
+  items: ShowcaseReportDto[];
+  totalItems: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ShowcaseCommentDto {

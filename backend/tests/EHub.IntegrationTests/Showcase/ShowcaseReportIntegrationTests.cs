@@ -50,8 +50,11 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         hidden.IsFeatured.Should().BeFalse();
         hidden.FeaturedAt.Should().BeNull();
         var notifications = await scenario.Db.OutboxMessages.Where(item => item.AggregateId == hidden.Id).ToListAsync();
-        notifications.Should().ContainSingle();
-        notifications[0].PayloadJson.Should().NotContain("Confidential").And.NotContain(scenario.Reporter.Id.ToString()).And.NotContain(scenario.Reporter.FullName);
+        notifications.Should().HaveCount(2);
+        notifications.Should().Contain(item => item.PayloadJson.Contains("New showcase report"));
+        notifications.Should().OnlyContain(item => item.PayloadJson.Contains("Confidential") == false
+            && item.PayloadJson.Contains(scenario.Reporter.Id.ToString()) == false
+            && item.PayloadJson.Contains(scenario.Reporter.FullName) == false);
         using var mine = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/mine", scenario.Owner, SystemRoles.Student);
         mine.StatusCode.Should().Be(HttpStatusCode.OK);
         (await mine.Content.ReadAsStringAsync()).Should().NotContain("Confidential").And.NotContain(scenario.Reporter.FullName);
@@ -121,13 +124,13 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         var page = await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id);
         var acted = report.Status == ShowcaseReportStatus.ActionTaken;
         page.Status.Should().Be(acted ? ShowcaseStatus.Hidden : ShowcaseStatus.Published);
-        (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == page.Id)).Should().Be(acted ? 1 : 0);
+        (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == page.Id)).Should().Be(acted ? 2 : 1);
         (await scenario.Db.ShowcaseReviewHistories.CountAsync(item => item.ShowcaseProjectId == page.Id && item.ToStatus == ShowcaseStatus.Hidden))
             .Should().Be(acted ? 1 : 0);
     }
 
     [Fact]
-    public async Task CommentReports_CheckOwnershipAndPage_AndActionTakenHidesTheContainingShowcase()
+    public async Task CommentReports_CheckOwnershipAndPage_AndActionTakenHidesOnlyTheReportedComment()
     {
         await using var scenario = await SeedAsync();
         var comment = new ShowcaseComment { ShowcaseProjectId = scenario.Page.Id, AuthorUserId = scenario.Reporter.Id, Content = "Reported comment" };
@@ -147,7 +150,13 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
             scenario.Lecturer, SystemRoles.Admin, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
         resolved.StatusCode.Should().Be(HttpStatusCode.OK);
         (await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id))
-            .Status.Should().Be(ShowcaseStatus.Hidden);
+            .Status.Should().Be(ShowcaseStatus.Published);
+        (await scenario.Db.ShowcaseComments.IgnoreQueryFilters().SingleAsync(item => item.Id == comment.Id))
+            .IsDeleted.Should().BeTrue();
+        var notifications = await scenario.Db.OutboxMessages.Where(item => item.AggregateId == scenario.Page.Id).ToListAsync();
+        notifications.Should().HaveCount(2);
+        notifications.Should().Contain(item => item.PayloadJson.Contains("Bình luận của bạn đã bị ẩn vì vi phạm quy tắc cộng đồng."));
+        notifications.Should().OnlyContain(item => item.PayloadJson.Contains(scenario.Owner.FullName) == false);
     }
 
     [Fact]
@@ -174,7 +183,8 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         result.IsFailure.Should().BeTrue();
         (await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(item => item.Id == id)).Status.Should().Be(ShowcaseReportStatus.Dismissed);
         (await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Published);
-        (await scenario.Db.OutboxMessages.AnyAsync(item => item.AggregateId == scenario.Page.Id)).Should().BeFalse();
+        (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == scenario.Page.Id)).Should().Be(1,
+            "the creation notification remains, but the failed action must not queue another notification");
         (await scenario.Db.ShowcaseReviewHistories.AnyAsync(item => item.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
     }
 

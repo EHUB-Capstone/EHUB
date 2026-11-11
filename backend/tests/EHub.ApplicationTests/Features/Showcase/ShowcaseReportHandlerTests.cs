@@ -90,6 +90,29 @@ public sealed class ShowcaseReportHandlerTests
         (await handler.CreateAsync(seed.ShowcaseId, request, author.Id)).Error.Code.Should().Be(ErrorCodes.ShowcaseCommentNotFound);
     }
 
+    [Fact]
+    public async Task CommentReports_AreGroupedAndOneDecisionClosesEveryOpenReportForTheComment()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var firstReporter = await ShowcaseTestData.AddUserAsync(db, "First reporter");
+        var secondReporter = await ShowcaseTestData.AddUserAsync(db, "Second reporter");
+        var comment = new ShowcaseComment { ShowcaseProjectId = seed.ShowcaseId, AuthorUserId = seed.OwnerUserId, Content = "Reported" };
+        db.ShowcaseComments.Add(comment);
+        await db.SaveChangesAsync();
+        var handler = Handler(db);
+        var first = await handler.CreateAsync(seed.ShowcaseId, new() { CommentId = comment.Id, Reason = "Spam" }, firstReporter.Id);
+        (await handler.CreateAsync(seed.ShowcaseId, new() { CommentId = comment.Id, Reason = "Harassment" }, secondReporter.Id)).IsSuccess.Should().BeTrue();
+
+        var queue = await handler.ListAsync("Open", 1, 20, seed.LecturerUserId, SystemRoles.Lecturer);
+        queue.Value.Items.Should().ContainSingle().Which.ReportCount.Should().Be(2);
+        (await handler.ResolveAsync(first.Value.Id, new() { Status = "ActionTaken" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
+        (await db.ShowcaseReports.Where(item => item.CommentId == comment.Id).Select(item => item.Status).ToListAsync())
+            .Should().OnlyContain(status => status == ShowcaseReportStatus.ActionTaken);
+        (await db.ShowcaseProjects.SingleAsync(item => item.Id == seed.ShowcaseId)).Status.Should().Be(ShowcaseStatus.Published);
+        (await db.ShowcaseComments.IgnoreQueryFilters().SingleAsync(item => item.Id == comment.Id)).IsDeleted.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(SystemRoles.Student)]
     [InlineData(SystemRoles.Mentor)]
@@ -149,8 +172,11 @@ public sealed class ShowcaseReportHandlerTests
         {
             page.IsFeatured.Should().BeFalse();
             page.FeaturedAt.Should().BeNull();
-            var payload = (await db.OutboxMessages.SingleAsync()).PayloadJson;
-            payload.Should().NotContain("Private").And.NotContain(reporter.Id.ToString()).And.NotContain(reporter.FullName);
+            var messages = await db.OutboxMessages.ToListAsync();
+            messages.Should().HaveCount(2);
+            messages.Should().OnlyContain(message => message.PayloadJson.Contains("Private") == false
+                && message.PayloadJson.Contains(reporter.Id.ToString()) == false
+                && message.PayloadJson.Contains(reporter.FullName) == false);
             page.ReviewNote.Should().NotContain("Private");
             db.ShowcaseReviewHistories.Select(item => item.Note).Should().OnlyContain(note => !note!.Contains("Private"));
             // Verify the same DTO the team uses cannot expose report notes.
@@ -160,7 +186,7 @@ public sealed class ShowcaseReportHandlerTests
         }
         else
         {
-            db.OutboxMessages.Should().BeEmpty();
+            db.OutboxMessages.Should().ContainSingle("creating the report notifies reviewers, even when they dismiss it");
             db.ShowcaseReviewHistories.Should().BeEmpty();
         }
         (await handler.ResolveAsync(created.Value.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer))
@@ -180,7 +206,7 @@ public sealed class ShowcaseReportHandlerTests
         var decision = new ResolveShowcaseReportRequest { Status = "ActionTaken" };
         (await handler.ResolveAsync(first.Value.Id, decision, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
         (await handler.ResolveAsync(second.Value.Id, decision, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
-        db.OutboxMessages.Should().ContainSingle();
+        db.OutboxMessages.Should().HaveCount(3, "one reviewer alert per report and only one page-hidden notification");
     }
 
     [Theory]

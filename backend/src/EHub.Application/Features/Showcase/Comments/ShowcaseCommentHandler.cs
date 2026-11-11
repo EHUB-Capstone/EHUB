@@ -126,6 +126,12 @@ public sealed class ShowcaseCommentHandler(IApplicationDbContext context, IUnitO
             var now = time.UtcNow;
             var thread = await context.ShowcaseComments.Where(item => threadIds.Contains(item.Id)).ToListAsync(token);
             foreach (var item in thread) { item.IsDeleted = true; item.DeletedAt = now; item.DeletedBy = userId; }
+            // Authors already know when they remove their own comment. A staff removal is communicated without
+            // exposing the moderator or any report that may have prompted the decision.
+            if (comment.AuthorUserId != userId)
+                ShowcaseOutbox.EnqueueNotification(context, showcaseId, [comment.AuthorUserId],
+                    "Comment hidden", "Bình luận của bạn đã bị ẩn vì vi phạm quy tắc cộng đồng.",
+                    $"/showcase/{showcaseId}", now);
             var removed = thread.Count;
             await context.ShowcaseProjects.Where(item => item.Id == showcaseId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CommentCount, item => Math.Max(0, item.CommentCount - removed)), token);

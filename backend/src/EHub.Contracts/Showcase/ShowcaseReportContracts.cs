@@ -36,4 +36,6 @@ public sealed class ShowcaseReportDto
     public Guid? ResolvedByUserId { get; init; }
     public DateTime? ResolvedAt { get; init; }
     public string? ResolutionNote { get; init; }
+    /// <summary>Number of open reports for this same showcase or comment target.</summary>
+    public int ReportCount { get; init; }
 }
