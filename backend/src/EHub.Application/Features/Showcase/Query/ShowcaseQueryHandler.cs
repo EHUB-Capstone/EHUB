@@ -62,16 +62,76 @@ public sealed class ShowcaseQueryHandler(IApplicationDbContext context) : IShowc
                 .ToArrayAsync(cancellationToken);
         }
 
+        IReadOnlyCollection<string> industries = [];
+        ShowcaseReferenceDataDto? referenceData = null;
+        if (project is not null)
+        {
+            industries = await context.ProjectTags.AsNoTracking()
+                .Where(tag => tag.ProjectId == project.ProjectId && tag.TagType == ProjectTagType.StartupField)
+                .OrderBy(tag => tag.TagName)
+                .Select(tag => tag.TagName)
+                .ToArrayAsync(cancellationToken);
+            // Evaluation scores and feedback are reviewer-only: `canModerate` is already scoped to an Admin or a
+            // Lecturer assigned to the class, so nothing below runs for anyone else.
+            if (canModerate) referenceData = await LoadReferenceDataAsync(project, cancellationToken);
+        }
+
         return Result.Success(new ShowcaseDetailDto
         {
             Showcase = ShowcaseMapper.ToDto(showcase, project?.Profile, canEdit: isOwner, includeReviewNote: privileged),
             TeamName = project?.TeamName ?? string.Empty,
             Members = members,
+            Industries = industries,
+            ReferenceData = referenceData,
             History = history,
             IsOwner = isOwner,
             HasUpvoted = page.HasUpvoted,
             CanModerate = canModerate
         });
+    }
+
+    private async Task<ShowcaseReferenceDataDto> LoadReferenceDataAsync(LatestProject project, CancellationToken cancellationToken)
+    {
+        var semester = await context.Projects.AsNoTracking()
+            .Where(item => item.Id == project.ProjectId)
+            .Select(item => new ShowcaseSemesterOptionDto
+            {
+                Id = item.Team.Class.Semester.Id,
+                Code = item.Team.Class.Semester.Code,
+                Name = item.Team.Class.Semester.Name
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Drafts and unpublished submissions are not final results, so only Published/Locked evaluations are shown.
+        var evaluations = await context.Evaluations.AsNoTracking()
+            .Where(item => item.ProjectId == project.ProjectId &&
+                           (item.Status == EvaluationStatus.Published || item.Status == EvaluationStatus.Locked))
+            .Select(item => new ShowcaseReferenceEvaluationDto
+            {
+                EvaluatorRole = item.EvaluatorRole.ToString(),
+                Status = item.Status.ToString(),
+                TotalScore = item.TotalScore,
+                MaxTotalScore = item.MaxTotalScore,
+                Strengths = item.Strengths,
+                Weaknesses = item.Weaknesses,
+                Suggestions = item.Suggestions,
+                PublishedAt = item.PublishedAt
+            })
+            .ToArrayAsync(cancellationToken);
+
+        // Newest result of each evaluator role (Lecturer, Mentor, Admin).
+        var latestPerRole = evaluations
+            .GroupBy(item => item.EvaluatorRole)
+            .Select(group => group.OrderByDescending(item => item.PublishedAt ?? DateTime.MinValue).First())
+            .OrderBy(item => item.EvaluatorRole, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ShowcaseReferenceDataDto
+        {
+            ClassCode = project.ClassCode,
+            Semester = semester,
+            Evaluations = latestPerRole
+        };
     }
 
     private static Result<ShowcaseDetailDto> NotFound() =>

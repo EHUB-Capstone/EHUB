@@ -10,6 +10,7 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import ShowcaseModerationActions from '../../components/showcase/ShowcaseModerationActions';
 import ShowcaseFeaturedToggle from '../../components/showcase/ShowcaseFeaturedToggle';
 import ShowcaseComments from '../../components/showcase/ShowcaseComments';
+import ShowcaseReferenceData from '../../components/showcase/ShowcaseReferenceData';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import ShowcaseUpvoteButton from '../../components/showcase/ShowcaseUpvoteButton';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
@@ -109,7 +110,7 @@ export default function ShowcaseDetail() {
     );
   }
 
-  const { showcase, members, isOwner, hasUpvoted, canModerate, teamName } = detail.data;
+  const { showcase, members, isOwner, hasUpvoted, canModerate, teamName, industries = [], referenceData } = detail.data;
   const { profile } = showcase;
   const privileged = isOwner || canModerate;
   const navigationState = location.state as { showcaseBackTo?: unknown; showcaseBackLabel?: unknown } | null;
@@ -121,6 +122,31 @@ export default function ShowcaseDetail() {
   const backLabel = suppliedBackLabel ?? (isOwner ? 'My Showcase' : canModerate ? 'Showcase Moderation' : 'Project Showcase');
   const [cover, ...gallery] = showcase.media;
   const hasStory = showcase.links.length > 0 || [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
+
+  const teamCard = members.length > 0 && (
+    <Card hover={false} padding="p-5">
+      <Card.Header className="mb-3">
+        <Card.Title icon={Users}>Team</Card.Title>
+      </Card.Header>
+      <ul className="space-y-3">
+        {members.map((member) => (
+          <li key={`${member.fullName}-${member.role}`} className="flex items-center gap-3">
+            {member.avatarUrl ? (
+              <img src={member.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+            ) : (
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary-50 text-body-sm font-semibold text-secondary" aria-hidden="true">
+                {member.fullName.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-body font-medium text-secondary">{member.fullName}</p>
+              <p className="text-caption text-slate-600">{member.role}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
 
   const applyDecision = () => {
     void queryClient.invalidateQueries({ queryKey: ['showcase', 'moderation'] });
@@ -153,10 +179,10 @@ export default function ShowcaseDetail() {
               {showcase.isFeatured && <Badge variant="brand" size="md">Featured</Badge>}
             </div>
             <h1 className="mt-1.5 break-words text-display text-secondary">{profile.projectName}</h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-slate-600">
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-body-sm text-slate-600">
               <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
               {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />Published {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
-            </p>
+            </div>
           </div>
           {isOwner && showcase.canEdit && (
             <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
@@ -166,6 +192,11 @@ export default function ShowcaseDetail() {
         </div>
 
         {profile.description && <p className="max-w-3xl text-body-lg leading-relaxed text-slate-600">{profile.description}</p>}
+        {industries.length > 0 && (
+          <ul aria-label="Startup industries" className="flex flex-wrap gap-2">
+            {industries.map((industry) => <li key={industry}><Badge variant="navy" size="md">{industry}</Badge></li>)}
+          </ul>
+        )}
       </header>
 
       {privileged && showcase.reviewNote && (
@@ -175,7 +206,7 @@ export default function ShowcaseDetail() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
         <div className="min-w-0 space-y-6">
           {cover && (
             <section aria-label="Screenshots" className="space-y-3">
@@ -248,48 +279,26 @@ export default function ShowcaseDetail() {
                 className="h-auto w-full flex-col gap-0 rounded-none px-2 py-3"
               />
             </div>
+            {canModerate && (
+              <div role="group" aria-label="Review this page" className="mt-4 border-t border-slate-200 pt-4">
+                <p className="mb-2 text-overline uppercase text-slate-600">Review this page</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ShowcaseModerationActions
+                    showcaseId={showcase.id}
+                    title={profile.projectName}
+                    status={showcase.status}
+                    wasEverPublished={showcase.publishedAt !== null}
+                    onDecided={applyDecision}
+                  />
+                  {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
+                </div>
+              </div>
+            )}
           </Card>
 
-          {members.length > 0 && (
-            <Card hover={false} padding="p-5">
-              <Card.Header className="mb-3">
-                <Card.Title icon={Users}>Team</Card.Title>
-              </Card.Header>
-              <ul className="space-y-3">
-                {members.map((member) => (
-                  <li key={`${member.fullName}-${member.role}`} className="flex items-center gap-3">
-                    {member.avatarUrl ? (
-                      <img src={member.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid h-10 w-10 place-items-center rounded-full bg-secondary-50 text-body-sm font-semibold text-secondary" aria-hidden="true">
-                        {member.fullName.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-body font-medium text-secondary">{member.fullName}</p>
-                      <p className="text-caption text-slate-600">{member.role}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+          {canModerate && referenceData && <ShowcaseReferenceData data={referenceData} />}
 
-          {canModerate && (
-            <div className="rounded-xl border border-dashed border-secondary-200 bg-secondary-50 p-4">
-              <p className="mb-2 text-body-sm font-semibold text-secondary">Review this page</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <ShowcaseModerationActions
-                  showcaseId={showcase.id}
-                  title={profile.projectName}
-                  status={showcase.status}
-                  wasEverPublished={showcase.publishedAt !== null}
-                  onDecided={applyDecision}
-                />
-                {showcase.status === 'Published' && <ShowcaseFeaturedToggle showcaseId={showcase.id} title={profile.projectName} isFeatured={showcase.isFeatured} onChanged={applyDecision} />}
-              </div>
-            </div>
-          )}
+          {teamCard}
         </aside>
       </div>
     </main>

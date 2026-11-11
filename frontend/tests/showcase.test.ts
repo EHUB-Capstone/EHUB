@@ -373,3 +373,21 @@ test('comment client pages threads and replies, posts and removes a comment', as
     assert.equal(await showcaseApi.deleteComment('s1', 'c1'), null);
   } finally { mock.restore(); }
 });
+
+test('showcase detail client passes reviewer reference data through and keeps it null for other viewers', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const reference = {
+    classCode: 'C1',
+    semester: { id: 'sem1', code: 'FA26', name: 'Fall 2026' },
+    evaluations: [{ evaluatorRole: 'Lecturer', status: 'Published', totalScore: 85, maxTotalScore: 100, strengths: null, weaknesses: null, suggestions: null, publishedAt: null }],
+  };
+  mock.onGet('/showcase/reviewed').reply(200, { data: { industries: ['HealthTech'], referenceData: reference } });
+  mock.onGet('/showcase/public').reply(200, { data: { industries: ['HealthTech'], referenceData: null } });
+  try {
+    const reviewed = await showcaseApi.get('reviewed');
+    assert.deepEqual(reviewed.referenceData, reference);
+    const publicView = await showcaseApi.get('public');
+    assert.equal(publicView.referenceData, null);
+    assert.deepEqual(publicView.industries, ['HealthTech']);
+  } finally { mock.restore(); }
+});

@@ -194,10 +194,35 @@ export interface ShowcaseHistoryDto {
   createdAt: string;
 }
 
+export type ShowcaseEvaluatorRole = 'Lecturer' | 'Mentor' | 'Admin';
+
+/** A reviewer's final (Published/Locked) evaluation, shown as reference only. */
+export interface ShowcaseReferenceEvaluationDto {
+  evaluatorRole: ShowcaseEvaluatorRole;
+  status: string;
+  totalScore: number;
+  maxTotalScore: number;
+  strengths: string | null;
+  weaknesses: string | null;
+  suggestions: string | null;
+  publishedAt: string | null;
+}
+
+/** Module 1-3 data; the server sends it only to an Admin or an in-scope Lecturer. */
+export interface ShowcaseReferenceDataDto {
+  classCode: string;
+  semester: { id: string; code: string; name: string } | null;
+  evaluations: ShowcaseReferenceEvaluationDto[];
+}
+
 export interface ShowcaseDetailDto {
   showcase: ShowcaseDto;
   teamName: string;
   members: ShowcaseTeamMemberDto[];
+  /** Public startup-industry tags; never accompanied by scores. */
+  industries: string[];
+  /** Reviewer-only; null for everyone else. */
+  referenceData: ShowcaseReferenceDataDto | null;
   history: ShowcaseHistoryDto[];
   isOwner: boolean;
   hasUpvoted: boolean;
