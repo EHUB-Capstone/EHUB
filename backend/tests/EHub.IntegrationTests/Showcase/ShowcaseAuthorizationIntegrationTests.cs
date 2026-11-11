@@ -29,6 +29,8 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/reports")]
     [InlineData("GET", "/api/showcase/reports")]
     [InlineData("POST", "/api/showcase/reports/00000000-0000-0000-0000-000000000001/resolve")]
+    [InlineData("DELETE", "/api/showcase/reports/00000000-0000-0000-0000-000000000001")]
+    [InlineData("DELETE", "/api/showcase/reports/history?status=Dismissed")]
     [InlineData("GET", "/api/showcase/filter-options")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
@@ -55,7 +57,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     {
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PUT") request.Content = JsonContent.Create(Payload(Guid.NewGuid()));
+        if (method is "POST" or "PUT") request.Content = JsonContent.Create(PayloadFor(path));
 
         using var response = await client.SendAsync(request);
 
@@ -66,6 +68,8 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData(SystemRoles.Lecturer, "GET", "/api/showcase/mine")]
     [InlineData(SystemRoles.Admin, "GET", "/api/showcase/mine")]
     [InlineData(SystemRoles.Mentor, "POST", "/api/showcase")]
+    [InlineData(SystemRoles.Lecturer, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/reports")]
+    [InlineData(SystemRoles.Admin, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/reports")]
     [InlineData(SystemRoles.Lecturer, "PUT", "/api/showcase/00000000-0000-0000-0000-000000000001")]
     [InlineData(SystemRoles.Lecturer, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/submit")]
     [InlineData(SystemRoles.Admin, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/withdraw")]
@@ -74,6 +78,10 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData(SystemRoles.Mentor, "GET", "/api/showcase/reports")]
     [InlineData(SystemRoles.Student, "POST", "/api/showcase/reports/00000000-0000-0000-0000-000000000001/resolve")]
     [InlineData(SystemRoles.Mentor, "POST", "/api/showcase/reports/00000000-0000-0000-0000-000000000001/resolve")]
+    [InlineData(SystemRoles.Student, "DELETE", "/api/showcase/reports/00000000-0000-0000-0000-000000000001")]
+    [InlineData(SystemRoles.Mentor, "DELETE", "/api/showcase/reports/00000000-0000-0000-0000-000000000001")]
+    [InlineData(SystemRoles.Student, "DELETE", "/api/showcase/reports/history?status=Dismissed")]
+    [InlineData(SystemRoles.Mentor, "DELETE", "/api/showcase/reports/history?status=Dismissed")]
     [InlineData(SystemRoles.Student, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData(SystemRoles.Student, "DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData(SystemRoles.Mentor, "POST", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
@@ -86,7 +94,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     {
         using var client = _factory.CreateClient();
         using var request = AuthorizedRequest(new HttpMethod(method), path, role,
-            method is "POST" or "PUT" ? Payload(Guid.NewGuid()) : null);
+            method is "POST" or "PUT" ? PayloadFor(path) : null);
 
         using var response = await client.SendAsync(request);
 
@@ -195,6 +203,10 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         ProjectLineageId = lineageId,
         DevelopmentStage = "Mvp"
     };
+
+    private static object PayloadFor(string path) => path.EndsWith("/reports", StringComparison.OrdinalIgnoreCase)
+        ? new CreateShowcaseReportRequest { Reason = "Other" }
+        : Payload(Guid.NewGuid());
 
     private HttpRequestMessage AuthorizedRequest(HttpMethod method, string path, string role, object? payload)
     {

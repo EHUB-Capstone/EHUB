@@ -195,24 +195,61 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         using var own = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Owner, SystemRoles.Student,
             new CreateShowcaseReportRequest { Reason = "Spam" });
         own.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var reportableComments = Enumerable.Range(0, 6).Select(index => new ShowcaseComment
+        {
+            ShowcaseProjectId = scenario.Page.Id,
+            AuthorUserId = scenario.Owner.Id,
+            Content = $"Rate-limit comment {index}"
+        }).ToArray();
+        scenario.Db.ShowcaseComments.AddRange(reportableComments);
+        await scenario.Db.SaveChangesAsync();
+
+        for (var i = 0; i < 5; i++)
+        {
+            using var allowed = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.RateReporter, SystemRoles.Student,
+                new CreateShowcaseReportRequest { Reason = "Spam", CommentId = reportableComments[i].Id });
+            allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+        using var limited = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.RateReporter, SystemRoles.Student,
+            new CreateShowcaseReportRequest { Reason = "Spam", CommentId = reportableComments[5].Id });
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.RetryAfter.Should().NotBeNull();
         await scenario.Db.ShowcaseProjects.Where(item => item.Id == scenario.Page.Id)
             .ExecuteUpdateAsync(update => update.SetProperty(item => item.Status, ShowcaseStatus.Hidden));
         using var hidden = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
             new CreateShowcaseReportRequest { Reason = "Spam" });
         hidden.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        for (var i = 0; i < 4; i++)
-        {
-            using var allowed = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
-                new CreateShowcaseReportRequest { Reason = "Spam" });
-            allowed.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        }
-        using var limited = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
-            new CreateShowcaseReportRequest { Reason = "Spam" });
-        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
-        limited.Headers.RetryAfter.Should().NotBeNull();
         using var independent = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Lecturer, SystemRoles.Lecturer,
             new CreateShowcaseReportRequest { Reason = "Spam" });
-        independent.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        independent.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ResolvedHistory_CanBeDeletedIndividuallyOrByCurrentStatus()
+    {
+        await using var scenario = await SeedAsync();
+
+        async Task<Guid> CreateAndDismissAsync()
+        {
+            using var created = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
+                new CreateShowcaseReportRequest { Reason = "Other" });
+            created.StatusCode.Should().Be(HttpStatusCode.OK);
+            var id = (await created.Content.ReadFromJsonAsync<ApiResponse<ShowcaseReportReceiptDto>>())!.Data!.Id;
+            using var dismissed = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{id}/resolve",
+                scenario.Lecturer, SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "Dismissed" });
+            dismissed.StatusCode.Should().Be(HttpStatusCode.OK);
+            return id;
+        }
+
+        var first = await CreateAndDismissAsync();
+        using (var deleted = await scenario.SendAsync(HttpMethod.Delete, $"/api/showcase/reports/{first}", scenario.Lecturer, SystemRoles.Lecturer))
+            deleted.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await scenario.Db.ShowcaseReports.CountAsync()).Should().Be(0);
+
+        await CreateAndDismissAsync();
+        using (var deletedAll = await scenario.SendAsync(HttpMethod.Delete, "/api/showcase/reports/history?status=Dismissed", scenario.Lecturer, SystemRoles.Lecturer))
+            deletedAll.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await scenario.Db.ShowcaseReports.CountAsync()).Should().Be(0);
     }
 
     private async Task<Scenario> SeedAsync()
@@ -224,7 +261,8 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         var owner = User("Owner");
         var lecturer = User("Lecturer");
         var reporter = User("Reporter");
-        db.Users.AddRange(owner, lecturer, reporter);
+        var rateReporter = User("RateReporter");
+        db.Users.AddRange(owner, lecturer, reporter, rateReporter);
         var courseId = await db.Courses.Select(item => item.Id).FirstAsync();
         var semesterId = await db.Semesters.Select(item => item.Id).FirstAsync();
         var index = (await db.Classes.IgnoreQueryFilters().Where(item => item.CourseId == courseId && item.SemesterId == semesterId)
@@ -247,12 +285,12 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         db.Projects.Add(project);
         db.ShowcaseProjects.Add(page);
         await db.SaveChangesAsync();
-        return new Scenario(scope, db, factory.CreateClient(), page, project, classroom, student, owner, lecturer, reporter);
+        return new Scenario(scope, db, factory.CreateClient(), page, project, classroom, student, owner, lecturer, reporter, rateReporter);
     }
 
     private sealed record Scenario(
         AsyncServiceScope Scope, AppDbContext Db, HttpClient Client, ShowcaseProject Page,
-        Project Project, Class Classroom, Student Student, User Owner, User Lecturer, User Reporter) : IAsyncDisposable
+        Project Project, Class Classroom, Student Student, User Owner, User Lecturer, User Reporter, User RateReporter) : IAsyncDisposable
     {
         public string CreatePath => $"/api/showcase/{Page.Id}/reports";
 
@@ -278,7 +316,7 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
             Db.Teams.Remove(await Db.Teams.SingleAsync(item => item.Id == Project.TeamId));
             Db.Classes.Remove(await Db.Classes.SingleAsync(item => item.Id == Classroom.Id));
             Db.Students.Remove(await Db.Students.SingleAsync(item => item.Id == Student.Id));
-            var userIds = new[] { Owner.Id, Lecturer.Id, Reporter.Id };
+            var userIds = new[] { Owner.Id, Lecturer.Id, Reporter.Id, RateReporter.Id };
             Db.Users.RemoveRange(await Db.Users.Where(item => userIds.Contains(item.Id)).ToListAsync());
             await Db.SaveChangesAsync();
             Client.Dispose();
