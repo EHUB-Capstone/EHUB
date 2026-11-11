@@ -5,6 +5,7 @@ using EHub.Application.Features.ProjectData.GetProjectDataDistribution;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataTrends;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
+using EHub.Application.Features.ProjectData.GetProjectEvidence;
 using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
 using EHub.Application.Features.ProjectData.ExportProjectData;
 using EHub.Application.Features.ProjectData.ManageAchievements;
@@ -73,6 +74,17 @@ public sealed class ProjectDataController(ICurrentUserService currentUser) : Con
         ToResponse(
             await handler.HandleAsync(UserId, Role, cancellationToken),
             "Project data filter options retrieved.");
+
+    /// <summary>How the project was graded and who mentored its team, for the project detail dialog.</summary>
+    [HttpGet("{projectId:guid}/evidence")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetEvidence(
+        Guid projectId,
+        [FromServices] IGetProjectEvidenceQueryHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(
+            await handler.HandleAsync(projectId, UserId, Role, cancellationToken),
+            "Project evidence retrieved.");
 
     [HttpGet("{projectId:guid}/achievements/history")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

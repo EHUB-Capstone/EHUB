@@ -26,6 +26,7 @@ using EHub.Application.Features.ProjectData.GetProjectData;
 using EHub.Application.Features.ProjectData.GetProjectDataDistribution;
 using EHub.Application.Features.ProjectData.GetProjectDataFilterOptions;
 using EHub.Application.Features.ProjectData.GetProjectDataTrends;
+using EHub.Application.Features.ProjectData.GetProjectEvidence;
 using EHub.Application.Features.ProjectData.GetProjectStartupIndustryHistory;
 using EHub.Application.Features.ProjectData.GetProjectDataSummary;
 using EHub.Application.Features.ProjectData.ExportProjectData;
@@ -92,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IGetProjectDataDistributionQueryHandler, GetProjectDataDistributionQueryHandler>();
         services.AddScoped<IGetProjectDataTrendsQueryHandler, GetProjectDataTrendsQueryHandler>();
         services.AddScoped<IGetProjectAchievementHistoryQueryHandler, GetProjectAchievementHistoryQueryHandler>();
+        services.AddScoped<IGetProjectEvidenceQueryHandler, GetProjectEvidenceQueryHandler>();
         services.AddScoped<IUpdateProjectAchievementsCommandHandler, UpdateProjectAchievementsCommandHandler>();
         services.AddScoped<IGetProjectStartupIndustryHistoryQueryHandler, GetProjectStartupIndustryHistoryQueryHandler>();
         services.AddScoped<IUpdateProjectStartupIndustriesCommandHandler, UpdateProjectStartupIndustriesCommandHandler>();

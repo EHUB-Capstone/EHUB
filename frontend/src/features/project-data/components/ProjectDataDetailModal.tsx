@@ -30,6 +30,7 @@ import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectAchievementHistory from './ProjectAchievementHistory';
 import ProjectCompetitionBadges from './ProjectCompetitionBadges';
 import ProjectCompetitionEditor from './ProjectCompetitionEditor';
+import ProjectEvidenceSection from './ProjectEvidenceSection';
 import { MentorLabel } from './ProjectDataTable';
 import ProjectStartupIndustryEditor from './ProjectStartupIndustryEditor';
 import ProjectStartupIndustryHistory from './ProjectStartupIndustryHistory';
@@ -251,6 +252,8 @@ export default function ProjectDataDetailModal({
               </Field>
             </div>
           </dl>
+
+          <ProjectEvidenceSection key={item.projectId} projectId={item.projectId} />
 
           <section aria-label="Showcase interaction reference" className="space-y-3">
             <h3 className="text-subheading font-semibold text-secondary">Tương tác Showcase</h3>

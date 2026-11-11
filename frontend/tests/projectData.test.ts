@@ -4,9 +4,10 @@ import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
 import { projectDataApi } from '../src/api/projectDataApi.ts';
 import { PROJECT_ACHIEVEMENTS } from '../src/types/projectData.ts';
-import type { ProjectAchievement, ProjectDataItem } from '../src/types/projectData.ts';
+import type { ProjectAchievement, ProjectDataItem, ProjectEvidenceComponent } from '../src/types/projectData.ts';
 import {
   DEFAULT_PROJECT_DATA_QUERY,
+  PROJECT_DATA_EMPTY_VALUE,
   PROJECT_DATA_MAX_FILTER_VALUES,
   activeFilterKeys,
   activeFilterValues,
@@ -31,6 +32,16 @@ import {
   projectDataSummaryKey,
   projectWorkspacePath,
   describeIndustryDraft,
+  describeEvidenceMentorPeriod,
+  describeEvidenceMentoring,
+  describeEvidenceStatus,
+  describeEvidenceWeight,
+  evidenceMentorSlotLabel,
+  evidenceSessionsLabel,
+  formatEvidenceDate,
+  formatEvidenceScore,
+  hasEvidenceGrades,
+  projectEvidenceKey,
   projectDataHistoryKey,
   projectStartupIndustryHistoryKey,
   historyActionLabel,
@@ -523,4 +534,110 @@ test('the list request serialises a multi-select filter as repeated keys, not gr
   } finally {
     mock.restore();
   }
+});
+
+test('the evidence request goes to the project evidence endpoint and is read-only', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    const payload = {
+      projectId: 'project-1',
+      evaluation: { courseScore: null, components: [] },
+      mentoring: { mentors: [], totalCompletedSessions: 0, lastSessionAtUtc: null },
+    };
+    mock.onGet('/project-data/project-1/evidence').reply(200, { success: true, message: 'ok', data: payload });
+    const response = await projectDataApi.getEvidence('project-1');
+    assert.deepEqual(response.data, payload);
+    assert.equal(mock.history.get.length, 1);
+    assert.equal(mock.history.put.length + mock.history.post.length + mock.history.delete.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the evidence cache key is per user and project, so evidence is never shared between users', () => {
+  assert.deepEqual(projectEvidenceKey('u1', 'p1'), ['project-data', 'u1', 'evidence', 'p1']);
+  assert.notDeepEqual(projectEvidenceKey('u1', 'p1'), projectEvidenceKey('u2', 'p1'));
+  assert.notDeepEqual(projectEvidenceKey('u1', 'p1'), projectEvidenceKey('u1', 'p2'));
+  assert.deepEqual(projectEvidenceKey(undefined, 'p1'), ['project-data', 'anonymous', 'evidence', 'p1']);
+});
+
+test('evidence scores show at most two decimals without trailing zeros, and a dash when there is none', () => {
+  assert.equal(formatEvidenceScore(7.6), '7.6');
+  assert.equal(formatEvidenceScore(8), '8');
+  assert.equal(formatEvidenceScore(7.25), '7.25');
+  assert.equal(formatEvidenceScore(7.254), '7.25');
+  assert.equal(formatEvidenceScore(0), '0');
+  assert.equal(formatEvidenceScore(null), PROJECT_DATA_EMPTY_VALUE);
+  assert.equal(formatEvidenceScore(undefined), PROJECT_DATA_EMPTY_VALUE);
+  assert.equal(formatEvidenceScore(Number.NaN), PROJECT_DATA_EMPTY_VALUE);
+});
+
+test('evidence dates are spelled out and an unusable date becomes a dash', () => {
+  assert.equal(formatEvidenceDate('2026-10-04T12:00:00Z'), '4 Oct 2026');
+  assert.equal(formatEvidenceDate(null), PROJECT_DATA_EMPTY_VALUE);
+  assert.equal(formatEvidenceDate('not a date'), PROJECT_DATA_EMPTY_VALUE);
+});
+
+test('every evidence status has a readable label and a semantic tone', () => {
+  assert.deepEqual(describeEvidenceStatus('Published'), { label: 'Published', tone: 'success' });
+  assert.deepEqual(describeEvidenceStatus('PendingPublication'), { label: 'Pending publication', tone: 'warning' });
+  assert.deepEqual(describeEvidenceStatus('NotGraded'), { label: 'Not graded', tone: 'neutral' });
+  // An unknown value from a newer server is shown as not graded, never as a published score.
+  assert.equal(describeEvidenceStatus('Surprise' as never).label, 'Not graded');
+});
+
+test('a graded part names its kind and weight', () => {
+  assert.equal(
+    describeEvidenceWeight({ kind: 'Checkpoint', checkpointNumber: 2, weightPercent: 40 }),
+    'Checkpoint 2 · 40% of the course score',
+  );
+  assert.equal(
+    describeEvidenceWeight({ kind: 'Assessment', checkpointNumber: null, weightPercent: 12.5 }),
+    'Assessment · 12.5% of the course score',
+  );
+});
+
+test('the evaluation block is empty until a part is graded or waiting for publication', () => {
+  const part = (status: ProjectEvidenceComponent['status']): ProjectEvidenceComponent => ({
+    name: 'Checkpoint 1', kind: 'Checkpoint', checkpointNumber: 1, weightPercent: 40, status, score: null, feedback: null, publishedAtUtc: null,
+  });
+  assert.equal(hasEvidenceGrades({ courseScore: null, components: [] }), false);
+  assert.equal(hasEvidenceGrades({ courseScore: null, components: [part('NotGraded'), part('NotGraded')] }), false);
+  assert.equal(hasEvidenceGrades({ courseScore: null, components: [part('NotGraded'), part('PendingPublication')] }), true);
+  assert.equal(hasEvidenceGrades({ courseScore: 7.6, components: [part('Published')] }), true);
+});
+
+test('mentors are described with the names staff know and their session counts', () => {
+  assert.equal(evidenceMentorSlotLabel('Enterprise'), 'Enterprise mentor');
+  assert.equal(evidenceMentorSlotLabel('Academic'), 'Lecturer mentor');
+  assert.equal(evidenceSessionsLabel(0), 'No completed sessions');
+  assert.equal(evidenceSessionsLabel(1), '1 completed session');
+  assert.equal(evidenceSessionsLabel(4), '4 completed sessions');
+});
+
+test('a mentor period says since when, or from when until when', () => {
+  assert.equal(
+    describeEvidenceMentorPeriod({ assignedAtUtc: '2026-10-04T12:00:00Z', endedAtUtc: null }),
+    'Since 4 Oct 2026',
+  );
+  assert.equal(
+    describeEvidenceMentorPeriod({ assignedAtUtc: '2026-10-04T12:00:00Z', endedAtUtc: '2026-11-12T12:00:00Z' }),
+    '4 Oct 2026 - 12 Nov 2026',
+  );
+});
+
+test('the mentoring summary is empty without mentors and mentions the last session when there is one', () => {
+  const mentor = {
+    assignmentId: 'a1', mentorProfileId: 'm1', fullName: 'Tran B', organization: null, slot: 'Enterprise' as const,
+    assignedAtUtc: '2026-10-04T12:00:00Z', endedAtUtc: null, isCurrent: true, expertise: [], completedSessions: 4,
+  };
+  assert.equal(describeEvidenceMentoring({ mentors: [], totalCompletedSessions: 0, lastSessionAtUtc: null }), '');
+  assert.equal(
+    describeEvidenceMentoring({ mentors: [mentor], totalCompletedSessions: 4, lastSessionAtUtc: '2026-11-05T12:00:00Z' }),
+    '4 completed sessions in total · last on 5 Nov 2026',
+  );
+  assert.equal(
+    describeEvidenceMentoring({ mentors: [mentor], totalCompletedSessions: 0, lastSessionAtUtc: null }),
+    'No completed sessions',
+  );
 });

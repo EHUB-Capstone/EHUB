@@ -303,6 +303,58 @@ export interface ProjectAchievementHistory {
   items: ProjectAchievementHistoryItem[];
 }
 
+/** How far a graded part of the course score has come; only a Published part shows a score or feedback. */
+export const PROJECT_EVIDENCE_STATUSES = ['Published', 'PendingPublication', 'NotGraded'] as const;
+export type ProjectEvidenceStatus = (typeof PROJECT_EVIDENCE_STATUSES)[number];
+
+export interface ProjectEvidenceComponent {
+  name: string;
+  kind: 'Checkpoint' | 'Assessment';
+  /** The checkpoint order (1, 2, ...); null for an assessment. */
+  checkpointNumber: number | null;
+  /** Share of the course score, 0-100. */
+  weightPercent: number;
+  status: ProjectEvidenceStatus;
+  /** The 0-10 score of the published version. */
+  score: number | null;
+  feedback: string | null;
+  publishedAtUtc: string | null;
+}
+
+export interface ProjectEvidenceEvaluation {
+  /** The official 0-10 course score (same as Analytics and the export); null until every part is published. */
+  courseScore: number | null;
+  components: ProjectEvidenceComponent[];
+}
+
+export interface ProjectEvidenceMentor {
+  assignmentId: string;
+  mentorProfileId: string;
+  fullName: string;
+  organization: string | null;
+  /** Enterprise or Academic: the mentor slot of the team. */
+  slot: 'Enterprise' | 'Academic';
+  assignedAtUtc: string;
+  endedAtUtc: string | null;
+  /** True for the mentor the project list shows; false for one who left or was replaced earlier. */
+  isCurrent: boolean;
+  expertise: string[];
+  completedSessions: number;
+}
+
+export interface ProjectEvidenceMentoring {
+  mentors: ProjectEvidenceMentor[];
+  totalCompletedSessions: number;
+  lastSessionAtUtc: string | null;
+}
+
+/** The academic evidence of one project: how it was graded and who mentored it. */
+export interface ProjectEvidence {
+  projectId: string;
+  evaluation: ProjectEvidenceEvaluation;
+  mentoring: ProjectEvidenceMentoring;
+}
+
 export interface ProjectAchievementsResult {
   projectId: string;
   achievements: ProjectAchievement[];

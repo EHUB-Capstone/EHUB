@@ -34,24 +34,34 @@ internal static class OfficialCourseScore
         var scored = new List<TeamRankingComponent>(weighted.Length);
         foreach (var component in weighted)
         {
-            var latest = evaluations
-                .Where(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
-                .Where(evaluation => component.CheckpointId.HasValue
-                    ? evaluation.CheckpointId == component.CheckpointId
-                    : evaluation.RubricId == component.RubricId)
-                .OrderByDescending(evaluation => evaluation.UpdatedAt)
-                .ThenByDescending(evaluation => evaluation.Id)
-                .FirstOrDefault();
-
+            var latest = LatestFor(component, evaluations);
             if (latest is null || latest.Status != EvaluationStatus.Published || latest.MaxTotalScore <= 0)
                 return null;
 
             scored.Add(new TeamRankingComponent(
                 component.Weight,
-                latest.TotalScore / latest.MaxTotalScore * ScoreScale,
+                ToScore(latest),
                 EvaluationStatus.Published));
         }
 
         return TeamRankingRules.CalculateCourseTotal(scored);
     }
+
+    /// <summary>
+    /// The evaluation that decides a component: the newest submitted-or-published one. A newer unpublished re-grade
+    /// therefore hides an older published score. Shared with the project evidence so both show the same version.
+    /// </summary>
+    internal static TrendEvaluation? LatestFor(TrendComponent component, IReadOnlyCollection<TrendEvaluation> evaluations) =>
+        evaluations
+            .Where(evaluation => evaluation.Status is EvaluationStatus.Submitted or EvaluationStatus.Published)
+            .Where(evaluation => component.CheckpointId.HasValue
+                ? evaluation.CheckpointId == component.CheckpointId
+                : evaluation.RubricId == component.RubricId)
+            .OrderByDescending(evaluation => evaluation.UpdatedAt)
+            .ThenByDescending(evaluation => evaluation.Id)
+            .FirstOrDefault();
+
+    /// <summary>The evaluation as a 0-10 score; only meaningful when <see cref="TrendEvaluation.MaxTotalScore"/> is positive.</summary>
+    internal static decimal ToScore(TrendEvaluation evaluation) =>
+        evaluation.TotalScore / evaluation.MaxTotalScore * ScoreScale;
 }

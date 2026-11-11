@@ -28,22 +28,24 @@ boundaries.
 
 - The diagrams describe the current modular-monolith implementation and the
   production deployment represented by `docker-compose.production.yml`.
-- Google Identity, Gmail SMTP (with Brevo fallback), Cloudinary (profile
-  avatars) and Cloudflare R2 (submission files) are shown because the deployed
-  backend is configured to use them.
-- The AI capability (mentor recommendation) is self-hosted: an Ollama container
-  running the BGE-M3 embedding model, with vectors stored in PostgreSQL
-  (pgvector). It is drawn as an EHUB container, not as an external provider.
-  The infrastructure layer is a single VPS running Docker Compose; Docker Swarm,
+- Google Identity, Gmail SMTP (with Brevo fallback), Cloudinary (avatars,
+  mentor CVs and feedback attachments) and Cloudflare R2 (submission files and
+  preview PDFs) are shown because the deployed backend is configured to use them.
+- There are two AI capabilities. Mentor recommendation calls the external
+  Google Gemini API. AI checkpoint summaries run on a self-hosted Ollama
+  container (Qwen 3.5 2B), drawn as an EHUB container. The summary feature has a
+  per-environment switch; the diagrams show it enabled.
+- The infrastructure layer is a single VPS running Docker Compose; Docker Swarm,
   Kubernetes and managed cloud platforms are not used.
-- Hosted cleanup and outbox processing are shown inside the backend process,
-  not as a separate worker container.
-- SignalR, staging and automated CD are not shown because they are not part of
-  the verified production architecture represented here. Discord appears only as
-  the channel that receives backup status alerts.
-- The deployment diagram shows the host-side backup job (daily systemd timer)
-  uploading to a dedicated private Cloudflare R2 bucket and sending status
-  alerts to a Discord channel.
+- Hosted cleanup, document preview, summary and outbox processing are shown
+  inside the backend process, not as a separate worker container. Document
+  previews are produced by LibreOffice inside the backend container.
+- Chat and the WebSocket realtime channel are not shown because they are not
+  used. Only production is drawn; the staging stack on the same VPS is omitted.
+- The deployment diagram shows the host-side backup job (systemd timers for the
+  daily backup, freshness and disk checks) uploading to a private Cloudflare R2
+  bucket and sending alerts to Discord. The GitHub Actions release pipeline is
+  not part of the runtime topology, so it is described in text only.
 - The System Context Diagram remains in Report 3 and should be referenced from
   the opening of Report 4 as C4 Level 1.
 
@@ -56,4 +58,5 @@ node docs/system-architecture-c4/tools/generate-c4-diagrams.js
 ```
 
 The Draw.io and SVG files are always generated. PNG export is also generated
-when the optional `sharp` Node package is available.
+when the optional `sharp` Node package is available (for example through
+`NODE_PATH` pointing to a folder where `sharp` is installed).
