@@ -127,7 +127,11 @@ public sealed class ShowcaseReportHandler(
         var report = await ScopedReports(userId, role).SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
         if (report is null)
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseReportNotFound, "The report was not found.");
-        if (report.Status != ShowcaseReportStatus.Open)
+        // A long-lived context may already track this row. Read the current database state before acting so a
+        // concurrent reviewer cannot cause an action to be applied using stale Open data.
+        var currentStatus = await context.ShowcaseReports.AsNoTracking().Where(item => item.Id == reportId)
+            .Select(item => item.Status).SingleAsync(cancellationToken);
+        if (currentStatus != ShowcaseReportStatus.Open)
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseInvalidState, "This report has already been resolved.");
         var targetStatus = Enum.Parse<ShowcaseReportStatus>(request.Status, true);
         var showcase = await context.ShowcaseProjects.SingleAsync(item => item.Id == report.ShowcaseProjectId, cancellationToken);

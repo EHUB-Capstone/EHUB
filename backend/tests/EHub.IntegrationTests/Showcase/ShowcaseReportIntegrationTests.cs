@@ -151,7 +151,7 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         resolved.StatusCode.Should().Be(HttpStatusCode.OK);
         (await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id))
             .Status.Should().Be(ShowcaseStatus.Published);
-        (await scenario.Db.ShowcaseComments.IgnoreQueryFilters().SingleAsync(item => item.Id == comment.Id))
+        (await scenario.Db.ShowcaseComments.IgnoreQueryFilters().AsNoTracking().SingleAsync(item => item.Id == comment.Id))
             .IsDeleted.Should().BeTrue();
         var notifications = await scenario.Db.OutboxMessages.Where(item => item.AggregateId == scenario.Page.Id).ToListAsync();
         notifications.Should().HaveCount(2);
