@@ -4,6 +4,7 @@ export type ShowcaseStatus = 'Draft' | 'PendingReview' | 'Published' | 'Hidden';
 export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
 export type ShowcaseDecision = 'approve' | 'reject' | 'hide' | 'unhide';
+export type ShowcaseLaunchPeriod = 'topThisWeek' | 'thisWeek' | 'lastWeek';
 
 export interface ShowcaseFeaturedDto {
   id: string;
@@ -79,6 +80,7 @@ export interface GetShowcasesRequest {
   featured?: boolean;
   semesterId?: string;
   sort?: 'newest' | 'popular' | 'trending';
+  period?: ShowcaseLaunchPeriod;
   page?: number;
   pageSize?: number;
 }
@@ -94,6 +96,7 @@ export interface ShowcaseCardDto {
   featuredAt: string | null;
   teamName: string;
   industries: string[];
+  viewCount: number;
   likeCount: number;
   hasUpvoted: boolean;
   isOwner: boolean;

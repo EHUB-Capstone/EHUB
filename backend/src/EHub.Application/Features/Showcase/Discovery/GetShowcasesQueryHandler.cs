@@ -50,12 +50,22 @@ public sealed class GetShowcasesQueryHandler(
             query = query.Where(row => row.Showcase.DevelopmentStage == stage);
         }
 
+        var now = time.UtcNow;
+        var period = request.Period?.Trim();
+        if (!string.IsNullOrWhiteSpace(period))
+        {
+            var monday = now.Date.AddDays(-(((int)now.DayOfWeek + 6) % 7));
+            var lastWeek = string.Equals(period, "lastWeek", StringComparison.OrdinalIgnoreCase);
+            var start = lastWeek ? monday.AddDays(-7) : monday;
+            var end = lastWeek ? monday : monday.AddDays(7);
+            query = query.Where(row => row.Showcase.PublishedAt >= start && row.Showcase.PublishedAt < end
+                && row.Showcase.PublishedAt <= now);
+        }
         var total = await query.CountAsync(cancellationToken);
-        var sort = request.Sort.Trim();
+        var sort = string.Equals(period, "topThisWeek", StringComparison.OrdinalIgnoreCase) ? "trending" : request.Sort.Trim();
         var ordered = query.OrderByDescending(row => row.Showcase.PublishedAt);
         if (string.Equals(sort, "trending", StringComparison.OrdinalIgnoreCase))
         {
-            var now = time.UtcNow;
             var todayUtc = DateOnly.FromDateTime(now);
             var oneDayAgo = now.AddDays(-1);
             var twoDaysAgo = now.AddDays(-2);
@@ -101,6 +111,7 @@ public sealed class GetShowcasesQueryHandler(
                 Industries = row.Project.ProjectTags.Where(tag => tag.TagType == ProjectTagType.StartupField)
                     .OrderBy(tag => tag.TagName).Select(tag => tag.TagName).ToArray(),
                 LikeCount = row.Showcase.LikeCount,
+                ViewCount = row.Showcase.ViewCount,
                 HasUpvoted = context.ShowcaseUpvotes.Any(vote => vote.ShowcaseProjectId == row.Showcase.Id && vote.UserId == viewerId),
                 IsOwner = viewerIsStudent && ownedProjects.Any(project => project.ProjectLineageId == row.Showcase.ProjectLineageId),
                 CommentCount = row.Showcase.CommentCount,

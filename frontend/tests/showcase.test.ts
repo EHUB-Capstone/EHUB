@@ -3,7 +3,8 @@ import test from 'node:test';
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
-import { discoveryRequest, discoveryPages, isNewlyPublished } from '../src/utils/showcaseDiscovery.ts';
+import { discoveryRequest, discoveryPages, isNewlyPublished, mergeShowcasePages, updateShowcaseDiscoveryUpvote } from '../src/utils/showcaseDiscovery.ts';
+import type { ShowcaseCardDto, ShowcaseDiscoveryPageDto } from '../src/types/showcase.ts';
 
 test('showcase view client returns the current counter and accepts an abort signal', async () => {
   const mock = new MockAdapter(axiosClient);
@@ -14,6 +15,23 @@ test('showcase view client returns the current counter and accepts an abort sign
     assert.equal(mock.history.post[0].signal, controller.signal);
     controller.abort();
     await assert.rejects(showcaseApi.recordView('s1', controller.signal));
+  } finally {
+    mock.restore();
+  }
+});
+
+test('discovery cards include the current view counter used by the compact gallery', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const request = discoveryRequest(new URLSearchParams());
+  const card = { id: 's1', projectName: 'Smart Garden', viewCount: 27, likeCount: 4, commentCount: 2 };
+  mock.onGet('/showcase', { params: request }).reply(200, {
+    data: { items: [card], totalItems: 1, totalPages: 1, pageIndex: 1, pageSize: 8 },
+  });
+  try {
+    const response = await showcaseApi.list(request);
+    assert.equal(response.items[0].viewCount, 27);
+    assert.equal(response.items[0].likeCount, 4);
+    assert.equal(response.items[0].commentCount, 2);
   } finally {
     mock.restore();
   }
@@ -79,6 +97,64 @@ test('discovery pagination stays bounded for large server result sets', () => {
   assert.deepEqual(discoveryPages(1, 0), []);
   assert.deepEqual(discoveryPages(1, 2), [1, 2]);
   assert.deepEqual(discoveryPages(1000, 1000), [996, 997, 998, 999, 1000]);
+});
+
+test('launch period filters round-trip to the API without dropping the other discovery filters', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const request = discoveryRequest(new URLSearchParams('period=topThisWeek&stage=Mvp&industry=AI'));
+  assert.equal(request.period, 'topThisWeek');
+  assert.equal(request.stage, 'Mvp');
+  assert.equal(request.industry, 'AI');
+  assert.equal(discoveryRequest(new URLSearchParams('period=thisWeek')).period, 'thisWeek');
+  assert.equal(discoveryRequest(new URLSearchParams('period=lastWeek')).period, 'lastWeek');
+  assert.equal(discoveryRequest(new URLSearchParams('period=unknown')).period, undefined);
+  mock.onGet('/showcase', { params: { ...request, page: 2 } }).reply(200, {
+    data: { items: [], totalItems: 8, totalPages: 1, pageIndex: 2, pageSize: 8 },
+  });
+  try {
+    await showcaseApi.list({ ...request, page: 2 });
+    assert.equal(mock.history.get[0].params.period, 'topThisWeek');
+    assert.equal(mock.history.get[0].params.page, 2);
+  } finally {
+    mock.restore();
+  }
+});
+
+const discoveryCard = (id: string, likes = 0): ShowcaseCardDto => ({
+  id, projectName: id, description: '', logoUrl: null, developmentStage: 'Idea',
+  publishedAt: null, isFeatured: false, featuredAt: null, teamName: '', industries: [],
+  viewCount: 0, likeCount: likes, hasUpvoted: false, isOwner: false, commentCount: 0,
+});
+const discoveryPage = (items: ShowcaseCardDto[], index = 1): ShowcaseDiscoveryPageDto => ({
+  items, pageIndex: index, pageSize: 8, totalItems: 3, totalPages: 2,
+});
+
+test('infinite discovery merges loaded pages without duplicate rows and accepts fresher counters', () => {
+  const first = discoveryPage([discoveryCard('a'), discoveryCard('b')]);
+  const next = discoveryPage([discoveryCard('b', 9), discoveryCard('c')], 2);
+  const rows = mergeShowcasePages([first, next]);
+  assert.deepEqual(rows.map(row => row.id), ['a', 'b', 'c']);
+  assert.equal(rows[1].likeCount, 9);
+  assert.equal(first.items[1].likeCount, 0);
+  assert.deepEqual(mergeShowcasePages([]), []);
+});
+
+test('upvotes update every loaded page while preserving legacy page caches and pagination metadata', () => {
+  const first = discoveryPage([discoveryCard('a'), discoveryCard('b')]);
+  const next = discoveryPage([discoveryCard('b'), discoveryCard('c')], 2);
+  const vote = { likeCount: 10, hasUpvoted: true };
+  const original = { pages: [first, next], pageParams: [1, 2] };
+  const updated = updateShowcaseDiscoveryUpvote(original, 'b', vote);
+  assert.ok(updated && 'pages' in updated);
+  assert.equal(updated.pages[0].items[1].likeCount, 10);
+  assert.equal(updated.pages[1].items[0].hasUpvoted, true);
+  assert.deepEqual(updated.pageParams, [1, 2]);
+  assert.equal(updated.pages[0].items[0], first.items[0]);
+  assert.equal(original.pages[1].items[0].likeCount, 0);
+  const legacy = updateShowcaseDiscoveryUpvote(first, 'b', vote);
+  assert.ok(legacy && 'items' in legacy);
+  assert.equal(legacy.items[1].hasUpvoted, true);
+  assert.equal(updateShowcaseDiscoveryUpvote(undefined, 'b', vote), undefined);
 });
 
 test('discovery client forwards filters and unwraps list, options and detail; errors remain failures', async () => {

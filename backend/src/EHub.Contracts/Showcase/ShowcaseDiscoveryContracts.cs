@@ -10,6 +10,8 @@ public sealed class GetShowcasesRequest
     /// <summary>Semester of the newest project in the lineage.</summary>
     public Guid? SemesterId { get; init; }
     public string Sort { get; init; } = "newest";
+    /// <summary>Optional Monday-based UTC publication window: topThisWeek, thisWeek or lastWeek.</summary>
+    public string? Period { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 20;
 }
@@ -26,6 +28,7 @@ public sealed class ShowcaseCardDto
     public DateTime? FeaturedAt { get; init; }
     public string TeamName { get; init; } = string.Empty;
     public IReadOnlyCollection<string> Industries { get; init; } = Array.Empty<string>();
+    public int ViewCount { get; init; }
     public int LikeCount { get; init; }
     public bool HasUpvoted { get; init; }
     public bool IsOwner { get; init; }
