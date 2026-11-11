@@ -194,7 +194,7 @@ public sealed class ShowcaseReportHandlerTests
     }
 
     [Fact]
-    public async Task ActionTaken_OnAlreadyHiddenPage_ClosesAnotherReportWithoutDuplicateNotification()
+    public async Task ActionTaken_ClosesAllOpenReportsForTheTarget_WithOneHideNotification()
     {
         await using var db = ShowcaseTestData.NewContext();
         var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
@@ -205,8 +205,11 @@ public sealed class ShowcaseReportHandlerTests
         var second = await handler.CreateAsync(seed.ShowcaseId, PageReport, another.Id);
         var decision = new ResolveShowcaseReportRequest { Status = "ActionTaken" };
         (await handler.ResolveAsync(first.Value.Id, decision, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
-        (await handler.ResolveAsync(second.Value.Id, decision, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
-        db.OutboxMessages.Should().HaveCount(3, "one reviewer alert per report and only one page-hidden notification");
+        (await handler.ResolveAsync(second.Value.Id, decision, seed.LecturerUserId, SystemRoles.Lecturer))
+            .Error.Code.Should().Be(ErrorCodes.ShowcaseInvalidState);
+        (await db.ShowcaseReports.Where(item => item.ShowcaseProjectId == seed.ShowcaseId).Select(item => item.Status).ToListAsync())
+            .Should().OnlyContain(status => status == ShowcaseReportStatus.ActionTaken);
+        db.OutboxMessages.Should().HaveCount(2, "the first report alerts reviewers and the action hides the page once");
     }
 
     [Theory]
