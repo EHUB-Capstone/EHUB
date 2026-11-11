@@ -30,6 +30,28 @@ test('showcase insights client gets the owner-only fourteen-day snapshot', async
   } finally { mock.restore(); }
 });
 
+test('report client submits content, lists the staff queue, and resolves a report', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const receipt = { id: 'r1', showcaseProjectId: 's1', commentId: null, status: 'Open', createdAt: '2026-11-11T00:00:00Z' };
+  const queue = { items: [{ ...receipt, reason: 'Spam', note: null, resolvedByUserId: null, resolvedAt: null, resolutionNote: null }], totalItems: 1, pageIndex: 1, pageSize: 20, totalPages: 1 };
+  mock.onPost('/showcase/s1/reports').reply(200, { data: receipt });
+  mock.onGet('/showcase/reports').reply(200, { data: queue });
+  mock.onPost('/showcase/reports/r1/resolve').reply(200, { data: { ...queue.items[0], status: 'ActionTaken' } });
+  mock.onDelete('/showcase/reports/r1').reply(200, { data: null });
+  mock.onDelete('/showcase/reports/history', { params: { status: 'Dismissed' } }).reply(200, { data: null });
+  try {
+    assert.deepEqual(await showcaseApi.createReport('s1', { reason: 'Spam', note: 'Spam link' }), receipt);
+    assert.deepEqual(mock.history.post[0].data && JSON.parse(mock.history.post[0].data), { reason: 'Spam', note: 'Spam link' });
+    assert.deepEqual(await showcaseApi.getReports({ status: 'Open', page: 1, pageSize: 20 }), queue);
+    assert.equal(mock.history.get[0].params.status, 'Open');
+    assert.equal((await showcaseApi.resolveReport('r1', { status: 'ActionTaken' })).status, 'ActionTaken');
+    await showcaseApi.deleteReportHistory('r1');
+    assert.equal(mock.history.delete[0].url, '/showcase/reports/r1');
+    await showcaseApi.deleteAllReportHistory('Dismissed');
+    assert.equal(mock.history.delete[1].params.status, 'Dismissed');
+  } finally { mock.restore(); }
+});
+
 test('newly published rail includes only projects published in the preceding seven days', () => {
   const now = Date.parse('2026-11-05T12:00:00Z');
   assert.equal(isNewlyPublished('2026-10-29T12:00:00Z', now), true);

@@ -123,6 +123,18 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.ResolveAsync(reportId, request, UserId, FeaturedRole, cancellationToken), "Report resolved.");
 
+    [HttpDelete("reports/{reportId:guid}")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> DeleteReportHistory(
+        Guid reportId, [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteHistoryAsync(reportId, UserId, FeaturedRole, cancellationToken), "Report history deleted.");
+
+    [HttpDelete("reports/history")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> DeleteAllReportHistory(
+        [FromQuery] string status, [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteAllHistoryAsync(status, UserId, FeaturedRole, cancellationToken), "Report history deleted.");
+
     [HttpGet("{id:guid}/comments/{commentId:guid}/replies")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> CommentReplies(

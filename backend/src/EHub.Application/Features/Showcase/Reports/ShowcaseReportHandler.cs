@@ -50,6 +50,7 @@ public sealed class ShowcaseReportHandler(
 
         if (await HasReportAsync(showcaseId, request.CommentId, userId, cancellationToken))
             return Duplicate();
+        var hasOpenReport = await HasOpenReportAsync(showcaseId, request.CommentId, cancellationToken);
         var report = new ShowcaseReport
         {
             ShowcaseProjectId = showcaseId, CommentId = request.CommentId, ReporterUserId = userId,
@@ -57,6 +58,17 @@ public sealed class ShowcaseReportHandler(
             Note = Clean(request.Note), CreatedAt = time.UtcNow
         };
         context.ShowcaseReports.Add(report);
+        var project = await ShowcaseAccess.LatestProjectAsync(context, showcase.ProjectLineageId, cancellationToken);
+        if (!hasOpenReport && project is not null)
+        {
+            // Report details and reporter identity stay in the moderation queue. The notification only asks staff
+            // to review the item, and reaches both the class reviewers and administrators.
+            ShowcaseOutbox.EnqueueNotification(context, showcaseId, project.LecturerUserIds,
+                "New showcase report", request.CommentId.HasValue
+                    ? "A comment has been reported and needs review."
+                    : "A showcase page has been reported and needs review.",
+                "/showcase/moderation?tab=reports", time.UtcNow, notifyAdministrators: true);
+        }
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -89,13 +101,17 @@ public sealed class ShowcaseReportHandler(
         pageSize = Math.Clamp(pageSize, 1, 50);
         if (page > int.MaxValue / pageSize)
             return Result.Failure<PagedResponse<ShowcaseReportDto>>(ErrorCodes.ShowcaseValidationError, "Page is too large.");
-        var query = ScopedReports(userId, role).AsNoTracking().Where(report => report.Status == state);
-        var total = await query.CountAsync(cancellationToken);
-        var reports = await query.OrderBy(report => report.CreatedAt).ThenBy(report => report.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        var rows = await ScopedReports(userId, role).AsNoTracking().Where(report => report.Status == state)
+            .OrderBy(report => report.CreatedAt).ThenBy(report => report.Id).ToListAsync(cancellationToken);
+        // A moderator reviews content targets, not each individual submission. Keep one representative report and
+        // expose the number of reporters so a burst of reports does not fill the queue with duplicate tickets.
+        var grouped = rows.GroupBy(report => new { report.ShowcaseProjectId, report.CommentId })
+            .Select(group => new { Report = group.First(), Count = group.Count() }).ToList();
+        var total = grouped.Count;
+        var reports = grouped.Skip((page - 1) * pageSize).Take(pageSize).ToList();
         return Result.Success(new PagedResponse<ShowcaseReportDto>
         {
-            Items = reports.Select(ToDto).ToArray(), TotalItems = total, PageIndex = page,
+            Items = reports.Select(item => ToDto(item.Report, item.Count)).ToArray(), TotalItems = total, PageIndex = page,
             PageSize = pageSize, TotalPages = (int)Math.Ceiling(total / (double)pageSize)
         });
     }
@@ -111,18 +127,60 @@ public sealed class ShowcaseReportHandler(
         var report = await ScopedReports(userId, role).SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
         if (report is null)
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseReportNotFound, "The report was not found.");
-        if (report.Status != ShowcaseReportStatus.Open)
+        // A long-lived context may already track this row. Read the current database state before acting so a
+        // concurrent reviewer cannot cause an action to be applied using stale Open data.
+        var currentStatus = await context.ShowcaseReports.AsNoTracking().Where(item => item.Id == reportId)
+            .Select(item => item.Status).SingleAsync(cancellationToken);
+        if (currentStatus != ShowcaseReportStatus.Open)
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseInvalidState, "This report has already been resolved.");
         var targetStatus = Enum.Parse<ShowcaseReportStatus>(request.Status, true);
         var showcase = await context.ShowcaseProjects.SingleAsync(item => item.Id == report.ShowcaseProjectId, cancellationToken);
-        if (targetStatus == ShowcaseReportStatus.ActionTaken && showcase.Status is not (ShowcaseStatus.Published or ShowcaseStatus.Hidden))
+        if (targetStatus == ShowcaseReportStatus.ActionTaken && report.CommentId is null
+            && showcase.Status is not (ShowcaseStatus.Published or ShowcaseStatus.Hidden))
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseInvalidState, "Only a published or already hidden showcase can be actioned.");
 
-        report.Status = targetStatus;
-        report.ResolvedAt = time.UtcNow;
-        report.ResolvedByUserId = userId;
-        report.ResolutionNote = Clean(request.ResolutionNote);
-        if (targetStatus == ShowcaseReportStatus.ActionTaken && showcase.Status == ShowcaseStatus.Published)
+        var matchingOpenReports = await context.ShowcaseReports
+            .Where(item => item.ShowcaseProjectId == report.ShowcaseProjectId && item.CommentId == report.CommentId
+                && item.Status == ShowcaseReportStatus.Open)
+            .ToListAsync(cancellationToken);
+        var resolvedAt = time.UtcNow;
+        var resolutionNote = Clean(request.ResolutionNote);
+        foreach (var matchingReport in matchingOpenReports)
+        {
+            matchingReport.Status = targetStatus;
+            matchingReport.ResolvedAt = resolvedAt;
+            matchingReport.ResolvedByUserId = userId;
+            matchingReport.ResolutionNote = resolutionNote;
+        }
+        if (targetStatus == ShowcaseReportStatus.ActionTaken && report.CommentId is { } commentId)
+        {
+            var comment = await context.ShowcaseComments.SingleOrDefaultAsync(item => item.Id == commentId
+                && item.ShowcaseProjectId == showcase.Id, cancellationToken);
+            if (comment is null)
+            {
+                context.ClearChanges();
+                return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseCommentNotFound, "The reported comment is no longer available.");
+            }
+
+            comment.IsDeleted = true;
+            comment.DeletedAt = time.UtcNow;
+            comment.DeletedBy = userId;
+            // Keep the count, report state, hidden comment and notification in the same SaveChanges operation.
+            showcase.CommentCount = Math.Max(0, showcase.CommentCount - 1);
+            ShowcaseOutbox.EnqueueNotification(context, showcase.Id, [comment.AuthorUserId],
+                "Comment hidden", "Bình luận của bạn đã bị ẩn vì vi phạm quy tắc cộng đồng.",
+                $"/showcase/{showcase.Id}", time.UtcNow);
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                context.ClearChanges();
+                return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict, "The report was changed by another reviewer. Reload and try again.");
+            }
+        }
+        else if (targetStatus == ShowcaseReportStatus.ActionTaken && showcase.Status == ShowcaseStatus.Published)
         {
             // The moderation handler saves this tracked report, the hide, audit history and outbox together.
             // Private report text never reaches the team's ReviewNote, history or notification.
@@ -146,7 +204,42 @@ public sealed class ShowcaseReportHandler(
                 return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict, "The report was changed by another reviewer. Reload and try again.");
             }
         }
-        return Result.Success(ToDto(report));
+        return Result.Success(ToDto(report, matchingOpenReports.Count));
+    }
+
+    public async Task<Result> DeleteHistoryAsync(Guid reportId, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!ShowcaseAccess.IsModerator(role))
+            return Result.Failure(ErrorCodes.ShowcaseAccessDenied, "Only lecturers and administrators can delete report history.");
+        var report = await ScopedReports(userId, role).SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
+        if (report is null)
+            return Result.Failure(ErrorCodes.ShowcaseReportNotFound, "The report was not found.");
+        if (report.Status == ShowcaseReportStatus.Open)
+            return Result.Failure(ErrorCodes.ShowcaseInvalidState, "Open reports cannot be deleted.");
+
+        // Queue entries are grouped by target, so pruning one history entry removes the closed history for that
+        // showcase/comment target without touching any newly-opened report.
+        var history = await context.ShowcaseReports.Where(item => item.ShowcaseProjectId == report.ShowcaseProjectId
+            && item.CommentId == report.CommentId && item.Status != ShowcaseReportStatus.Open).ToListAsync(cancellationToken);
+        context.ShowcaseReports.RemoveRange(history);
+        await context.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    public async Task<Result> DeleteAllHistoryAsync(string status, Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!ShowcaseAccess.IsModerator(role))
+            return Result.Failure(ErrorCodes.ShowcaseAccessDenied, "Only lecturers and administrators can delete report history.");
+        if (!Enum.TryParse<ShowcaseReportStatus>(status, true, out var state)
+            || state == ShowcaseReportStatus.Open)
+            return Result.Failure(ErrorCodes.ShowcaseValidationError, "Only Dismissed or ActionTaken history can be deleted.");
+
+        var scope = ShowcaseAccess.ModeratableShowcases(context, userId, role);
+        var history = await context.ShowcaseReports.Where(report => report.Status == state
+            && scope.Any(showcase => showcase.Id == report.ShowcaseProjectId)).ToListAsync(cancellationToken);
+        context.ShowcaseReports.RemoveRange(history);
+        await context.SaveChangesAsync(cancellationToken);
+        return Result.Success();
     }
 
     private IQueryable<ShowcaseReport> ScopedReports(Guid userId, string role)
@@ -159,16 +252,20 @@ public sealed class ShowcaseReportHandler(
         context.ShowcaseReports.AsNoTracking().AnyAsync(report => report.ShowcaseProjectId == showcaseId
             && report.CommentId == commentId && report.ReporterUserId == userId, cancellationToken);
 
+    private Task<bool> HasOpenReportAsync(Guid showcaseId, Guid? commentId, CancellationToken cancellationToken) =>
+        context.ShowcaseReports.AsNoTracking().AnyAsync(report => report.ShowcaseProjectId == showcaseId
+            && report.CommentId == commentId && report.Status == ShowcaseReportStatus.Open, cancellationToken);
+
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static Result<ShowcaseReportReceiptDto> Duplicate() =>
         Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseReportAlreadyExists, "You have already reported this content.");
 
-    private static ShowcaseReportDto ToDto(ShowcaseReport report) => new()
+    private static ShowcaseReportDto ToDto(ShowcaseReport report, int reportCount = 1) => new()
     {
         Id = report.Id, ShowcaseProjectId = report.ShowcaseProjectId, CommentId = report.CommentId,
         Reason = report.Reason.ToString(), Note = report.Note, Status = report.Status.ToString(),
         CreatedAt = report.CreatedAt, ResolvedAt = report.ResolvedAt, ResolvedByUserId = report.ResolvedByUserId,
-        ResolutionNote = report.ResolutionNote
+        ResolutionNote = report.ResolutionNote, ReportCount = reportCount
     };
 }

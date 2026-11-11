@@ -13,6 +13,7 @@ import ShowcaseComments from '../../components/showcase/ShowcaseComments';
 import ShowcaseReferenceData from '../../components/showcase/ShowcaseReferenceData';
 import ShowcaseStatusBadge from '../../components/showcase/ShowcaseStatusBadge';
 import ShowcaseUpvoteButton from '../../components/showcase/ShowcaseUpvoteButton';
+import ShowcaseReportButton from '../../components/showcase/ShowcaseReportButton';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 import { showcaseApi } from '../../api/showcaseApi';
 import { useAuthContext } from '../../context/AuthContext';
@@ -279,6 +280,7 @@ export default function ShowcaseDetail() {
                 className="h-auto w-full flex-col gap-0 rounded-none px-2 py-3"
               />
             </div>
+            {showcase.status === 'Published' && !isOwner && <div className="mt-3"><ShowcaseReportButton showcaseId={showcase.id} /></div>}
             {canModerate && (
               <div role="group" aria-label="Review this page" className="mt-4 border-t border-slate-200 pt-4">
                 <p className="mb-2 text-overline uppercase text-slate-600">Review this page</p>

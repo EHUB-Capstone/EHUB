@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Badge from '../ui/Badge';
@@ -17,6 +18,7 @@ import type { ShowcaseCommentDto } from '../../types/showcase';
 import { cn } from '../../utils/cn';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_LIMITS, timeAgo } from '../../utils/showcase';
+import ShowcaseReportButton from './ShowcaseReportButton';
 
 const PAGE_SIZE = 10;
 const REPLY_PAGE_SIZE = 20;
@@ -147,14 +149,15 @@ function ExpandableText({ text }: { text: string }) {
   );
 }
 
-function CommentBody({ comment, small = false, onReply, onDelete }: {
+function CommentBody({ showcaseId, comment, small = false, onReply, onDelete }: {
+  showcaseId: string;
   comment: ShowcaseCommentDto;
   small?: boolean;
   onReply: () => void;
   onDelete: () => void;
 }) {
   return (
-    <div className="flex gap-3">
+    <div id={`comment-${comment.id}`} className="flex scroll-mt-6 gap-3">
       <Avatar name={comment.authorName} url={comment.authorAvatarUrl} small={small} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -168,6 +171,7 @@ function CommentBody({ comment, small = false, onReply, onDelete }: {
           {comment.canDelete && (
             <button type="button" onClick={onDelete} className="rounded hover:text-danger-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">Delete</button>
           )}
+          {!comment.canDelete && <ShowcaseReportButton showcaseId={showcaseId} commentId={comment.id} />}
         </div>
       </div>
     </div>
@@ -191,14 +195,14 @@ function Thread({ showcaseId, comment, onDelete }: { showcaseId: string; comment
 
   return (
     <li>
-      <CommentBody comment={comment} onReply={() => setReplyTo(comment)} onDelete={() => onDelete(comment)} />
+      <CommentBody showcaseId={showcaseId} comment={comment} onReply={() => setReplyTo(comment)} onDelete={() => onDelete(comment)} />
 
       {(shown.length > 0 || replyTo) && (
         <div className="ml-12 mt-3 space-y-3.5 border-l-2 border-slate-200 pl-4">
           <ul className="space-y-3.5">
             {shown.map((reply) => (
               <li key={reply.id}>
-                <CommentBody comment={reply} small onReply={() => setReplyTo(reply)} onDelete={() => onDelete(reply)} />
+                <CommentBody showcaseId={showcaseId} comment={reply} small onReply={() => setReplyTo(reply)} onDelete={() => onDelete(reply)} />
               </li>
             ))}
           </ul>
@@ -247,6 +251,7 @@ interface ShowcaseCommentsProps {
 
 /** Community comments of a published page: newest first, replies one level deep, loaded in small pages. */
 export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseCommentsProps) {
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<ShowcaseCommentDto | null>(null);
   const comments = useInfiniteQuery({
@@ -266,6 +271,12 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
     onError: (error) => toast.error(failureMessage(error, 'Could not remove the comment. Try again.')),
   });
   const items = comments.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // A moderator can deep-link from the report queue to a loaded comment without adding another API endpoint.
+  useEffect(() => {
+    const target = location.hash.startsWith('#comment-') ? document.getElementById(location.hash.slice(1)) : null;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [items, location.hash]);
 
   return (
     <Card hover={false} padding="p-5 sm:p-6" aria-labelledby="showcase-comments-heading">

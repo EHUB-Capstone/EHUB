@@ -19,6 +19,12 @@ import type {
   ShowcaseCommentDto,
   ShowcaseCommentPageDto,
   CreateShowcaseCommentRequest,
+  CreateShowcaseReportRequest,
+  ResolveShowcaseReportRequest,
+  ShowcaseReportPageDto,
+  ShowcaseReportReceiptDto,
+  ShowcaseReportDto,
+  ShowcaseReportStatus,
 } from '../types/showcase.ts';
 
 // axiosClient resolves to the response body, so each call yields the ApiEnvelope.
@@ -45,6 +51,16 @@ export const showcaseApi = {
     unwrap<ShowcaseCommentDto>(axiosClient.post(`/showcase/${id}/comments`, body)),
   deleteComment: (id: string, commentId: string) =>
     unwrap<null>(axiosClient.delete(`/showcase/${id}/comments/${commentId}`)),
+  createReport: (id: string, body: CreateShowcaseReportRequest) =>
+    unwrap<ShowcaseReportReceiptDto>(axiosClient.post(`/showcase/${id}/reports`, body)),
+  getReports: (params: { status?: ShowcaseReportStatus; page?: number; pageSize?: number }, signal?: AbortSignal) =>
+    unwrap<ShowcaseReportPageDto>(axiosClient.get('/showcase/reports', { params, signal })),
+  resolveReport: (reportId: string, body: ResolveShowcaseReportRequest) =>
+    unwrap<ShowcaseReportDto>(axiosClient.post(`/showcase/reports/${reportId}/resolve`, body)),
+  deleteReportHistory: (reportId: string) =>
+    unwrap<null>(axiosClient.delete(`/showcase/reports/${reportId}`)),
+  deleteAllReportHistory: (status: Extract<ShowcaseReportStatus, 'Dismissed' | 'ActionTaken'>) =>
+    unwrap<null>(axiosClient.delete('/showcase/reports/history', { params: { status } })),
   setUpvote: (id: string, hasUpvoted: boolean) =>
     unwrap<ShowcaseUpvoteDto>(hasUpvoted
       ? axiosClient.post(`/showcase/${id}/upvote`)
