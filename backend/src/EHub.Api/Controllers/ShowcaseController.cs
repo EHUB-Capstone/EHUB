@@ -104,8 +104,14 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     [EnableRateLimiting(ShowcaseReportRateLimitPolicies.Create)]
     public async Task<IActionResult> CreateReport(
         Guid id, [FromBody] CreateShowcaseReportRequest request,
-        [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Report submitted.");
+        [FromServices] IShowcaseReportHandler handler, CancellationToken cancellationToken)
+    {
+        if (string.Equals(Role, SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Role, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            return ToResponse(Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseAccessDenied,
+                "Lecturers and administrators moderate content directly and cannot submit reports."), "Report submitted.");
+        return ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Report submitted.");
+    }
 
     [HttpGet("reports")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]

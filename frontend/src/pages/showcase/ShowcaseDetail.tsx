@@ -1,7 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CalendarDays, ExternalLink, Eye, Lightbulb, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, Eye, Lightbulb, Pencil, Sparkles, Target, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -20,6 +20,7 @@ import { useAuthContext } from '../../context/AuthContext';
 import type { ShowcaseDetailDto } from '../../types/showcase';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
+import { parseShowcaseVideo, showcaseVideoEmbedUrl, VIDEO_IFRAME_SANDBOX, type ShowcaseVideo } from '../../utils/showcaseVideo';
 
 function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
   if (typeof children === 'string' ? !children.trim() : !children) return null;
@@ -43,6 +44,36 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
       <span className="mt-0.5 inline-flex items-center gap-1"><Icon className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />{label}</span>
     </div>
   );
+}
+
+type ShowcaseSlide =
+  | { kind: 'image'; id: string; url: string; caption: string | null }
+  | { kind: 'video'; id: string; label: string; video: ShowcaseVideo };
+
+function ScreenshotCarousel({ slides, projectName }: { slides: ShowcaseSlide[]; projectName: string }) {
+  const rail = useRef<HTMLUListElement>(null);
+  const [active, setActive] = useState(0);
+  const select = (index: number) => {
+    const next = (index + slides.length) % slides.length;
+    const slide = rail.current?.querySelector<HTMLElement>(`[data-slide="${next}"]`);
+    if (rail.current && slide) {
+      rail.current.scrollTo({ left: slide.offsetLeft - rail.current.offsetLeft, behavior: 'smooth' });
+    }
+    setActive(next);
+  };
+  return <section aria-label="Screenshots" className="space-y-4">
+    <div className="relative">
+      <ul ref={rail} className="flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {slides.map((item, index) => <li key={item.id} data-slide={index} className={slides.length === 1 ? 'w-full shrink-0 snap-start' : 'w-[calc(100%-2.5rem)] shrink-0 snap-start sm:w-[calc(50%-0.75rem)]'}>
+          {item.kind === 'image' ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"><img src={item.url} alt={item.caption ?? `${projectName} screenshot ${index + 1}`} loading={index > 1 ? 'lazy' : undefined} className="aspect-video w-full bg-slate-50 object-contain" /><span className="sr-only">(opens full size in a new tab)</span></a>
+            : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-card"><iframe src={showcaseVideoEmbedUrl(item.video, 'player')} title={item.label} sandbox={VIDEO_IFRAME_SANDBOX} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full" /></div>}
+        </li>)}
+      </ul>
+      {slides.length > 2 && <button type="button" aria-label="Previous screenshot" onClick={() => select(active - 1)} className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronLeft className="h-6 w-6" aria-hidden="true" /></button>}
+      {slides.length > 2 && <button type="button" aria-label="Next screenshot" onClick={() => select(active + 1)} className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronRight className="h-6 w-6" aria-hidden="true" /></button>}
+    </div>
+    {slides.length > 1 && <div className="flex justify-center gap-3" role="tablist" aria-label="Screenshot navigation">{slides.map((item, index) => <button key={item.id} type="button" role="tab" aria-selected={active === index} aria-label={`Show item ${index + 1}`} onClick={() => select(index)} className={`h-2.5 w-2.5 rounded-full transition-colors ${active === index ? 'bg-primary' : 'bg-slate-300 hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-500'}`} />)}</div>}
+  </section>;
 }
 
 export default function ShowcaseDetail() {
@@ -121,8 +152,16 @@ export default function ShowcaseDetail() {
   const suppliedBackLabel = typeof navigationState?.showcaseBackLabel === 'string' ? navigationState.showcaseBackLabel : null;
   const backTo = suppliedBackTo ?? (isOwner ? '/showcase/manage' : canModerate ? '/showcase/moderation' : '/showcase');
   const backLabel = suppliedBackLabel ?? (isOwner ? 'My Showcase' : canModerate ? 'Showcase Moderation' : 'Project Showcase');
-  const [cover, ...gallery] = showcase.media;
-  const hasStory = showcase.links.length > 0 || [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
+  const videoSlides: ShowcaseSlide[] = showcase.links.flatMap(link => {
+    const video = link.linkType === 'Video' ? parseShowcaseVideo(link.url) : null;
+    return video ? [{ kind: 'video' as const, id: link.id, label: link.label || `${profile.projectName} video`, video }] : [];
+  });
+  const carouselSlides: ShowcaseSlide[] = [
+    ...showcase.media.map(item => ({ kind: 'image' as const, id: item.id, url: item.url, caption: item.caption })),
+    ...videoSlides,
+  ];
+  const remainingLinks = showcase.links.filter(link => !(link.linkType === 'Video' && parseShowcaseVideo(link.url)));
+  const hasStory = remainingLinks.length > 0 || [profile.problem, profile.targetUsers, profile.solution, showcase.highlights].some((value) => value?.trim());
 
   const teamCard = members.length > 0 && (
     <Card hover={false} padding="p-5">
@@ -209,26 +248,15 @@ export default function ShowcaseDetail() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
         <div className="min-w-0 space-y-6">
-          {cover && (
-            <section aria-label="Screenshots" className="space-y-3">
-              <a href={cover.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-                <img src={cover.url} alt={cover.caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full bg-slate-50 object-contain" />
+          {showcase.media.length === 1 && videoSlides.length === 0 && (
+            <section aria-label="Screenshots">
+              <a href={showcase.media[0].url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
+                <img src={showcase.media[0].url} alt={showcase.media[0].caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full bg-slate-50 object-contain" />
                 <span className="sr-only">(opens full size in a new tab)</span>
               </a>
-              {gallery.length > 0 && (
-                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {gallery.map((item) => (
-                    <li key={item.id}>
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-slate-200 transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-                        <img src={item.url} alt={item.caption ?? `${profile.projectName} screenshot`} loading="lazy" className="aspect-video w-full bg-slate-50 object-contain" />
-                        <span className="sr-only">(opens full size in a new tab)</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </section>
           )}
+          {carouselSlides.length > 1 || videoSlides.length === 1 && showcase.media.length === 0 ? <ScreenshotCarousel slides={carouselSlides} projectName={profile.projectName} /> : null}
 
           {hasStory && (
             <Card hover={false} className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
@@ -236,10 +264,10 @@ export default function ShowcaseDetail() {
               <StoryBlock icon={UserRound} title={PROJECT_PROFILE_LABELS.targetUsers}>{profile.targetUsers}</StoryBlock>
               <div className="space-y-7">
                 <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
-                {showcase.links.length > 0 && (
+                {remainingLinks.length > 0 && (
                   <StoryBlock icon={ExternalLink} title="Links">
                     <ul className="space-y-2">
-                      {showcase.links.map((link) => (
+                      {remainingLinks.map((link) => (
                         <li key={link.id}>
                           <a
                             href={link.url}
@@ -280,7 +308,7 @@ export default function ShowcaseDetail() {
                 className="h-auto w-full flex-col gap-0 rounded-none px-2 py-3"
               />
             </div>
-            {showcase.status === 'Published' && !isOwner && <div className="mt-3"><ShowcaseReportButton showcaseId={showcase.id} /></div>}
+            {showcase.status === 'Published' && !isOwner && viewerRole !== 'LECTURER' && viewerRole !== 'ADMIN' && <div className="mt-3"><ShowcaseReportButton showcaseId={showcase.id} /></div>}
             {canModerate && (
               <div role="group" aria-label="Review this page" className="mt-4 border-t border-slate-200 pt-4">
                 <p className="mb-2 text-overline uppercase text-slate-600">Review this page</p>

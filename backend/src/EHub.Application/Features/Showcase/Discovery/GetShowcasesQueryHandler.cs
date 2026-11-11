@@ -52,7 +52,17 @@ public sealed class GetShowcasesQueryHandler(
 
         var now = time.UtcNow;
         var period = request.Period?.Trim();
-        if (!string.IsNullOrWhiteSpace(period))
+        if (string.Equals(period, "topThisWeek", StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep the launch rail useful during a quiet week without treating older pages as new launches.
+            // The fourteen-day fallback is intentionally used only when the normal seven-day window is empty.
+            var sevenDaysAgo = now.AddDays(-7);
+            var recent = query.Where(row => row.Showcase.PublishedAt >= sevenDaysAgo && row.Showcase.PublishedAt <= now);
+            query = await recent.AnyAsync(cancellationToken)
+                ? recent
+                : query.Where(row => row.Showcase.PublishedAt >= now.AddDays(-14) && row.Showcase.PublishedAt <= now);
+        }
+        else if (!string.IsNullOrWhiteSpace(period))
         {
             var monday = now.Date.AddDays(-(((int)now.DayOfWeek + 6) % 7));
             var lastWeek = string.Equals(period, "lastWeek", StringComparison.OrdinalIgnoreCase);

@@ -319,7 +319,7 @@ public sealed class ShowcaseDiscoveryTests
     }
 
     [Fact]
-    public async Task LaunchPeriods_FilterBeforePaging_AndTopThisWeekUsesPopularityWithinTheWeek()
+    public async Task LaunchPeriods_FilterBeforePaging_AndTopThisWeekUsesPopularityInTheLastSevenDays()
     {
         await using var db = ShowcaseTestData.NewContext();
         var now = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
@@ -341,13 +341,33 @@ public sealed class ShowcaseDiscoveryTests
         var previous = await handler.HandleAsync(new() { Period = "lastWeek" });
         previous.Value.Items.Select(item => item.Id).Should().Equal(lastSunday.ShowcaseId, lastMonday.ShowcaseId);
         var top = await handler.HandleAsync(new() { Period = "topThisWeek", PageSize = 1 });
-        top.Value.TotalItems.Should().Be(2);
-        top.Value.Items.Should().ContainSingle().Which.Id.Should().Be(thisMonday.ShowcaseId);
+        top.Value.TotalItems.Should().Be(3);
+        top.Value.Items.Should().ContainSingle().Which.Id.Should().Be(lastSunday.ShowcaseId);
         (await handler.HandleAsync(new() { Period = "topThisWeek", PageSize = 1, Page = 2 }))
-            .Value.Items.Single().Id.Should().Be(today.ShowcaseId);
+            .Value.Items.Single().Id.Should().Be(thisMonday.ShowcaseId);
         (await handler.HandleAsync(new() { Period = "thisWeek", Featured = true }))
             .Value.Items.Single().Id.Should().Be(thisMonday.ShowcaseId);
         (await handler.HandleAsync(new())).Value.TotalItems.Should().Be(6);
+    }
+
+    [Fact]
+    public async Task TopThisWeek_FallsBackToFourteenDaysOnlyWhenTheSevenDayWindowIsEmpty()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+        var fallback = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-8));
+        var tooOld = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-15));
+        (await db.ShowcaseProjects.FindAsync(fallback.ShowcaseId))!.LikeCount = 1;
+        (await db.ShowcaseProjects.FindAsync(tooOld.ShowcaseId))!.LikeCount = 999;
+        await db.SaveChangesAsync();
+
+        var fallbackResult = await Handler(db, now).HandleAsync(new() { Period = "topThisWeek" });
+        fallbackResult.Value.Items.Should().ContainSingle().Which.Id.Should().Be(fallback.ShowcaseId);
+
+        var recent = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-1));
+        await db.SaveChangesAsync();
+        var normalResult = await Handler(db, now).HandleAsync(new() { Period = "topThisWeek" });
+        normalResult.Value.Items.Should().ContainSingle().Which.Id.Should().Be(recent.ShowcaseId);
     }
 
     [Theory]

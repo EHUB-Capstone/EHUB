@@ -10,7 +10,10 @@ public sealed class GetShowcasesRequest
     /// <summary>Semester of the newest project in the lineage.</summary>
     public Guid? SemesterId { get; init; }
     public string Sort { get; init; } = "newest";
-    /// <summary>Optional Monday-based UTC publication window: topThisWeek, thisWeek or lastWeek.</summary>
+    /// <summary>
+    /// Optional publication window: topThisWeek ranks the last seven days (falling back to fourteen days only when
+    /// there are no matches); thisWeek and lastWeek use Monday-based UTC boundaries.
+    /// </summary>
     public string? Period { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 20;

@@ -149,9 +149,10 @@ function ExpandableText({ text }: { text: string }) {
   );
 }
 
-function CommentBody({ showcaseId, comment, small = false, onReply, onDelete }: {
+function CommentBody({ showcaseId, comment, canReport, small = false, onReply, onDelete }: {
   showcaseId: string;
   comment: ShowcaseCommentDto;
+  canReport: boolean;
   small?: boolean;
   onReply: () => void;
   onDelete: () => void;
@@ -171,14 +172,14 @@ function CommentBody({ showcaseId, comment, small = false, onReply, onDelete }: 
           {comment.canDelete && (
             <button type="button" onClick={onDelete} className="rounded hover:text-danger-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">Delete</button>
           )}
-          {!comment.canDelete && <ShowcaseReportButton showcaseId={showcaseId} commentId={comment.id} />}
+          {!comment.canDelete && canReport && <ShowcaseReportButton showcaseId={showcaseId} commentId={comment.id} />}
         </div>
       </div>
     </div>
   );
 }
 
-function Thread({ showcaseId, comment, onDelete }: { showcaseId: string; comment: ShowcaseCommentDto; onDelete: (comment: ShowcaseCommentDto) => void }) {
+function Thread({ showcaseId, comment, canReport, onDelete }: { showcaseId: string; comment: ShowcaseCommentDto; canReport: boolean; onDelete: (comment: ShowcaseCommentDto) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [replyTo, setReplyTo] = useState<ShowcaseCommentDto | null>(null);
   const hasHiddenReplies = comment.replyCount > comment.replies.length;
@@ -195,14 +196,14 @@ function Thread({ showcaseId, comment, onDelete }: { showcaseId: string; comment
 
   return (
     <li>
-      <CommentBody showcaseId={showcaseId} comment={comment} onReply={() => setReplyTo(comment)} onDelete={() => onDelete(comment)} />
+      <CommentBody showcaseId={showcaseId} comment={comment} canReport={canReport} onReply={() => setReplyTo(comment)} onDelete={() => onDelete(comment)} />
 
       {(shown.length > 0 || replyTo) && (
         <div className="ml-12 mt-3 space-y-3.5 border-l-2 border-slate-200 pl-4">
           <ul className="space-y-3.5">
             {shown.map((reply) => (
               <li key={reply.id}>
-                <CommentBody showcaseId={showcaseId} comment={reply} small onReply={() => setReplyTo(reply)} onDelete={() => onDelete(reply)} />
+                <CommentBody showcaseId={showcaseId} comment={reply} canReport={canReport} small onReply={() => setReplyTo(reply)} onDelete={() => onDelete(reply)} />
               </li>
             ))}
           </ul>
@@ -251,6 +252,8 @@ interface ShowcaseCommentsProps {
 
 /** Community comments of a published page: newest first, replies one level deep, loaded in small pages. */
 export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseCommentsProps) {
+  const { user } = useAuthContext();
+  const canReport = user?.role !== 'LECTURER' && user?.role !== 'ADMIN';
   const location = useLocation();
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<ShowcaseCommentDto | null>(null);
@@ -299,7 +302,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
         )}
         {items.length > 0 && (
           <ul className="space-y-6">
-            {items.map((comment) => <Thread key={comment.id} showcaseId={showcaseId} comment={comment} onDelete={setTarget} />)}
+            {items.map((comment) => <Thread key={comment.id} showcaseId={showcaseId} comment={comment} canReport={canReport} onDelete={setTarget} />)}
           </ul>
         )}
         {comments.hasNextPage && (
