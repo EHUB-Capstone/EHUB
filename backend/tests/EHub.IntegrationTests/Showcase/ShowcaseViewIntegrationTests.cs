@@ -47,6 +47,10 @@ public sealed class ShowcaseViewIntegrationTests(CustomWebApplicationFactory fac
             detailResponse.StatusCode.Should().Be(HttpStatusCode.OK);
             var detail = (await detailResponse.Content.ReadFromJsonAsync<ApiResponse<ShowcaseDetailDto>>())!.Data!;
             detail.Showcase.ViewCount.Should().Be(7);
+            using var discoveryResponse = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase?search={scenario.Search}", scenario.Viewer);
+            discoveryResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            var discovery = (await discoveryResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCardDto>>>())!.Data!;
+            discovery.Items.Single(item => item.Id == firstId).ViewCount.Should().Be(7);
         });
 
     [Fact]
@@ -112,6 +116,36 @@ public sealed class ShowcaseViewIntegrationTests(CustomWebApplicationFactory fac
                 var page = (await response.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCardDto>>>())!.Data!;
                 page.TotalItems.Should().Be(2);
                 return page.Items.Single().Id;
+            }
+        });
+
+    [Fact]
+    public Task LaunchPeriods_FilterPublicationDatesAndRankBeforePaging_OnPostgreSql() =>
+        WithShowcasesAsync(async scenario =>
+        {
+            scenario.Clock.UtcNow = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+            scenario.First.PublishedAt = new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Utc);
+            scenario.First.LikeCount = 20;
+            scenario.Second.PublishedAt = new DateTime(2026, 11, 8, 23, 59, 59, DateTimeKind.Utc);
+            await scenario.Db.SaveChangesAsync();
+            (await ReadAsync("period=thisWeek")).Items.Single().Id.Should().Be(scenario.First.Id);
+            (await ReadAsync("period=lastWeek")).Items.Single().Id.Should().Be(scenario.Second.Id);
+            scenario.Second.PublishedAt = scenario.Clock.UtcNow.AddHours(-1);
+            await scenario.Db.SaveChangesAsync();
+            var top = await ReadAsync("period=topThisWeek&pageSize=1");
+            top.TotalItems.Should().Be(2);
+            top.Items.Single().Id.Should().Be(scenario.First.Id);
+            (await ReadAsync("period=topThisWeek&pageSize=1&page=2")).Items.Single().Id.Should().Be(scenario.Second.Id);
+            (await ReadAsync("period=thisWeek&pageSize=1")).Items.Single().Id.Should().Be(scenario.Second.Id);
+            scenario.Second.PublishedAt = scenario.Clock.UtcNow.AddMinutes(1);
+            await scenario.Db.SaveChangesAsync();
+            (await ReadAsync("period=thisWeek")).Items.Should().ContainSingle().Which.Id.Should().Be(scenario.First.Id);
+
+            async Task<PagedResponse<ShowcaseCardDto>> ReadAsync(string query)
+            {
+                using var response = await scenario.SendAsync(HttpMethod.Get, $"/api/showcase?search={scenario.Search}&{query}", scenario.Viewer);
+                response.StatusCode.Should().Be(HttpStatusCode.OK);
+                return (await response.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseCardDto>>>())!.Data!;
             }
         });
 

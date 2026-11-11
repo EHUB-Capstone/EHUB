@@ -89,10 +89,15 @@ public sealed class ShowcaseDiscoveryTests
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
 
+        await db.ShowcaseProjects.Where(page => page.Status == ShowcaseStatus.Published && !page.IsDeleted)
+            .ForEachAsync(page => page.ViewCount = 27);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
         var result = await Handler(db).HandleAsync(new());
 
         result.Value.TotalItems.Should().Be(1);
         result.Value.Items.Should().ContainSingle().Which.ProjectName.Should().Be("Smart Garden");
+        result.Value.Items.Single().ViewCount.Should().Be(27);
         db.ChangeTracker.Entries().Should().BeEmpty();
         var json = System.Text.Json.JsonSerializer.Serialize(result.Value);
         json.Should().NotContain("ReviewNote").And.NotContain("History");
@@ -311,6 +316,64 @@ public sealed class ShowcaseDiscoveryTests
                 ViewDateUtc = date
             }));
         }
+    }
+
+    [Fact]
+    public async Task LaunchPeriods_FilterBeforePaging_AndTopThisWeekUsesPopularityWithinTheWeek()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+        var monday = new DateTime(2026, 11, 9, 0, 0, 0, DateTimeKind.Utc);
+        var previousMonday = monday.AddDays(-7);
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: previousMonday.AddTicks(-10));
+        var lastMonday = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: previousMonday);
+        var lastSunday = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: monday.AddTicks(-10));
+        var thisMonday = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: monday);
+        var today = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now);
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddMinutes(1));
+        (await db.ShowcaseProjects.FindAsync(lastSunday.ShowcaseId))!.LikeCount = 999;
+        (await db.ShowcaseProjects.FindAsync(thisMonday.ShowcaseId))!.LikeCount = 20;
+        (await db.ShowcaseProjects.FindAsync(thisMonday.ShowcaseId))!.IsFeatured = true;
+        await db.SaveChangesAsync();
+        var handler = Handler(db, now);
+        var current = await handler.HandleAsync(new() { Period = "thisWeek" });
+        current.Value.Items.Select(item => item.Id).Should().Equal(today.ShowcaseId, thisMonday.ShowcaseId);
+        var previous = await handler.HandleAsync(new() { Period = "lastWeek" });
+        previous.Value.Items.Select(item => item.Id).Should().Equal(lastSunday.ShowcaseId, lastMonday.ShowcaseId);
+        var top = await handler.HandleAsync(new() { Period = "topThisWeek", PageSize = 1 });
+        top.Value.TotalItems.Should().Be(2);
+        top.Value.Items.Should().ContainSingle().Which.Id.Should().Be(thisMonday.ShowcaseId);
+        (await handler.HandleAsync(new() { Period = "topThisWeek", PageSize = 1, Page = 2 }))
+            .Value.Items.Single().Id.Should().Be(today.ShowcaseId);
+        (await handler.HandleAsync(new() { Period = "thisWeek", Featured = true }))
+            .Value.Items.Single().Id.Should().Be(thisMonday.ShowcaseId);
+        (await handler.HandleAsync(new())).Value.TotalItems.Should().Be(6);
+    }
+
+    [Theory]
+    [InlineData(2026, 11, 9, 2026, 11, 9)]
+    [InlineData(2026, 11, 15, 2026, 11, 9)]
+    [InlineData(2027, 1, 1, 2026, 12, 28)]
+    public async Task LaunchPeriods_UseMondayUtcBoundariesAcrossWeekAndYearChanges(
+        int year, int month, int day, int startYear, int startMonth, int startDay)
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(year, month, day, 12, 0, 0, DateTimeKind.Utc);
+        var monday = new DateTime(startYear, startMonth, startDay, 0, 0, 0, DateTimeKind.Utc);
+        var current = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: monday);
+        var previous = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: monday.AddTicks(-10));
+        var handler = Handler(db, now);
+        (await handler.HandleAsync(new() { Period = "thisWeek" })).Value.Items.Should().ContainSingle().Which.Id.Should().Be(current.ShowcaseId);
+        (await handler.HandleAsync(new() { Period = "lastWeek" })).Value.Items.Should().ContainSingle().Which.Id.Should().Be(previous.ShowcaseId);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("unknown")]
+    public async Task InvalidLaunchPeriod_IsRejected(string period)
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        (await Handler(db).HandleAsync(new() { Period = period })).IsFailure.Should().BeTrue();
     }
 
     [Theory]

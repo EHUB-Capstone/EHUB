@@ -1,4 +1,4 @@
-import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useMutationState, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Flame } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showcaseApi } from '../../api/showcaseApi';
@@ -6,6 +6,7 @@ import { useAuthContext } from '../../context/AuthContext';
 import type { ShowcaseDetailDto, ShowcaseDiscoveryPageDto, ShowcaseUpvoteDto } from '../../types/showcase';
 import { cn } from '../../utils/cn';
 import { optimisticShowcaseUpvote } from '../../utils/showcase';
+import { updateShowcaseDiscoveryUpvote } from '../../utils/showcaseDiscovery';
 import Button from '../ui/Button';
 
 interface ShowcaseUpvoteButtonProps extends ShowcaseUpvoteDto {
@@ -42,10 +43,9 @@ export default function ShowcaseUpvoteButton({
     mutationKey,
     mutationFn: (next: ShowcaseUpvoteDto) => showcaseApi.setUpvote(showcaseId, next.hasUpvoted),
     onSuccess: saved => {
-      queryClient.setQueriesData<ShowcaseDiscoveryPageDto>(discovery, page => page && ({
-        ...page,
-        items: page.items.map(item => item.id === showcaseId ? { ...item, ...saved } : item),
-      }));
+      queryClient.setQueriesData<ShowcaseDiscoveryPageDto | InfiniteData<ShowcaseDiscoveryPageDto>>(
+        discovery, data => updateShowcaseDiscoveryUpvote(data, showcaseId, saved),
+      );
       queryClient.setQueryData<ShowcaseDetailDto>(detailKey, detail => detail && ({
         ...detail,
         hasUpvoted: saved.hasUpvoted,

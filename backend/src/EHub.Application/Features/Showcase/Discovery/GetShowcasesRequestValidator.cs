@@ -14,6 +14,9 @@ public sealed class GetShowcasesRequestValidator : AbstractValidator<GetShowcase
             .Must(value => Enum.GetNames<ShowcaseDevelopmentStage>().Contains(value?.Trim(), StringComparer.OrdinalIgnoreCase))
             .When(request => !string.IsNullOrWhiteSpace(request.Stage));
         RuleFor(request => request.SemesterId).NotEqual(Guid.Empty).When(request => request.SemesterId.HasValue);
+        RuleFor(request => request.Period)
+            .Must(value => new[] { "topThisWeek", "thisWeek", "lastWeek" }.Contains(value?.Trim(), StringComparer.OrdinalIgnoreCase))
+            .When(request => !string.IsNullOrWhiteSpace(request.Period));
         RuleFor(request => request.Sort).Must(value =>
             string.Equals(value?.Trim(), "newest", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value?.Trim(), "popular", StringComparison.OrdinalIgnoreCase) ||
