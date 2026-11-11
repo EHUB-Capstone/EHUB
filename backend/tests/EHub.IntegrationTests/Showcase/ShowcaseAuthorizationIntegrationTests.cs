@@ -57,7 +57,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     {
         using var client = _factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PUT") request.Content = JsonContent.Create(Payload(Guid.NewGuid()));
+        if (method is "POST" or "PUT") request.Content = JsonContent.Create(PayloadFor(path));
 
         using var response = await client.SendAsync(request);
 
@@ -94,7 +94,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     {
         using var client = _factory.CreateClient();
         using var request = AuthorizedRequest(new HttpMethod(method), path, role,
-            method is "POST" or "PUT" ? Payload(Guid.NewGuid()) : null);
+            method is "POST" or "PUT" ? PayloadFor(path) : null);
 
         using var response = await client.SendAsync(request);
 
@@ -203,6 +203,10 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         ProjectLineageId = lineageId,
         DevelopmentStage = "Mvp"
     };
+
+    private static object PayloadFor(string path) => path.EndsWith("/reports", StringComparison.OrdinalIgnoreCase)
+        ? new CreateShowcaseReportRequest { Reason = "Other" }
+        : Payload(Guid.NewGuid());
 
     private HttpRequestMessage AuthorizedRequest(HttpMethod method, string path, string role, object? payload)
     {
