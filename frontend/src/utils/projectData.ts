@@ -27,6 +27,10 @@ import type {
   ProjectDataSemesterTerm,
   ProjectDataSortField,
   ProjectDataTab,
+  ProjectEvidenceEvaluation,
+  ProjectEvidenceMentor,
+  ProjectEvidenceMentoring,
+  ProjectEvidenceStatus,
 } from '../types/projectData.ts';
 import { haveSameIndustrySelection, resolveIndustryIds, validateIndustrySelection } from './projectWorkspace.ts';
 
@@ -566,4 +570,77 @@ export function describeCompetitionDraft(
     blocked: Object.keys(errors).length > 0 || listError !== '',
     dirty,
   };
+}
+
+/** The evidence of a project is only read for the open project, so the key is per user and project. */
+export function projectEvidenceKey(userId: string | undefined, projectId: string) {
+  return ['project-data', userId ?? 'anonymous', 'evidence', projectId] as const;
+}
+
+/** "4 Oct 2026": month spelled out so day/month order is never ambiguous. */
+export function formatEvidenceDate(iso: string | null | undefined): string {
+  if (!iso) return PROJECT_DATA_EMPTY_VALUE;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** A 0-10 score with at most two decimals and no trailing zeros ("7.6", "8", "7.25"). */
+export function formatEvidenceScore(score: number | null | undefined): string {
+  if (score === null || score === undefined || !Number.isFinite(score)) return PROJECT_DATA_EMPTY_VALUE;
+  return String(Number(score.toFixed(2)));
+}
+
+export interface EvidenceStatusView {
+  label: string;
+  /** A `Badge` variant; the label is always shown, so colour is never the only signal. */
+  tone: 'success' | 'warning' | 'neutral';
+}
+
+const EVIDENCE_STATUS_VIEWS: Record<ProjectEvidenceStatus, EvidenceStatusView> = {
+  Published: { label: 'Published', tone: 'success' },
+  PendingPublication: { label: 'Pending publication', tone: 'warning' },
+  NotGraded: { label: 'Not graded', tone: 'neutral' },
+};
+
+export function describeEvidenceStatus(status: ProjectEvidenceStatus): EvidenceStatusView {
+  return EVIDENCE_STATUS_VIEWS[status] ?? EVIDENCE_STATUS_VIEWS.NotGraded;
+}
+
+/** "Checkpoint 1 - 40% of the course score" style line under a part's name. */
+export function describeEvidenceWeight(component: { kind: string; checkpointNumber: number | null; weightPercent: number }): string {
+  const weight = `${Number(component.weightPercent.toFixed(2))}% of the course score`;
+  return component.kind === 'Checkpoint' && component.checkpointNumber !== null
+    ? `Checkpoint ${component.checkpointNumber} · ${weight}`
+    : `Assessment · ${weight}`;
+}
+
+/** True once at least one part was graded (published or waiting for publication); otherwise the section shows its empty state. */
+export function hasEvidenceGrades(evaluation: ProjectEvidenceEvaluation): boolean {
+  return evaluation.components.some(component => component.status !== 'NotGraded');
+}
+
+/** The mentor slots use the names staff know from the class mentor board. */
+export function evidenceMentorSlotLabel(slot: ProjectEvidenceMentor['slot']): string {
+  return slot === 'Academic' ? 'Lecturer mentor' : 'Enterprise mentor';
+}
+
+export function evidenceSessionsLabel(count: number): string {
+  if (count <= 0) return 'No completed sessions';
+  return count === 1 ? '1 completed session' : `${count} completed sessions`;
+}
+
+/** "Since 4 Oct 2026" for a mentor still on the team, "4 Oct 2026 - 12 Nov 2026" for one who left. */
+export function describeEvidenceMentorPeriod(mentor: Pick<ProjectEvidenceMentor, 'assignedAtUtc' | 'endedAtUtc'>): string {
+  const started = formatEvidenceDate(mentor.assignedAtUtc);
+  return mentor.endedAtUtc ? `${started} - ${formatEvidenceDate(mentor.endedAtUtc)}` : `Since ${started}`;
+}
+
+/** The one-line summary above the mentor list; empty when nobody mentored the team. */
+export function describeEvidenceMentoring(mentoring: ProjectEvidenceMentoring): string {
+  if (mentoring.mentors.length === 0) return '';
+  const sessions = evidenceSessionsLabel(mentoring.totalCompletedSessions);
+  return mentoring.lastSessionAtUtc
+    ? `${sessions} in total · last on ${formatEvidenceDate(mentoring.lastSessionAtUtc)}`
+    : sessions;
 }

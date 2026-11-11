@@ -10,6 +10,7 @@ import type {
   ProjectDataQuery,
   ProjectDataSummary,
   ProjectDataTrends,
+  ProjectEvidence,
   ProjectStartupIndustriesResult,
   ProjectStartupIndustryHistory,
   UpdateProjectAchievementsPayload,
@@ -37,6 +38,10 @@ export const projectDataApi = {
 
   getAchievementHistory: (projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectAchievementHistory>> =>
     axiosClient.get(`/project-data/${projectId}/achievements/history`, { signal }),
+
+  /** How the project was graded (published results only) and who mentored its team. Staff only. */
+  getEvidence: (projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectEvidence>> =>
+    axiosClient.get(`/project-data/${projectId}/evidence`, { signal }),
 
   getStartupIndustryHistory: (projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectStartupIndustryHistory>> =>
     axiosClient.get(`/project-data/${projectId}/startup-industries/history`, { signal }),
