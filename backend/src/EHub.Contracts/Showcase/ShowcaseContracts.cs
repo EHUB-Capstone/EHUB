@@ -132,11 +132,40 @@ public sealed class ShowcaseHistoryDto
     public DateTime CreatedAt { get; init; }
 }
 
+/// <summary>One reviewer's published evaluation of the project, shown to reviewers as reference only.</summary>
+public sealed class ShowcaseReferenceEvaluationDto
+{
+    public string EvaluatorRole { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public decimal TotalScore { get; init; }
+    public decimal MaxTotalScore { get; init; }
+    public string? Strengths { get; init; }
+    public string? Weaknesses { get; init; }
+    public string? Suggestions { get; init; }
+    public DateTime? PublishedAt { get; init; }
+}
+
+/// <summary>Module 1-3 data (class, semester, evaluations). Only sent to an Admin or an in-scope Lecturer.</summary>
+public sealed class ShowcaseReferenceDataDto
+{
+    public string ClassCode { get; init; } = string.Empty;
+    public ShowcaseSemesterOptionDto? Semester { get; init; }
+
+    /// <summary>Latest Published/Locked evaluation of each evaluator role for the newest project.</summary>
+    public IReadOnlyCollection<ShowcaseReferenceEvaluationDto> Evaluations { get; init; } = Array.Empty<ShowcaseReferenceEvaluationDto>();
+}
+
 public sealed class ShowcaseDetailDto
 {
     public ShowcaseDto Showcase { get; init; } = new();
     public string TeamName { get; init; } = string.Empty;
     public IReadOnlyCollection<ShowcaseTeamMemberDto> Members { get; init; } = Array.Empty<ShowcaseTeamMemberDto>();
+
+    /// <summary>Startup industries of the newest project; a public tag with no score.</summary>
+    public IReadOnlyCollection<string> Industries { get; init; } = Array.Empty<string>();
+
+    /// <summary>Reviewer-only reference data; null for every other viewer.</summary>
+    public ShowcaseReferenceDataDto? ReferenceData { get; init; }
 
     /// <summary>Review trail; empty for ordinary viewers.</summary>
     public IReadOnlyCollection<ShowcaseHistoryDto> History { get; init; } = Array.Empty<ShowcaseHistoryDto>();
