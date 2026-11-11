@@ -62,6 +62,13 @@ export interface ProjectDataMentor extends ProjectDataPerson {
   isHistorical: boolean;
 }
 
+/** Current counters of the lineage's showcase across semesters and publication states. Reference only. */
+export interface ProjectDataShowcaseMetrics {
+  viewCount: number;
+  upvoteCount: number;
+  commentCount: number;
+}
+
 export interface ProjectDataItem {
   projectId: string;
   teamId: string;
@@ -85,6 +92,8 @@ export interface ProjectDataItem {
   achievementsUpdatedAtUtc: string | null;
   achievementsUpdatedBy: ProjectDataPerson | null;
   rowVersion: string;
+  /** Null when the lineage has no non-deleted showcase. */
+  showcaseMetrics: ProjectDataShowcaseMetrics | null;
 }
 
 export interface ProjectCompetition {

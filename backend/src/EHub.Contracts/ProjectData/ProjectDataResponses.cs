@@ -20,6 +20,14 @@ public sealed class ProjectDataMentorResponse
     public bool IsHistorical { get; init; }
 }
 
+/// <summary>Current lineage-wide showcase counters, provided only as reference for staff.</summary>
+public sealed class ProjectDataShowcaseMetricsResponse
+{
+    public int ViewCount { get; init; }
+    public int UpvoteCount { get; init; }
+    public int CommentCount { get; init; }
+}
+
 public sealed class ProjectDataItemResponse
 {
     public Guid ProjectId { get; init; }
@@ -43,6 +51,8 @@ public sealed class ProjectDataItemResponse
     public DateTime? AchievementsUpdatedAtUtc { get; init; }
     public ProjectDataPersonResponse? AchievementsUpdatedBy { get; init; }
     public string RowVersion { get; init; } = string.Empty;
+    /// <summary>Null when the lineage has no non-deleted showcase. Includes unpublished and hidden pages.</summary>
+    public ProjectDataShowcaseMetricsResponse? ShowcaseMetrics { get; init; }
 }
 
 public sealed class ProjectDataSummaryResponse

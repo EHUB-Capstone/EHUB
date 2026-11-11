@@ -47,6 +47,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
             .Take(request.PageSize)
             .Select(project => new ProjectRow(
                 project.Id,
+                project.ProjectLineageId,
                 project.TeamId,
                 project.Team.ClassId,
                 project.Team.Class.SemesterId,
@@ -90,6 +91,21 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
     {
         var projectIds = rows.Select(row => row.ProjectId).ToArray();
         var teamIds = rows.Select(row => row.TeamId).ToArray();
+        var lineageIds = rows.Select(row => row.ProjectLineageId).Distinct().ToArray();
+        // Enrich only the scoped, paged rows. A showcase is shared across the projects in its lineage.
+        var showcaseMetrics = await context.ShowcaseProjects.AsNoTracking()
+            .Where(showcase => lineageIds.Contains(showcase.ProjectLineageId))
+            .Select(showcase => new
+            {
+                showcase.ProjectLineageId,
+                Metrics = new ProjectDataShowcaseMetricsResponse
+                {
+                    ViewCount = showcase.ViewCount,
+                    UpvoteCount = showcase.LikeCount,
+                    CommentCount = showcase.CommentCount
+                }
+            })
+            .ToDictionaryAsync(showcase => showcase.ProjectLineageId, showcase => showcase.Metrics, cancellationToken);
 
         var tagRows = await context.ProjectTags.AsNoTracking()
             .Where(tag => projectIds.Contains(tag.ProjectId) && tag.TagType == ProjectTagType.StartupField)
@@ -158,6 +174,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
                 ? new ProjectDataPersonResponse { UserId = updaterId, FullName = updaterName }
                 : null,
             RowVersion = row.Version.ToString(),
+            ShowcaseMetrics = showcaseMetrics.GetValueOrDefault(row.ProjectLineageId),
         }).ToArray();
     }
 
@@ -179,6 +196,7 @@ public sealed class GetProjectDataQueryHandler(IApplicationDbContext context) : 
 
     private sealed record ProjectRow(
         Guid ProjectId,
+        Guid ProjectLineageId,
         Guid TeamId,
         Guid ClassId,
         Guid SemesterId,

@@ -14,6 +14,7 @@ import {
   clearProjectDataFilters,
   displayList,
   displayText,
+  displayShowcaseMetric,
   hasActiveSearchOrFilters,
   hasFilterValue,
   mentorName,
@@ -281,7 +282,38 @@ const item: ProjectDataItem = {
   subjectId: 'subject-1', subjectCode: 'EXE201', classCode: 'EXE201_8', groups: [], projectName: 'Health app', description: null,
   startupIndustries: [], lecturer: null, mentor: null, academicMentor: null, achievements: [], competitions: [], achievementNote: null,
   achievementsUpdatedAtUtc: null, achievementsUpdatedBy: null, rowVersion: '7',
+  showcaseMetrics: null,
 };
+
+test('showcase reference values distinguish missing data from zero and format large counters', () => {
+  assert.equal(displayShowcaseMetric(undefined), '—');
+  assert.equal(displayShowcaseMetric(null), '—');
+  assert.equal(displayShowcaseMetric(0), '0');
+  assert.equal(displayShowcaseMetric(12500), '12,500');
+});
+
+test('the list client preserves showcase counters and missing showcases alongside existing filters and sort', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const metrics = { viewCount: 120, upvoteCount: 0, commentCount: 7 };
+  try {
+    mock.onGet('/project-data').reply(config => {
+      assert.equal(config.params.sortBy, 'projectName');
+      assert.equal(config.params.isDescending, true);
+      assert.deepEqual(config.params.startupIndustry, ['EdTech']);
+      return [200, { success: true, message: 'ok', data: {
+        items: [{ ...item, showcaseMetrics: metrics }, { ...item, projectId: 'project-2' }],
+        pageIndex: 1, pageSize: 20, totalItems: 2, totalPages: 1,
+      } }];
+    });
+    const response = await projectDataApi.list({
+      ...DEFAULT_PROJECT_DATA_QUERY, sortBy: 'projectName', isDescending: true, startupIndustry: ['EdTech'],
+    });
+    assert.deepEqual(response.data.items[0].showcaseMetrics, metrics);
+    assert.equal(response.data.items[1].showcaseMetrics, null);
+  } finally {
+    mock.restore();
+  }
+});
 
 test('the API client sends server-side query params, honours abort signals and maps the envelope', async () => {
   const mock = new MockAdapter(axiosClient);

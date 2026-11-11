@@ -22,6 +22,7 @@ import { toProjectDataRequestParams, toProjectDataSummaryParams, toProjectDataTr
 const repeatedKeys = { indexes: null } as const;
 
 export const projectDataApi = {
+  /** List rows include nullable showcaseMetrics with current lineage-wide counters for staff reference. */
   list: (query: ProjectDataQuery, signal?: AbortSignal): Promise<ApiEnvelope<ProjectDataPage>> =>
     axiosClient.get('/project-data', { params: toProjectDataRequestParams(query), paramsSerializer: repeatedKeys, signal }),
 
