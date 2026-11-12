@@ -1,4 +1,4 @@
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using FluentAssertions;
 
@@ -40,7 +40,7 @@ public sealed class CheckpointEvidenceRankingTests
             "Cloud-SaaS: Phân khúc Xử lý chứng từ thông minh (IDP) tăng trưởng bùng nổ",
             "HẠN CHẾ Phụ thuộc mật độ địa lý"
         ];
-        var normalised = file.Select(line => MentorRankingFeatures.Normalize(line)).ToArray();
+        var normalised = file.Select(line => MentorEvidenceText.Normalize(line)).ToArray();
 
         CheckpointCriterionCues.Find("Target Customer Definition", Target.Excellent, file, normalised)
             .Single().Found.Should().BeFalse("a software market segment is not the team's customer segment");
@@ -49,7 +49,7 @@ public sealed class CheckpointEvidenceRankingTests
         // A customer segment written in Vietnamese still counts, even with a broken diacritic from the PDF.
         string[] real = ["Phân khúc ban đầ u: F&B nhiều chi nhánh, nhân viên làm theo ca."];
         CheckpointCriterionCues.Find("Target Customer Definition", Target.Excellent, real,
-            real.Select(line => MentorRankingFeatures.Normalize(line)).ToArray()).Single().Found.Should().BeTrue();
+            real.Select(line => MentorEvidenceText.Normalize(line)).ToArray()).Single().Found.Should().BeTrue();
     }
 
     [Fact]

@@ -12,6 +12,7 @@ using Testcontainers.PostgreSql;
 using EHub.Infrastructure.Persistence;
 using EHub.Infrastructure.Persistence.Seed;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Infrastructure.Mentoring.Gemini;
 
 namespace EHub.IntegrationTests.Common;
 
@@ -52,9 +53,18 @@ public sealed class CustomWebApplicationFactory
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Mentoring:MatchingProvider"] = "Gemini",
+            ["Mentoring:Gemini:ApiKey"] = "SYNTHETIC_GEMINI_TEST_KEY",
+            ["Mentoring:Gemini:DataTransferEnabled"] = "true",
+            ["Mentoring:Gemini:MinimumRequestIntervalSeconds"] = "0"
+        }));
 
         builder.ConfigureServices(services =>
         {
+            services.AddHttpClient<IGenerativeMentorFitRanker, GeminiMentorFitRanker>()
+                .ConfigurePrimaryHttpMessageHandler(() => new SyntheticGeminiHandler());
             // Background workers race with explicit outbox assertions and serializable
             // workflow commands. Integration tests invoke those flows directly, so they
             // must run against a deterministic database without hosted workers.

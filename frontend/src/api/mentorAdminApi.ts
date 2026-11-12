@@ -66,7 +66,7 @@ export const mentorAdminApi = {
       edits,
       includeTemporaryMentors,
       ...(seed === undefined ? {} : { seed }),
-    }, { signal, ...(strategy === 'Ai' ? { timeout: 60_000 } : {}) }),
+    }, { signal, ...(strategy === 'Ai' ? { timeout: 110_000 } : {}) }),
 
   /** Downloads the semester assignment workbook: sheets EXE101, EXE201 and a mentor summary. */
   exportAssignments: (semesterId: string): Promise<Blob> =>

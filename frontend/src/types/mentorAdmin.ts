@@ -215,6 +215,17 @@ export interface MentorAllocationMentorLoad {
   totalAfter: number;
 }
 
+export interface MentorAllocationBalance {
+  mentorType: MentorType;
+  semesterTeamCount: number;
+  eligibleMentorCount: number;
+  targetMinTeams: number;
+  targetMaxTeams: number;
+  extraTeamMentorCount: number;
+  minLoadAfter: number;
+  maxLoadAfter: number;
+}
+
 export interface MentorAllocationPreview {
   sessionId: string;
   semesterId: string;
@@ -233,6 +244,7 @@ export interface MentorAllocationPreview {
   skipped?: MentorAllocationSkipped[];
   unfilled?: MentorAllocationUnfilled[];
   mentorLoads?: MentorAllocationMentorLoad[];
+  balance?: MentorAllocationBalance[];
   conflicts?: MentorAllocationConflict[];
   existingAssignments?: MentorAllocationExisting[];
 }

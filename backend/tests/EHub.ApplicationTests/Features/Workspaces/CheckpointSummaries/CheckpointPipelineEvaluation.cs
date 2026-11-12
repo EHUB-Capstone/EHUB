@@ -3,6 +3,7 @@ using System.Text.Json;
 using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using EHub.Contracts.Workspaces;
 using EHub.Infrastructure.Mentoring;
+using Microsoft.Extensions.Configuration;
 using EHub.Infrastructure.Summarization;
 using Xunit.Abstractions;
 
@@ -34,7 +35,7 @@ public sealed class CheckpointPipelineEvaluation(ITestOutputHelper output)
     {
         var root = Environment.GetEnvironmentVariable("EHUB_EVAL_FIXTURES")!;
         var extractor = new SubmissionTextExtractor();
-        var topics = new CheckpointSummaryTopics(FileMentorFitRanker.ReadModel(null));
+        var topics = new CheckpointSummaryTopics(new FileMentorEvidenceGuard(new ConfigurationBuilder().Build()).FindAffirmedTopics);
         var settings = new CheckpointSummarySettings();
 
         var report = new StringBuilder("# Backend rules evaluation\n\n");

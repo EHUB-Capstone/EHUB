@@ -39,7 +39,7 @@ export const mentorSupportApi = {
   previewMyCv: async (): Promise<Blob> => axiosClient.get('/mentoring/profile/cv/preview', { responseType: 'blob' }),
   getDirectory: async (signal?: AbortSignal): Promise<MentorProfile[]> => data(await axiosClient.get('/mentoring/directory', { signal })),
   getRecommendations: async (teamId: string, signal?: AbortSignal): Promise<MentorRecommendation[]> =>
-    data(await axiosClient.get(`/mentoring/teams/${teamId}/recommendations`, { timeout: 55_000, signal })),
+    data(await axiosClient.get(`/mentoring/teams/${teamId}/recommendations`, { timeout: 110_000, signal })),
   getSessions: async (teamId?: string): Promise<MentoringSession[]> =>
     data(await axiosClient.get('/mentoring/sessions', { params: teamId ? { teamId } : {} })),
   createSession: async (session: SaveMentoringSession): Promise<MentoringSession> =>

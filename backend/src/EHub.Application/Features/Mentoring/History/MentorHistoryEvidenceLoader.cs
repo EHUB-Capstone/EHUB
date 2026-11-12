@@ -144,36 +144,12 @@ public static class MentorHistoryEvidenceLoader
 
     private sealed record AchievementNote(DateTime At, Guid ProjectId, string Note);
 
-    // Copies contain only the fields consumed by matching. Never return these copies as profile DTOs,
-    // persist them, or pass them to the semantic reranker, which can quote experience in its reasons.
-    public static IReadOnlyCollection<MentorProfile> ForRanking(IReadOnlyCollection<MentorProfile> profiles,
-        IReadOnlyDictionary<Guid, MentorHistoryEvidence> history) => profiles.Select(profile =>
-    {
-        if (!history.TryGetValue(profile.Id, out var evidence) || string.IsNullOrWhiteSpace(evidence.EvidenceText))
-            return profile;
-        var declaredExperience = Clip(profile.Experience, 4000);
-        return new RankingProfile(profile.Id)
-        {
-            UserId = profile.UserId, User = profile.User, Type = profile.Type,
-            Status = profile.Status, Expertise = profile.Expertise, StartupDomains = profile.StartupDomains,
-            TechnologySkills = profile.TechnologySkills, MentorTags = profile.MentorTags,
-            Experiences = profile.Experiences, Bio = profile.Bio,
-            Experience = declaredExperience + "\n" +
-                Clip(evidence.EvidenceText, Math.Min(MaximumHistoryCharacters, 5999 - declaredExperience.Length))
-        };
-    }).ToArray();
-
-    private sealed class RankingProfile : MentorProfile
-    {
-        public RankingProfile(Guid id) => Id = id;
-    }
-
     public static MentorFitRanking AddReasons(MentorFitRanking ranking, MentorHistoryEvidence evidence)
     {
         if (!ranking.HasEvidence) return ranking;
         var reasons = ranking.Reasons.ToList();
-        if (evidence.CompletedSessionCount > 0)
-            reasons.Add($"Lịch sử đã ghi nhận: {evidence.CompletedSessionCount} buổi hướng dẫn hoàn tất cho {evidence.MentoredTeamCount} nhóm");
+        if (evidence.MentoredTeamCount > 0)
+            reasons.Add($"Lịch sử đã ghi nhận: hướng dẫn {evidence.MentoredTeamCount} nhóm");
         if (evidence.AchievementCount > 0)
             reasons.Add($"Có {evidence.AchievementCount} dự án ghi nhận thành tích trong thời gian phụ trách");
         return ranking with { Reasons = reasons.Distinct(StringComparer.Ordinal).ToArray() };

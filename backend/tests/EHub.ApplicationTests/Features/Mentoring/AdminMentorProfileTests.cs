@@ -52,8 +52,7 @@ public sealed class AdminMentorProfileTests
         var stored = await context.MentorProfiles.Include(x => x.User).Include(x => x.Experiences).SingleAsync();
         stored.User.NormalizedEmail.Should().Be("updated@example.test");
         stored.Experiences.Should().ContainSingle().Which.Area.Should().Be("Cloud");
-        var reader = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), Substitute.For<IMentorEmbeddingSearch>(),
-            Substitute.For<IMentorCvTextReader>());
+        var reader = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), Substitute.For<IMentorCvTextReader>(), Substitute.For<IMentorRecommendationRanker>());
         var mine = await reader.GetMineAsync(stored.UserId, default);
         mine.Value.Experiences.Single().Years.Should().Be(5);
         mine.Value.TechnologySkills.Should().Contain("AI");
@@ -90,15 +89,7 @@ public sealed class AdminMentorProfileTests
         (await context.Users.CountAsync()).Should().Be(1);
     }
 
-    [Fact]
-    public void ExperienceAndTagsContributeToRecommendation()
-    {
-        var profile = new MentorProfile { Expertise = ["Product"], StartupDomains = ["Education"],
-            TechnologySkills = ["Cloud"], Tags = ["Founder"], Experiences = [new MentorExperience { Kind = "Technology", Area = "AI", Years = 5 }] };
-        var result = MentorFitScorer.Score(profile, "AI cloud education platform", 0, 0);
-        result.Reasons.Should().Contain("Chuyên môn phù hợp: AI").And.Contain("Chuyên môn phù hợp: Cloud");
-        result.Score.Should().BeGreaterThan(0);
-    }
+
 
     [Fact]
     public async Task DuplicatedExperienceIsRejected()

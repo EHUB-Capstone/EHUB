@@ -40,12 +40,12 @@ public sealed class MentoringWorkflowTests
         context.SemesterStaffAssignments.Add(new SemesterStaffAssignment { Semester = semester, User = other,
             Role = SemesterStaffRole.Mentor, Status = SemesterStaffStatus.Active });
         await context.SaveChangesAsync();
-        var embeddings = Substitute.For<IMentorEmbeddingSearch>();
-        embeddings.SimilaritiesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
-            Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, double>
-                { [profile.Id] = 0.8, [otherProfile.Id] = 0.2 });
-        var handler = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(), embeddings,
-            Substitute.For<IMentorCvTextReader>());
+        var ranker = Substitute.For<IMentorRecommendationRanker>();
+        ranker.RankAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
+            Arg.Any<CancellationToken>()).Returns(call => call.ArgAt<IReadOnlyCollection<MentorProfile>>(1)
+                .ToDictionary(item => item.Id, item => new MentorFitRanking(item.Id == profile.Id ? 70 : 20, ["AI profile evidence"])));
+        var handler = new MentorProfileHandler(context, Substitute.For<IMentorDocumentStorageService>(),
+            Substitute.For<IMentorCvTextReader>(), ranker);
 
         var denied = await handler.RecommendAsync(group.Id, Guid.NewGuid(), SystemRoles.Lecturer, default);
         var allowed = await handler.RecommendAsync(group.Id, lecturer.Id, SystemRoles.Lecturer, default);
@@ -73,9 +73,9 @@ public sealed class MentoringWorkflowTests
         availability.Status = SemesterStaffStatus.Active;
         await context.SaveChangesAsync();
 
-        embeddings.SimilaritiesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
-            Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, double>>(_ =>
-                throw new MentorEmbeddingUnavailableException());
+        ranker.RankAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(),
+            Arg.Any<CancellationToken>()).Returns<IReadOnlyDictionary<Guid, MentorFitRanking>>(_ =>
+                throw new MentorFitRankerUnavailableException());
         var unavailable = await handler.RecommendAsync(group.Id, lecturer.Id, SystemRoles.Lecturer, default);
         unavailable.Error.Code.Should().Be(ErrorCodes.MentorMatchingUnavailable);
 

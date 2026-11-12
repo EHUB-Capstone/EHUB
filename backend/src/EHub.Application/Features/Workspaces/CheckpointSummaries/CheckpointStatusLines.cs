@@ -88,7 +88,7 @@ internal static partial class CheckpointStatusLines
     }
 
     private static HashSet<string> Words(string text) =>
-        EHub.Application.Features.Mentoring.TrainedRanking.MentorRankingFeatures.Normalize(text)
+        EHub.Application.Features.Mentoring.Evidence.MentorEvidenceText.Normalize(text)
             .Split([' ', ',', '.', ':', ';', '(', ')', '-', '/', '"'], StringSplitOptions.RemoveEmptyEntries)
             .Where(word => word.Length > MinimumWordLength && !CommonWords.Contains(word))
             .ToHashSet(StringComparer.Ordinal);

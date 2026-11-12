@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, Pencil, RefreshCw, Undo2 } from 'lucide-react';
+import { useId, useMemo, useState } from 'react';
+import { AlertTriangle, ChevronDown, Pencil, RefreshCw, Undo2 } from 'lucide-react';
 import type {
   MentorAllocationConflict,
   MentorAllocationEdit,
@@ -10,6 +10,7 @@ import {
   ALL_CLASSES,
   buildTeamGrid,
   filterTeamGrid,
+  formatAllocationReason,
   getAiReviewAssignments,
   resolveClassFilter,
   teamClassOptions,
@@ -138,10 +139,24 @@ export default function MentorAllocationPreviewModal({
         </div>
         {preview.strategy === 'Ai' && (
           <p className="rounded-xl bg-info-50 px-3 py-2 text-body-sm text-info-dark">
-            AI fills open slots whenever an eligible mentor is available, using skills, experience, achievements, mentoring history and workload.
-            {' '}Review suggestions with a fit score of 0 closely. When matching evidence is missing, AI proposes a mentor by workload.
+            AI balances semester workload by mentor type first, then uses fit scores among mentors with the same workload.
+            {' '}Review suggestions with a fit score of 0 closely. You can change a mentor or leave a slot empty before accepting.
             {' '}Eligible mentors stay with continuing teams from EXE101 to EXE201. Fit scores are not probabilities.
           </p>
+        )}
+        {(preview.balance?.length ?? 0) > 0 && (
+          <section aria-label="Semester workload balance" className="rounded-xl border border-slate-200 p-3 text-body-sm text-slate-600">
+            <h3 className="font-semibold text-slate-800">Chia đều theo học kỳ</h3>
+            <p className="mt-1 text-caption text-slate-500">Tính tải trên cả học kỳ; chỉ thêm vào các vị trí trống trong phạm vi đã chọn. Có thể sửa tay trước khi chốt.</p>
+            <ul className="mt-2 space-y-1">
+              {preview.balance?.map(item => <li key={item.mentorType}>
+                <strong>{slotLabel[item.mentorType]}</strong>: {item.semesterTeamCount} nhóm / {item.eligibleMentorCount} mentor hợp lệ
+                {item.eligibleMentorCount > 0
+                  ? ` → mục tiêu ${item.targetMinTeams === item.targetMaxTeams ? item.targetMinTeams : `${item.targetMinTeams}–${item.targetMaxTeams}`} nhóm/mentor; sau đề xuất: ${item.minLoadAfter}–${item.maxLoadAfter} nhóm.`
+                  : ' → chưa có mentor hợp lệ để chia.'}
+              </li>)}
+            </ul>
+          </section>
         )}
         {errorMessage && (
           <div role="alert" className="rounded-xl bg-danger-50 px-3 py-2 text-body-sm text-danger-dark">
@@ -340,20 +355,45 @@ function SlotCell({ slot }: { slot: SlotView }) {
       </div>
       {(slot.fitScore != null || (slot.reasons?.length ?? 0) > 0) && (
         <div className="mt-2 space-y-1 text-caption text-slate-600">
-          {slot.fitScore != null && <p className="font-semibold">Fit score: {slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}</p>}
+          {slot.fitScore != null && <p className="font-semibold">Điểm phù hợp: {slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100</p>}
           {slot.history && <div role="group" aria-label={`Mentoring history for ${slot.mentorName ?? 'mentor'}`} className="space-y-1">
-            <p>{slot.history.completedSessionCount} completed sessions · {slot.history.mentoredTeamCount} mentored teams · {slot.history.achievementCount} projects with achievements</p>
-            <p>Base fit: {slot.history.baseFitScore} · History: +{slot.history.historyBonus} · Achievements: +{slot.history.achievementBonus} · Final score capped at 100</p>
+            <p>{slot.history.mentoredTeamCount || slot.history.achievementCount
+              ? `${slot.history.mentoredTeamCount} nhóm · ${slot.history.achievementCount} dự án có thành tích`
+              : 'Chưa có lịch sử hướng dẫn và thành tích.'}</p>
+            {(slot.history.historyBonus > 0 || slot.history.achievementBonus > 0) && (
+              <p>Điểm nền {slot.history.baseFitScore} · Lịch sử +{slot.history.historyBonus} · Thành tích +{slot.history.achievementBonus}</p>
+            )}
           </div>}
-          {(slot.reasons?.length ?? 0) > 0 && (
-            <ul className="list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${slot.mentorName ?? 'mentor'}`}>
-              {slot.reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}
-            </ul>
-          )}
+          {slot.needsReview && <p className="text-warning-dark">Cần kiểm tra mức phù hợp trước khi chốt.</p>}
+          <AssignmentDetails key={slot.mentorProfileId} mentorName={slot.mentorName} reasons={slot.reasons} />
         </div>
       )}
       {slot.replacesCurrent && slot.currentMentorName && (
         <p className="mt-1 text-caption text-amber-700">Replaces <span className="line-through">{slot.currentMentorName}</span> (assignment ends on save)</p>
+      )}
+    </div>
+  );
+}
+
+function AssignmentDetails({ mentorName, reasons }: { mentorName: string | null; reasons?: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
+  if (!reasons?.length) return null;
+  return (
+    <div>
+      <Button
+        size="xs" variant="ghost" className="w-full justify-between px-0"
+        aria-expanded={expanded} aria-controls={detailsId}
+        aria-label={`${expanded ? 'Thu gọn' : 'Xem chi tiết'} đánh giá của ${mentorName ?? 'mentor'}`}
+        onClick={() => setExpanded(value => !value)}
+      >
+        {expanded ? 'Thu gọn' : 'Xem chi tiết'}
+        <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </Button>
+      {expanded && (
+        <ul id={detailsId} className="mt-1 list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${mentorName ?? 'mentor'}`}>
+          {reasons.map((reason, index) => <li key={`${index}-${reason}`}>{formatAllocationReason(reason)}</li>)}
+        </ul>
       )}
     </div>
   );
@@ -498,11 +538,7 @@ function AttentionPanel({
               <li key={`${item.teamId}-${item.mentorType}`} className="rounded-lg border border-warning-light bg-warning-50 px-3 py-2 text-body-sm text-warning-dark">
                 <strong>{item.teamName}</strong> · {item.classCode} · {slotLabel[item.mentorType]}
                 <p>{item.mentorName} · Fit score: 0 <Badge variant="warning">Needs review</Badge></p>
-                {(item.reasons?.length ?? 0) > 0 && (
-                  <ul className="mt-1 list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${item.mentorName}`}>
-                    {item.reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}
-                  </ul>
-                )}
+                <AssignmentDetails mentorName={item.mentorName} reasons={item.reasons} />
               </li>
             ))}
           </ul>

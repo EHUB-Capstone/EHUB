@@ -21,7 +21,7 @@ Run workflow "Deploy Production" (nhánh main, SHA đầy đủ)
 
 Khác với staging:
 
-- **Không tạo lại database và Ollama.** Chỉ backend và frontend được tạo lại, nên mỗi lần
+- **Không tạo lại database.** Chỉ backend và frontend được tạo lại, nên mỗi lần
   release chỉ có gián đoạn khoảng vài chục giây khi hai container này khởi động lại. Nâng cấp
   image Postgres hoặc đổi định nghĩa Compose của `postgres`/`ollama` là thao tác thủ công
   riêng, theo runbook.
@@ -165,7 +165,7 @@ Thông báo lỗi tương ứng bước dừng:
 | `preconditions`, `verify-commit`, `staging-gate` | SHA sai, không thuộc `main`, hoặc nội dung chưa chạy trên staging | Chưa |
 | `backup` | Backup hoặc upload R2 lỗi, hoặc không có file mới | Chưa |
 | `checkout`, `set-image-tag`, `validate-compose`, `build` | Lỗi trước khi dừng dịch vụ | Chưa chạy dịch vụ mới; code đã checkout sang SHA mới |
-| `start-dependencies`, `embedding-model` | Postgres/Ollama không lên | Dịch vụ cũ vẫn chạy |
+| `start-dependencies` | PostgreSQL không lên | Dịch vụ cũ vẫn chạy |
 | `migrate` | Migration lỗi | **Có thể đã áp dụng một phần.** Dừng, đọc log, không sửa DB thủ công |
 | `start-application`, `health-check`, `verify-running-images` | Migration đã chạy, ứng dụng mới lỗi | **Có.** Xem mục 5 |
 
@@ -198,20 +198,13 @@ Thông báo lỗi tương ứng bước dừng:
 - Không có blue-green: gián đoạn ngắn khi backend/frontend khởi động lại là chấp nhận được
   ở quy mô pilot hiện tại.
 
-## 8. Công tắc provider AI (Ollama hoặc Hybrid)
+## Cấu hình AI hiện tại
 
-Giống staging: dòng `MENTOR_MATCHING_PROVIDER=Ollama|Hybrid` trong `/opt/ehub/app/.env.production`
-(không có dòng nghĩa là `Ollama`). **Production giữ `Ollama`** cho tới khi pilot Hybrid trên
-staging được chấp nhận ([HYBRID_MENTOR_VPS.md](HYBRID_MENTOR_VPS.md) mục 7). Khi bật `Hybrid`:
+Chỉ dùng Gemini, với cấu hình key phía server và dữ liệu nghề nghiệp đã được rà soát.
+Đặt `MENTOR_MATCHING_PROVIDER=Gemini` trong môi trường VPS. Script deploy đã được cập nhật
+luôn ghép `docker-compose.gemini.yml`; khi nâng cấp, phải cài bản script đã review mới
+trước khi dùng quy trình deploy. Khóa deploy, backup, migration và kiểm tra image giữ nguyên.
 
-- Script từ chối nếu RAM khả dụng dưới 1536 MB (VPS không có swap), trước cả bước backup.
-- `postgres` và `ollama` vẫn **không bao giờ** bị build hay tạo lại. Bước migrate và bước
-  khởi động ứng dụng dùng `--no-deps`, vì Compose tạo lại container database nếu định nghĩa
-  của nó lệch so với container đang chạy (điều này đã được kiểm chứng bằng Docker Compose thật).
-- `mentor-semantic` được gỡ và tạo lại cùng backend ở mỗi lần deploy; sức khỏe, revision model
-  và image của nó được kiểm tra riêng. Thất bại ở các kiểm tra này làm workflow đỏ.
-- Quay lui: đặt `Ollama` (hoặc xóa dòng), chạy Deploy Production với SHA đang chạy và tích
-  `skip_staging_gate` chỉ khi SHA đó chưa từng chạy trên staging. Script gỡ container
-  `mentor-semantic` còn lại.
-- Discord ghi "AI provider: ..." trong tin thành công và thất bại.
-- Sau khi sửa script này, cài lại bản mới vào `/opt/ehub/deploy/` (mục 2.3).
+Hướng dẫn chi tiết: [GEMINI_MENTOR_VPS.md](GEMINI_MENTOR_VPS.md).
+Script chỉ dọn container model đã nghỉ trong đúng Compose project khi thực sự deploy;
+không xóa volume hay database. Chưa có thao tác triển khai nào từ lần cập nhật code này.

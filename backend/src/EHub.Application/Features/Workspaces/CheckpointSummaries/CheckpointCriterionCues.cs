@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
 
@@ -11,7 +11,7 @@ namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 /// without the model, which of them a file mentions. It shows presence of evidence, never a grade: a file that mentions
 /// a roadmap may still have a poor one.
 /// Rubrics are written in English while students write in English or Vietnamese, so each concept lists its terms in
-/// both languages. Terms are regular expressions over accent-free lower-case text (see <c>MentorRankingFeatures.Normalize</c>).
+/// both languages. Terms are regular expressions over accent-free lower-case text (see <c>MentorEvidenceText.Normalize</c>).
 /// </summary>
 internal static class CheckpointCriterionCues
 {
@@ -65,7 +65,7 @@ internal static class CheckpointCriterionCues
     /// </summary>
     public static IReadOnlyList<string> Wanted(string? title, string? excellentText)
     {
-        var text = MentorRankingFeatures.Normalize(title + ". " + excellentText);
+        var text = MentorEvidenceText.Normalize(title + ". " + excellentText);
         if (text.Length == 0) return [];
         return Concepts
             .Select(concept => (concept.Label, Match: concept.Terms.Match(text)))
