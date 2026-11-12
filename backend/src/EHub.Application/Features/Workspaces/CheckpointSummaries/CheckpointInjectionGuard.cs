@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 
 namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 
@@ -18,7 +18,7 @@ internal static partial class CheckpointInjectionGuard
 
     public static bool IsInstructionToAi(string sentence)
     {
-        var text = MentorRankingFeatures.Normalize(sentence);
+        var text = MentorEvidenceText.Normalize(sentence);
         return text.Length > 0 && (AddressesTheAi().IsMatch(text) || OverridesInstructions().IsMatch(text) || AsksForAGrade().IsMatch(text));
     }
 

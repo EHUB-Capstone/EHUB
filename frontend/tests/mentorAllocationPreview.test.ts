@@ -14,6 +14,7 @@ import {
   ALL_CLASSES,
   buildTeamGrid,
   filterTeamGrid,
+  formatAllocationReason,
   getAiReviewAssignments,
   resolveClassFilter,
   teamClassOptions,
@@ -26,6 +27,14 @@ import {
   summarizePreview,
   upsertEdit,
 } from '../src/utils/mentorAllocationPreview.ts';
+
+test('assignment copy uses AI without exposing the provider or model identifier', () => {
+  assert.equal(formatAllocationReason('Gemini (gemini-3.5-flash-lite) đề xuất; bằng chứng: React'), 'AI đề xuất; bằng chứng: React');
+  assert.equal(formatAllocationReason('50% × Hồ sơ 73.75 + 30% × Gemini 70 = 57.88'), '50% × Hồ sơ 73.75 + 30% × AI 70 = 57.88');
+  assert.equal(formatAllocationReason('Model: gemini-3.1-flash-lite'), 'Model: AI');
+  assert.equal(formatAllocationReason('Gemini startupDomain: 75/100; bằng chứng: Ươm tạo'), 'Lĩnh vực: 75/100; bằng chứng: Ươm tạo');
+  assert.equal(formatAllocationReason('Ưu tiên lịch sử: +4 điểm'), 'Ưu tiên lịch sử: +4 điểm');
+});
 
 const row = (overrides: Partial<MentorAllocationRowPreview>): MentorAllocationRowPreview => ({
   teamId: 't1',
@@ -293,13 +302,13 @@ test('attention filter includes filled AI suggestions that need evidence review'
 
 test('the AI preview keeps the history and achievement score breakdown on the correct mentor slot', () => {
   const history = { baseFitScore: 80, completedSessionCount: 10, mentoredTeamCount: 2,
-    achievementCount: 2, historyBonus: 7, achievementBonus: 4 };
+    achievementCount: 2, historyBonus: 4, achievementBonus: 4 };
   const grid = buildTeamGrid(preview({ strategy: 'Ai', assignments: [
-    row({ fitScore: 91, history }),
+    row({ fitScore: 88, history }),
     row({ mentorType: 'Academic', mentorProfileId: 'other', fitScore: 0,
       history: { ...history, baseFitScore: 0, historyBonus: 0, achievementBonus: 0 } }),
   ] }));
-  assert.equal(grid[0].enterprise.fitScore, 91);
+  assert.equal(grid[0].enterprise.fitScore, 88);
   assert.deepEqual(grid[0].enterprise.history, history);
   assert.equal(grid[0].academic.history?.achievementBonus, 0);
   assert.equal(grid[0].academic.needsReview, true);
@@ -316,7 +325,7 @@ test('AI client keeps class scope, seed and manual edits, and saves only on expl
 
     assert.equal(response.data.sessionId, 'ai-session');
     assert.equal(mock.history.post.length, 1);
-    assert.equal(mock.history.post[0].timeout, 60_000);
+    assert.equal(mock.history.post[0].timeout, 110_000);
     assert.deepEqual(JSON.parse(mock.history.post[0].data), {
       semesterId: 'sem', classIds: ['class-1'], seed: 42, strategy: 'Ai', edits: [edit], includeTemporaryMentors: false,
     });

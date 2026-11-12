@@ -1,5 +1,0 @@
-services:
-  backend:
-    environment:
-      Mentoring__MatchingProvider: Trained
-      Mentoring__TrainedModelPath: /app/Mentoring/Models/allocation-model.json

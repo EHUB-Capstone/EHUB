@@ -51,12 +51,11 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
 
     {profile.history && <section className="border-t border-slate-200 pt-5" aria-labelledby="mentor-recorded-history">
       <h3 id="mentor-recorded-history" className="text-subheading text-secondary">Recorded mentoring history</h3>
-      <dl className="mt-3 grid gap-4 sm:grid-cols-3">
-        <div><dt className="text-caption text-slate-500">Completed sessions</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.completedSessionCount}</dd></div>
-        <div><dt className="text-caption text-slate-500">Teams coached in completed sessions</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.mentoredTeamCount}</dd></div>
+      <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+        <div><dt className="text-caption text-slate-500">Mentored teams</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.mentoredTeamCount}</dd></div>
         <div><dt className="text-caption text-slate-500">Projects with recorded achievements</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.achievementCount}</dd></div>
       </dl>
-      <p className="mt-3 text-caption text-slate-500">Completed mentoring sessions inform skill matching. Project achievements are counted when recorded during this mentor’s assignment.</p>
+      <p className="mt-3 text-caption text-slate-500">Recorded mentoring evidence identifies coached teams. Project achievements are counted when recorded during this mentor’s assignment.</p>
     </section>}
 
     <section className="border-t border-slate-200 pt-5">

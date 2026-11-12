@@ -1,5 +1,5 @@
 using System.Text;
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
 
@@ -105,14 +105,14 @@ internal static class CheckpointSummaryEvidence
         var neverQuoted = sentences.Select((sentence, position) => sentence.EndsWith('?') || CheckpointSummaryText.IsLabelStrip(sentence) ||
             CheckpointSummaryText.IsInterfaceText(sentence) || CheckpointSummaryText.IsCoverMetadata(sentence) ||
             // "Nhóm sẽ hoàn thiện lộ trình và các phần còn lại sau" says the roadmap is not there yet.
-            CheckpointSummaryText.IsDeferral(MentorRankingFeatures.Normalize(sentence)) ||
+            CheckpointSummaryText.IsDeferral(MentorEvidenceText.Normalize(sentence)) ||
             (!prepared[position].Title && !prepared[position].Short && CheckpointSummaryText.IsMostlyCapitals(sentence))).ToArray();
         // A heading with no content under it (only table cells, or the next numbered topic) shows the file covers a topic
         // but has nothing to quote.
         var hollow = Enumerable.Range(0, sentences.Count).Select(i => prepared[i].Short && IsHollow(sentences, titles, i)).ToArray();
 
         // Accent-free affirmative text of every sentence, for the dictionary of expected things (roadmap, persona...).
-        var normalised = sentences.Select(sentence => MentorRankingFeatures.Normalize(MentorEvidenceText.Positive(sentence))).ToArray();
+        var normalised = sentences.Select(sentence => MentorEvidenceText.Normalize(MentorEvidenceText.Positive(sentence))).ToArray();
         // The agenda after "Table of Contents" names the sections; it is not evidence about them.
         var contents = CheckpointSummaryText.ContentsLines(sentences);
 
@@ -131,7 +131,7 @@ internal static class CheckpointSummaryEvidence
                     Assessment = item.Assessment
                 };
             var terms = item.Title + ". " + item.Description;
-            var itemPairs = Pairs(MentorRankingFeatures.Normalize(terms));
+            var itemPairs = Pairs(MentorEvidenceText.Normalize(terms));
             var itemTopics = topics.Find(terms);
             // The criterion's own name ("Solution Fit") often appears only as a slide title ("SOLUTIONS"). All of its
             // longer words must be there: "BUSINESS WORKFLOW" is not about the business model.
@@ -268,7 +268,7 @@ internal static class CheckpointSummaryEvidence
 
     /// <summary>Accent-free words with a plural "s" removed, so "SOLUTIONS" matches "Solution".</summary>
     private static HashSet<string> Words(string text) =>
-        MentorRankingFeatures.Normalize(text)
+        MentorEvidenceText.Normalize(text)
             .Split([' ', ',', '.', ':', ';', '(', ')', '-', '/', '&', '"'], StringSplitOptions.RemoveEmptyEntries)
             .Select(word => word.Length > MinimumNameWord && word.EndsWith('s') ? word[..^1] : word)
             .ToHashSet(StringComparer.Ordinal);

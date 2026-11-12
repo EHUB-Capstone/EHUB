@@ -271,6 +271,18 @@ public sealed class MentorAllocationExistingPreview
     public bool Replaced { get; init; }
 }
 
+public sealed class MentorAllocationBalancePreview
+{
+    public string MentorType { get; init; } = string.Empty;
+    public int SemesterTeamCount { get; init; }
+    public int EligibleMentorCount { get; init; }
+    public int TargetMinTeams { get; init; }
+    public int TargetMaxTeams { get; init; }
+    public int ExtraTeamMentorCount { get; init; }
+    public int MinLoadAfter { get; init; }
+    public int MaxLoadAfter { get; init; }
+}
+
 public sealed class MentorAllocationPreviewResponse
 {
     public Guid SessionId { get; init; }
@@ -289,6 +301,7 @@ public sealed class MentorAllocationPreviewResponse
     public IReadOnlyCollection<MentorAllocationSkippedPreview> Skipped { get; init; } = Array.Empty<MentorAllocationSkippedPreview>();
     public IReadOnlyCollection<MentorAllocationUnfilledPreview> Unfilled { get; init; } = Array.Empty<MentorAllocationUnfilledPreview>();
     public IReadOnlyCollection<MentorAllocationMentorLoad> MentorLoads { get; init; } = Array.Empty<MentorAllocationMentorLoad>();
+    public IReadOnlyCollection<MentorAllocationBalancePreview> Balance { get; init; } = Array.Empty<MentorAllocationBalancePreview>();
     public IReadOnlyCollection<MentorAllocationConflictPreview> Conflicts { get; init; } = Array.Empty<MentorAllocationConflictPreview>();
     public IReadOnlyCollection<MentorAllocationExistingPreview> ExistingAssignments { get; init; } = Array.Empty<MentorAllocationExistingPreview>();
     public int ReplacementCount { get; init; }

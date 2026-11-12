@@ -11,16 +11,8 @@
 #             77 not root, anything else = failed stage (see EHUB_DEPLOY_RESULT).
 # A failure never rolls back automatically: a migration may already have been applied.
 #
-# AI provider switch: MENTOR_MATCHING_PROVIDER=Ollama|Trained|Hybrid in .env.staging (a missing
-# line means Ollama). Hybrid adds docker-compose.hybrid.yml and the mentor-semantic container,
-# which shares the backend's network namespace and is therefore recreated with the backend.
-# Trained adds docker-compose.trained.yml with a model packaged in the backend image; it does
-# not start Ollama or pull an embedding model. Leaving Hybrid removes mentor-semantic.
-#
-# AI checkpoint summaries: CHECKPOINT_SUMMARY_PROVIDER=Disabled|Ollama in the env file (a missing line
-# means Disabled). Ollama starts the ollama container even with the Trained provider and pulls the
-# summary model (CHECKPOINT_SUMMARY_MODEL, default qwen3.5:2b-q4_K_M). Compose passes the same value
-# to the backend, which then shows the feature and runs its background workers; Disabled hides it.
+# AI matching uses Gemini with backend scoring. Set its server-side key and reviewed-data transfer in the environment.
+# Optional checkpoint summaries keep their independent Disabled/Ollama switch.
 set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -45,18 +37,11 @@ readonly HEALTH_INTERVAL_SECONDS=5
 readonly COMPOSE_WAIT_SECONDS=300
 readonly MIN_FREE_GB=8
 readonly COMPOSE_PROJECT="ehub-staging"
-# Hybrid mentor matching (see docs/deployment/HYBRID_MENTOR_VPS.md).
-readonly SEMANTIC_OVERRIDE="${APP_DIR}/docker-compose.hybrid.yml"
-readonly TRAINED_OVERRIDE="${APP_DIR}/docker-compose.trained.yml"
-readonly TRAINED_MODEL_SOURCE="${APP_DIR}/backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json"
-readonly SEMANTIC_PREPARE_MODEL="${APP_DIR}/tools/mentor-matching/semantic/prepare_model.py"
-readonly SEMANTIC_HEALTH_ATTEMPTS=24
-readonly SEMANTIC_HEALTH_INTERVAL_SECONDS=5
-readonly MIN_AVAILABLE_MEMORY_MB=1536
+readonly GEMINI_OVERRIDE="${APP_DIR}/docker-compose.gemini.yml"
 
 STAGE="init"
 TARGET_SHA=""
-PROVIDER="Ollama"
+PROVIDER="Gemini"
 SUMMARY="Disabled"
 PREVIOUS_SHA="unknown"
 OWNER=""
@@ -246,11 +231,9 @@ else
     provider_value=""
 fi
 case "${provider_value,,}" in
-    ""|ollama) PROVIDER="Ollama" ;;
-    trained) PROVIDER="Trained" ;;
-    hybrid) PROVIDER="Hybrid" ;;
+    ""|gemini) PROVIDER="Gemini" ;;
     *)
-        echo "MENTOR_MATCHING_PROVIDER must be Ollama, Trained or Hybrid." >&2
+        echo "Only MENTOR_MATCHING_PROVIDER=Gemini is supported. Update the environment before deploying." >&2
         false
         ;;
 esac
@@ -287,20 +270,6 @@ if [[ ! "${SUMMARY_MODEL}" =~ ^[A-Za-z0-9._:/-]+$ ]]; then
 fi
 echo "AI checkpoint summaries: ${SUMMARY}"
 
-# Ollama is needed for mentor embeddings (every provider but Trained) or for summaries.
-NEEDS_OLLAMA="false"
-if [[ "${PROVIDER}" != "Trained" || "${SUMMARY}" == "Ollama" ]]; then
-    NEEDS_OLLAMA="true"
-fi
-
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    # The VPS has no swap: refuse to start another memory consumer when RAM is already short.
-    available_mb="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024 }' /proc/meminfo)"
-    if (( available_mb < MIN_AVAILABLE_MEMORY_MB )); then
-        echo "Only ${available_mb} MB of memory is available; Hybrid needs at least ${MIN_AVAILABLE_MEMORY_MB} MB." >&2
-        false
-    fi
-fi
 
 stage "verify-commit"
 git_as_owner fetch --quiet origin "+refs/heads/develop:refs/remotes/origin/develop"
@@ -343,19 +312,11 @@ fi
 mv -f -- "${temporary_env}" "${ENV_FILE}"
 
 compose=(docker compose --project-name "${COMPOSE_PROJECT}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}")
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    if [[ ! -f "${SEMANTIC_OVERRIDE}" || ! -f "${SEMANTIC_PREPARE_MODEL}" ]]; then
-        echo "This commit has no Hybrid support files (docker-compose.hybrid.yml, semantic service)." >&2
-        false
-    fi
-    compose+=(-f "${SEMANTIC_OVERRIDE}")
-elif [[ "${PROVIDER}" == "Trained" ]]; then
-    if [[ ! -f "${TRAINED_OVERRIDE}" ]]; then
-        echo "This commit has no Trained support file (docker-compose.trained.yml)." >&2
-        false
-    fi
-    compose+=(-f "${TRAINED_OVERRIDE}")
+if [[ ! -f "${GEMINI_OVERRIDE}" ]]; then
+    echo "This commit has no Gemini support file (docker-compose.gemini.yml)." >&2
+    false
 fi
+compose+=(-f "${GEMINI_OVERRIDE}")
 
 stage "validate-compose"
 "${compose[@]}" config --quiet
@@ -364,24 +325,14 @@ stage "build"
 "${compose[@]}" build postgres
 "${compose[@]}" build backend
 "${compose[@]}" build frontend
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    "${compose[@]}" build mentor-semantic
-fi
 
 stage "start-dependencies"
 dependencies=(postgres)
-if [[ "${NEEDS_OLLAMA}" == "true" ]]; then
+if [[ "${SUMMARY}" == "Ollama" ]]; then
     dependencies+=(ollama)
 fi
 "${compose[@]}" up -d --wait --wait-timeout "${COMPOSE_WAIT_SECONDS}" "${dependencies[@]}"
 
-if [[ "${PROVIDER}" != "Trained" ]]; then
-    stage "embedding-model"
-    models="$("${compose[@]}" exec -T ollama ollama list)"
-    if ! grep -q '^bge-m3[: ]' <<< "${models}"; then
-        "${compose[@]}" exec -T ollama ollama pull bge-m3
-    fi
-fi
 
 if [[ "${SUMMARY}" == "Ollama" ]]; then
     stage "summary-model"
@@ -395,30 +346,28 @@ fi
 stage "migrate"
 "${compose[@]}" run --rm -T --no-deps backend --initialize-database
 
-# mentor-semantic shares the backend's network namespace, so it only works while attached to the
-# backend container that exists right now. It is therefore always removed first and, for Hybrid,
-# created again after the backend; this never relies on Compose recreating it implicitly.
-remove_semantic_containers() {
-    local ids
+# Retire only known AI containers in this stack. Database containers and volumes stay intact.
+remove_retired_ai_containers() {
+    local service ids
     local -a id_list
-    ids="$(docker ps -aq \
-        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
-        --filter "label=com.docker.compose.service=mentor-semantic")"
-    if [[ -n "${ids}" ]]; then
-        echo "Removing mentor-semantic container(s) so none stays attached to an old backend."
-        mapfile -t id_list <<< "${ids}"
-        docker rm -f "${id_list[@]}" > /dev/null
-    fi
+    for service in ollama mentor-semantic; do
+        # The summary runtime is still needed when that independent feature is enabled.
+        if [[ "${service}" == "ollama" && "${SUMMARY}" == "Ollama" ]]; then continue; fi
+        ids="$(docker ps -aq \
+            --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" \
+            --filter "label=com.docker.compose.service=${service}")"
+        if [[ -n "${ids}" ]]; then
+            echo "Removing retired AI container(s): ${service}"
+            mapfile -t id_list <<< "${ids}"
+            docker rm -f "${id_list[@]}" > /dev/null
+        fi
+    done
 }
 
 stage "start-application"
-remove_semantic_containers
-# --no-deps: postgres and ollama were converged in "start-dependencies" and are not touched again.
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    "${compose[@]}" up -d --wait --no-deps --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend mentor-semantic frontend
-else
-    "${compose[@]}" up -d --wait --no-deps --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend frontend
-fi
+remove_retired_ai_containers
+# --no-deps: the database was prepared in "start-dependencies" and is not touched again.
+"${compose[@]}" up -d --wait --no-deps --wait-timeout "${COMPOSE_WAIT_SECONDS}" backend frontend
 
 check_endpoint() {
     local path="$1" attempt
@@ -434,62 +383,12 @@ check_endpoint() {
     return 1
 }
 
-# The backend readiness endpoint does not cover the semantic service, so it is checked on its own
-# from inside the backend's network namespace: ready, and the model revision the commit pins.
-check_semantic() {
-    local expected_revision attempt body
-    expected_revision="$(sed -n 's/^REVISION = "\([0-9a-f]\{40\}\)".*/\1/p' "${SEMANTIC_PREPARE_MODEL}")"
-    if [[ -z "${expected_revision}" ]]; then
-        echo "Could not read the pinned model revision from prepare_model.py." >&2
-        return 1
-    fi
-    for (( attempt = 1; attempt <= SEMANTIC_HEALTH_ATTEMPTS; attempt++ )); do
-        if body="$("${compose[@]}" exec -T backend curl --fail --silent --max-time 5 \
-                http://127.0.0.1:8091/health 2> /dev/null)" \
-            && grep -Eq '"ready"[[:space:]]*:[[:space:]]*true' <<< "${body}" \
-            && grep -Eq "\"revision\"[[:space:]]*:[[:space:]]*\"${expected_revision}\"" <<< "${body}"; then
-            echo "ok mentor-semantic (model revision ${expected_revision:0:12})"
-            return 0
-        fi
-        sleep "${SEMANTIC_HEALTH_INTERVAL_SECONDS}"
-    done
-    echo "mentor-semantic is not ready with the pinned model after ${SEMANTIC_HEALTH_ATTEMPTS} attempts." >&2
-    return 1
-}
 
-# /health/ready does not load the mentor model. A checkout under umask 077 once produced an image in
-# which only root could read it: every health check passed while AI allocation failed. This check runs
-# as the backend's own unprivileged user and compares the model with the one in the reviewed commit.
-check_trained_model() {
-    local expected model_path actual
-    if [[ ! -f "${TRAINED_MODEL_SOURCE}" ]]; then
-        echo "This commit has no packaged mentor model (${TRAINED_MODEL_SOURCE})." >&2
-        return 1
-    fi
-    expected="$(sha256sum "${TRAINED_MODEL_SOURCE}" | cut -d' ' -f1)"
-    if ! model_path="$("${compose[@]}" exec -T backend printenv Mentoring__TrainedModelPath)" \
-            || [[ -z "${model_path}" ]]; then
-        echo "The backend has no Mentoring__TrainedModelPath; the Trained override is not applied." >&2
-        return 1
-    fi
-    if ! actual="$("${compose[@]}" exec -T backend sha256sum "${model_path}" | cut -d' ' -f1)"; then
-        echo "The backend user cannot read the mentor model ${model_path}; AI allocation would fail." >&2
-        return 1
-    fi
-    if [[ "${actual}" != "${expected}" ]]; then
-        echo "The mentor model in the backend (${actual:0:12}) differs from the commit (${expected:0:12})." >&2
-        return 1
-    fi
-    echo "ok mentor model (sha256 ${expected:0:12})"
-}
 
 stage "health-check"
 check_endpoint /healthz
 check_endpoint /health/live
 check_endpoint /health/ready
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    check_semantic
-fi
 
 stage "verify-running-images"
 for service in backend frontend; do
@@ -500,26 +399,14 @@ for service in backend frontend; do
         false
     fi
 done
-if [[ "${PROVIDER}" == "Hybrid" ]]; then
-    container_id="$("${compose[@]}" ps -q mentor-semantic)"
-    running_image="$(docker inspect --format '{{.Config.Image}}' "${container_id}")"
-    if [[ "${running_image}" != "ehub-mentor-semantic:${TARGET_SHA}" ]]; then
-        echo "Running mentor-semantic image is ${running_image}, expected the requested commit." >&2
-        false
-    fi
-fi
 
-if [[ "${PROVIDER}" == "Trained" ]]; then
-    stage "verify-ai-model"
-    check_trained_model
-fi
 
 trap - ERR
 record "SUCCESS sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER}"
 echo "EHUB_DEPLOY_RESULT=success sha=${TARGET_SHA} previous=${PREVIOUS_SHA} provider=${PROVIDER}"
 
 # Housekeeping runs after the result line and must never change the release outcome. Staging keeps
-# the last 5 releases (it deploys on every push to develop); mentor-semantic is only built for Hybrid.
+# the last 5 releases (it deploys on every push to develop).
 if ! cleanup_after_release 5 '^[0-9a-f]{40}$' ehub-staging-backend ehub-staging-frontend ehub-mentor-semantic; then
     echo "WARNING: post-release cleanup failed; the release itself succeeded." >&2
 fi

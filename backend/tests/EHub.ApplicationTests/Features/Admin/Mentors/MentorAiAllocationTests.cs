@@ -100,7 +100,7 @@ public sealed class MentorAiAllocationTests
     }
 
     [Fact]
-    public void Engine_PrefersGenuineEvidenceEvenAtZeroScore_ToAnyUnprovenCandidate()
+    public void Engine_PrefersSemesterBalanceBeforeEvidenceAndMarksAnUnprovenChoiceForReview()
     {
         var team = new AllocationTeam(Guid.NewGuid(), Guid.NewGuid(), "A", "Project");
         var evidenced = new AllocationMentor(Guid.NewGuid(), "Evidenced", "", MentorType.Enterprise);
@@ -118,10 +118,10 @@ public sealed class MentorAiAllocationTests
         var result = MentorAllocationEngine.Allocate([team], [evidenced, unproven], existing, 9, AllocationStrategy.Ai, rankings);
 
         var proposal = result.Proposals.Should().ContainSingle().Subject;
-        proposal.Mentor.Id.Should().Be(evidenced.Id);
-        proposal.Ranking!.HasEvidence.Should().BeTrue();
-        proposal.Ranking.Reasons.Should().Equal("Specific work evidence");
-        result.Warnings.Should().NotContain(message => message.Contains("cần rà soát"));
+        proposal.Mentor.Id.Should().Be(unproven.Id);
+        proposal.Ranking!.HasEvidence.Should().BeFalse();
+        proposal.Ranking.Score.Should().Be(0);
+        result.Warnings.Should().Contain(message => message.Contains("admin cần rà soát"));
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class MentorAiAllocationTests
     }
 
     [Fact]
-    public void Engine_UsesPreciseFitBeforeWorkload_ThenBalancesTiesAcrossOtherClasses()
+    public void Engine_BalancesAcrossOtherClassesBeforeFitAndUsesPreciseFitForEqualLoads()
     {
         var team = new AllocationTeam(Guid.NewGuid(), Guid.NewGuid(), "A", "First");
         var busy = new AllocationMentor(Guid.NewGuid(), "Busy", "", MentorType.Enterprise);
@@ -210,7 +210,9 @@ public sealed class MentorAiAllocationTests
         var rankings = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> { [team.Id] = fits };
 
         var precise = MentorAllocationEngine.Allocate([team], [busy, free], existing, 7, AllocationStrategy.Ai, rankings);
-        precise.Proposals.Single().Mentor.Id.Should().Be(busy.Id);
+        precise.Proposals.Single().Mentor.Id.Should().Be(free.Id);
+        var equalLoad = MentorAllocationEngine.Allocate([team], [busy, free], [], 7, AllocationStrategy.Ai, rankings);
+        equalLoad.Proposals.Single().Mentor.Id.Should().Be(busy.Id);
         fits[free.Id] = new(80, [], true, 80.49);
         var tied = MentorAllocationEngine.Allocate([team], [busy, free], existing, 7, AllocationStrategy.Ai, rankings);
         tied.Proposals.Single().Mentor.Id.Should().Be(free.Id);
@@ -240,6 +242,13 @@ public sealed class MentorAiAllocationTests
         row.FitScore.Should().Be(80);
         row.Reasons.Should().Contain("Matching evidence");
         result.Value.MentorLoads.Single(item => item.MentorProfileId == busy.Id).TotalBefore.Should().Be(1);
+        var balance = result.Value.Balance.Single(item => item.MentorType == nameof(MentorType.Enterprise));
+        balance.SemesterTeamCount.Should().Be(2, "class-scoped previews use the whole semester's team count");
+        balance.EligibleMentorCount.Should().Be(2);
+        balance.TargetMinTeams.Should().Be(1);
+        balance.TargetMaxTeams.Should().Be(1);
+        balance.MinLoadAfter.Should().Be(1);
+        balance.MaxLoadAfter.Should().Be(1);
         db.MentorAllocationSessions.Should().ContainSingle();
         await ranker.Received(1).RankForAllocationAsync("Marketing platform\nSelected", Arg.Is<IReadOnlyCollection<MentorProfile>>(
             profiles => profiles != null && profiles.Count == 2 && profiles.All(profile => profile.Id == busy.Id || profile.Id == free.Id)), Arg.Any<CancellationToken>());
@@ -283,7 +292,10 @@ public sealed class MentorAiAllocationTests
         await db.SaveChangesAsync();
         var ranker = Substitute.For<IMentorRecommendationRanker>();
         ranker.RankForAllocationAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(), Arg.Any<CancellationToken>())
-            .Returns(new Dictionary<Guid, MentorFitRanking> { [aiMentor.Id] = new(95, ["Project evidence"]) });
+            .Returns(new Dictionary<Guid, MentorFitRanking>
+            {
+                [aiMentor.Id] = new(95, ["Project evidence"]), [previousMentor.Id] = new(0, [], false)
+            });
 
         var result = await Handler(db, ranker).PreviewAllocationAsync(new PreviewMentorAllocationRequest
         {
@@ -347,8 +359,7 @@ public sealed class MentorAiAllocationTests
     }
 
     [Theory]
-    [InlineData("trained")]
-    [InlineData("embedding")]
+    [InlineData("model")]
     [InlineData("timeout")]
     [InlineData("unconfigured")]
     public async Task ProviderUnavailable_DoesNotPersistAPartialOrRandomPreview(string failure)
@@ -358,7 +369,6 @@ public sealed class MentorAiAllocationTests
         var ranker = Substitute.For<IMentorRecommendationRanker>();
         Exception error = failure switch
         {
-            "embedding" => new MentorEmbeddingUnavailableException(),
             "timeout" => new OperationCanceledException(),
             _ => new MentorFitRankerUnavailableException()
         };
@@ -403,6 +413,64 @@ public sealed class MentorAiAllocationTests
 
         result.Error.Code.Should().Be(ErrorCodes.MentorAllocationInvalid);
         await ranker.DidNotReceiveWithAnyArgs().RankForAllocationAsync(default!, default!, default);
+    }
+
+    [Theory]
+    [InlineData(107, 37, 17)]
+    [InlineData(10, 3, 2)]
+    [InlineData(3, 5, 7)]
+    public void Engine_BalancesBothTypesEvenWhenEveryProjectPrefersTheSameMentor(int teamCount, int enterpriseCount, int academicCount)
+    {
+        var classId = Guid.NewGuid();
+        var teams = Enumerable.Range(0, teamCount).Select(index => new AllocationTeam(Guid.NewGuid(), classId, $"T{index}", "Synthetic project")).ToArray();
+        AllocationMentor[] Pool(MentorType type, int count) => Enumerable.Range(0, count)
+            .Select(index => new AllocationMentor(Guid.NewGuid(), $"Synthetic {type} {index}", "", type)).ToArray();
+        var mentors = Pool(MentorType.Enterprise, enterpriseCount).Concat(Pool(MentorType.Academic, academicCount)).ToArray();
+        var rankings = teams.ToDictionary(team => team.Id, _ => (IReadOnlyDictionary<Guid, MentorFitRanking>)mentors
+            .Select((mentor, index) => (mentor, score: index == 0 || index == enterpriseCount ? 100 : 1))
+            .ToDictionary(item => item.mentor.Id, item => new MentorFitRanking(item.score, ["Relevant evidence"])));
+
+        var outcome = MentorAllocationEngine.Allocate(teams, mentors, [], 23, AllocationStrategy.Ai, rankings);
+        var repeated = MentorAllocationEngine.Allocate(teams, mentors, [], 23, AllocationStrategy.Ai, rankings);
+
+        outcome.Proposals.Should().HaveCount(teamCount * 2);
+        outcome.Proposals.Select(item => (item.Team.Id, item.Mentor.Type)).Should().OnlyHaveUniqueItems();
+        outcome.Proposals.Select(item => (item.Team.Id, item.Mentor.Id)).Should()
+            .Equal(repeated.Proposals.Select(item => (item.Team.Id, item.Mentor.Id)));
+        foreach (var type in new[] { MentorType.Enterprise, MentorType.Academic })
+        {
+            var pool = mentors.Where(mentor => mentor.Type == type).ToArray();
+            var counts = pool.Select(mentor => outcome.Proposals.Count(item => item.Mentor.Id == mentor.Id)).ToArray();
+            counts.Min().Should().Be(teamCount / pool.Length);
+            counts.Max().Should().Be((int)Math.Ceiling((double)teamCount / pool.Length));
+        }
+    }
+
+    [Fact]
+    public async Task ManualEditsMayExceedTheBalanceTargetAndAutoAllocationFillsOtherMentorsFirst()
+    {
+        await using var db = Context();
+        var (selected, busy, free) = await SeedAsync(db);
+        var manualTeams = new[] { selected, AddTeam(db, selected.Class.Semester, "Manual two"), AddTeam(db, selected.Class.Semester, "Manual three") };
+        var automatic = AddTeam(db, selected.Class.Semester, "Automatic");
+        await db.SaveChangesAsync();
+        var ranker = ConstantRanker();
+        var result = await Handler(db, ranker).PreviewAllocationAsync(new()
+        {
+            SemesterId = selected.Class.SemesterId, Strategy = MentorAllocationStrategies.Ai, Seed = 23,
+            Edits = manualTeams.Select(team => new MentorAllocationEdit
+            { TeamId = team.Id, MentorType = nameof(MentorType.Enterprise), MentorProfileId = busy.Id }).ToArray()
+        });
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CanCommit.Should().BeTrue();
+        result.Value.Assignments.Should().HaveCount(4);
+        result.Value.Assignments.Count(row => row.Source == MentorAllocationSources.Manual && row.MentorProfileId == busy.Id).Should().Be(3);
+        result.Value.Assignments.Single(row => row.TeamId == automatic.Id).MentorProfileId.Should().Be(free.Id);
+        result.Value.Balance.Single(row => row.MentorType == nameof(MentorType.Enterprise)).MaxLoadAfter.Should().Be(3);
+        result.Value.Warnings.Should().Contain(message => message.Contains("chênh lệch"));
+        db.MentorAssignments.Should().BeEmpty("admin acceptance is still required");
+        await ranker.Received(1).RankForAllocationAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(), Arg.Any<CancellationToken>());
     }
 
     private static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>()

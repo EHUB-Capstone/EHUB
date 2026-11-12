@@ -19,6 +19,9 @@ using CloudinaryDotNet;
 using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Storage;
 using EHub.Infrastructure.Mentoring;
+using EHub.Infrastructure.Mentoring.Gemini;
+using EHub.Application.Features.Mentoring.Scoring;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pgvector.EntityFrameworkCore;
 
 namespace EHub.Infrastructure;
@@ -35,29 +38,23 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString,
                 b => { b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName); b.UseVector(); }));
 
-        services.AddHttpClient<IMentorEmbeddingSearch, OllamaMentorEmbeddingSearch>(client =>
-        {
-            var baseUrl = configuration["Mentoring:OllamaBaseUrl"] ?? "http://localhost:11434";
-            client.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/", UriKind.Absolute);
-            client.Timeout = TimeSpan.FromSeconds(90);
-        });
-        var matchingProvider = configuration["Mentoring:MatchingProvider"] ?? "Ollama";
-        if (string.Equals(matchingProvider, "Trained", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(matchingProvider, "Hybrid", StringComparison.OrdinalIgnoreCase))
-        {
-            services.AddSingleton<IMentorFitRanker, FileMentorFitRanker>();
-            if (string.Equals(matchingProvider, "Hybrid", StringComparison.OrdinalIgnoreCase))
-            {
-                var semanticUri = LocalSemanticMentorReranker.ServiceUri(configuration);
-                services.AddHttpClient<IMentorSemanticReranker, LocalSemanticMentorReranker>(client =>
-                {
-                    client.BaseAddress = semanticUri;
-                    client.Timeout = TimeSpan.FromSeconds(40);
-                }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
-            }
-        }
-        else if (!string.Equals(matchingProvider, "Ollama", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Mentoring:MatchingProvider must be Ollama, Trained or Hybrid.");
+        var matchingProvider = configuration["Mentoring:MatchingProvider"] ?? "Gemini";
+        if (!string.Equals(matchingProvider, "Gemini", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Mentoring:MatchingProvider supports only Gemini. Configure the current AI service before starting.");
+        services.AddOptions<MentorScoringOptions>().Bind(configuration.GetSection(MentorScoringOptions.SectionName))
+            .Validate(options => options.IsValid(), "Mentoring:Scoring requires criterion weights from 0 to 100 with a positive total.")
+            .ValidateOnStart();
+        services.AddSingleton<IMentorEvidenceGuard>(new FileMentorEvidenceGuard(configuration));
+        services.AddOptions<GeminiMentorOptions>().Bind(configuration.GetSection(GeminiMentorOptions.SectionName))
+            .Validate(options => options.IsValid(),
+                "Configure Mentoring:Gemini with a server-side API key, reviewed professional-data transfer enabled and approved model IDs.")
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<GeminiRequestCoordinator>();
+        services.AddHttpClient<IGenerativeMentorFitRanker, GeminiMentorFitRanker>(client =>
+            client.Timeout = TimeSpan.FromSeconds(55))
+            .RedactLoggedHeaders(["x-goog-api-key"])
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         AddCheckpointSummaries(services, configuration);
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
@@ -209,12 +206,9 @@ public static class DependencyInjection
         });
         services.AddSingleton<ISubmissionTextExtractor, EHub.Infrastructure.Summarization.SubmissionTextExtractor>();
         services.AddSingleton<ICheckpointSummaryQueueSignal, CheckpointSummaryQueueSignal>();
-        // Only the keyword catalog of the mentor model is used; a missing or unreadable model just turns topic matching off.
-        services.AddSingleton(_ =>
-        {
-            try { return new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics(FileMentorFitRanker.ReadModel(configuration["Mentoring:TrainedModelPath"])); }
-            catch (Exception) { return EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics.None; }
-        });
+        // Reuse the data-only alias catalog; checkpoint summaries do not depend on a mentor scoring model.
+        services.AddSingleton(_ => new EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryTopics(
+            new FileMentorEvidenceGuard(configuration).FindAffirmedTopics));
         services.AddSingleton<ICheckpointSummaryCancellation, CheckpointSummaryCancellation>();
         // One per instance: it remembers whether the model has been answering, so the worker can pause while it is down.
         services.AddSingleton<EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointSummaryCircuitBreaker>();

@@ -69,7 +69,7 @@ public sealed class CheckpointRubricAwarenessTests
             "Milestone Q3/2026: complete MVP version 2 and onboard 300 beta users.",
             "Core features: format preservation, LaTeX and Mermaid rendering."
         ];
-        var normalised = file.Select(line => EHub.Application.Features.Mentoring.TrainedRanking.MentorRankingFeatures.Normalize(line)).ToArray();
+        var normalised = file.Select(line => EHub.Application.Features.Mentoring.Evidence.MentorEvidenceText.Normalize(line)).ToArray();
 
         // In the order the Excellent text mentions them ("well-prioritized core features").
         CheckpointCriterionCues.Wanted(null, excellent).Should().Equal("Roadmap", "Prioritization", "Core features", "User needs");
@@ -84,7 +84,7 @@ public sealed class CheckpointRubricAwarenessTests
     public void Cues_UnderstandVietnameseFiles()
     {
         string[] file = ["Lộ trình phát triển: quý 3 hoàn thành MVP.", "Chân dung khách hàng: sinh viên năm hai.", "Hành trình khách hàng gồm 5 bước."];
-        var normalised = file.Select(line => EHub.Application.Features.Mentoring.TrainedRanking.MentorRankingFeatures.Normalize(line)).ToArray();
+        var normalised = file.Select(line => EHub.Application.Features.Mentoring.Evidence.MentorEvidenceText.Normalize(line)).ToArray();
 
         var cues = CheckpointCriterionCues.Find(null, "Strong problem-solution fit supported by clear persona and CJM", file, normalised);
 

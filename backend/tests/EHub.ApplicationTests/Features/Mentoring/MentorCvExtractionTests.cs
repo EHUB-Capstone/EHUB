@@ -272,8 +272,8 @@ public sealed class MentorCvExtractionTests
         storage.UploadAsync(Arg.Any<Stream>(), "cv.docx", profile.Id, "cv", default)
             .Returns(Result.Success(("https://storage.example.test/cv", "new-cv")));
         storage.DownloadAsync("https://storage.example.test/cv", default).Returns(Result.Success(bytes));
-        var handler = new MentorProfileHandler(db, storage, Substitute.For<IMentorEmbeddingSearch>(),
-            new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()));
+        var handler = new MentorProfileHandler(db, storage, new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()),
+            Substitute.For<IMentorRecommendationRanker>());
         using var stream = new MemoryStream(bytes);
         var result = await handler.UploadDocumentAsync(profile.UserId, "cv", stream, "cv.docx", bytes.Length, default);
         result.IsSuccess.Should().BeTrue();
@@ -303,7 +303,7 @@ public sealed class MentorCvExtractionTests
         db.MentorProfiles.Add(profile);
         await db.SaveChangesAsync();
         var handler = new MentorProfileHandler(db, Substitute.For<IMentorDocumentStorageService>(),
-            Substitute.For<IMentorEmbeddingSearch>(), Substitute.For<IMentorCvTextReader>());
+            Substitute.For<IMentorCvTextReader>(), Substitute.For<IMentorRecommendationRanker>());
         var request = new UpdateMentorProfileRequest
         {
             MentorType = "Business",
@@ -335,8 +335,8 @@ public sealed class MentorCvExtractionTests
         var storage = Substitute.For<IMentorDocumentStorageService>();
         storage.UploadAsync(Arg.Any<Stream>(), "skills.docx", profile.Id, "cv", default)
             .Returns(Result.Success(("https://storage.example.test/skills", "skills-cv")));
-        var handler = new MentorProfileHandler(db, storage, Substitute.For<IMentorEmbeddingSearch>(),
-            new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()));
+        var handler = new MentorProfileHandler(db, storage, new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()),
+            Substitute.For<IMentorRecommendationRanker>());
         using var stream = new MemoryStream(bytes);
 
         var result = await handler.UploadDocumentAsync(profile.UserId, "cv", stream, "skills.docx", bytes.Length, default);
@@ -369,8 +369,8 @@ public sealed class MentorCvExtractionTests
         db.MentorProfiles.Add(profile);
         await db.SaveChangesAsync();
         var storage = Substitute.For<IMentorDocumentStorageService>();
-        var handler = new MentorProfileHandler(db, storage, Substitute.For<IMentorEmbeddingSearch>(),
-            new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()));
+        var handler = new MentorProfileHandler(db, storage, new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()),
+            Substitute.For<IMentorRecommendationRanker>());
         var bytes = noProfessionalSections ? Docx("Personal information\nPRIVATE_MARKER") : Encoding.UTF8.GetBytes("invalid document");
         using var stream = new MemoryStream(bytes);
         (await handler.UploadDocumentAsync(profile.UserId, "cv", stream, name, bytes.Length, default)).IsFailure.Should().BeTrue();

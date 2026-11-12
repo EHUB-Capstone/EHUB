@@ -1,6 +1,6 @@
 using System.Text;
 using EHub.Application.Features.Workspaces.CheckpointSummaries;
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 using FluentAssertions;
 
 namespace EHub.ApplicationTests.Features.Workspaces.CheckpointSummaries;
@@ -168,7 +168,7 @@ public sealed class CheckpointEvidenceQualityTests
     [Fact]
     public void Find_RecognisesACustomerBaseWrittenAsATargetGroup()
     {
-        CheckpointCriterionCues.Mentions("Target customer", MentorRankingFeatures.Normalize("Tệp 4.500 doanh nghiệp SME Forwarder tại Việt Nam."))
+        CheckpointCriterionCues.Mentions("Target customer", MentorEvidenceText.Normalize("Tệp 4.500 doanh nghiệp SME Forwarder tại Việt Nam."))
             .Should().BeTrue();
     }
 
@@ -275,8 +275,8 @@ public sealed class CheckpointEvidenceQualityTests
 
         CheckpointSummaryEvidence.Find("Nhóm sẽ hoàn thiện lộ trình và các phần còn lại sau.", [roadmap], CheckpointSummaryTopics.None)[0]
             .Finding.Should().Be(CheckpointSummaryEvidence.NotFound);
-        CheckpointSummaryText.IsDeferral(MentorRankingFeatures.Normalize("Nhóm đang hoàn thiện nội dung.")).Should().BeTrue();
-        CheckpointSummaryText.IsDeferral(MentorRankingFeatures.Normalize("Quý 4/2026: hoàn thiện MVP gồm tạo bộ thẻ.")).Should().BeFalse();
+        CheckpointSummaryText.IsDeferral(MentorEvidenceText.Normalize("Nhóm đang hoàn thiện nội dung.")).Should().BeTrue();
+        CheckpointSummaryText.IsDeferral(MentorEvidenceText.Normalize("Quý 4/2026: hoàn thiện MVP gồm tạo bộ thẻ.")).Should().BeFalse();
     }
 
     [Theory]
@@ -294,7 +294,7 @@ public sealed class CheckpointEvidenceQualityTests
     [InlineData("Product / demo", "Bản demo chạy trên Android với 9 màn hình.", true)]
     public void Cues_RecogniseHowStudentsActuallyPhraseIt(string label, string sentence, bool expected)
     {
-        CheckpointCriterionCues.Mentions(label, MentorRankingFeatures.Normalize(sentence)).Should().Be(expected);
+        CheckpointCriterionCues.Mentions(label, MentorEvidenceText.Normalize(sentence)).Should().Be(expected);
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public sealed class CheckpointEvidenceQualityTests
     public void CueNormalisation_StillMatchesWhatTheFirstRoundExpects()
     {
         // The competitor concept now also knows "giải pháp thay thế" (alternative solutions).
-        CheckpointCriterionCues.Mentions("Competitors", MentorRankingFeatures.Normalize("Trainual Giải pháp thay thế")).Should().BeTrue();
-        CheckpointCriterionCues.Mentions("Competitors", MentorRankingFeatures.Normalize("Giải pháp của Rolly")).Should().BeFalse();
+        CheckpointCriterionCues.Mentions("Competitors", MentorEvidenceText.Normalize("Trainual Giải pháp thay thế")).Should().BeTrue();
+        CheckpointCriterionCues.Mentions("Competitors", MentorEvidenceText.Normalize("Giải pháp của Rolly")).Should().BeFalse();
     }
 }

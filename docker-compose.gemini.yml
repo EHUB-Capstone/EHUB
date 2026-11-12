@@ -1,0 +1,14 @@
+services:
+  backend:
+    environment:
+      Mentoring__MatchingProvider: Gemini
+      Mentoring__Gemini__ApiKey: ${GEMINI_API_KEY:?GEMINI_API_KEY must be provided by the server secret store}
+      Mentoring__Gemini__Model: ${GEMINI_MODEL:-gemini-3.8-flash}
+      Mentoring__Gemini__FallbackModels: ${GEMINI_FALLBACK_MODELS:-gemini-3.5-flash-lite,gemini-3.1-flash-lite}
+      Mentoring__Gemini__DataTransferEnabled: ${GEMINI_DATA_TRANSFER_ENABLED:-false}
+      Mentoring__Gemini__MinimumRequestIntervalSeconds: ${GEMINI_MINIMUM_REQUEST_INTERVAL_SECONDS:-12}
+      Mentoring__Scoring__ExperienceWeight: ${MENTOR_RULE_EXPERIENCE_WEIGHT:-35}
+      Mentoring__Scoring__ExpertiseWeight: ${MENTOR_RULE_EXPERTISE_WEIGHT:-25}
+      Mentoring__Scoring__StartupDomainWeight: ${MENTOR_RULE_STARTUP_DOMAIN_WEIGHT:-15}
+      Mentoring__Scoring__TechnologyWeight: ${MENTOR_RULE_TECHNOLOGY_WEIGHT:-20}
+      Mentoring__Scoring__BioWeight: ${MENTOR_RULE_BIO_WEIGHT:-5}

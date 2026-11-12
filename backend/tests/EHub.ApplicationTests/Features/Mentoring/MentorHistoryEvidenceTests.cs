@@ -2,11 +2,9 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Mentoring.History;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
-using EHub.Infrastructure.Mentoring;
 using EHub.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 
 namespace EHub.ApplicationTests.Features.Mentoring;
@@ -199,53 +197,7 @@ public sealed class MentorHistoryEvidenceTests
         result.EvidenceText.Should().Contain("Legacy market research award");
     }
 
-    [Fact]
-    public async Task CoachingNotesSupplyMatchingEvidenceWithoutChangingTheSavedProfile()
-    {
-        await using var db = Context();
-        var mentor = AddMentor(db);
-        mentor.Type = MentorType.Academic;
-        mentor.Experience = "General mentoring background";
-        var session = AddSession(db, AddAssignment(db, mentor), "Technical coaching", Now.AddDays(-3));
-        session.Notes = "Guided C#/.NET backend implementation and PostgreSQL database design.";
-        await db.SaveChangesAsync();
-        var history = await MentorHistoryEvidenceLoader.LoadAsync(db, [mentor.Id], Now, default);
-        var prepared = MentorHistoryEvidenceLoader.ForRanking([mentor], history);
-        var ranker = new FileMentorFitRanker(new ConfigurationBuilder().Build());
 
-        var originalRanking = ranker.Rank("Backend C#/.NET và PostgreSQL", [mentor], default)[mentor.Id];
-        var historyRanking = ranker.Rank("Backend C#/.NET và PostgreSQL", prepared, default)[mentor.Id];
-        var explained = MentorHistoryEvidenceLoader.AddReasons(historyRanking, history[mentor.Id]);
-
-        originalRanking.HasEvidence.Should().BeFalse();
-        historyRanking.HasEvidence.Should().BeTrue();
-        explained.Reasons.Should().Contain(reason => reason.Contains("1 buổi hướng dẫn"));
-        explained.Reasons.Should().NotContain(reason => reason.Contains("Guided C#/.NET backend implementation"));
-        explained.Score.Should().Be(historyRanking.Score);
-        explained.RankingValue.Should().Be(historyRanking.RankingValue);
-        prepared.Single().Should().NotBeSameAs(mentor);
-        mentor.Experience.Should().Be("General mentoring background");
-        db.ChangeTracker.HasChanges().Should().BeFalse();
-        await db.SaveChangesAsync();
-        (await db.MentorProfiles.AsNoTracking().SingleAsync()).Experience.Should().Be("General mentoring background");
-    }
-
-    [Fact]
-    public void HistoryCountsCannotInventRelevanceOrRaiseTheMatchingScore()
-    {
-        var mentor = new MentorProfile { Type = MentorType.Academic };
-        var history = new MentorHistoryEvidence(100, 20, 5, "");
-        var prepared = MentorHistoryEvidenceLoader.ForRanking([mentor], new Dictionary<Guid, MentorHistoryEvidence> { [mentor.Id] = history });
-        var ranking = new FileMentorFitRanker(new ConfigurationBuilder().Build())
-            .Rank("AI và computer vision", prepared, default)[mentor.Id];
-
-        ranking.HasEvidence.Should().BeFalse();
-        MentorHistoryEvidenceLoader.AddReasons(ranking, history).Should().Be(ranking);
-        var relevant = new MentorFitRanking(70, ["Matching skill"], true, 70.4);
-        var explained = MentorHistoryEvidenceLoader.AddReasons(relevant, history);
-        explained.Score.Should().Be(70);
-        explained.RankingValue.Should().Be(70.4);
-    }
 
     private static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

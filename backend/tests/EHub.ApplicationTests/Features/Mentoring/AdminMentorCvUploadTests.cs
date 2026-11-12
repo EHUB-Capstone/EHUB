@@ -245,8 +245,8 @@ public sealed class AdminMentorCvUploadTests
 
     private static AdminMentorCvUploadHandler Handler(AppDbContext db, IMentorDocumentStorageService storage,
         ICurrentUserService? user = null, IMentorCvTextReader? reader = null) => new(db, user ?? User(),
-            new MentorProfileHandler(db, storage, Substitute.For<IMentorEmbeddingSearch>(),
-                reader ?? new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>())));
+            new MentorProfileHandler(db, storage, reader ?? new MentorCvTextReader(Substitute.For<IDocumentPreviewConverter>()),
+                Substitute.For<IMentorRecommendationRanker>()));
 
     private static ICurrentUserService User(string role = SystemRoles.Admin, bool authenticated = true, bool emptyUserId = false)
     {
