@@ -158,19 +158,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # The VPS deploy scripts check out with umask 077, so a new or changed file arrives as 0600.
-      # Reproduce that here; a runner checkout (0644) would hide an unreadable model.
-      - name: Make the mentor model owner-only like a VPS checkout
-        if: matrix.component == 'backend'
-        run: chmod 600 backend/src/EHub.Infrastructure/Mentoring/Models/allocation-model.json
-
       - name: Build image without publishing
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: false
-          load: ${{ matrix.component == 'backend' }}
           tags: ehub-${{ matrix.component }}:ci
           build-args: ${{ matrix.build-args }}
           cache-from: type=gha,scope=${{ matrix.component }}
