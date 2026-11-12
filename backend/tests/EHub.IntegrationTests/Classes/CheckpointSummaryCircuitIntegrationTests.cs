@@ -102,7 +102,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         waiting.Value.Processing.Should().Be(0);
         waiting.Value.OldestPendingSeconds.Should().NotBeNull();
         waiting.Value.Model.Should().Be("scripted-model");
-        waiting.Value.PromptVersion.Should().Be("v11");
+        waiting.Value.PromptVersion.Should().Be("v12");
         waiting.Value.ModelReachable.Should().BeTrue();
         waiting.Value.Circuit.Should().Be("Closed");
 

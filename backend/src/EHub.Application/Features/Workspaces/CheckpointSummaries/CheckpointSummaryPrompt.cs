@@ -24,7 +24,8 @@ internal static class CheckpointSummaryPrompt
     // v11: same wording. Text cleaning of slide PDFs (figures laid out in layers, words split at the tone mark), the check
     // that a price is not read as a head count, and questions about rubric items the file does not mention now apply, so
     // summaries made with v10 are redone when a reviewer asks again.
-    public const string Version = "v11";
+    // v12: verify every overview sentence, expose safe extractive fallback and invalidate changed checklist snapshots.
+    public const string Version = "v12";
 
     public const string System =
         "Bạn là trợ lý giúp giảng viên và mentor đọc tài liệu checkpoint của nhóm sinh viên khởi nghiệp. " +

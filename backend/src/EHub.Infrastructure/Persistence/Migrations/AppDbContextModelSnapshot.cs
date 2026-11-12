@@ -647,6 +647,10 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("submission_file_summary_id");
 
+                    b.Property<Guid?>("SummaryGenerationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("summary_generation_id");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");

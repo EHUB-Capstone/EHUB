@@ -20,4 +20,6 @@ public class CheckpointSummaryFeedback : AuditableEntity
 
     public string? PromptVersion { get; set; }
     public string? Model { get; set; }
+    /// <summary>The exact generation being reviewed; null for historical results created before generation tracking.</summary>
+    public Guid? SummaryGenerationId { get; set; }
 }

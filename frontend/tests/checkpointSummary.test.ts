@@ -57,6 +57,16 @@ test('only files without a current summary can be chosen, and none is chosen by 
   assert.deepEqual(keepSelectable(['a', 'b', 'd'], summary(file('a', 'Pending'), file('b', 'Ready'), file('d', 'Failed'))), ['d']);
 });
 
+test('outdated ready summaries can be refreshed while current ready summaries stay cached', () => {
+  const stale = file('stale', 'Ready', { needsRefresh: true });
+  const current = file('current', 'Ready', { needsRefresh: false });
+  assert.deepEqual(selectableFileIds(summary(stale, current)), ['stale']);
+  assert.deepEqual(keepSelectable(['stale', 'current'], summary(stale, current)), ['stale']);
+  assert.equal(fileStatusView(stale).label, 'Cần cập nhật');
+  assert.equal(fileStatusView(stale).tone, 'warning');
+  assert.ok(summaryStatusBadges(summary(stale, current), false).some((badge) => badge.label === '1 cần cập nhật'));
+});
+
 test('the collapsed header counts files by state, worst news first', () => {
   const files = [file('a', 'Processing'), file('b', 'Pending'), file('c', 'Pending'), file('d', 'Failed'), file('e', 'Ready'), file('f', 'None'), file('g', 'Cancelled')];
   assert.deepEqual(summaryStatusCounts(files), { total: 7, ready: 1, summarising: 1, queued: 2, failed: 1, notSummarised: 2 });
@@ -432,6 +442,13 @@ test('feedback: only a finished summary can be rated and only the chosen file ch
   assert.equal(withFeedback(after, 'a', null).files[0].myFeedback, null);
 });
 
+test('late feedback responses never attach an old verdict to a regenerated result', () => {
+  const latest = summary(file('a', 'Ready', { generationId: 'new-generation', myFeedback: null }));
+  assert.equal(withFeedback(latest, 'a', { rating: 'Helpful', reason: null }, 'old-generation').files[0].myFeedback, null);
+  assert.deepEqual(withFeedback(latest, 'a', { rating: 'Helpful', reason: null }, 'new-generation').files[0].myFeedback,
+    { rating: 'Helpful', reason: null });
+});
+
 test('mock: a reviewer rates a finished summary, changes the verdict and takes it back; the rest is refused', async (t) => {
   resetMockState();
   await login('giang.lecturer@ehub.local');
@@ -447,7 +464,15 @@ test('mock: a reviewer rates a finished summary, changes the verdict and takes i
 
   now += 7_000;
   assert.equal((await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].myFeedback, null);
+  const generationId = (await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].generationId;
+  assert.ok(generationId);
+  assert.deepEqual(await errorCode(checkpointSummaryApi.setFeedback(TEAM_ID, 1, fileId,
+    { rating: 'Helpful', reason: null, generationId: crypto.randomUUID() })), { status: 409, code: 'WORKSPACE_CONCURRENCY_CONFLICT' });
+  assert.equal((await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].myFeedback, null);
   await checkpointSummaryApi.setFeedback(TEAM_ID, 1, fileId, { rating: 'Helpful', reason: null });
+  assert.deepEqual((await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].myFeedback, { rating: 'Helpful', reason: null });
+  assert.deepEqual(await errorCode(checkpointSummaryApi.clearFeedback(TEAM_ID, 1, fileId, crypto.randomUUID())),
+    { status: 409, code: 'WORKSPACE_CONCURRENCY_CONFLICT' });
   assert.deepEqual((await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].myFeedback, { rating: 'Helpful', reason: null });
   await checkpointSummaryApi.setFeedback(TEAM_ID, 1, fileId, { rating: 'NotHelpful', reason: 'MissingKeyPoint' });
   assert.deepEqual((await checkpointSummaryApi.get(TEAM_ID, 1)).data.files[0].myFeedback, { rating: 'NotHelpful', reason: 'MissingKeyPoint' });

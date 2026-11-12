@@ -1,5 +1,9 @@
 # Bàn giao tính năng AI tóm tắt bài nộp checkpoint
 
+> Cập nhật v12: xem [AI_CHECKPOINT_SUMMARY_V12.md](AI_CHECKPOINT_SUMMARY_V12.md).
+> Ghi nhận benchmark bên dưới thuộc v11. Mã nguồn và hai migration đánh dấu "chưa commit" trong bản bàn giao cũ đã vào `develop`; không chỉnh sửa các migration đó.
+> Các thay đổi v12 đang được kiểm thử trên nhánh `AI`; tài liệu này không xác nhận trạng thái đã deploy trên VPS.
+
 Tài liệu này dành cho người tiếp nhận tính năng. Đọc hết file này trước, sau đó mới đọc
 [AI_CHECKPOINT_SUMMARY.md](AI_CHECKPOINT_SUMMARY.md) (nhật ký từng đợt nâng cấp kèm số đo benchmark) khi cần biết
 "vì sao code lại như vậy".
@@ -52,9 +56,9 @@ Script deploy (`scripts/staging/deploy-staging.sh`, `scripts/production/deploy-p
 
 - Đọc `CHECKPOINT_SUMMARY_PROVIDER` (chỉ nhận `Disabled`/`Ollama`) và `CHECKPOINT_SUMMARY_MODEL`
   (mặc định `qwen3.5:2b-q4_K_M`, ký tự lạ bị từ chối).
-- Nếu `Ollama`: thêm container `ollama` vào dependencies (kể cả khi mentor matching dùng `Trained`), và stage
+- Nếu `Ollama`: thêm container `ollama` vào dependencies (độc lập với mentor matching dùng `Gemini`), và stage
   `summary-model` chạy `ollama pull` nếu model chưa có.
-- Script **không tự tắt** container `ollama` khi chuyển về `Disabled`.
+- Khi chuyển về `Disabled`, script hiện tại gỡ container Ollama thuộc cùng Compose project; volume model được giữ nguyên.
 - **Cạm bẫy vận hành:** script deploy chạy từ bản root-owned cài tại `/opt/ehub/deploy/` trên VPS. Sửa script trong
   repo **không có tác dụng** cho tới khi cài lại bản đó (xem `docs/deployment/STAGING_CD.md`, `PRODUCTION_CD.md`).
   Production chạy script cũ vẫn an toàn vì compose mặc định `Disabled`.
@@ -96,7 +100,7 @@ Thư mục chính: `backend/src/EHub.Application/Features/Workspaces/CheckpointS
 | `CheckpointSummaryEvidence.cs` | **Lõi của đối chiếu yêu cầu.** `Find` chọn câu trích cho từng yêu cầu/tiêu chí bằng luật; `Preview` gom mọi thứ không-model. |
 | `CheckpointCriterionProfile.cs` | Phân loại tiêu chí `Document` / `Product` / `Live`; lấy mức Excellent của rubric làm mô tả. |
 | `CheckpointCriterionCues.cs` | Từ điển song ngữ Anh–Việt (~28 khái niệm) để kiểm tra "dấu hiệu" của mức Excellent (roadmap, persona, CJM...). |
-| `CheckpointSummaryTopics.cs` | Mượn danh mục chủ đề/biệt danh của **model xếp hạng mentor** (`Mentoring:TrainedModelPath`). Thiếu model thì tắt phần này, không lỗi. |
+| `CheckpointSummaryTopics.cs` | Dùng danh mục alias dữ liệu thuần qua `FileMentorEvidenceGuard`; không phụ thuộc model Trained. |
 | `CheckpointStatusLines.cs` | Tìm dòng trạng thái DONE/PENDING/IN PROGRESS/TODO/HOÀN THÀNH và ghép với đề nghị. |
 | `CheckpointFigureConflicts.cs` | Số liệu mâu thuẫn **trong một file** (conversion 15% vs 30%, ngân sách chia khác nhau). |
 | `CheckpointCrossFileFigures.cs` | Thu thập tối đa 40 câu có số liệu mỗi file và so **giữa các file** (cỡ mẫu 51 vs 52, % khác nhau). |
@@ -251,7 +255,7 @@ Mỗi mục checklist nhận một trong:
 | `NotChecked` | Chưa có file nào được đọc (chỉ có ở bảng gộp) |
 
 Nguyên tắc: **thà không trích còn hơn trích sai.** Một câu chỉ tính qua phần khẳng định của nó (câu phủ định
-"chưa có kế hoạch gọi vốn" không là bằng chứng). Khớp bằng cặp từ không dấu, chủ đề/biệt danh của model mentor, và dấu hiệu
+"chưa có kế hoạch gọi vốn" không là bằng chứng). Khớp bằng cặp từ không dấu, danh mục chủ đề/biệt danh dùng chung, và dấu hiệu
 theo mức Excellent. Các loại dòng **không bao giờ làm bằng chứng**: câu hỏi, nhãn biểu đồ, dải chữ hoa, hướng dẫn dashboard,
 mục lục, câu hoãn ("sẽ hoàn thiện sau"), tiêu đề không có nội dung, và với từng tiêu chí còn có luật riêng (tiêu chí chỉ hỏi về
 vấn đề thì không nhận câu khuyến nghị; tiêu chí không hỏi đối thủ thì không nhận hàng bảng đối thủ). Một câu không được trích hai lần cho hai tiêu chí khi còn lựa chọn khác.
@@ -276,7 +280,7 @@ Một ý chính chỉ được giữ khi `Supports` trả `true`. Bị loại n�
 - chứa con số không có trong file, hoặc khoảng số ("15-30") mà file không viết đúng cặp đó;
 - không đủ **một nửa số từ** (75% với file ít chữ) có trong file, trừ khi có ≥ 2 thuật ngữ đặc trưng (slide tiếng Anh, tóm tắt tiếng Việt).
 
-Câu đầu của tổng quan luôn giữ (trừ khi lạm dụng quy mô thị trường); các câu sau cũng bị kiểm tra. Câu hỏi bị loại nếu dựa trên
+Từ v12, mọi câu tổng quan đều được kiểm tra với một câu nguồn; nếu không còn câu hợp lệ thì dùng trích dẫn an toàn hoặc báo chưa đủ bằng chứng. Câu hỏi bị loại nếu dựa trên
 con số file không có, hoặc so sánh với "các công ty khác" mà file không nêu, hoặc nói về "tài liệu" thay vì hỏi nhóm.
 Ý chính còn bị loại nếu **mâu thuẫn với dòng trạng thái** (ý nói "đã hoàn thành" việc mà file ghi PENDING), và ý nêu một
 giá trị của số liệu đang mâu thuẫn được chú thích "(tài liệu cũng ghi 15%)".
@@ -363,7 +367,7 @@ Contract C# và kiểu TypeScript phải sửa **đồng bộ** (quy chuẩn AGE
 - Mô hình: **`qwen3.5:2b-q4_K_M`** qua Ollama `0.34.0`, chạy local, không gửi dữ liệu ra ngoài. Đã thử `qwen2.5:3b` (chậm gần 3 lần,
   mất nhiều chi tiết) và `qwen3:4b-instruct` (bị kill do hết RAM trong 3 GB).
 - Tham số gọi (`OllamaCheckpointSummarizer`): `temperature 0`, `seed 42`, `think false`, `num_ctx 4096`, `num_predict 600`,
-  `format` = JSON schema, `keep_alive 30m`. `temperature 0` và `seed 42` để **cùng file ra cùng kết quả**.
+  `format` = JSON schema, `keep_alive 30m`. `temperature 0` và `seed 42` giúp giảm biến động giữa các lượt chạy; không phải bảo đảm kết quả giống nhau trên mọi máy.
 - Warm-up: `GenerationService` nạp model khi khởi động bằng `api/generate` không prompt.
 - Container `ollama` trong compose: **2 CPU, 3 GB, không swap**, `OLLAMA_NUM_PARALLEL=1`, `OLLAMA_MAX_LOADED_MODELS=1`,
   `OLLAMA_NO_CLOUD=1`. Model dùng khoảng 2,5 GB, từng bị OOM-kill ở bài rất dài nên giới hạn ký tự đầu vào là cấu hình.
@@ -420,7 +424,7 @@ Lưu ý: đáp án F05 đã đổi cho khớp kết quả sau khi xem câu tríc
 | `FilePromptCharacters` | 5.000 | 2.000-18.000, không vượt `MaxInputCharacters`, và `FilePromptCharacters/3 + 1200 ≤ ContextLength` |
 | `JobTimeoutMinutes` | 10 | 1-14 (lease là 15 phút) |
 | `RequestsPerUserPerHour` | 10 | |
-| `Mentoring:TrainedModelPath` | (sẵn có) | Chỉ lấy danh mục chủ đề; thiếu thì tắt khớp chủ đề |
+| `Mentoring:Gemini:RuleCatalogPath` | danh mục alias nhúng trong assembly | Tuỳ chọn file alias dữ liệu thuần; không chứa trọng số model. File cấu hình sai bị từ chối |
 
 Hằng số cố định trong `CheckpointSummaryLimits`: hàng bấm tay 30, hàng tự động 200, lease 15 phút, ý chính ≤ 4, câu hỏi ≤ 2,
 tổng quan ≤ 1.500 ký tự, mỗi mục ≤ 500, bằng chứng ≤ 300 ký tự.
@@ -449,8 +453,9 @@ Mỗi người xem một dòng cho mỗi (team, checkpoint): `SeenVersionNumber`
 | `20261101100243_AddCheckpointSummaries` | Đã vào `develop` — **không được sửa** |
 | `20261102024001_ReplaceCheckpointSummariesWithFileSummaries` | Đã vào `develop` — không sửa |
 | `20261102153744_AddFileSummaryAutoQueueAndPreview` | Đã vào `develop` — không sửa |
-| `20261110033908_AddCheckpointReviewMarkers` | **Chưa commit**, nằm trong cây làm việc hiện tại |
-| `20261110164650_AddCheckpointSummaryFeedback` | **Chưa commit.** Chỉ tạo bảng `checkpoint_summary_feedback` (đã kiểm tra không có thay đổi nào khác trong `Up`). Còn sửa được vì chưa vào `develop` |
+| `20261110033908_AddCheckpointReviewMarkers` | Đã vào `develop` — không sửa |
+| `20261110164650_AddCheckpointSummaryFeedback` | Đã vào `develop` — không sửa |
+| `20261112185043_AddSummaryFeedbackGeneration` | Mới trong v12: liên kết verdict với đúng generation; chưa apply staging/production |
 
 Lệnh tạo migration mới và quy tắc xem `AGENTS.md` mục 5. Đổi `Prompt Version` hoặc cấu trúc JSON không cần migration.
 
@@ -484,7 +489,7 @@ Khi chạy integration test, nên dừng container benchmark `ehub-summary-bench
   (mặc định `ehub-summary-bench`; **chỉ trỏ vào container thử nghiệm, không bao giờ vào Ollama của staging/production**). Thời gian chờ của cầu dao dùng đồng hồ giả của test nên
   không phải đợi thật; mô hình và kết nối là thật. Kết quả (11/2026, qwen3.5:2b): sau 2 vòng thất bại thật cầu dao mở, cả hai file giữ 1 lần thử, khi container chạy lại thì cả hai
   file `Ready` và cầu dao đóng, tổng khoảng 1 phút. `CheckHealthAsync` cũng được kiểm với server thật (chạy: có model; dừng: không trả lời). Test luôn `docker start` lại container ở cuối.
-- Lần chạy đầy đủ gần nhất (local, 11/2026): `dotnet build` 0 lỗi; UnitTests 141/141; ApplicationTests 1150 đạt (1 bỏ qua nếu không đặt biến của bộ đánh giá);
+- Lượt kiểm thử v11 ghi nhận khi bàn giao (local, 11/2026): `dotnet build` 0 lỗi; UnitTests 141/141; ApplicationTests 1150 đạt (1 bỏ qua nếu không đặt biến của bộ đánh giá);
   IntegrationTests 625 đạt, 4 bỏ qua (các test cần Ollama thật); frontend `npm run lint` (chỉ cảnh báo cũ, exit 0), `type-check`, `npm test` 614/614, `build` đều đạt.
   Test tích hợp dùng Testcontainers nên **cần Docker Desktop đang chạy**.
 - Test với mô hình thật (`SummaryJob_WithTheRealLocalModelProducesAValidVietnameseSummary`) đạt trên container `ehub-summary-bench` (qwen3.5:2b), 30 giây.
@@ -500,15 +505,11 @@ Khi chạy integration test, nên dừng container benchmark `ehub-summary-bench
 ## 13. Việc chưa làm / chưa kiểm chứng / rủi ro
 
 **Trạng thái mã nguồn**
-- **Toàn bộ công việc còn nằm trong cây làm việc, chưa commit** (khoảng 95 mục trong `git status`, gồm file sửa và file mới): Review Inbox,
-  so sánh phiên bản, số liệu giữa checkpoint, sửa chữ PDF, kiểm tra tiền/số người, bộ đánh giá C#, câu hỏi do luật tạo, cầu dao, chẩn đoán Admin
-  (backend và giao diện), phản hồi chất lượng, dọn dữ liệu khi xóa file, hai migration (`AddCheckpointReviewMarkers`, `AddCheckpointSummaryFeedback`),
-  mock, test, tài liệu. **Phải commit (nên chia nhóm theo từng tính năng) và mở PR trước khi người nhận làm tiếp**, nếu không họ không có gì để nhận.
-- Chưa triển khai các thay đổi này lên staging. Khi triển khai: cần cả **backend và frontend**, và migration mới chạy trong stage `migrate` của script deploy.
-- `.claude/launch.json` là file cấu hình xem trước cục bộ (mock, cổng 5199); quyết định giữ hay bỏ trước khi commit.
+- Các nâng cấp v11 và migration đã commit/merge. Xem tài liệu v12 để biết thay đổi đang kiểm thử trên nhánh `AI`.
+- Trạng thái deploy staging/production phải xác nhận từ môi trường chạy; không suy ra từ trạng thái source.
 
 **Chưa kiểm chứng**
-- **Chưa đo thời gian/RAM trên VPS staging.** Mọi số liệu là trên PC. Kiểm tra `free -h` trước khi bật: script deploy chỉ kiểm tra RAM khả dụng (`MIN_AVAILABLE_MEMORY_MB`) cho nhánh mentor `Hybrid`, **không** kiểm tra riêng cho bước bật tóm tắt AI.
+- **Chưa đo thời gian/RAM trên VPS staging.** Mọi số liệu là trên PC. Kiểm tra `free -h` trước khi bật: script deploy hiện tại chưa có kiểm tra RAM khả dụng riêng cho bước bật tóm tắt AI.
 - **Chưa chạy giao diện với backend thật** cho các gói nâng cấp 2-4 và câu hỏi gợi ý mới (chỉ qua mock và test tích hợp).
 - Chưa kiểm thử tải: nhiều bài nộp cùng lúc (hàng tự động tối đa 200) sẽ làm CPU 2 nhân bận liên tục; model chạy từng file một.
 - Benchmark Python không phản ánh đúng backend; đã có `CheckpointPipelineEvaluation` đo qua C# (phần 9), nhưng nó chưa gồm bước gọi mô hình

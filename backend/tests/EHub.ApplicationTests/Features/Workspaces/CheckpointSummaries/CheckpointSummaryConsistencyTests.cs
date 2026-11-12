@@ -86,7 +86,7 @@ public sealed class CheckpointSummaryConsistencyTests
             ]
         };
         var grounding = new CheckpointSummaryGrounding(
-            ReviewSlide + "\n750 Premium Subscribers (15% conversion rate)\nPremium Users 600 (Year 1) 30% conversion target\nChuyển đổi sang Premium trong năm đầu");
+            ReviewSlide + "\n750 Premium Subscribers (15% conversion rate)\nPremium Users 600 (Year 1) 30% conversion target\nMục tiêu tỷ lệ chuyển đổi sang Premium trong năm đầu là 30%.");
 
         var content = CheckpointSummaryOutput.TryBuild(json, preview, grounding)!;
 

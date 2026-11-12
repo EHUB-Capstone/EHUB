@@ -34,6 +34,10 @@ public sealed class WorkspaceFileSummary
     /// <summary>None, Pending, Processing, Ready, Failed or Cancelled.</summary>
     public string Status { get; init; } = string.Empty;
 
+    /// <summary>A ready result uses an older analysis version or a different checklist; the reviewer can refresh it.</summary>
+    public bool NeedsRefresh { get; init; }
+    public Guid? GenerationId { get; init; }
+
     /// <summary>For Pending files: how many summaries are ahead in the shared queue.</summary>
     public int? QueueAhead { get; init; }
 
@@ -59,6 +63,10 @@ public sealed class WorkspaceFileSummary
 public sealed class WorkspaceFileSummaryContent
 {
     public string Overview { get; init; } = string.Empty;
+    /// <summary>The overview is an original source excerpt because the model's overview could not be verified.</summary>
+    public bool OverviewFromSource { get; init; }
+    public IReadOnlyCollection<WorkspaceSummaryClaimEvidence> OverviewEvidence { get; init; } = Array.Empty<WorkspaceSummaryClaimEvidence>();
+    public IReadOnlyCollection<WorkspaceSummaryClaimEvidence> KeyPointEvidence { get; init; } = Array.Empty<WorkspaceSummaryClaimEvidence>();
     public IReadOnlyCollection<string> KeyPoints { get; init; } = Array.Empty<string>();
 
     /// <summary>The file's most informative sentences, quoted as written and chosen without the model.</summary>
@@ -84,6 +92,14 @@ public sealed class WorkspaceFileSummaryContent
 
     /// <summary>The file is mostly images or diagrams; only its titles and few lines of text were read.</summary>
     public bool LittleText { get; init; }
+}
+
+/// <summary>An original passage selected by the backend to support one generated claim.</summary>
+public sealed class WorkspaceSummaryClaimEvidence
+{
+    public string Text { get; init; } = string.Empty;
+    public string Quote { get; init; } = string.Empty;
+    public int? Page { get; init; }
 }
 
 /// <summary>A line of the file that reports the status of a piece of work, quoted as written.</summary>

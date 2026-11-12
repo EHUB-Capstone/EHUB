@@ -3,6 +3,8 @@ namespace EHub.Contracts.Workspaces;
 /// <summary>A reviewer's verdict on an AI file summary. <see cref="Reason"/> is one of a fixed list and only goes with NotHelpful.</summary>
 public sealed class SetCheckpointSummaryFeedbackRequest
 {
+    /// <summary>The generation shown to the reviewer. Optional during rollout of generation-aware clients.</summary>
+    public Guid? GenerationId { get; init; }
     /// <summary>Helpful or NotHelpful.</summary>
     public string Rating { get; init; } = string.Empty;
 

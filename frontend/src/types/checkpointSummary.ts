@@ -68,6 +68,10 @@ export interface FilePreview {
 
 export interface FileSummaryContent {
   overview: string;
+  /** An original source excerpt is shown when the generated overview could not be verified. */
+  overviewFromSource?: boolean;
+  overviewEvidence?: SummaryClaimEvidence[];
+  keyPointEvidence?: SummaryClaimEvidence[];
   keyPoints: string[];
   /** The file's most informative sentences, quoted as written. */
   highlights: string[];
@@ -85,6 +89,12 @@ export interface FileSummaryContent {
   littleText: boolean;
 }
 
+export interface SummaryClaimEvidence {
+  text: string;
+  quote: string;
+  page: number | null;
+}
+
 export type SummaryFeedbackRating = 'Helpful' | 'NotHelpful';
 export type SummaryFeedbackReason = 'Inaccurate' | 'MissingKeyPoint' | 'WrongEvidence' | 'Other';
 
@@ -95,8 +105,15 @@ export interface SummaryFeedback {
   reason: SummaryFeedbackReason | null;
 }
 
+export interface SummaryFeedbackRequest extends SummaryFeedback {
+  generationId?: string | null;
+}
+
 export interface FileSummary {
   fileId: string;
+  /** Optional for compatibility while older backends are being replaced. */
+  needsRefresh?: boolean;
+  generationId?: string | null;
   name: string;
   versionNumber: number;
   uploadedAt: string;

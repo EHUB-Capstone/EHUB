@@ -1,4 +1,3 @@
-using System.Text.Json;
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Workspaces.CheckpointFiles;
@@ -34,8 +33,6 @@ public sealed class CheckpointSummaryGenerator(
     ILogger<CheckpointSummaryGenerator> logger,
     CheckpointSummaryCircuitBreaker? breaker = null) : ICheckpointSummaryGenerator
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     // Checklist items with related content before the summary follows the checklist outline.
     private const int MinimumCoveredItems = 2;
 
@@ -121,14 +118,17 @@ public sealed class CheckpointSummaryGenerator(
 
         // Only a model that cannot be reached or does not answer counts against the circuit; an unreadable file or a bad answer says
         // nothing about whether the model is up, so those outcomes leave the circuit as it is.
+        // A ten-minute timeout must not consume a two-minute cooldown before the error even returns.
+        var failedAt = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
+        if (failedAt < nowUtc) failedAt = nowUtc;
         DateTime? pausedUntil = null;
         if (breaker is not null && result.Error.Code is ErrorCodes.WorkspaceSummaryModelUnreachable or ErrorCodes.WorkspaceSummaryModelTimeout)
         {
-            breaker.RecordFailure(nowUtc);
-            var snapshot = breaker.Snapshot(nowUtc);
+            breaker.RecordFailure(failedAt);
+            var snapshot = breaker.Snapshot(failedAt);
             if (snapshot.State == CheckpointCircuitState.Open) pausedUntil = snapshot.OpenUntilUtc;
         }
-        await RecordFailureAsync(candidate.Id, candidate.AttemptCount + 1, leaseUntil, result.Error, nowUtc, pausedUntil, cancellationToken);
+        await RecordFailureAsync(candidate.Id, candidate.AttemptCount + 1, leaseUntil, result.Error, failedAt, pausedUntil, cancellationToken);
         return true;
     }
 
@@ -144,7 +144,7 @@ public sealed class CheckpointSummaryGenerator(
 
         // The quick view needs no model. Saving it first lets the screen show it while the model is still writing.
         var preview = CheckpointSummaryEvidence.Preview(text, checklist, topics, read.Value.LittleText, read.Value.IgnoredInstructions, read.Value.Pages);
-        var previewJson = JsonSerializer.Serialize(preview, JsonOptions);
+        var previewJson = CheckpointSummarySnapshot.Serialize(preview, checklist);
         await context.SubmissionFileSummaries
             .Where(item => item.Id == summaryId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.PreviewJson, previewJson), cancellationToken);
@@ -168,10 +168,10 @@ public sealed class CheckpointSummaryGenerator(
         if (answer.IsFailure) return Result.Failure<Generated>(answer.Error);
 
         // Checked against the whole file, not only the condensed prompt: a detail from the file is never wrongly dropped.
-        var content = CheckpointSummaryOutput.TryBuild(answer.Value, preview, new CheckpointSummaryGrounding(text, read.Value.LittleText));
+        var content = CheckpointSummaryOutput.TryBuild(answer.Value, preview, new CheckpointSummaryGrounding(text, read.Value.LittleText), read.Value.Pages);
         if (content is null)
             return Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryModelBadAnswer, "The model returned an answer that could not be used.");
-        return Result.Success(new Generated(JsonSerializer.Serialize(content, JsonOptions), previewJson, read.Value.Truncated || condensed));
+        return Result.Success(new Generated(CheckpointSummarySnapshot.Serialize(content, checklist, newGeneration: true), previewJson, read.Value.Truncated || condensed));
     }
 
     private async Task RecordFailureAsync(
