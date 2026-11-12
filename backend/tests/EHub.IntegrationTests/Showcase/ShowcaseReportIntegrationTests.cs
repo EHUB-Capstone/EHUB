@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Data.Common;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Showcase.Moderation;
@@ -12,9 +13,12 @@ using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
 using EHub.IntegrationTests.Common;
 using EHub.Shared.Constants;
+using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Pgvector.EntityFrameworkCore;
 
 namespace EHub.IntegrationTests.Showcase;
 
@@ -123,6 +127,44 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         var report = await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(item => item.Id == id);
         var page = await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id);
         var acted = report.Status == ShowcaseReportStatus.ActionTaken;
+        page.Status.Should().Be(acted ? ShowcaseStatus.Hidden : ShowcaseStatus.Published);
+        (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == page.Id)).Should().Be(acted ? 2 : 1);
+        (await scenario.Db.ShowcaseReviewHistories.CountAsync(item => item.ShowcaseProjectId == page.Id && item.ToStatus == ShowcaseStatus.Hidden))
+            .Should().Be(acted ? 1 : 0);
+    }
+
+    [Theory]
+    [InlineData("ActionTaken", "Dismissed")]
+    [InlineData("Dismissed", "ActionTaken")]
+    public async Task ResolveAfterAnotherReviewerWinsBetweenReads_HasNoSecondDecisionOrSideEffects(string losingStatus, string winningStatus)
+    {
+        await using var scenario = await SeedAsync();
+        using var created = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseReportRequest { Reason = "Other" });
+        var id = (await created.Content.ReadFromJsonAsync<ApiResponse<ShowcaseReportReceiptDto>>())!.Data!.Id;
+        var interceptor = new ResolveBetweenReadsInterceptor(async () =>
+        {
+            // Commit the winning request after the other handler read Open, but before its open-report query executes.
+            using var winner = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{id}/resolve",
+                scenario.Lecturer, SystemRoles.Admin, new ResolveShowcaseReportRequest { Status = winningStatus });
+            winner.StatusCode.Should().Be(HttpStatusCode.OK);
+        });
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(factory.TestConnectionString, options => options.UseVector()).AddInterceptors(interceptor).Options);
+        var clock = scenario.Scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+        var handler = new ShowcaseReportHandler(db, clock, new ShowcaseModerationHandler(db, clock),
+            new CreateShowcaseReportRequestValidator(), new ResolveShowcaseReportRequestValidator());
+
+        var loser = await handler.ResolveAsync(id, new ResolveShowcaseReportRequest { Status = losingStatus },
+            scenario.Lecturer.Id, SystemRoles.Lecturer);
+
+        interceptor.Triggered.Should().BeTrue();
+        loser.IsFailure.Should().BeTrue();
+        loser.Error.Code.Should().Be(ErrorCodes.ShowcaseConcurrencyConflict);
+        var report = await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(item => item.Id == id);
+        report.Status.ToString().Should().Be(winningStatus);
+        var acted = winningStatus == "ActionTaken";
+        var page = await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(item => item.Id == scenario.Page.Id);
         page.Status.Should().Be(acted ? ShowcaseStatus.Hidden : ShowcaseStatus.Published);
         (await scenario.Db.OutboxMessages.CountAsync(item => item.AggregateId == page.Id)).Should().Be(acted ? 2 : 1);
         (await scenario.Db.ShowcaseReviewHistories.CountAsync(item => item.ShowcaseProjectId == page.Id && item.ToStatus == ShowcaseStatus.Hidden))
@@ -286,6 +328,25 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         db.ShowcaseProjects.Add(page);
         await db.SaveChangesAsync();
         return new Scenario(scope, db, factory.CreateClient(), page, project, classroom, student, owner, lecturer, reporter, rateReporter);
+    }
+
+    private sealed class ResolveBetweenReadsInterceptor(Func<Task> resolveWinner) : DbCommandInterceptor
+    {
+        public bool Triggered { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            var filtersOpen = command.CommandText.Contains("'Open'", StringComparison.Ordinal) ||
+                command.Parameters.Cast<DbParameter>().Any(parameter => parameter.Value?.ToString() == "Open");
+            if (!Triggered && filtersOpen && command.CommandText.Contains("showcase_reports", StringComparison.Ordinal) &&
+                command.CommandText.Contains("comment_id", StringComparison.Ordinal))
+            {
+                Triggered = true;
+                await resolveWinner();
+            }
+            return result;
+        }
     }
 
     private sealed record Scenario(
