@@ -8,8 +8,8 @@ public sealed class GeminiMentorOptions
         ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"];
 
     public string ApiKey { get; set; } = string.Empty;
-    public string Model { get; set; } = "gemini-3.8-flash";
-    public string FallbackModels { get; set; } = "gemini-3.5-flash-lite,gemini-3.1-flash-lite";
+    public string Model { get; set; } = "gemini-3.5-flash-lite";
+    public string FallbackModels { get; set; } = "gemini-3.1-flash-lite";
     // Enable only after reviewing the professional summaries; automatic masking is not anonymization.
     public bool DataTransferEnabled { get; set; }
     public int MinimumRequestIntervalSeconds { get; set; } = 12;

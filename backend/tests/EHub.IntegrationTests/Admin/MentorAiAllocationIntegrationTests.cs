@@ -33,6 +33,42 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
     private const string CommitUrl = "/api/admin/mentors/allocations/commit";
     private const string PrivateMarker = "PRIVATE_PREVIOUS_TEAM_NOTES";
 
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, MentorFitFailure.Authentication)]
+    [InlineData(HttpStatusCode.TooManyRequests, MentorFitFailure.Quota)]
+    [InlineData(HttpStatusCode.OK, MentorFitFailure.InvalidResponse)]
+    public async Task FailedBackgroundJobsReturnTheSafeSpecificCauseWithoutSavingAssignments(HttpStatusCode status, MentorFitFailure failure)
+    {
+        var gemini = new RecordingGemini { FailureStatus = status == HttpStatusCode.OK ? null : status, InvalidOutput = true };
+        using var app = App(gemini: gemini);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        using var started = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        started.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var id = (await started.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claim = (await processor.ClaimAsync(default))!.Value;
+        claim.Id.Should().Be(id);
+        await processor.ProcessAsync(id, claim.LeaseId, default);
+        using var polled = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", admin.Token));
+        polled.StatusCode.Should().Be(HttpStatusCode.OK);
+        var job = (await polled.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+        job.Status.Should().Be("Failed");
+        job.CompletedBatches.Should().Be(0);
+        job.Message.Should().Be(new MentorFitRankerUnavailableException(failure).UserMessage);
+        job.Message.Should().NotContain("PRIVATE_PROVIDER_BODY");
+        job.Preview.Should().BeNull();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.MentorAllocationJobs.AsNoTracking().SingleAsync(row => row.Id == id)).ErrorMessage.Should().Be(job.Message);
+        (await db.MentorAssignments.AnyAsync(row => row.TeamId == fixture.TeamId)).Should().BeFalse();
+        (await db.MentorAllocationSessions.AnyAsync(row => row.SemesterId == fixture.SemesterId)).Should().BeFalse();
+        (await db.OutboxMessages.AnyAsync(row => row.AggregateId == fixture.ClassId)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task ARepeatedlyInterruptedQueuedJobFailsAndAllowsANewAttempt()
     {
@@ -833,8 +869,8 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
     }
 
     [Theory]
-    [InlineData("Business", 1)]
-    [InlineData("IT", 2)]
+    [InlineData("Business", 2)]
+    [InlineData("IT", 3)]
     public async Task AFailedRoleCannotBecomeAZeroScoreFallbackOrPartiallySavedPreview(string invalidRole, int expectedCalls)
     {
         var gemini = new RecordingGemini { InvalidRole = invalidRole };
@@ -879,6 +915,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         public const string Evidence = "Marketing strategy and React frontend development";
         public List<string> Inputs { get; } = [];
         public bool InvalidOutput { get; init; }
+        public HttpStatusCode? FailureStatus { get; init; }
         public bool CompareBackendRules { get; init; }
         public string? InvalidRole { get; init; }
         public List<(string Role, int Projects, int Mentors)> Batches { get; } = [];
@@ -886,6 +923,8 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         public int MentorCount { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (FailureStatus is { } status)
+                return new(status) { Content = JsonContent.Create(new { error = new { message = "PRIVATE_PROVIDER_BODY" } }) };
             var body = await request.Content!.ReadAsStringAsync(cancellationToken);
             Inputs.Add(body);
             using var envelope = JsonDocument.Parse(body);

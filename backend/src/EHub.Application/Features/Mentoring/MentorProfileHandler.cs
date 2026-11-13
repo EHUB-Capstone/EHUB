@@ -264,10 +264,10 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
                 ErrorCodes.MentorMatchingUnavailable, "Dịch vụ đang chuẩn bị dữ liệu mentor. Vui lòng thử lại.");
         }
-        catch (MentorFitRankerUnavailableException)
+        catch (MentorFitRankerUnavailableException error)
         {
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
-                ErrorCodes.MentorMatchingUnavailable, "Mô hình gợi ý mentor tạm thời chưa sẵn sàng.");
+                ErrorCodes.MentorMatchingUnavailable, error.UserMessage);
         }
         var items = profiles.Select(profile =>
         {

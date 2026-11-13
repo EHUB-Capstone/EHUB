@@ -11,7 +11,7 @@ using EHub.Infrastructure.Mentoring.Gemini;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace EHub.ApplicationTests.Features.Mentoring;
@@ -73,17 +73,17 @@ public sealed class GeminiMentorFitRankerTests
     public async Task ATruncatedLaterBatchRejectsTheWholeScopeAndRetryReusesTheCompletedBatch()
     {
         var calls = 0;
-        using var rig = new Rig(call => ++calls == 2 ? Envelope("truncated", "MAX_TOKENS") : Success(call));
+        using var rig = new Rig(call => ++calls is >= 2 and <= 4 ? Envelope("truncated", "MAX_TOKENS") : Success(call));
         var projects = Enumerable.Range(0, 41).Select(index => new MentorRankingProject(Guid.NewGuid(),
             $"Fictional marketing startup {index}")).ToArray();
         var mentors = new[] { Profile() };
 
         await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() =>
             rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default));
-        rig.Calls.Should().HaveCount(2);
+        rig.Calls.Should().HaveCount(4);
         var result = await rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default);
         result.Should().HaveCount(41);
-        rig.Calls.Should().HaveCount(4, "the first successful batch is cached and the failed batch is retried");
+        rig.Calls.Should().HaveCount(6, "the first successful batch is cached and the failed batch is retried");
     }
 
     [Theory]
@@ -214,17 +214,103 @@ public sealed class GeminiMentorFitRankerTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    [InlineData(HttpStatusCode.BadRequest)]
-    [InlineData(HttpStatusCode.ServiceUnavailable)]
-    [InlineData(HttpStatusCode.Redirect)]
-    public async Task OtherErrorsStopAndDoNotExposeTheProviderBody(HttpStatusCode status)
+    [InlineData(HttpStatusCode.Unauthorized, MentorFitFailure.Authentication, 1)]
+    [InlineData(HttpStatusCode.Forbidden, MentorFitFailure.Permission, 1)]
+    [InlineData(HttpStatusCode.BadRequest, MentorFitFailure.RequestRejected, 1)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, MentorFitFailure.ServiceUnavailable, 9)]
+    [InlineData(HttpStatusCode.InternalServerError, MentorFitFailure.ServiceUnavailable, 9)]
+    [InlineData(HttpStatusCode.NotFound, MentorFitFailure.ModelUnavailable, 3)]
+    [InlineData(HttpStatusCode.TooManyRequests, MentorFitFailure.Quota, 1)]
+    [InlineData(HttpStatusCode.Redirect, MentorFitFailure.RequestRejected, 1)]
+    public async Task OtherErrorsStopAndDoNotExposeTheProviderBody(HttpStatusCode status, MentorFitFailure failure, int calls)
     {
         using var rig = new Rig(_ => Error(status));
         var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+        exception.Failure.Should().Be(failure);
+        exception.UserMessage.Should().NotBe(new MentorFitRankerUnavailableException().UserMessage);
+        exception.UserMessage.Should().NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
         exception.ToString().Should().NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
-        rig.Calls.Should().HaveCount(status == HttpStatusCode.ServiceUnavailable ? 6 : 1);
+        string.Join('\n', rig.Logger.Messages).Should().Contain(failure.ToString()).And.NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
+        rig.Calls.Should().HaveCount(calls);
+    }
+
+    [Theory]
+    [InlineData("API_KEY_INVALID")]
+    [InlineData("API_KEY_EXPIRED")]
+    public async Task InvalidKeyReportedAsBadRequestIsIdentifiedWithoutLoggingItsBody(string reason)
+    {
+        using var rig = new Rig(_ => Json(HttpStatusCode.BadRequest, new { error = new
+        {
+            message = FakeKey, details = new[] { new { reason } }
+        } }));
+        var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+        exception.Failure.Should().Be(MentorFitFailure.Authentication);
+        string.Join('\n', rig.Logger.Messages).Should().NotContain(FakeKey);
+    }
+
+    [Theory]
+    [InlineData("<html>PRIVATE_PROVIDER_BODY</html>")]
+    [InlineData("{}")]
+    [InlineData("{\"error\":{\"details\":null}}")]
+    public async Task Malformed429KeepsTheQuotaFailureAndProjectCooldown(string body)
+    {
+        using var rig = new Rig(_ => new(HttpStatusCode.TooManyRequests) { Content = new StringContent(body) });
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+            exception.Failure.Should().Be(MentorFitFailure.Quota);
+        }
+        rig.Coordinator.ProjectBlockedUntil.Should().Be(rig.Clock.GetUtcNow().AddMinutes(1));
+        rig.Calls.Should().HaveCount(1);
+        string.Join('\n', rig.Logger.Messages).Should().NotContain("PRIVATE_PROVIDER_BODY");
+    }
+
+    [Fact]
+    public async Task AllCooledDownModelsKeepTheirFailureReasonWithoutSendingAnotherRequest()
+    {
+        using var rig = new Rig(call => Quota(call.Model, true));
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+            exception.Failure.Should().Be(MentorFitFailure.Quota);
+        }
+        rig.Calls.Should().HaveCount(3);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TransportAndClientTimeoutErrorsHaveSafeDistinctMessages(bool timeout)
+    {
+        using var rig = new Rig(_ => timeout ? throw new TaskCanceledException(FakeKey) : throw new HttpRequestException(FakeKey));
+        var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+        exception.Failure.Should().Be(timeout ? MentorFitFailure.Timeout : MentorFitFailure.Network);
+        (exception.ToString() + exception.UserMessage + string.Join('\n', rig.Logger.Messages)).Should().NotContain(FakeKey);
+    }
+
+    [Fact]
+    public async Task InvalidEvidenceLogsOnlyAFixedValidationCode()
+    {
+        using var rig = new Rig(call =>
+        {
+            var data = Result(call);
+            data["results"]![0]!["mentors"]![0]!["criteria"]!["experience"]!["evidence"] = FakeKey;
+            return Envelope(data.ToJsonString());
+        });
+        var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+        exception.Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        string.Join('\n', rig.Logger.Messages).Should().Contain("criterion_evidence").And.NotContain(FakeKey).And.NotContain(Evidence);
+    }
+
+    [Theory]
+    [InlineData("MAX_TOKENS", "MAX_TOKENS")]
+    [InlineData(FakeKey, "UNKNOWN")]
+    public async Task IncompleteOutputLogsOnlyAnAllowlistedFinishReason(string finish, string loggedReason)
+    {
+        using var rig = new Rig(_ => Envelope("PRIVATE_PROVIDER_BODY", finish));
+        var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+        exception.Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        string.Join('\n', rig.Logger.Messages).Should().Contain(loggedReason).And.NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
     }
 
     [Fact]
@@ -242,7 +328,7 @@ public sealed class GeminiMentorFitRankerTests
     {
         using var rig = new Rig(call => call.Model == "gemini-3.8-flash" ? Error(HttpStatusCode.ServiceUnavailable) : Success(call));
         await Rank(rig);
-        rig.Calls.Select(call => call.Model).Should().Equal("gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite");
+        rig.Calls.Select(call => call.Model).Should().Equal("gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite");
         rig.Coordinator.ModelBlockedUntil["gemini-3.8-flash"].Should().Be(rig.Clock.GetUtcNow().AddMinutes(1));
         await Rank(rig, "Another fictional marketing project");
         rig.Calls.Last().Model.Should().Be("gemini-3.5-flash-lite");
@@ -316,9 +402,10 @@ public sealed class GeminiMentorFitRankerTests
             }
             return Envelope(fault == "invalid-json" ? "not-json" : data.ToJsonString(), fault == "truncated" ? "MAX_TOKENS" : "STOP");
         });
-        await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(
+        var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(
             [new(Guid.NewGuid(), "Marketing startup")], [Profile(), Profile(), Profile()], MentorRankingScope.AllSpecialties, default));
-        rig.Calls.Should().HaveCount(1);
+        exception.Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        rig.Calls.Should().HaveCount(3);
     }
 
     [Fact]
@@ -514,9 +601,12 @@ public sealed class GeminiMentorFitRankerTests
     private sealed class Rig : IDisposable
     {
         public List<Call> Calls { get; } = [];
-        public GeminiMentorOptions Settings { get; } = new() { ApiKey = FakeKey, DataTransferEnabled = true, MinimumRequestIntervalSeconds = 0 };
+        // Explicit legacy configuration exercises all three approved fallback slots regardless of deployment defaults.
+        public GeminiMentorOptions Settings { get; } = new() { ApiKey = FakeKey, DataTransferEnabled = true, MinimumRequestIntervalSeconds = 0,
+            Model = "gemini-3.8-flash", FallbackModels = "gemini-3.5-flash-lite,gemini-3.1-flash-lite" };
         public GeminiRequestCoordinator Coordinator { get; } = new();
         public TestClock Clock { get; } = new();
+        public RecordingLogger Logger { get; } = new();
         public GeminiMentorFitRanker Ranker { get; }
         private readonly HttpClient client;
         public Rig(Func<Call, HttpResponseMessage>? respond = null)
@@ -528,9 +618,17 @@ public sealed class GeminiMentorFitRankerTests
                 Calls.Add(call);
                 return (respond ?? Success)(call);
             }));
-            Ranker = new(client, Options.Create(Settings), Coordinator, Clock, NullLogger<GeminiMentorFitRanker>.Instance);
+            Ranker = new(client, Options.Create(Settings), Coordinator, Clock, Logger);
         }
         public void Dispose() { client.Dispose(); Coordinator.Gate.Dispose(); }
+    }
+    private sealed class RecordingLogger : ILogger<GeminiMentorFitRanker>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
     {

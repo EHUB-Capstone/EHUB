@@ -56,6 +56,8 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
         if (job is null) return;
         var owned = db.MentorAllocationJobs.Where(item => item.Id == id && item.LeaseId == leaseId &&
             item.Status == MentorAllocationJobStatus.Processing);
+        var completedBatches = 0;
+        var totalBatches = 0;
         try
         {
             if (!await IsAdminAsync(job.AdminUserId, ct)) throw new InvalidOperationException("Administrator access changed.");
@@ -67,6 +69,8 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
                 if (await owned.Where(item => item.LeaseExpiresAtUtc > currentTime).ExecuteUpdateAsync(update => update
                         .SetProperty(item => item.CompletedBatches, completed).SetProperty(item => item.TotalBatches, total), token) != 1)
                     throw new OperationCanceledException("The allocation task lease ended.");
+                completedBatches = completed;
+                totalBatches = total;
             });
             var result = await previews.PreviewAllocationForAdminAsync(request, job.AdminUserId, ct);
             ct.ThrowIfCancellationRequested();
@@ -74,6 +78,9 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
             now = clock.UtcNow;
             var resultJson = result.IsSuccess ? JsonSerializer.Serialize(result.Value, Json) : null;
             var message = result.IsSuccess ? null : result.Error.Message;
+            if (result.IsFailure)
+                logger.LogWarning("Mentor allocation task {JobId} failed with {ErrorCode}; completed {CompletedBatches}/{TotalBatches} batches",
+                    id, result.Error.Code, completedBatches, totalBatches);
             await owned.Where(item => item.LeaseExpiresAtUtc > now).ExecuteUpdateAsync(update => update
                 .SetProperty(item => item.Status, result.IsSuccess ? MentorAllocationJobStatus.Ready : MentorAllocationJobStatus.Failed)
                 .SetProperty(item => item.ResultJson, resultJson).SetProperty(item => item.ErrorMessage, message)
@@ -87,7 +94,8 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
         }
         catch (Exception error)
         {
-            logger.LogWarning("Mentor allocation task {JobId} failed with {ExceptionType}", id, error.GetType().Name);
+            logger.LogWarning("Mentor allocation task {JobId} failed with {ExceptionType}; completed {CompletedBatches}/{TotalBatches} batches",
+                id, error.GetType().Name, completedBatches, totalBatches);
             await owned.ExecuteUpdateAsync(update => update.SetProperty(item => item.Status, MentorAllocationJobStatus.Failed)
                 .SetProperty(item => item.ErrorMessage, "AI allocation could not finish. Please try again.")
                 .SetProperty(item => item.LeaseId, (Guid?)null).SetProperty(item => item.LeaseExpiresAtUtc, (DateTime?)null),
