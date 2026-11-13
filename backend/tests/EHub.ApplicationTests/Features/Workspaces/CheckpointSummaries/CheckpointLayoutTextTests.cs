@@ -110,7 +110,7 @@ public sealed class CheckpointLayoutTextTests
         var slides = CheckpointSummaryPrompt.User(2, "Review", [], "review.pdf", "CONTENTS", excerpt: false, littleText: true);
         var report = CheckpointSummaryPrompt.User(2, "Review", [], "report.docx", "Nội dung", excerpt: false);
 
-        CheckpointSummaryPrompt.Version.Should().Be("v12");
+        CheckpointSummaryPrompt.Version.Should().Be("v13");
         slides.Should().Contain("phần lớn là hình ảnh").And.Contain("Mục lục");
         report.Should().NotContain("phần lớn là hình ảnh").And.Contain("Mục lục");
     }

@@ -25,7 +25,8 @@ internal static class CheckpointSummaryPrompt
     // that a price is not read as a head count, and questions about rubric items the file does not mention now apply, so
     // summaries made with v10 are redone when a reviewer asks again.
     // v12: verify every overview sentence, expose safe extractive fallback and invalidate changed checklist snapshots.
-    public const string Version = "v12";
+    // v13: require a percentage with its sign and unit in the passage supporting a generated claim.
+    public const string Version = "v13";
 
     public const string System =
         "Bạn là trợ lý giúp giảng viên và mentor đọc tài liệu checkpoint của nhóm sinh viên khởi nghiệp. " +

@@ -8,6 +8,17 @@ namespace EHub.ApplicationTests.Features.Workspaces.CheckpointSummaries;
 
 public sealed class CheckpointSummaryReliabilityTests
 {
+    [Theory]
+    [InlineData("Nhóm ghi nhận 20 khách hàng trả phí.", "Nhóm ghi nhận 20% khách hàng trả phí.", false)]
+    [InlineData("Doanh thu thay đổi -20% trong quý.", "Doanh thu thay đổi 20% trong quý.", false)]
+    [InlineData("Nhóm ghi nhận 12,5 phần trăm khách hàng trả phí.", "Nhóm ghi nhận 12.5% khách hàng trả phí.", true)]
+    [InlineData("The team converted 25 percent of customers.", "The team converted 25% of customers.", true)]
+    public void EvidenceMustSupportThePercentageAsWritten(string source, string claim, bool supported)
+    {
+        var evidence = new CheckpointSummaryGrounding(source).FindEvidence(claim);
+        evidence.Should().Be(supported ? source : null);
+    }
+
     [Fact]
     public void ClaimsNeedOneRelevantSourceAndExposeTheOriginalPageInsteadOfMixingFactsAcrossTheFile()
     {

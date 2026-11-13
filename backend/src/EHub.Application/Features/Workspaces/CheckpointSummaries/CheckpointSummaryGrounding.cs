@@ -38,6 +38,7 @@ internal sealed partial class CheckpointSummaryGrounding
     private readonly double _minimumWordSupport;
     private readonly bool _littleText;
     private readonly Dictionary<string, string?> _evidence = new(StringComparer.Ordinal);
+    private HashSet<string>? _percentages;
 
     /// <param name="littleText">The file is mostly images: key points need more of their words in the text that was read.</param>
     public CheckpointSummaryGrounding(string sourceText, bool littleText = false)
@@ -60,6 +61,12 @@ internal sealed partial class CheckpointSummaryGrounding
         if (words.Any(word => word.Any(char.IsDigit) && !_words.Contains(word))) return false;
         // "15-30 phút" built from a "15" and a "30" that the file never writes together is just as invented.
         if (InventsRange(claim)) return false;
+        // Word matching alone loses the minus sign and can split a decimal into unrelated tokens.
+        foreach (var percentage in PercentageValues(claim))
+        {
+            _percentages ??= _sentences.SelectMany(PercentageValues).ToHashSet(StringComparer.Ordinal);
+            if (!_percentages.Contains(percentage)) return false;
+        }
         var supported = words.Count(_words.Contains);
         if (supported >= _minimumWordSupport * words.Length) return true;
         // Slides are often in English while the summary is in Vietnamese: then distinctive terms carry the evidence.
@@ -155,6 +162,12 @@ internal sealed partial class CheckpointSummaryGrounding
 
     private static string AmountNumber(string value) => value.Replace(',', '.').TrimEnd('.');
 
+    private static IEnumerable<string> PercentageValues(string text) =>
+        Percentage().Matches(text).Select(match => match.Groups["number"].Value.Replace(',', '.').Replace('−', '-'));
+
+    [GeneratedRegex(@"(?<![\p{L}\d.,])(?<number>[−-]?\d+(?:[.,]\d+)?)\s*(?:%|phần\s+trăm\b|percent\b|per\s+cent\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Percentage();
+
     /// <summary>
     /// True when a figure of the sentence ("5 lỗi") appears in the file only inside quotation marks: a post title or a
     /// slogan such as “5 lỗi formatting sinh viên gặp mỗi tuần” in a content plan, not a finding of the team.
@@ -188,7 +201,8 @@ internal sealed partial class CheckpointSummaryGrounding
         word.Any(char.IsDigit) || (word.Length >= 3 && word.All(character => character is >= 'a' and <= 'z'));
 
     private static IEnumerable<string> Words(string text) =>
-        CheckpointSummaryText.Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        CheckpointSummaryText.Normalize(Percentage().Replace(text, "${number}%"))
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
     // "3.2" or "E-HUB.com.vn" do not end a sentence: only a mark followed by a space does.
     [GeneratedRegex(@"(?<=[.!?])\s+")]
