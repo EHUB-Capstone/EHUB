@@ -6,9 +6,13 @@
    và mentor hợp lệ tham gia học kỳ, đúng loại Enterprise hoặc Academic.
 2. Giữ vị trí đã có mentor, sửa tay và mentor kế thừa hợp lệ. Chỉ chấm vị trí còn thiếu.
 3. Backend gửi tên/mô tả dự án và tóm tắt chuyên môn đã lọc định danh tới Gemini.
-   Hai loại mentor được chấm bằng request riêng. Không gửi CV gốc hoặc ghi chú/feedback lịch sử.
-4. AI trả tối đa hai ứng viên mỗi dự án trong mỗi loại, cùng năm điểm 0–100 và đoạn trích
-   nguyên văn cho từng điểm dương. Backend kiểm tra mã, cấu trúc, điểm, nguồn bằng chứng
+   Mỗi loại mentor được chấm bằng các lô tối đa 20 dự án; phản hồi JSON gọn dùng mã bằng chứng ngắn để tránh cắt JSON.
+   Giao diện theo dõi tác vụ nền, hiển thị số lô đã chấm và mở preview khi cả hai loại hoàn tất.
+   Tác vụ xử lý tối đa 300 dự án cần chấm mỗi loại, trong ngân sách 15 phút.
+   Không gửi CV gốc hoặc ghi chú/feedback lịch sử.
+4. Backend chuẩn bị các đoạn bằng chứng nguyên văn dài 2–80 ký tự, có mã riêng trong từng trường hồ sơ.
+   AI trả tối đa hai ứng viên mỗi dự án trong mỗi loại, cùng năm điểm 0–100 và mã bằng chứng
+   cho từng điểm dương. Backend ánh xạ mã về đúng đoạn nguồn, kiểm tra cấu trúc, điểm, nguồn bằng chứng
    và các phủ định rõ trong hồ sơ. Đây là shortlist, không phải ma trận mọi cặp mentor/dự án.
 5. Backend tính điểm theo chính sách bên dưới. Khi phân công, ưu tiên mentor đang ít nhóm
    nhất trong loại đó trên cả học kỳ, rồi so điểm phù hợp trong tập cùng tải.

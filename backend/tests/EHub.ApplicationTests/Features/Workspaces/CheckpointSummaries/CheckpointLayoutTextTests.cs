@@ -79,12 +79,12 @@ public sealed class CheckpointLayoutTextTests
     }
 
     [Fact]
-    public void GroundedOverview_KeepsTheFirstSentenceAndDropsUnsupportedOnes()
+    public void GroundedOverview_KeepsOnlySupportedSentencesIncludingTheOpeningClaim()
     {
         var grounding = new CheckpointSummaryGrounding("Mục 3.2 của Report 3 không đúng template. Dùng actor Guest.");
 
         grounding.GroundedOverview("Tài liệu là slide review của nhóm. Mục 3.2 của Report 3 chưa đúng template. Nhóm gọi vốn 5 tỷ từ quỹ đầu tư.")
-            .Should().Be("Tài liệu là slide review của nhóm. Mục 3.2 của Report 3 chưa đúng template.");
+            .Should().Be("Mục 3.2 của Report 3 chưa đúng template.");
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class CheckpointLayoutTextTests
         var slides = CheckpointSummaryPrompt.User(2, "Review", [], "review.pdf", "CONTENTS", excerpt: false, littleText: true);
         var report = CheckpointSummaryPrompt.User(2, "Review", [], "report.docx", "Nội dung", excerpt: false);
 
-        CheckpointSummaryPrompt.Version.Should().Be("v11");
+        CheckpointSummaryPrompt.Version.Should().Be("v13");
         slides.Should().Contain("phần lớn là hình ảnh").And.Contain("Mục lục");
         report.Should().NotContain("phần lớn là hình ảnh").And.Contain("Mục lục");
     }

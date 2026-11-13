@@ -374,10 +374,28 @@ function FileSummaryDetails({ file, maxCharacters }: { file: FileSummary; maxCha
     <div className="space-y-3">
       <IgnoredInstructionsNote count={content.ignoredInstructions} />
       {content.littleText && <LittleTextNote />}
+      {content.overviewFromSource && <p className="text-caption text-slate-500">Tổng quan trích từ tài liệu; phần diễn giải tự động chưa đủ căn cứ.</p>}
       <p className="whitespace-pre-line text-body text-slate-700">{content.overview}</p>
+      {(content.overviewEvidence?.length ?? 0) > 0 && (
+        <details className="text-body-sm text-slate-600">
+          <summary className="cursor-pointer py-2 font-medium">Nguồn của tổng quan</summary>
+          <div className="space-y-2">{content.overviewEvidence?.map((evidence) => (
+            <Quoted key={evidence.text} text={evidence.quote} fileId={file.fileId} fileName={file.name} page={evidence.page} />
+          ))}</div>
+        </details>
+      )}
       {content.keyPoints.length > 0 && (
         <ul className="list-disc space-y-1 pl-5 text-body-sm text-slate-700">
-          {content.keyPoints.map((point) => <li key={point}>{point}</li>)}
+          {content.keyPoints.map((point) => {
+            const evidence = content.keyPointEvidence?.find((item) => item.text === point);
+            return <li key={point}>
+              {point}
+              {evidence && <details className="mt-1 text-caption text-slate-600">
+                <summary className="cursor-pointer py-1 font-medium">Xem bằng chứng</summary>
+                <Quoted text={evidence.quote} fileId={file.fileId} fileName={file.name} page={evidence.page} />
+              </details>}
+            </li>;
+          })}
         </ul>
       )}
       <QuickView highlights={content.highlights} highlightPages={content.highlightPages} requirements={content.requirements} conflicts={content.conflicts ?? []} statusItems={content.statusItems ?? []} fileId={file.fileId} fileName={file.name} />
@@ -436,14 +454,15 @@ function FileRow({ file, selected, onToggleSelected, onRetry, maxCharacters, dis
           <Badge variant={status.tone}>{status.label}</Badge>
           {canOpen && <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />}
         </button>
-        {file.status === 'Failed' && (
-          <Button variant="outline" size="sm" icon={RefreshCw} disabled={disabled} onClick={onRetry} aria-label={`Thử lại tóm tắt ${file.name}`}>
-            Thử lại
+        {(file.status === 'Failed' || (file.status === 'Ready' && file.needsRefresh)) && (
+          <Button variant="outline" size="sm" icon={RefreshCw} disabled={disabled} onClick={onRetry} aria-label={`${file.needsRefresh ? 'Tạo lại' : 'Thử lại'} tóm tắt ${file.name}`}>
+            {file.needsRefresh ? 'Tạo lại' : 'Thử lại'}
           </Button>
         )}
       </div>
       {canOpen && open && (
         <div id={regionId} className="border-t border-slate-200 px-4 py-3">
+          {file.needsRefresh && <p className="mb-3 text-body-sm text-slate-600">Tiêu chí hoặc cách phân tích đã được cập nhật. Tạo lại để xem kết quả mới nhất.</p>}
           <FileSummaryDetails file={file} maxCharacters={maxCharacters} />
         </div>
       )}
@@ -526,18 +545,22 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
     setRatingFileId(fileId);
     const controller = new AbortController();
     ratingControllerRef.current = controller;
+    const generationId = summary?.files.find((file) => file.fileId === fileId)?.generationId ?? null;
     try {
-      if (feedback) await checkpointSummaryApi.setFeedback(teamId, checkpointNumber, fileId, feedback, controller.signal);
-      else await checkpointSummaryApi.clearFeedback(teamId, checkpointNumber, fileId, controller.signal);
-      setSummary((current) => (current ? withFeedback(current, fileId, feedback) : current));
+      if (feedback) await checkpointSummaryApi.setFeedback(teamId, checkpointNumber, fileId,
+        { ...feedback, generationId }, controller.signal);
+      else await checkpointSummaryApi.clearFeedback(teamId, checkpointNumber, fileId, generationId, controller.signal);
+      setSummary((current) => (current ? withFeedback(current, fileId, feedback, generationId) : current));
     } catch (error) {
       if (axios.isCancel(error)) return;
-      toast.error(summaryErrorMessage(parseApiError(error, '').code));
+      const code = parseApiError(error, '').code;
+      toast.error(summaryErrorMessage(code));
+      if (code === 'WORKSPACE_CONCURRENCY_CONFLICT') await load(controller.signal);
     } finally {
       ratingRef.current = false;
       if (!controller.signal.aborted) setRatingFileId(null);
     }
-  }, [teamId, checkpointNumber]);
+  }, [teamId, checkpointNumber, summary, load]);
 
   const retryLoad = () => {
     retryControllerRef.current?.abort();

@@ -13,13 +13,16 @@ using Microsoft.Extensions.Options;
 
 namespace EHub.Infrastructure.Mentoring.Gemini;
 
-/// <summary>One bounded, structured request per mentor role scores its pending projects; never writes assignments.</summary>
+/// <summary>Bounded, structured batches score pending projects per mentor role; never writes assignments.</summary>
 public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMentorOptions> options,
-    GeminiRequestCoordinator coordinator, TimeProvider clock, ILogger<GeminiMentorFitRanker> logger)
+    GeminiRequestCoordinator coordinator, TimeProvider clock, ILogger<GeminiMentorFitRanker> logger,
+    MentorRankingExecution? execution = null)
     : IGenerativeMentorFitRanker
 {
     private const int MaximumResponseBytes = 1024 * 1024;
-    public TimeSpan RequestTimeout => TimeSpan.FromSeconds(90);
+    // Short evidence IDs allow larger batches while keeping each model call bounded.
+    internal const int ProjectsPerRequest = MentorRankingExecution.ProjectsPerBatch;
+    public TimeSpan RequestTimeout => execution?.Timeout ?? TimeSpan.FromSeconds(180);
 
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankAsync(
         IReadOnlyCollection<MentorRankingProject> projects, IReadOnlyCollection<MentorProfile> mentors,
@@ -37,7 +40,33 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         cancellationToken = deadline.Token;
         try
         {
-            var prompt = new GeminiMentorPrompt(projects, mentors, scope);
+            // Validate the complete scope before sending any data. Each response must fit the output budget.
+            if (projects.Count > GeminiMentorPrompt.MaximumProjects || projects.Select(project => project.Id).Distinct().Count() != projects.Count)
+                throw new MentorFitRankerUnavailableException();
+            var prompts = projects.OrderBy(project => project.Id).Chunk(ProjectsPerRequest)
+                .Select(batch => new GeminiMentorPrompt(batch, mentors, scope)).ToArray();
+            var result = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
+            foreach (var prompt in prompts)
+            {
+                var scores = await RankBatchAsync(prompt, cancellationToken);
+                foreach (var score in scores) result.Add(score.Key, score.Value);
+                if (execution is not null) await execution.AdvanceAsync(cancellationToken);
+            }
+            return result;
+        }
+        catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
+        { throw new MentorFitRankerUnavailableException(); }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException or
+            KeyNotFoundException or ArgumentException or RegexMatchTimeoutException or IOException)
+        { throw new MentorFitRankerUnavailableException(); }
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankBatchAsync(
+        GeminiMentorPrompt prompt, CancellationToken cancellationToken)
+    {
+        var settings = options.Value;
+        try
+        {
             var cacheKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
                 string.Join(',', settings.Models) + "\n" + GeminiMentorPrompt.Instruction + "\n" + prompt.Json)));
             await coordinator.Gate.WaitAsync(cancellationToken);
@@ -52,31 +81,17 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                     cancellationToken.ThrowIfCancellationRequested();
                     now = clock.GetUtcNow();
                     if (coordinator.ModelBlockedUntil.TryGetValue(model, out var until) && until > now) continue;
-                    var wait = coordinator.NextRequestAt - now;
-                    if (wait > TimeSpan.Zero) await Task.Delay(wait, clock, cancellationToken);
-                    coordinator.NextRequestAt = clock.GetUtcNow().AddSeconds(settings.MinimumRequestIntervalSeconds);
-                    using var request = new HttpRequestMessage(HttpMethod.Post,
-                        $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
-                    request.Headers.Add("x-goog-api-key", settings.ApiKey);
-                    request.Content = JsonContent.Create(new
-                    {
-                        systemInstruction = new { parts = new[] { new { text = GeminiMentorPrompt.Instruction } } },
-                        contents = new[] { new { role = "user", parts = new[] { new { text = prompt.Json } } } },
-                        generationConfig = new
-                        {
-                            temperature = model.StartsWith("gemini-2.5-", StringComparison.Ordinal) ? 0 : 1,
-                            maxOutputTokens = 16_384,
-                            responseMimeType = "application/json",
-                            responseJsonSchema = ResponseSchema(),
-                            thinkingConfig = ThinkingConfiguration(model)
-                        }
-                    });
-                    using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                    using var response = await SendRequestAsync(model, prompt, cancellationToken);
                     var body = await ReadBoundedAsync(response, cancellationToken);
                     if (!response.IsSuccessStatusCode)
                     {
                         // No raw response, prompt, key, exception message or HTTP headers are logged.
                         logger.LogWarning("Gemini mentor ranking returned HTTP {StatusCode} for {Model}", (int)response.StatusCode, model);
+                        if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+                        {
+                            coordinator.ModelBlockedUntil[model] = clock.GetUtcNow().AddMinutes(1);
+                            continue;
+                        }
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
                             coordinator.ModelBlockedUntil[model] = clock.GetUtcNow().AddMinutes(10);
@@ -108,9 +123,9 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                         coordinator.Cache.Remove(expired);
                     if (coordinator.Cache.Count >= 32)
                         coordinator.Cache.Remove(coordinator.Cache.MinBy(item => item.Value.ExpiresAt).Key);
-                    coordinator.Cache[cacheKey] = new GeminiCachedResponse(text, model, clock.GetUtcNow().AddMinutes(2));
+                    coordinator.Cache[cacheKey] = new GeminiCachedResponse(text, model, clock.GetUtcNow().AddMinutes(10));
                     logger.LogInformation("Gemini mentor ranking completed using {Model}: {ProjectCount} projects, {MentorCount} profiles; input {InputTokens}, output {OutputTokens}, thoughts {ThoughtTokens}, total {TotalTokens} tokens",
-                        model, projects.Count, mentors.Count, UsageCount(envelope.RootElement, "promptTokenCount"),
+                        model, prompt.Projects.Length, prompt.Mentors.Length, UsageCount(envelope.RootElement, "promptTokenCount"),
                         UsageCount(envelope.RootElement, "candidatesTokenCount"), UsageCount(envelope.RootElement, "thoughtsTokenCount"),
                         UsageCount(envelope.RootElement, "totalTokenCount"));
                     return result;
@@ -119,11 +134,43 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             }
             finally { coordinator.Gate.Release(); }
         }
-        catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
-        { throw new MentorFitRankerUnavailableException(); }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException or
             KeyNotFoundException or ArgumentException or RegexMatchTimeoutException or IOException)
         { throw new MentorFitRankerUnavailableException(); }
+    }
+
+    private async Task<HttpResponseMessage> SendRequestAsync(string model, GeminiMentorPrompt prompt, CancellationToken ct)
+    {
+        var settings = options.Value;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var wait = coordinator.NextRequestAt - clock.GetUtcNow();
+            if (wait > TimeSpan.Zero) await Task.Delay(wait, clock, ct);
+            coordinator.NextRequestAt = clock.GetUtcNow().AddSeconds(settings.MinimumRequestIntervalSeconds);
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
+            request.Headers.Add("x-goog-api-key", settings.ApiKey);
+            request.Content = JsonContent.Create(new
+            {
+                systemInstruction = new { parts = new[] { new { text = GeminiMentorPrompt.Instruction } } },
+                contents = new[] { new { role = "user", parts = new[] { new { text = prompt.Json } } } },
+                generationConfig = new
+                {
+                    temperature = model.StartsWith("gemini-2.5-", StringComparison.Ordinal) ? 0 : 1,
+                    maxOutputTokens = 16_384,
+                    responseMimeType = "application/json",
+                    responseJsonSchema = ResponseSchema(),
+                    thinkingConfig = ThinkingConfiguration(model)
+                }
+            });
+            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.StatusCode != HttpStatusCode.ServiceUnavailable || attempt == 1) return response;
+            // One transient retry, within the caller's deadline and the same request pacing.
+            response.Dispose();
+            var retryAt = clock.GetUtcNow().AddSeconds(1);
+            if (retryAt > coordinator.NextRequestAt) coordinator.NextRequestAt = retryAt;
+        }
+        throw new MentorFitRankerUnavailableException();
     }
 
     private static IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> ParseResults(
@@ -158,7 +205,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                 var criteria = candidate.GetProperty("criteria");
                 var reasons = new List<string> { $"Gemini ({model}): đánh giá 5 tiêu chí hồ sơ" };
                 var values = new[] { "experience", "expertise", "startupDomain", "technology", "bio" }
-                    .Select(name => ReadCriterion(criteria.GetProperty(name), mentor.Fields[name], name, reasons)).ToArray();
+                    .Select(name => ReadCriterion(criteria.GetProperty(name), mentor, name, reasons)).ToArray();
                 if (values.All(value => value == 0)) throw new MentorFitRankerUnavailableException();
                 // No overall model score exists. Application computes the weighted profile score from these five inputs.
                 scores[mentor.SourceId] = new MentorFitRanking(0, reasons.ToArray(), true, 0)
@@ -169,13 +216,14 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         return result;
     }
 
-    private static int ReadCriterion(JsonElement criterion, string source, string name, List<string> reasons)
+    private static int ReadCriterion(JsonElement criterion, GeminiMentor mentor, string name, List<string> reasons)
     {
         if (!criterion.GetProperty("score").TryGetInt32(out var score) || score is < 0 or > 100)
             throw new MentorFitRankerUnavailableException();
         var quote = criterion.GetProperty("evidence").GetString();
         if (score == 0 && quote == "") return 0;
-        if (score == 0 || !IsPositiveQuote(source, quote, 2, 2))
+        if (quote is not null && mentor.EvidenceOptions[name].TryGetValue(quote, out var selected)) quote = selected;
+        if (score == 0 || !IsPositiveQuote(mentor.Fields[name], quote, 2, 2))
             throw new MentorFitRankerUnavailableException();
         reasons.Add($"Gemini {name}: {score}/100; bằng chứng: {quote}");
         return score;
@@ -210,7 +258,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                         project = new { type = "string" },
                         mentors = new
                         {
-                            type = "array", maxItems = 4, items = new
+                            type = "array", maxItems = 2, items = new
                             {
                                 type = "object", required = new[] { "id", "criteria" },
                                 properties = new
@@ -235,7 +283,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
     {
         type = "object", required = new[] { "score", "evidence" },
         properties = new { score = new { type = "integer", minimum = 0, maximum = 100 },
-            evidence = new { type = "string", maxLength = 160 } }
+            evidence = new { type = "string", maxLength = 3 } }
     };
 
     private static async Task<byte[]> ReadBoundedAsync(HttpResponseMessage response, CancellationToken ct)

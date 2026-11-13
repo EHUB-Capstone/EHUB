@@ -422,9 +422,16 @@ public sealed class MentorAdminHandler(
         return Result.Success(new MentorSemesterClassListResponse { Classes = rows });
     }
 
-    public async Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationAsync(PreviewMentorAllocationRequest request, CancellationToken cancellationToken = default)
+    public Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationAsync(PreviewMentorAllocationRequest request, CancellationToken cancellationToken = default)
     {
-        if (!TryGetAdminId(out var adminId)) return Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
+        if (!TryGetAdminId(out var adminId)) return Task.FromResult(Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required."));
+        return PreviewAllocationForAdminAsync(request, adminId, cancellationToken);
+    }
+
+    // Called by the durable job processor after re-checking the submitting administrator's current access.
+    internal async Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationForAdminAsync(
+        PreviewMentorAllocationRequest request, Guid adminId, CancellationToken cancellationToken)
+    {
         if (!TryParseStrategy(request.Strategy, out var strategy))
             return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorAllocationInvalid, $"The allocation strategy must be {MentorAllocationStrategies.Balanced}, {MentorAllocationStrategies.Random} or {MentorAllocationStrategies.Ai}.");
         if (request.SemesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == request.SemesterId, cancellationToken))

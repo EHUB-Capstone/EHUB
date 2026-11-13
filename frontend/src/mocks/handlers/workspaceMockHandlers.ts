@@ -424,7 +424,8 @@ const mockPreviewPolls = new Map<string, number>();
 // AI file summaries are simulated in memory. Each request queues the chosen files newest first; every file then
 // spends a few seconds Pending and Processing before it is Ready, so the polling screen can be exercised without a model.
 const MOCK_SUMMARY_STEP_MS = 6_000;
-const mockFileSummaries = new Map<string, { startsAt: number; cancelledAt?: number }>();
+const mockFileSummaries = new Map<string, { startsAt: number; cancelledAt?: number; generationId: string }>();
+const mockFeedbackGenerations = new Map<string, string>();
 // The signed-in reviewer's verdict on a file's summary, by file id.
 const mockSummaryFeedback = new Map<string, { rating: string; reason: string | null }>();
 
@@ -483,6 +484,8 @@ function mockSummary(teamId: string, number: number) {
       status,
       queueAhead: status === 'Pending' ? busy + pending.findIndex((item) => item._id === file._id) : null,
       isAutomatic: false,
+      needsRefresh: false,
+      generationId: entry?.generationId ?? null,
       // The quick view needs no AI, so it is there as soon as a file is queued.
       preview: status === 'Pending' || status === 'Processing' ? { highlights, requirements: findingsFor(position), conflicts: mockConflicts, statusItems: mockStatus, littleText: false } : null,
       requestedAt: entry ? new Date(entry.startsAt).toISOString() : null,
@@ -490,6 +493,9 @@ function mockSummary(teamId: string, number: number) {
       errorCode: null,
       inputTruncated: position === 0 && files.length > 1,
       content: status !== 'Ready' ? null : {
+        overviewFromSource: false,
+        overviewEvidence: [],
+        keyPointEvidence: [],
         overview: `Tài liệu "${file.originalName}" trình bày vấn đề của sinh viên khi tìm dịch vụ trong khuôn viên trường và đề xuất một nền tảng kết nối dịch vụ đã được xác minh.`,
         keyPoints: [
           'Khách hàng mục tiêu là sinh viên năm nhất và năm hai.',
@@ -504,7 +510,8 @@ function mockSummary(teamId: string, number: number) {
         littleText: false,
         questions: ['Nhóm đã kiểm chứng mức phí hoa hồng 8% với nhà cung cấp dịch vụ nào chưa?'],
       },
-      myFeedback: status === 'Ready' ? mockSummaryFeedback.get(file._id) ?? null : null,
+      myFeedback: status === 'Ready' && mockFeedbackGenerations.get(file._id) === entry?.generationId
+        ? mockSummaryFeedback.get(file._id) ?? null : null,
     };
   });
   const ready = fileSummaries.filter((file) => file.content);
@@ -1608,7 +1615,7 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
       .map(([, entry]) => entry.startsAt + MOCK_SUMMARY_STEP_MS));
     for (const file of files.filter((item) => fileIds.includes(item._id))) {
       if (!['None', 'Cancelled', 'Failed'].includes(mockFileStatus(file._id, now))) continue;
-      mockFileSummaries.set(file._id, { startsAt });
+      mockFileSummaries.set(file._id, { startsAt, generationId: crypto.randomUUID() });
       startsAt += MOCK_SUMMARY_STEP_MS;
     }
     return [202, { success: true, message: 'AI summary queued.', code: null, data: mockSummary(teamId, checkpointNumber), errors: null }];
@@ -1740,19 +1747,27 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
   mock.onPut(feedbackRoute).reply((config) => {
     const target = feedbackTarget(config.url);
     if (target.error) return target.error;
-    const body = parseBody(config) as { rating?: string; reason?: string | null };
+    const body = parseBody(config) as { rating?: string; reason?: string | null; generationId?: string | null };
+    const generationId = mockFileSummaries.get(target.fileId!)!.generationId;
     const reason = body.reason ? String(body.reason) : null;
     if (body.rating !== 'Helpful' && body.rating !== 'NotHelpful')
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'Rating must be Helpful or NotHelpful.');
     if (reason !== null && (body.rating !== 'NotHelpful' || !FEEDBACK_REASONS.includes(reason)))
       return failure(400, 'WORKSPACE_VALIDATION_ERROR', 'That reason cannot be used.');
+    if (body.generationId != null && body.generationId !== generationId)
+      return failure(409, 'WORKSPACE_CONCURRENCY_CONFLICT', 'This summary has been regenerated. Reload before rating.');
     mockSummaryFeedback.set(target.fileId!, { rating: body.rating, reason });
+    mockFeedbackGenerations.set(target.fileId!, generationId);
     return ok({ rating: body.rating, reason }, 'AI summary feedback saved.');
   });
   mock.onDelete(feedbackRoute).reply((config) => {
     const target = feedbackTarget(config.url);
     if (target.error) return target.error;
+    const generationId = (config.params as { generationId?: string } | undefined)?.generationId;
+    if (generationId && generationId !== mockFileSummaries.get(target.fileId!)!.generationId)
+      return failure(409, 'WORKSPACE_CONCURRENCY_CONFLICT', 'This summary has been regenerated. Reload before clearing feedback.');
     mockSummaryFeedback.delete(target.fileId!);
+    mockFeedbackGenerations.delete(target.fileId!);
     return [204];
   });
 

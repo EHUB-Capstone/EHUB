@@ -25,6 +25,7 @@ public interface IApplicationDbContext
     DbSet<MentorImportSession> MentorImportSessions { get; }
     DbSet<MentorImportDraft> MentorImportDrafts { get; }
     DbSet<MentorAllocationSession> MentorAllocationSessions { get; }
+    DbSet<MentorAllocationJob> MentorAllocationJobs { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }
     DbSet<Student> Students { get; }
     DbSet<ClassStudent> ClassStudents { get; }

@@ -6,6 +6,8 @@ import type {
   MentorAllocationEdit,
   MentorAllocationPreview,
   MentorAllocationStrategy,
+  MentorAllocationJob,
+  MentorAllocationJobRequest,
   MentorImportCommitResult,
   MentorImportPreview,
   MentorSemesterClassList,
@@ -19,6 +21,11 @@ interface ApiEnvelope<T> {
 }
 
 export const mentorAdminApi = {
+  startAllocationJob: (request: MentorAllocationJobRequest, signal?: AbortSignal): Promise<ApiEnvelope<MentorAllocationJob>> =>
+    axiosClient.post('/admin/mentors/allocations/jobs', request, { signal }),
+
+  getAllocationJob: (id: string, signal?: AbortSignal): Promise<ApiEnvelope<MentorAllocationJob>> =>
+    axiosClient.get(`/admin/mentors/allocations/jobs/${id}`, { signal }),
   downloadTemplate: (): Promise<Blob> =>
     axiosClient.get('/admin/mentors/import-template', { responseType: 'blob' }),
 
@@ -66,7 +73,7 @@ export const mentorAdminApi = {
       edits,
       includeTemporaryMentors,
       ...(seed === undefined ? {} : { seed }),
-    }, { signal, ...(strategy === 'Ai' ? { timeout: 110_000 } : {}) }),
+    }, { signal, ...(strategy === 'Ai' ? { timeout: 200_000 } : {}) }),
 
   /** Downloads the semester assignment workbook: sheets EXE101, EXE201 and a mentor summary. */
   exportAssignments: (semesterId: string): Promise<Blob> =>

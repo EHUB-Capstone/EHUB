@@ -142,6 +142,16 @@ public sealed class CommitMentorAllocationRequest
     public Guid SessionId { get; init; }
 }
 
+public sealed class MentorAllocationJobResponse
+{
+    public Guid Id { get; init; }
+    public string Status { get; init; } = string.Empty;
+    public int CompletedBatches { get; init; }
+    public int TotalBatches { get; init; }
+    public string? Message { get; init; }
+    public MentorAllocationPreviewResponse? Preview { get; init; }
+}
+
 public sealed class MentorAllocationHistoryResponse
 {
     public int BaseFitScore { get; init; }

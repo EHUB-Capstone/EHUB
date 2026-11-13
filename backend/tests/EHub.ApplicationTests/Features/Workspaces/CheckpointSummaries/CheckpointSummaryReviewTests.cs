@@ -18,7 +18,7 @@ public sealed class CheckpointSummaryReviewTests
         var pitch = CheckpointSummaryPrompt.User(1, "Idea", Rubric, "deck.pdf", "Nội dung", false, followChecklist: true);
         var review = CheckpointSummaryPrompt.User(1, "Idea", Rubric, "review.pdf", "Nội dung", false, followChecklist: false, hasStatus: true);
 
-        CheckpointSummaryPrompt.Version.Should().Be("v11");
+        CheckpointSummaryPrompt.Version.Should().Be("v13");
         pitch.Should().Contain("- Problem Clarity: Clearly defined").And.Contain("mỗi ý về một mục khác nhau trong danh sách cần xem");
         // A file that does not cover the rubric is summarised on its own terms, without the labels to fill.
         review.Should().NotContain("Problem Clarity").And.Contain("không gắn nhãn")

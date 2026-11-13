@@ -237,7 +237,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         var stored = await LoadFileSummaryAsync(fixture, plan.Id);
         stored.Status.Should().Be(CheckpointSummaryStatus.Ready);
         stored.Model.Should().Be("scripted-model");
-        stored.PromptVersion.Should().Be("v11");
+        stored.PromptVersion.Should().Be("v13");
         stored.PreviewJson.Should().NotBeNull();
 
         var read = await CreateSummaryHandler(fixture).GetAsync(teamId, 1, fixture.Seed.MentorUserId, SystemRoles.Mentor);

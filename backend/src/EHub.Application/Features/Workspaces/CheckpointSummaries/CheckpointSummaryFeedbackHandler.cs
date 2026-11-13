@@ -18,7 +18,7 @@ public interface ICheckpointSummaryFeedbackHandler
         CancellationToken cancellationToken = default);
 
     Task<Result> ClearAsync(
-        Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, CancellationToken cancellationToken = default);
+        Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, Guid? generationId = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -48,6 +48,10 @@ public sealed class CheckpointSummaryFeedbackHandler(
 
         var summary = await FindRatableSummaryAsync(teamId, checkpointNumber, fileId, userId, role, cancellationToken);
         if (summary.IsFailure) return Result.Failure<WorkspaceSummaryFeedback>(summary.Error);
+        var generationId = CheckpointSummarySnapshot.GenerationId(summary.Value.ContentJson);
+        if (request.GenerationId is { } expected && expected != generationId)
+            return Result.Failure<WorkspaceSummaryFeedback>(ErrorCodes.WorkspaceConcurrencyConflict,
+                "This summary has been regenerated. Reload it before giving feedback.");
 
         var now = CheckpointWorkspaceAccess.EnsureUtc(dateTimeProvider.UtcNow);
         // A second tab can create the same verdict between the read and the save; the loser simply updates the winner's row.
@@ -72,6 +76,7 @@ public sealed class CheckpointSummaryFeedbackHandler(
             feedback.Reason = reason;
             feedback.PromptVersion = summary.Value.PromptVersion;
             feedback.Model = summary.Value.Model;
+            feedback.SummaryGenerationId = generationId;
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
@@ -86,14 +91,18 @@ public sealed class CheckpointSummaryFeedbackHandler(
     }
 
     public async Task<Result> ClearAsync(
-        Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, CancellationToken cancellationToken = default)
+        Guid teamId, int checkpointNumber, Guid fileId, Guid userId, string role, Guid? generationId = null, CancellationToken cancellationToken = default)
     {
         if (!settings.Enabled) return Result.Failure(ErrorCodes.WorkspaceSummaryDisabled, "AI summaries are not enabled on this server.");
         var summary = await FindRatableSummaryAsync(teamId, checkpointNumber, fileId, userId, role, cancellationToken);
         if (summary.IsFailure) return Result.Failure(summary.Error);
+        if (generationId is { } expected && expected != CheckpointSummarySnapshot.GenerationId(summary.Value.ContentJson))
+            return Result.Failure(ErrorCodes.WorkspaceConcurrencyConflict,
+                "This summary has been regenerated. Reload it before clearing feedback.");
         // A real delete, not a soft one: the unique index must not keep a cleared verdict from being given again.
         await context.CheckpointSummaryFeedbacks
-            .Where(item => item.SubmissionFileSummaryId == summary.Value.Id && item.UserId == userId)
+            .Where(item => item.SubmissionFileSummaryId == summary.Value.Id && item.UserId == userId &&
+                (generationId == null || item.SummaryGenerationId == generationId))
             .ExecuteDeleteAsync(cancellationToken);
         return Result.Success();
     }

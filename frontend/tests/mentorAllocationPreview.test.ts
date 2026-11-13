@@ -3,6 +3,7 @@ import test from 'node:test';
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
 import { mentorAdminApi } from '../src/api/mentorAdminApi.ts';
+import { MentorAllocationJobError, waitForMentorAllocationJob } from '../src/utils/mentorAllocationJob.ts';
 import type {
   MentorAllocationEdit,
   MentorAllocationMentorLoad,
@@ -325,7 +326,7 @@ test('AI client keeps class scope, seed and manual edits, and saves only on expl
 
     assert.equal(response.data.sessionId, 'ai-session');
     assert.equal(mock.history.post.length, 1);
-    assert.equal(mock.history.post[0].timeout, 110_000);
+    assert.equal(mock.history.post[0].timeout, 200_000);
     assert.deepEqual(JSON.parse(mock.history.post[0].data), {
       semesterId: 'sem', classIds: ['class-1'], seed: 42, strategy: 'Ai', edits: [edit], includeTemporaryMentors: false,
     });
@@ -337,6 +338,40 @@ test('AI client keeps class scope, seed and manual edits, and saves only on expl
   } finally {
     mock.restore();
   }
+});
+
+test('AI background jobs report progress and return a proposal without committing assignments', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const controller = new AbortController();
+  const job = { id: 'job-1', status: 'Queued' as const, completedBatches: 0, totalBatches: 2 };
+  try {
+    mock.onPost('/admin/mentors/allocations/jobs').reply(202, { success: true, data: job });
+    mock.onGet('/admin/mentors/allocations/jobs/job-1').replyOnce(200, {
+      success: true, data: { ...job, status: 'Processing', completedBatches: 1 },
+    });
+    mock.onGet('/admin/mentors/allocations/jobs/job-1').reply(200, {
+      success: true, data: { ...job, status: 'Ready', completedBatches: 2, preview: preview() },
+    });
+    const request = { semesterId: 'sem', classIds: ['class-1'], strategy: 'Ai' as const, edits: [],
+      includeTemporaryMentors: true, seed: 42 };
+    const queued = await mentorAdminApi.startAllocationJob(request, controller.signal);
+    const progress: number[] = [];
+    const result = await waitForMentorAllocationJob(queued.data, controller.signal, value => progress.push(value.completedBatches));
+    assert.deepEqual(JSON.parse(mock.history.post[0].data), request);
+    assert.deepEqual(progress, [0, 1, 2]);
+    assert.equal(result.sessionId, preview().sessionId);
+    assert.equal(mock.history.post.length, 1);
+  } finally { controller.abort(); mock.restore(); }
+});
+
+test('failed AI jobs expose their safe message and cancellation stops polling', async () => {
+  const controller = new AbortController();
+  const job = { id: 'job-1', status: 'Failed' as const, completedBatches: 1, totalBatches: 30, message: 'AI temporarily unavailable' };
+  await assert.rejects(waitForMentorAllocationJob(job, controller.signal, () => {}), error =>
+    error instanceof MentorAllocationJobError && error.message === job.message);
+  controller.abort();
+  await assert.rejects(waitForMentorAllocationJob({ ...job, status: 'Processing' }, controller.signal, () => {}),
+    error => error instanceof DOMException && error.name === 'AbortError');
 });
 
 test('semester AI client uses an empty class scope and supports cancelling a pending preview', async () => {
