@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 param(
     [ValidateSet('gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite')]
-    [string]$Model = 'gemini-3.8-flash',
+    [string]$Model = 'gemini-3.5-flash-lite',
     [switch]$DryRun
 )
 
@@ -38,7 +38,7 @@ try {
         'Mentoring:MatchingProvider' = 'Gemini'
         'Mentoring:Gemini:ApiKey' = $keyValue
         'Mentoring:Gemini:Model' = $Model
-        'Mentoring:Gemini:FallbackModels' = 'gemini-3.5-flash-lite,gemini-3.1-flash-lite'
+        'Mentoring:Gemini:FallbackModels' = 'gemini-3.1-flash-lite'
         'Mentoring:Gemini:DataTransferEnabled' = 'true'
         'Mentoring:Gemini:MinimumRequestIntervalSeconds' = '12'
     } | ConvertTo-Json -Compress

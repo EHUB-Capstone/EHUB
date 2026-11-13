@@ -527,13 +527,15 @@ public sealed class MentorAdminHandler(
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                logger.LogWarning("AI allocation failed with {FailureKind}", MentorFitFailure.Timeout);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
                     "AI chưa hoàn tất phân bổ trong thời gian cho phép. Vui lòng thử lại với phạm vi lớp nhỏ hơn.");
             }
-            catch (MentorFitRankerUnavailableException)
+            catch (MentorFitRankerUnavailableException error)
             {
+                logger.LogWarning("AI allocation failed with {FailureKind}", error.Failure);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
-                    "Dịch vụ AI phân bổ mentor tạm thời chưa sẵn sàng. Vui lòng thử lại.");
+                    error.UserMessage);
             }
         }
         var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings);

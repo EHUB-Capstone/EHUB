@@ -10,7 +10,7 @@ giữ phân công đã có/kế thừa và cho admin sửa tay trước khi ch�
   hoặc environment/secret storage của VPS. Không đưa vào VITE_*, repository, log hay chat.
 - `Mentoring:Gemini:DataTransferEnabled`: mặc định false; chỉ bật sau khi rà soát dữ liệu chuyên môn.
 - `Mentoring:Gemini:Model` và `FallbackModels`: chỉ nhận ID được phép trong `GeminiMentorOptions`.
-  Mặc định hiện tại là `gemini-3.8-flash`; danh sách dự phòng nằm trong cùng lớp cấu hình.
+  Mặc định hiện tại là `gemini-3.5-flash-lite`, dự phòng `gemini-3.1-flash-lite`.
   Khả năng truy cập, quota và chi phí phụ thuộc project/provider; ứng dụng không xác minh billing.
 - `Mentoring:Gemini:MinimumRequestIntervalSeconds`: mặc định 12, dùng chung giữa các request loại.
 - `Mentoring:Gemini:RuleCatalogPath`: tùy chọn file alias chỉ phục vụ phát hiện phủ định rõ.
@@ -46,8 +46,8 @@ Trong môi trường server đã được duyệt, cấu hình:
 ```text
 MENTOR_MATCHING_PROVIDER=Gemini
 GEMINI_API_KEY=<server-secret-store>
-GEMINI_MODEL=gemini-3.8-flash
-GEMINI_FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite
 GEMINI_DATA_TRANSFER_ENABLED=true
 GEMINI_MINIMUM_REQUEST_INTERVAL_SECONDS=12
 MENTOR_RULE_EXPERIENCE_WEIGHT=35
@@ -126,11 +126,45 @@ Các kiểm tra quyền, loại mentor, team/class scope và optimistic concurre
 - Lỗi transport, timeout, output sai hoặc một loại thất bại làm toàn bộ preview báo lỗi an toàn.
 - HTTP 404 bỏ qua model không có; 429 chỉ chuyển model khi xác nhận quota riêng của model.
   Quota chung/không rõ làm dừng, không quay key/project để né quota.
-- HTTP 503 thử lại cùng model một lần, giữ khoảng cách request. Nếu vẫn lỗi, tạm bỏ model đó
-  trong một phút và thử model fallback đã cấu hình, dùng chung deadline tổng.
+- HTTP 500/502/503/504 và lỗi mạng được thử tối đa ba lượt/model, chờ tăng dần 2/4 giây cộng
+  jitter, đồng thời giữ khoảng cách request tối thiểu và `Retry-After` nếu có. Nếu vẫn lỗi, tạm bỏ model đó ít nhất một phút
+  và thử model fallback đã cấu hình, dùng chung deadline tổng.
+- Mỗi lượt có deadline 55 giây bao gồm cả nhận header và đọc body. Khi timeout riêng của model,
+  chuyển ngay sang model tiếp theo; không thử ba lần chờ 55 giây trên cùng model. Hủy từ người gọi
+  hoặc hết deadline tổng thì dừng, không chuyển model.
+- Kết quả không hợp lệ của một model được ghi mã lỗi và thử model dự phòng với cùng lô.
+  Kiểm tra bằng chứng/đủ dự án vẫn nghiêm ngặt; không biến kết quả sai thành điểm hợp lệ.
 - Không âm thầm thay đánh giá AI bằng một thuật toán cục bộ khác.
 - Chạy model trong test bằng phản hồi giả lập chỉ chứng minh logic và API, không chứng minh
   chất lượng hoặc độ sẵn sàng của dịch vụ AI thật.
+
+### Tra lỗi trên staging
+
+Giao diện trả thông báo cố định theo nhóm lỗi: cấu hình, dữ liệu đầu vào, xác thực/quyền,
+hạn mức, model không khả dụng, dịch vụ quá tải, kết nối, timeout hoặc kết quả AI không hợp lệ.
+Tác vụ nền lưu cùng thông báo để tải lại trang vẫn thấy nguyên nhân. Lỗi không tạo bản phân công dở dang.
+HTTP 400 có mã lỗi key không hợp lệ/hết hiệu lực được phân loại riêng; HTTP 429 dù không có JSON
+vẫn giữ cooldown chung, không tự chuyển model khi chưa xác định quota riêng.
+
+Sau khi tái hiện lỗi, chạy trong thư mục staging. Không dùng `docker compose config` không có
+`--quiet`, không gửi nội dung `.env` hoặc API key:
+
+```bash
+cd /opt/ehub/staging/app
+docker compose --env-file .env.staging -f docker-compose.staging.yml -f docker-compose.gemini.yml ps -a
+docker compose --env-file .env.staging -f docker-compose.staging.yml -f docker-compose.gemini.yml logs --since 1h --tail 3000 backend 2>&1 | grep -Ei 'AI ranking|AI allocation|Gemini mentor ranking|Mentor allocation.*failed' | tail -n 30
+```
+
+Log chỉ chứa nhóm lỗi, HTTP status, model đã duyệt, loại exception và mã kiểm tra cố định
+(ví dụ `criterion_evidence`, `project_count`, `incomplete_response`). Finish reason chỉ ghi từ
+danh sách cho phép, như `MAX_TOKENS`; không ghi body phản hồi, prompt, hồ sơ, key hoặc header.
+Không có dòng khớp bộ lọc không chứng minh dịch vụ khỏe: kiểm tra kết quả `ps`, thời điểm tái hiện
+và phiên bản backend đang chạy trước khi kết luận.
+
+Mặc định mới dùng `gemini-3.5-flash-lite`, dự phòng `gemini-3.1-flash-lite`, theo phép đo staging
+ngày 2026-11-13. Cấu hình tường minh trong secret store/environment hiện có được ưu tiên hơn
+mặc định: khi nâng cấp cần kiểm tra lại tên model đã cấu hình, không cần đổi key đang hợp lệ.
+Model 3.8 và 2.5 vẫn được phép cấu hình để tương thích, nhưng quyền truy cập và độ sẵn sàng tùy project.
 
 ## Kiểm thử
 

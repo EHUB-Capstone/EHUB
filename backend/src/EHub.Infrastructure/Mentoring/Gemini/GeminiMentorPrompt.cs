@@ -53,10 +53,12 @@ internal sealed class GeminiMentorPrompt
     internal GeminiMentorPrompt(IReadOnlyCollection<MentorRankingProject> projects,
         IReadOnlyCollection<MentorProfile> mentors, MentorRankingScope scope)
     {
-        if (!Enum.IsDefined(scope) || projects.Count is < 1 or > MaximumProjects ||
-            mentors.Count is < 1 or > MaximumMentors || projects.Select(x => x.Id).Distinct().Count() != projects.Count ||
+        if (projects.Count > MaximumProjects || mentors.Count > MaximumMentors)
+            throw new MentorFitRankerUnavailableException(MentorFitFailure.InputLimit);
+        if (!Enum.IsDefined(scope) || projects.Count < 1 ||
+            mentors.Count < 1 || projects.Select(x => x.Id).Distinct().Count() != projects.Count ||
             mentors.Select(x => x.Id).Distinct().Count() != mentors.Count || mentors.Select(x => x.Type).Distinct().Count() != 1)
-            throw new MentorFitRankerUnavailableException();
+            throw new MentorFitRankerUnavailableException(MentorFitFailure.InvalidInput);
         Projects = projects.OrderBy(x => x.Id).Select((project, index) =>
             new GeminiProject($"P{index + 1:000}", ProfessionalText(project.Text, [], 1800), project.Id)).ToArray();
         Mentors = mentors.OrderBy(x => x.Id).Select((mentor, index) =>
@@ -77,7 +79,8 @@ internal sealed class GeminiMentorPrompt
             var evidence = fields.ToDictionary(field => field.Key, field => EvidenceOptions(field.Value));
             return new GeminiMentor($"M{index + 1:000}", mentor.MentorType, fields, evidence, mentor.Id);
         }).ToArray();
-        if (Projects.Any(project => string.IsNullOrWhiteSpace(project.Text))) throw new MentorFitRankerUnavailableException();
+        if (Projects.Any(project => string.IsNullOrWhiteSpace(project.Text)))
+            throw new MentorFitRankerUnavailableException(MentorFitFailure.InvalidInput);
         // Whitelist DTOs explicitly. Never serialize an entity, file, contact details or historical notes.
         Json = JsonSerializer.Serialize(new
         {
@@ -86,7 +89,7 @@ internal sealed class GeminiMentorPrompt
             projects = Projects.Select(x => new { id = x.Id, text = x.Text }),
             mentors = Mentors.Select(x => new { id = x.Id, role = x.Role, profile = x.Fields, evidenceOptions = x.EvidenceOptions })
         }, PromptJsonOptions);
-        if (Json.Length > 240_000) throw new MentorFitRankerUnavailableException();
+        if (Json.Length > 240_000) throw new MentorFitRankerUnavailableException(MentorFitFailure.InputLimit);
     }
 
     private static IReadOnlyDictionary<string, string> EvidenceOptions(string source)

@@ -362,6 +362,8 @@ public sealed class MentorAiAllocationTests
     [InlineData("model")]
     [InlineData("timeout")]
     [InlineData("unconfigured")]
+    [InlineData("quota")]
+    [InlineData("invalid-response")]
     public async Task ProviderUnavailable_DoesNotPersistAPartialOrRandomPreview(string failure)
     {
         await using var db = Context();
@@ -370,6 +372,8 @@ public sealed class MentorAiAllocationTests
         Exception error = failure switch
         {
             "timeout" => new OperationCanceledException(),
+            "quota" => new MentorFitRankerUnavailableException(MentorFitFailure.Quota),
+            "invalid-response" => new MentorFitRankerUnavailableException(MentorFitFailure.InvalidResponse),
             _ => new MentorFitRankerUnavailableException()
         };
         ranker.RankForAllocationAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<MentorProfile>>(), Arg.Any<CancellationToken>())
@@ -379,6 +383,8 @@ public sealed class MentorAiAllocationTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be(ErrorCodes.MentorMatchingUnavailable);
+        if (failure is "quota" or "invalid-response")
+            result.Error.Message.Should().Be(((MentorFitRankerUnavailableException)error).UserMessage);
         db.MentorAllocationSessions.Should().BeEmpty();
         db.MentorAssignments.Should().BeEmpty();
     }
