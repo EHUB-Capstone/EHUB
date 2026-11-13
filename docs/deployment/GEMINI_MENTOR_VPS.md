@@ -77,8 +77,9 @@ kinh nghiệm, expertise/tags, lĩnh vực, công nghệ và giới thiệu/họ
 Không gửi CV gốc, thông tin liên hệ hoặc ghi chú/feedback của nhóm đã hướng dẫn.
 
 Mỗi request chỉ chấm một loại mentor. AI trả tối đa hai ứng viên/dự án; mỗi ứng viên
-chỉ có `id` và `criteria` gồm năm cặp `score`/`evidence`. Điểm dương phải trích nguyên văn
-2–160 ký tự từ đúng trường tương ứng. Backend kiểm tra score nguyên 0–100, nguồn trích,
+chỉ có `id` và `criteria` gồm năm cặp `score`/`evidence`. Backend chuẩn bị các đoạn nguyên văn
+2–80 ký tự và gửi mã lựa chọn theo từng trường; AI trả mã trong `evidence` cho điểm dương.
+Backend ánh xạ mã về đoạn gốc và kiểm tra score nguyên 0–100, nguồn trích,
 phủ định và dữ liệu thiếu/bị cắt. Không yêu cầu hoặc dùng điểm AI tổng thể.
 
 ```text
@@ -104,12 +105,29 @@ Các kiểm tra quyền, loại mentor, team/class scope và optimistic concurre
 
 ## Giới hạn và lỗi
 
-- Hai loại chia sẻ deadline tổng 90 giây; HTTP client từng request tối đa 55 giây.
-  Frontend đợi 110 giây; Nginx cho endpoint AI đợi 120 giây.
-- Cache điểm chuyên môn trong bộ nhớ 2 phút, tối đa 32 bộ input; bonus lịch sử vẫn tính lại.
+- Mỗi loại được chia thành các lô tối đa 20 dự án; mã bằng chứng ngắn và JSON gọn giảm độ dài đầu ra.
+  Backend gom đủ lô của cả hai loại rồi mới tạo bản preview.
+- Mỗi loại nhận tối đa 300 dự án cần chấm và 200 mentor. Payload mỗi lô tối đa 240.000 ký tự.
+- Giao diện tạo tác vụ bằng `POST /api/admin/mentors/allocations/jobs`, nhận HTTP 202 và ID tác vụ,
+  rồi lấy tiến độ bằng `GET /api/admin/mentors/allocations/jobs/{id}`. Các request này kết thúc nhanh;
+  tác vụ có ngân sách 15 phút cho cả hai loại. HTTP client tới Gemini vẫn tối đa 55 giây/lượt.
+- Endpoint preview đồng bộ được giữ cho client hiện có, deadline 180 giây. Frontend cũ đợi 200 giây;
+  Nginx cho endpoint đồng bộ đợi 210 giây. Cần cập nhật/reload Nginx khi dùng cấu hình này.
+- Tác vụ và kết quả được lưu trong `mentor_allocation_jobs` trong 24 giờ, chỉ admin tạo tác vụ được đọc.
+  Migration `20261113065225_AddMentorAllocationJobs` phải được apply trong bước khởi tạo database trước
+  khi chạy phiên bản mới. Rollback ứng dụng trước khi rollback migration; Down xóa dữ liệu tác vụ nền.
+  Phân công đã chốt nằm trong bảng hiện có.
+- Worker gia hạn lease mỗi 20 giây. Sau sự cố, lease hết hạn sau hai phút cho phép nhận lại tác vụ,
+  tối đa ba lần nhận. Khi API khởi động lại, cache trong bộ nhớ mất và các lô phải được chấm lại.
+  Tác vụ thất bại được báo trên giao diện để admin thử lại. Trình duyệt giữ ID tác vụ trong session storage
+  để tiếp tục xem tiến độ sau khi tải lại trang, token đăng nhập tiếp tục nằm trong memory/cookie hiện có.
+- Cache điểm chuyên môn theo lô trong bộ nhớ 10 phút, tối đa 32 bộ input; bonus lịch sử vẫn tính lại.
+  Thử lại sau lỗi dùng lại lô đã hoàn tất nếu input chưa đổi.
 - Lỗi transport, timeout, output sai hoặc một loại thất bại làm toàn bộ preview báo lỗi an toàn.
 - HTTP 404 bỏ qua model không có; 429 chỉ chuyển model khi xác nhận quota riêng của model.
-  Quota chung/không rõ làm dừng, không quay key/project để né quota. 503 được báo là dịch vụ chưa sẵn sàng.
+  Quota chung/không rõ làm dừng, không quay key/project để né quota.
+- HTTP 503 thử lại cùng model một lần, giữ khoảng cách request. Nếu vẫn lỗi, tạm bỏ model đó
+  trong một phút và thử model fallback đã cấu hình, dùng chung deadline tổng.
 - Không âm thầm thay đánh giá AI bằng một thuật toán cục bộ khác.
 - Chạy model trong test bằng phản hồi giả lập chỉ chứng minh logic và API, không chứng minh
   chất lượng hoặc độ sẵn sàng của dịch vụ AI thật.

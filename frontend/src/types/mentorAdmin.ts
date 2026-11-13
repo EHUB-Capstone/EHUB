@@ -255,6 +255,24 @@ export interface MentorAllocationCommitResult {
   skippedCount: number;
 }
 
+export interface MentorAllocationJobRequest {
+  semesterId: string;
+  classIds: string[];
+  seed?: number;
+  edits: MentorAllocationEdit[];
+  includeTemporaryMentors: boolean;
+  strategy: 'Ai';
+}
+
+export interface MentorAllocationJob {
+  id: string;
+  status: 'Queued' | 'Processing' | 'Ready' | 'Failed';
+  completedBatches: number;
+  totalBatches: number;
+  message?: string | null;
+  preview?: MentorAllocationPreview | null;
+}
+
 /** One active class of a semester with how many of its mentor slots are still empty. */
 export interface MentorSemesterClass {
   classId: string;

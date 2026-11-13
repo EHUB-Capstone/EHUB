@@ -1,4 +1,5 @@
 using EHub.Application.Features.Admin.Mentors;
+using EHub.Application.Features.Admin.Mentors.AllocationJobs;
 using EHub.Application.Features.Admin.Mentors.ExportAssignments;
 using EHub.Api.Models.Common;
 using EHub.Contracts.Common;
@@ -14,7 +15,8 @@ namespace EHub.Api.Controllers;
 [ApiController]
 [Route("api/admin/mentors")]
 [Authorize(Policy = SystemPolicies.AdminOnly)]
-public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAssignmentExportHandler exportHandler) : ControllerBase
+public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAssignmentExportHandler exportHandler,
+    IMentorAllocationJobHandler jobs) : ControllerBase
 {
     [HttpGet("import-template")]
     public async Task<IActionResult> DownloadTemplate(CancellationToken cancellationToken)
@@ -72,6 +74,19 @@ public sealed class MentorAdminController(IMentorAdminHandler handler, IMentorAs
     [HttpPost("allocations/commit")]
     public async Task<IActionResult> CommitAllocation([FromBody] CommitMentorAllocationRequest request, CancellationToken cancellationToken) =>
         ToResponse(await handler.CommitAllocationAsync(request, cancellationToken), "Mentor allocation committed successfully.");
+
+    [HttpPost("allocations/jobs")]
+    public async Task<IActionResult> StartAllocationJob([FromBody] PreviewMentorAllocationRequest request, CancellationToken ct)
+    {
+        var result = await jobs.StartAsync(request, ct);
+        return result.IsSuccess
+            ? Accepted(ApiResponse<MentorAllocationJobResponse>.SuccessResponse(result.Value, "Mentor allocation task queued."))
+            : ToError(result.Error);
+    }
+
+    [HttpGet("allocations/jobs/{id:guid}")]
+    public async Task<IActionResult> GetAllocationJob(Guid id, CancellationToken ct) =>
+        ToResponse(await jobs.GetAsync(id, ct), "Mentor allocation task retrieved.");
 
     [HttpGet("assignments/export")]
     public async Task<IActionResult> ExportAssignments([FromQuery] Guid semesterId, CancellationToken cancellationToken)

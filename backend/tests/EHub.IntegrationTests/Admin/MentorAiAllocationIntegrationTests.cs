@@ -5,6 +5,7 @@ using System.Text.Json;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Mentoring.Scoring;
+using EHub.Application.Features.Admin.Mentors.AllocationJobs;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
 using EHub.Domain.Entities;
@@ -31,6 +32,135 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
     private const string PreviewUrl = "/api/admin/mentors/allocations/preview";
     private const string CommitUrl = "/api/admin/mentors/allocations/commit";
     private const string PrivateMarker = "PRIVATE_PREVIOUS_TEAM_NOTES";
+
+    [Fact]
+    public async Task ARepeatedlyInterruptedQueuedJobFailsAndAllowsANewAttempt()
+    {
+        using var app = App();
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        var payload = new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" };
+        using var first = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token, payload));
+        var oldId = (await first.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.MentorAllocationJobs.Where(job => job.Id == oldId)
+            .ExecuteUpdateAsync(update => update.SetProperty(job => job.Attempts, 3));
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        (await processor.ClaimAsync(default)).Should().BeNull();
+        (await db.MentorAllocationJobs.AsNoTracking().SingleAsync(job => job.Id == oldId)).Status.Should().Be(MentorAllocationJobStatus.Failed);
+        using var retry = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token, payload));
+        retry.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var newId = (await retry.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        newId.Should().NotBe(oldId);
+        var claim = (await processor.ClaimAsync(default))!.Value;
+        claim.Id.Should().Be(newId);
+        await processor.ProcessAsync(newId, claim.LeaseId, default);
+        (await db.MentorAllocationJobs.AsNoTracking().SingleAsync(job => job.Id == newId)).Status.Should().Be(MentorAllocationJobStatus.Ready);
+    }
+
+    [Fact]
+    public async Task DurableJobsEnforceOwnershipDeduplicateRequestsAndFenceExpiredWorkers()
+    {
+        var gemini = new RecordingGemini();
+        using var app = App(gemini: gemini);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var other = await Identity(SystemRoles.Admin);
+        var lecturer = await Identity(SystemRoles.Lecturer);
+        var fixture = await Seed(admin.Id);
+        using (var setup = factory.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.MentorProfiles.Where(profile => db.SemesterStaffAssignments.Any(staff =>
+                staff.SemesterId == fixture.SemesterId && staff.UserId == profile.UserId))
+                .ExecuteUpdateAsync(update => update.SetProperty(profile => profile.Experience, RecordingGemini.Evidence));
+        }
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        var payload = new PreviewMentorAllocationRequest
+        { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = MentorAllocationStrategies.Ai, Seed = 23 };
+        using var anonymous = await client.SendAsync(Authorized(HttpMethod.Post, jobs, null, payload));
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var forbidden = await client.SendAsync(Authorized(HttpMethod.Post, jobs, lecturer.Token, payload));
+        forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var invalid = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.HistoryClassId], Strategy = "Ai" }));
+        invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ =>
+            client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token, payload))));
+        var queued = new List<MentorAllocationJobResponse>();
+        foreach (var response in responses)
+        {
+            using (response)
+            {
+                response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+                queued.Add((await response.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!);
+            }
+        }
+        queued.Select(job => job.Id).Distinct().Should().ContainSingle();
+        var id = queued[0].Id;
+        using var privateResult = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", other.Token));
+        privateResult.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        using var forbiddenGet = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", lecturer.Token));
+        forbiddenGet.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var anonymousGet = await client.GetAsync($"{jobs}/{id}");
+        anonymousGet.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var firstScope = app.Services.CreateScope();
+        using var secondScope = app.Services.CreateScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var second = secondScope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claims = await Task.WhenAll(first.ClaimAsync(default), second.ClaimAsync(default));
+        claims.Count(claim => claim.HasValue).Should().Be(1);
+        var original = claims.Single(claim => claim.HasValue)!.Value;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.MentorAllocationJobs.Where(job => job.Id == id).ExecuteUpdateAsync(update =>
+                update.SetProperty(job => job.LeaseExpiresAtUtc, DateTime.UtcNow.AddMinutes(-1)));
+        }
+        var reclaimed = (await second.ClaimAsync(default))!.Value;
+        reclaimed.Id.Should().Be(id);
+        reclaimed.LeaseId.Should().NotBe(original.LeaseId);
+        (await first.RenewAsync(id, original.LeaseId, default)).Should().BeFalse();
+        await first.ProcessAsync(id, original.LeaseId, default);
+        gemini.Inputs.Should().BeEmpty();
+        (await second.RenewAsync(id, reclaimed.LeaseId, default)).Should().BeTrue();
+        await second.ProcessAsync(id, reclaimed.LeaseId, default);
+        using var poll = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", admin.Token));
+        var completed = (await poll.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+        completed.Status.Should().Be("Ready");
+        completed.CompletedBatches.Should().Be(2);
+        completed.TotalBatches.Should().Be(2);
+        completed.Preview!.Assignments.Should().HaveCount(2);
+        using var finalScope = factory.Services.CreateScope();
+        (await finalScope.ServiceProvider.GetRequiredService<AppDbContext>().MentorAssignments
+            .AnyAsync(assignment => assignment.TeamId == fixture.TeamId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RevokedAdministratorCannotRunAQueuedAllocation()
+    {
+        var gemini = new RecordingGemini();
+        using var app = App(gemini: gemini);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        using var started = await client.SendAsync(Authorized(HttpMethod.Post, "/api/admin/mentors/allocations/jobs", admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        started.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        var id = (await started.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Users.Where(user => user.Id == admin.Id).ExecuteUpdateAsync(update => update.SetProperty(user => user.Status, UserStatus.Inactive));
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claimed = (await processor.ClaimAsync(default))!.Value;
+        claimed.Id.Should().Be(id);
+        await processor.ProcessAsync(id, claimed.LeaseId, default);
+        (await db.MentorAllocationJobs.AsNoTracking().SingleAsync(job => job.Id == id)).Status.Should().Be(MentorAllocationJobStatus.Failed);
+        gemini.Inputs.Should().BeEmpty();
+    }
 
     [Fact]
     public async Task ClassPreviewUsesCompletedHistoryAndOnlyAcceptanceSavesAssignmentsAndOutbox()
@@ -330,8 +460,10 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             .AnyAsync(assignment => assignment.TeamId == fixture.TeamId)).Should().BeFalse();
     }
 
-    [Fact]
-    public async Task GeminiHandles100ProjectsAnd30MentorsInSeparateRoleCallsAndOnlyAdminAcceptanceSaves()
+    [Theory]
+    [InlineData(100, 30, false)]
+    [InlineData(300, 50, true)]
+    public async Task GeminiHandlesLargeScopesInBoundedRoleBatchesAndOnlyAdminAcceptanceSaves(int projectCount, int mentorCount, bool background)
     {
         var gemini = new RecordingGemini();
         using var app = App(gemini: gemini);
@@ -345,7 +477,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             var profiles = await db.MentorProfiles.Where(profile => db.SemesterStaffAssignments.Any(staff =>
                 staff.SemesterId == fixture.SemesterId && staff.UserId == profile.UserId)).ToListAsync();
             foreach (var profile in profiles) profile.Experience = RecordingGemini.Evidence;
-            for (var index = 0; index < 28; index++)
+            for (var index = 0; index < mentorCount - 2; index++)
             {
                 var suffix = Guid.NewGuid().ToString("N");
                 var user = new User { FullName = "Synthetic Gemini mentor", Email = $"gemini-{suffix}@example.test",
@@ -356,7 +488,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
                 db.SemesterStaffAssignments.Add(new SemesterStaffAssignment { SemesterId = fixture.SemesterId,
                     User = user, Role = SemesterStaffRole.Mentor, Status = SemesterStaffStatus.Active, CreatedBy = admin.Id });
             }
-            for (var index = 1; index < 100; index++)
+            for (var index = 1; index < projectCount; index++)
             {
                 var team = new Team { ClassId = fixture.ClassId, TeamCode = $"GEM-{Guid.NewGuid():N}",
                     TeamName = $"Fictional Gemini project {index}", Description = $"Marketing startup with React number {index}", CreatedById = admin.Id };
@@ -366,34 +498,57 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             }
             await db.SaveChangesAsync();
         }
-        using var request = Authorized(HttpMethod.Post, PreviewUrl, admin.Token, new PreviewMentorAllocationRequest
+        using var request = Authorized(HttpMethod.Post, background ? "/api/admin/mentors/allocations/jobs" : PreviewUrl, admin.Token, new PreviewMentorAllocationRequest
         {
             SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = MentorAllocationStrategies.Ai, Seed = 23
         });
         using var response = await client.SendAsync(request);
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var preview = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!;
-        preview.TeamCount.Should().Be(100);
-        preview.Assignments.Should().HaveCount(200);
+        MentorAllocationPreviewResponse preview;
+        if (background)
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+            var queued = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+            queued.Status.Should().Be("Queued");
+            using var workerScope = app.Services.CreateScope();
+            var processor = workerScope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+            var claim = (await processor.ClaimAsync(default))!.Value;
+            claim.Id.Should().Be(queued.Id);
+            await processor.ProcessAsync(claim.Id, claim.LeaseId, default);
+            using var poll = await client.SendAsync(Authorized(HttpMethod.Get, $"/api/admin/mentors/allocations/jobs/{queued.Id}", admin.Token));
+            var completed = (await poll.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+            completed.Status.Should().Be("Ready");
+            completed.CompletedBatches.Should().Be(30);
+            completed.TotalBatches.Should().Be(30);
+            preview = completed.Preview!;
+        }
+        else
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            preview = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!;
+        }
+        preview.TeamCount.Should().Be(projectCount);
+        preview.Assignments.Should().HaveCount(projectCount * 2);
         preview.Assignments.Should().OnlyContain(item => item.FitScore >= 0);
         preview.Assignments.Should().Contain(item => item.FitScore > 0 && item.Reasons.Any(reason => reason.Contains("Gemini")));
         preview.Assignments.Where(item => item.FitScore == 0).Should().OnlyContain(item => item.Reasons.Any(reason => reason.Contains("cần admin rà soát")));
         foreach (var type in new[] { nameof(MentorType.Enterprise), nameof(MentorType.Academic) })
         {
             var loads = preview.MentorLoads.Where(item => item.MentorType == type).Select(item => item.TotalAfter).ToArray();
-            loads.Should().HaveCount(15);
-            loads.Min().Should().Be(6);
-            loads.Max().Should().Be(7);
+            loads.Should().HaveCount(mentorCount / 2);
+            loads.Min().Should().Be(projectCount / (mentorCount / 2));
+            loads.Max().Should().Be((projectCount + mentorCount / 2 - 1) / (mentorCount / 2));
             var balance = preview.Balance.Single(item => item.MentorType == type);
-            balance.SemesterTeamCount.Should().Be(101, "the other class is included in semester totals");
-            balance.EligibleMentorCount.Should().Be(15);
-            balance.TargetMinTeams.Should().Be(6);
-            balance.TargetMaxTeams.Should().Be(7);
+            balance.SemesterTeamCount.Should().Be(projectCount + 1, "the other class is included in semester totals");
+            balance.EligibleMentorCount.Should().Be(mentorCount / 2);
+            balance.TargetMinTeams.Should().Be((projectCount + 1) / (mentorCount / 2));
+            balance.TargetMaxTeams.Should().Be((projectCount + mentorCount / 2) / (mentorCount / 2));
         }
         preview.CanCommit.Should().BeTrue();
-        gemini.Inputs.Should().HaveCount(2);
-        gemini.ProjectCount.Should().Be(100);
-        gemini.Batches.Should().BeEquivalentTo([("Business", 100, 15), ("IT", 100, 15)]);
+        gemini.Inputs.Should().HaveCount(projectCount / 20 * 2);
+        gemini.ProjectCount.Should().Be(20);
+        gemini.Batches.Should().BeEquivalentTo(
+            Enumerable.Repeat(("Business", 20, mentorCount / 2), projectCount / 20)
+                .Concat(Enumerable.Repeat(("IT", 20, mentorCount / 2), projectCount / 20)));
         gemini.Inputs.Should().OnlyContain(input => !input.Contains(PrivateMarker) && !input.Contains(admin.Id.ToString()));
         using (var scope = factory.Services.CreateScope())
         {
@@ -407,7 +562,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            (await db.MentorAssignments.CountAsync(item => item.Team.ClassId == fixture.ClassId)).Should().Be(200);
+            (await db.MentorAssignments.CountAsync(item => item.Team.ClassId == fixture.ClassId)).Should().Be(projectCount * 2);
             (await db.OutboxMessages.AnyAsync(item => item.AggregateId == fixture.ClassId)).Should().BeTrue();
             (await db.MentorAssignments.AnyAsync(item => item.TeamId == fixture.SiblingTeamId)).Should().BeFalse();
         }

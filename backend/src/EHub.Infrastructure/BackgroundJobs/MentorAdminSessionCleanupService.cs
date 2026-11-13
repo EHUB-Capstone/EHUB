@@ -27,6 +27,7 @@ internal sealed class MentorAdminSessionCleanupService(
                 var allocationCount = await context.MentorAllocationSessions
                     .Where(item => item.ExpiresAtUtc < DateTime.UtcNow || item.Status == MentorAdminSessionStatus.Consumed && item.ConsumedAtUtc < cutoff)
                     .ExecuteDeleteAsync(stoppingToken);
+                await context.MentorAllocationJobs.Where(item => item.ExpiresAtUtc < DateTime.UtcNow).ExecuteDeleteAsync(stoppingToken);
                 if (importCount + allocationCount > 0)
                     logger.LogInformation("Removed {MentorAdminSessionCount} expired mentor administration sessions", importCount + allocationCount);
             }

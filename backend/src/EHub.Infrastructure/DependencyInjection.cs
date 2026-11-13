@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddHostedService<ClassImportSessionCleanupService>();
         services.AddHostedService<LecturerImportSessionCleanupService>();
         services.AddHostedService<MentorAdminSessionCleanupService>();
+        services.AddHostedService<MentorAllocationJobService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
         services.AddHostedService<PendingSubmissionUploadCleanupService>();
         services.AddHostedService<SubmissionPreviewGenerationService>();

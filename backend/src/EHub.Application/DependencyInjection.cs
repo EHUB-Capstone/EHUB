@@ -77,7 +77,14 @@ public static class DependencyInjection
         services.AddScoped<IRejectUserCommandHandler, RejectUserCommandHandler>();
         services.AddScoped<IUserManagementHandler, UserManagementHandler>();
         services.AddScoped<EHub.Application.Features.Admin.Users.ImportLecturers.ILecturerImportHandler, EHub.Application.Features.Admin.Users.ImportLecturers.LecturerImportHandler>();
-        services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler, EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.MentorAdminHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.IMentorAdminHandler>(provider =>
+            provider.GetRequiredService<EHub.Application.Features.Admin.Mentors.MentorAdminHandler>());
+        services.AddScoped<EHub.Application.Common.Interfaces.Services.MentorRankingExecution>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.AllocationJobs.IMentorAllocationJobHandler,
+            EHub.Application.Features.Admin.Mentors.AllocationJobs.MentorAllocationJobHandler>();
+        services.AddScoped<EHub.Application.Features.Admin.Mentors.AllocationJobs.IMentorAllocationJobProcessor,
+            EHub.Application.Features.Admin.Mentors.AllocationJobs.MentorAllocationJobProcessor>();
         services.AddScoped<EHub.Application.Features.Admin.MentorProfiles.IMentorProfileHandler, EHub.Application.Features.Admin.MentorProfiles.MentorProfileHandler>();
 
         services.AddScoped<IGetAdminDashboardQueryHandler, GetAdminDashboardQueryHandler>();

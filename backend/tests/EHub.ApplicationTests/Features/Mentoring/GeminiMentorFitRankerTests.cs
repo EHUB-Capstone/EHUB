@@ -21,22 +21,69 @@ public sealed class GeminiMentorFitRankerTests
     private const string Evidence = "Digital marketing and startup growth";
     private const string FakeKey = "OFFLINE_TEST_NOT_A_REAL_API_KEY=";
 
-    [Fact]
-    public async Task OneRoleRequestHandles100ProjectsAndReturnsEveryCandidateWithoutSavingAssignments()
+    [Theory]
+    [InlineData("E01", true)]
+    [InlineData("E99", false)]
+    public async Task EvidenceIdsResolveOnlyToSuppliedProfessionalFragments(string evidenceId, bool valid)
+    {
+        using var rig = new Rig(call =>
+        {
+            var result = Result(call);
+            result["results"]![0]!["mentors"]![0]!["criteria"]!["experience"]!["evidence"] = evidenceId;
+            return Envelope(result.ToJsonString());
+        });
+        if (!valid)
+        {
+            await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
+            return;
+        }
+        var rankings = await Rank(rig);
+        rankings.Values.Single().Values.Single().Reasons.Should().Contain(reason => reason.Contains(Evidence));
+    }
+
+    [Theory]
+    [InlineData(100, 5)]
+    [InlineData(300, 15)]
+    public async Task BoundedBatchesHandleSupportedScopesAndReturnEveryCandidateWithoutSavingAssignments(int projectCount, int expectedCalls)
     {
         using var rig = new Rig();
         var mentors = new[] { Profile(), Profile() };
-        var projects = Enumerable.Range(1, 100).Select(index => new MentorRankingProject(Guid.NewGuid(),
+        var projects = Enumerable.Range(1, projectCount).Select(index => new MentorRankingProject(Guid.NewGuid(),
             $"Fictional marketing startup {index}, seeking customer acquisition coaching.")).ToArray();
 
         var results = await rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default);
 
-        rig.Calls.Should().HaveCount(1);
-        results.Should().HaveCount(100);
+        rig.Calls.Should().HaveCount(expectedCalls);
+        var sentProjects = rig.Calls.SelectMany(call =>
+        {
+            using var request = JsonDocument.Parse(call.Body);
+            using var input = JsonDocument.Parse(request.RootElement.GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString()!);
+            input.RootElement.GetProperty("projects").GetArrayLength().Should().BeLessThanOrEqualTo(20);
+            return input.RootElement.GetProperty("projects").EnumerateArray().Select(project => project.GetProperty("text").GetString()).ToArray();
+        }).ToArray();
+        sentProjects.Should().HaveCount(projectCount).And.OnlyHaveUniqueItems();
+        results.Should().HaveCount(projectCount);
         results.Values.Should().OnlyContain(row => row.Count == 2 && row.Values.Count(fit => fit.HasEvidence) == 1);
         results.Values.SelectMany(row => row.Values).Where(fit => fit.HasEvidence).Should().OnlyContain(fit =>
             fit.Score == 0 && fit.Reasons.Any(reason => reason.Contains("gemini-3.8-flash")) && fit.Criteria!.Experience == 75);
         rig.Calls[0].Body.Should().NotContain(mentors[0].Id.ToString()).And.NotContain(projects[0].Id.ToString());
+    }
+
+    [Fact]
+    public async Task ATruncatedLaterBatchRejectsTheWholeScopeAndRetryReusesTheCompletedBatch()
+    {
+        var calls = 0;
+        using var rig = new Rig(call => ++calls == 2 ? Envelope("truncated", "MAX_TOKENS") : Success(call));
+        var projects = Enumerable.Range(0, 41).Select(index => new MentorRankingProject(Guid.NewGuid(),
+            $"Fictional marketing startup {index}")).ToArray();
+        var mentors = new[] { Profile() };
+
+        await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() =>
+            rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default));
+        rig.Calls.Should().HaveCount(2);
+        var result = await rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default);
+        result.Should().HaveCount(41);
+        rig.Calls.Should().HaveCount(4, "the first successful batch is cached and the failed batch is retried");
     }
 
     [Theory]
@@ -146,7 +193,7 @@ public sealed class GeminiMentorFitRankerTests
     public async Task OversizedProjectOrMentorCollectionsAreRejectedBeforeSending(bool tooManyProjects)
     {
         using var rig = new Rig();
-        var projects = Enumerable.Range(0, tooManyProjects ? 151 : 1)
+        var projects = Enumerable.Range(0, tooManyProjects ? 301 : 1)
             .Select(_ => new MentorRankingProject(Guid.NewGuid(), "Marketing startup")).ToArray();
         var mentors = Enumerable.Range(0, tooManyProjects ? 1 : 201).Select(_ => Profile()).ToArray();
         await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(
@@ -177,7 +224,28 @@ public sealed class GeminiMentorFitRankerTests
         using var rig = new Rig(_ => Error(status));
         var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
         exception.ToString().Should().NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
-        rig.Calls.Should().HaveCount(1);
+        rig.Calls.Should().HaveCount(status == HttpStatusCode.ServiceUnavailable ? 6 : 1);
+    }
+
+    [Fact]
+    public async Task ATransient503RetriesTheSameModelOnceBeforeReturningTheCompleteResult()
+    {
+        var calls = 0;
+        using var rig = new Rig(call => ++calls == 1 ? Error(HttpStatusCode.ServiceUnavailable) : Success(call));
+        var result = await Rank(rig);
+        result.Should().ContainSingle();
+        rig.Calls.Select(call => call.Model).Should().Equal("gemini-3.8-flash", "gemini-3.8-flash");
+    }
+
+    [Fact]
+    public async Task Repeated503UsesAnApprovedFallbackAndCoolsDownTheUnavailableModel()
+    {
+        using var rig = new Rig(call => call.Model == "gemini-3.8-flash" ? Error(HttpStatusCode.ServiceUnavailable) : Success(call));
+        await Rank(rig);
+        rig.Calls.Select(call => call.Model).Should().Equal("gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite");
+        rig.Coordinator.ModelBlockedUntil["gemini-3.8-flash"].Should().Be(rig.Clock.GetUtcNow().AddMinutes(1));
+        await Rank(rig, "Another fictional marketing project");
+        rig.Calls.Last().Model.Should().Be("gemini-3.5-flash-lite");
     }
 
     [Fact]
@@ -325,7 +393,7 @@ public sealed class GeminiMentorFitRankerTests
     }
 
     [Fact]
-    public async Task MatchingInputIsCachedForTwoMinutesButChangedProfilesInvalidateTheCache()
+    public async Task MatchingInputIsCachedForTenMinutesButChangedProfilesInvalidateTheCache()
     {
         using var rig = new Rig();
         var projects = new[] { new MentorRankingProject(Guid.NewGuid(), "Marketing startup") };
@@ -336,7 +404,7 @@ public sealed class GeminiMentorFitRankerTests
         mentor.Experience += "; Product experimentation";
         await rig.Ranker.RankAsync(projects, [mentor], MentorRankingScope.AllSpecialties, default);
         rig.Calls.Should().HaveCount(2);
-        rig.Clock.Now += TimeSpan.FromMinutes(3);
+        rig.Clock.Now += TimeSpan.FromMinutes(11);
         await rig.Ranker.RankAsync(projects, [mentor], MentorRankingScope.AllSpecialties, default);
         rig.Calls.Should().HaveCount(3);
     }

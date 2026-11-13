@@ -11,7 +11,8 @@ namespace EHub.Application.Features.Mentoring;
 /// <summary>Uses the configured model and recorded mentoring evidence for both suggestions and allocation.</summary>
 public sealed class MentorRecommendationRanker(IApplicationDbContext context,
     IGenerativeMentorFitRanker generativeRanker, IMentorEvidenceGuard evidenceGuard,
-    IDateTimeProvider? dateTimeProvider = null, IOptions<MentorScoringOptions>? scoringOptions = null)
+    IDateTimeProvider? dateTimeProvider = null, IOptions<MentorScoringOptions>? scoringOptions = null,
+    MentorRankingExecution? execution = null)
     : IMentorRecommendationRanker, IBatchMentorRecommendationRanker
 {
     private HashSet<Guid>? historyMentorIds;
@@ -52,6 +53,14 @@ public sealed class MentorRecommendationRanker(IApplicationDbContext context,
         if (projects.Any(project => project.RequiredMentorTypes?.Any(type => !Enum.IsDefined(type)) == true))
             throw new MentorFitRankerUnavailableException();
         var merged = projects.ToDictionary(project => project.Id, _ => new Dictionary<Guid, MentorFitRanking>());
+        if (execution is not null)
+        {
+            var totalBatches = new[] { MentorType.Enterprise, MentorType.Academic }
+                .Where(type => mentors.Any(mentor => mentor.Type == type))
+                .Sum(type => (projects.Count(project => project.RequiredMentorTypes is null || project.RequiredMentorTypes.Contains(type))
+                    + MentorRankingExecution.ProjectsPerBatch - 1) / MentorRankingExecution.ProjectsPerBatch);
+            await execution.BeginAsync(totalBatches, cancellationToken);
+        }
         foreach (var type in new[] { MentorType.Enterprise, MentorType.Academic })
         {
             cancellationToken.ThrowIfCancellationRequested();
