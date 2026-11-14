@@ -22,6 +22,8 @@ export interface SlotView {
   fitScore?: number | null;
   reasons?: string[];
   history?: MentorAllocationRowPreview['history'];
+  fitDetails?: MentorAllocationRowPreview['fitDetails'];
+  alternatives?: MentorAllocationRowPreview['alternatives'];
   needsReview?: boolean;
 }
 
@@ -81,7 +83,8 @@ const compareNatural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
 
 const isAiSuggestionNeedingReview = (preview: MentorAllocationPreview, row: MentorAllocationRowPreview) =>
-  preview.strategy === 'Ai' && (row.source ?? 'Allocated') === 'Allocated' && row.fitScore === 0;
+  preview.strategy === 'Ai' && (row.source ?? 'Allocated') === 'Allocated' &&
+  (row.fitScore === 0 || row.fitDetails?.hasEvidence === false);
 
 /** Filled AI suggestions without matching evidence still need an administrator's review. */
 export function getAiReviewAssignments(preview: MentorAllocationPreview): MentorAllocationRowPreview[] {
@@ -137,6 +140,8 @@ export function buildTeamGrid(preview: MentorAllocationPreview): TeamGridRow[] {
       fitScore: row.fitScore,
       reasons: row.reasons,
       history: row.history,
+      fitDetails: row.fitDetails,
+      alternatives: row.alternatives,
       needsReview: isAiSuggestionNeedingReview(preview, row),
     });
   }
@@ -169,6 +174,72 @@ export function getMentorCandidates(preview: MentorAllocationPreview, type: Ment
   return (preview.mentorLoads ?? [])
     .filter(mentor => mentor.mentorType === type)
     .sort((left, right) => left.totalAfter - right.totalAfter || left.mentorName.localeCompare(right.mentorName));
+}
+
+export interface MentorAllocationLoadImpact {
+  selected: { mentorName: string; before: number; after: number };
+  previous: { mentorName: string; before: number; after: number } | null;
+}
+
+export interface MentorAllocationQualitySummary {
+  assessed: number;
+  supported: number;
+  needsReview: number;
+  missingProfileData: number;
+  unknownProfileData: number;
+  averageFit: number | null;
+}
+
+const criterionKeys = ['experience', 'expertise', 'startupDomain', 'technology', 'bio'] as const;
+
+export function getMissingProfileFields(details: SlotView['fitDetails']): typeof criterionKeys[number][] | null {
+  return details ? criterionKeys.filter(key => !details.availableProfileFields.includes(key)) : null;
+}
+
+/** Describes evidence/data coverage of new AI suggestions, never an accuracy estimate. */
+export function summarizeAllocationQuality(preview: MentorAllocationPreview): MentorAllocationQualitySummary | null {
+  if (preview.strategy !== 'Ai') return null;
+  const assessed = preview.assignments.filter(row => (row.source ?? 'Allocated') === 'Allocated' &&
+    row.fitScore != null && Number.isFinite(row.fitScore) && row.fitScore >= 0 && row.fitScore <= 100);
+  return {
+    assessed: assessed.length,
+    supported: assessed.filter(row => row.fitDetails?.hasEvidence ?? (row.fitScore! > 0)).length,
+    needsReview: assessed.filter(row => row.fitScore === 0 || row.fitDetails?.hasEvidence === false).length,
+    missingProfileData: assessed.filter(row => (getMissingProfileFields(row.fitDetails)?.length ?? 0) > 0).length,
+    unknownProfileData: assessed.filter(row => !row.fitDetails).length,
+    averageFit: assessed.length ? assessed.reduce((total, row) => total + row.fitScore!, 0) / assessed.length : null,
+  };
+}
+
+export function getAvailableFitAlternatives(slot: Pick<SlotView, 'mentorProfileId' | 'alternatives'>,
+  candidates: readonly MentorAllocationMentorLoad[]): NonNullable<SlotView['alternatives']> {
+  const eligible = new Set(candidates.map(candidate => candidate.mentorProfileId));
+  const seen = new Set<string>();
+  return (slot.alternatives ?? []).filter(candidate => {
+    if (candidate.mentorProfileId === slot.mentorProfileId || !eligible.has(candidate.mentorProfileId) ||
+      !candidate.hasEvidence || !Number.isFinite(candidate.fitScore) || candidate.fitScore < 0 || candidate.fitScore > 100 ||
+      seen.has(candidate.mentorProfileId)) return false;
+    seen.add(candidate.mentorProfileId);
+    return true;
+  }).sort((left, right) => right.fitScore - left.fitScore || left.mentorName.localeCompare(right.mentorName)).slice(0, 3);
+}
+
+/** Forecasts this one edit against the current preview; the next server preview remains authoritative. */
+export function getMentorLoadImpact(
+  preview: Pick<MentorAllocationPreview, 'mentorLoads'>,
+  slot: Pick<SlotView, 'mentorProfileId'>,
+  selectedMentorId: string,
+): MentorAllocationLoadImpact | null {
+  const selected = preview.mentorLoads?.find(mentor => mentor.mentorProfileId === selectedMentorId);
+  if (!selected || !Number.isFinite(selected.totalAfter) || selected.totalAfter < 0) return null;
+  const sameMentor = selectedMentorId === slot.mentorProfileId;
+  const previous = sameMentor ? undefined : preview.mentorLoads?.find(mentor => mentor.mentorProfileId === slot.mentorProfileId);
+  return {
+    selected: { mentorName: selected.mentorName, before: selected.totalAfter, after: selected.totalAfter + (sameMentor ? 0 : 1) },
+    previous: previous && Number.isFinite(previous.totalAfter) && previous.totalAfter >= 0
+      ? { mentorName: previous.mentorName, before: previous.totalAfter, after: Math.max(0, previous.totalAfter - 1) }
+      : null,
+  };
 }
 
 /** Subject codes present in the mentor loads, in a stable order, so the mentor table can show one column per subject. */

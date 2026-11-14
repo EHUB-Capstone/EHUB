@@ -33,6 +33,56 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
     private const string CommitUrl = "/api/admin/mentors/allocations/commit";
     private const string PrivateMarker = "PRIVATE_PREVIOUS_TEAM_NOTES";
 
+    [Fact]
+    public async Task PreviewProvidesSourceBackedCriteriaAndSameTypeAlternativesBeforeAnyAssignmentIsSaved()
+    {
+        var gemini = new RecordingGemini { CompareBackendRules = true };
+        using var app = App(gemini: gemini);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        var business = await Identity(SystemRoles.Mentor);
+        var technical = await Identity(SystemRoles.Mentor);
+        using (var setup = factory.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            foreach (var profile in await db.MentorProfiles.Where(profile => db.SemesterStaffAssignments.Any(staff =>
+                         staff.SemesterId == fixture.SemesterId && staff.UserId == profile.UserId)).ToArrayAsync())
+                profile.Experience = RecordingGemini.Evidence;
+            foreach (var (identity, type) in new[] { (business, MentorType.Enterprise), (technical, MentorType.Academic) })
+            {
+                db.MentorProfiles.Add(new MentorProfile { UserId = identity.Id, Type = type, Experience = RecordingGemini.Evidence });
+                db.SemesterStaffAssignments.Add(new SemesterStaffAssignment { SemesterId = fixture.SemesterId, UserId = identity.Id,
+                    Role = SemesterStaffRole.Mentor, Status = SemesterStaffStatus.Active, CreatedBy = admin.Id });
+            }
+            await db.SaveChangesAsync();
+        }
+        using var response = await client.SendAsync(Authorized(HttpMethod.Post, PreviewUrl, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var preview = (await response.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!;
+        preview.Assignments.Should().HaveCount(2);
+        foreach (var row in preview.Assignments)
+        {
+            row.FitDetails.Should().NotBeNull();
+            row.FitDetails!.HasEvidence.Should().BeTrue();
+            row.FitDetails.Criteria.Should().HaveCount(5);
+            row.FitDetails.Criteria.Single(item => item.Key == "experience").Evidence.Should().Be(RecordingGemini.Evidence);
+            row.FitDetails.AvailableProfileFields.Should().Contain("experience");
+            row.FitDetails.ProjectNeeds.Should().NotBeEmpty();
+            var alternative = row.Alternatives.Should().ContainSingle().Subject;
+            alternative.HasEvidence.Should().BeTrue();
+            alternative.MentorProfileId.Should().NotBe(row.MentorProfileId);
+            alternative.FitScore.Should().BeGreaterThan(0);
+            using var check = factory.Services.CreateScope();
+            var db = check.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.MentorProfiles.SingleAsync(profile => profile.Id == alternative.MentorProfileId)).Type.ToString().Should().Be(row.MentorType);
+            (await db.MentorAssignments.AnyAsync(assignment => assignment.TeamId == fixture.TeamId)).Should().BeFalse();
+        }
+        var json = await response.Content.ReadAsStringAsync();
+        json.Should().NotContain(PrivateMarker).And.NotContain("SYNTHETIC_GEMINI_TEST_KEY");
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, MentorFitFailure.Authentication)]
     [InlineData(HttpStatusCode.TooManyRequests, MentorFitFailure.Quota)]
@@ -943,6 +993,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
                 results = projects.Select(project => new
                 {
                     project = project.GetProperty("id").GetString(),
+                    needs = new[] { project.GetProperty("text").GetString()![..Math.Min(80, project.GetProperty("text").GetString()!.Length)] },
                     mentors = selected.Select(mentor =>
                     {
                         var candidate = new Dictionary<string, object?>

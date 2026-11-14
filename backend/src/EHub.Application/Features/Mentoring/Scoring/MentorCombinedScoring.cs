@@ -11,7 +11,14 @@ public static class MentorCombinedScoring
     {
         if (!settings.IsValid()) throw new MentorFitRankerUnavailableException();
         if (hasContradiction)
-            return new MentorFitRanking(0, ["Backend: hồ sơ phủ định chuyên môn được dự án yêu cầu; cần admin rà soát"], false, 0);
+            return new MentorFitRanking(0, ["Backend: hồ sơ phủ định chuyên môn được dự án yêu cầu; cần admin rà soát"], false, 0)
+            {
+                Analysis = gemini.Analysis is { } rejected ? rejected with
+                {
+                    ProfileScore = 0, HasEvidence = false,
+                    Criteria = rejected.Criteria.Select(item => item with { Score = 0, Evidence = null }).ToArray()
+                } : null
+            };
         var criteria = gemini.Criteria;
         if (criteria is null || !criteria.IsValid()) throw new MentorFitRankerUnavailableException();
         var hasCriteriaEvidence = criteria.Values.Any(value => value > 0);
@@ -35,7 +42,10 @@ public static class MentorCombinedScoring
         reasons.Add($"Điểm nền: {settings.ProfilePoints}% × Hồ sơ {Format(local)} = {Format(raw)}; " +
                     "lịch sử và thành tích được cộng tối đa 30 điểm (15 điểm mỗi phần)");
         return new MentorFitRanking((int)Math.Round(raw, MidpointRounding.AwayFromZero),
-            reasons.Distinct(StringComparer.Ordinal).ToArray(), hasEvidence, raw);
+            reasons.Distinct(StringComparer.Ordinal).ToArray(), hasEvidence, raw)
+        {
+            Analysis = gemini.Analysis is { } analysis ? analysis with { ProfileScore = local, HasEvidence = hasEvidence } : null
+        };
     }
 
     private static string Format(double number) => number.ToString("0.##", CultureInfo.InvariantCulture);

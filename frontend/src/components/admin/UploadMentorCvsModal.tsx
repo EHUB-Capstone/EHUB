@@ -171,7 +171,8 @@ export default function UploadMentorCvsModal({ onClose, onUploaded }: Props) {
       <div className="space-y-4 text-body text-slate-700">
         <p>Import mentor accounts from Excel first, then select one CV or a list of CVs. The email inside each CV is compared with the imported mentor emails. A unique match selects the mentor automatically.</p>
         <p className="text-body-sm text-slate-500">Reading the CV email does not save the file or change a profile. Review the selected mentors, or choose manually when the email is missing or ambiguous, before pressing Upload.</p>
-        <p className="text-body-sm text-slate-500">Uploading stores the full document and extracts education, professional background, work experience and expertise into the mentor profile. Mentor type and manually entered technology skills stay unchanged.</p>
+        <p className="text-body-sm text-slate-500">Uploading stores the document and extracts education, professional background, work experience, expertise, startup domains and technology skills. Supporting professional notes are kept with extracted skills and domains; existing manual entries and mentor type are preserved.</p>
+        <p className="text-body-sm text-slate-500">Review the extracted information and supporting notes in the mentor profile before using AI assignment.</p>
 
         {loading && !uploading && <p role="status" className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading mentors…</p>}
         {directoryError && <div role="alert" className="space-y-2 rounded-lg border border-danger-light bg-danger-50 p-3 text-danger-dark">

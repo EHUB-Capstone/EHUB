@@ -70,7 +70,7 @@ public sealed class GeminiMentorFitRankerTests
     }
 
     [Fact]
-    public async Task ATruncatedLaterBatchRejectsTheWholeScopeAndRetryReusesTheCompletedBatch()
+    public async Task ATruncatedLaterBatchIsSplitAndRetryReusesCompletedBatches()
     {
         var calls = 0;
         using var rig = new Rig(call => ++calls is >= 2 and <= 4 ? Envelope("truncated", "MAX_TOKENS") : Success(call));
@@ -78,12 +78,12 @@ public sealed class GeminiMentorFitRankerTests
             $"Fictional marketing startup {index}")).ToArray();
         var mentors = new[] { Profile() };
 
-        await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() =>
-            rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default));
-        rig.Calls.Should().HaveCount(4);
+        var first = await rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default);
+        first.Should().HaveCount(41);
+        rig.Calls.Should().HaveCount(7);
         var result = await rig.Ranker.RankAsync(projects, mentors, MentorRankingScope.AllSpecialties, default);
         result.Should().HaveCount(41);
-        rig.Calls.Should().HaveCount(6, "the first successful batch is cached and the failed batch is retried");
+        rig.Calls.Should().HaveCount(8, "the parent batch is retried successfully, while previously completed original batches are cached");
     }
 
     [Theory]
@@ -309,7 +309,7 @@ public sealed class GeminiMentorFitRankerTests
     {
         using var rig = new Rig(_ => Envelope("PRIVATE_PROVIDER_BODY", finish));
         var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => Rank(rig));
-        exception.Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        exception.Failure.Should().Be(finish == "MAX_TOKENS" ? MentorFitFailure.OutputLimit : MentorFitFailure.InvalidResponse);
         string.Join('\n', rig.Logger.Messages).Should().Contain(loggedReason).And.NotContain(FakeKey).And.NotContain("PRIVATE_PROVIDER_BODY");
     }
 
@@ -396,15 +396,15 @@ public sealed class GeminiMentorFitRankerTests
                 case "all-zero-criteria":
                     candidate["criteria"]!["experience"] = new JsonObject { ["score"] = 0, ["evidence"] = "" }; break;
                 case "too-many-per-role":
-                    candidates.Add(new JsonObject { ["id"] = "M002", ["criteria"] = Criteria() });
-                    candidates.Add(new JsonObject { ["id"] = "M003", ["criteria"] = Criteria() });
+                    for (var index = 2; index <= 6; index++)
+                        candidates.Add(new JsonObject { ["id"] = $"M{index:000}", ["criteria"] = Criteria() });
                     break;
             }
             return Envelope(fault == "invalid-json" ? "not-json" : data.ToJsonString(), fault == "truncated" ? "MAX_TOKENS" : "STOP");
         });
         var exception = await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(
-            [new(Guid.NewGuid(), "Marketing startup")], [Profile(), Profile(), Profile()], MentorRankingScope.AllSpecialties, default));
-        exception.Failure.Should().Be(MentorFitFailure.InvalidResponse);
+            [new(Guid.NewGuid(), "Marketing startup")], Enumerable.Range(0, 6).Select(_ => Profile()).ToArray(), MentorRankingScope.AllSpecialties, default));
+        exception.Failure.Should().Be(fault == "truncated" ? MentorFitFailure.OutputLimit : MentorFitFailure.InvalidResponse);
         rig.Calls.Should().HaveCount(3);
     }
 

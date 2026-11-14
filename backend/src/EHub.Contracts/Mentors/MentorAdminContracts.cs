@@ -162,6 +162,31 @@ public sealed class MentorAllocationHistoryResponse
     public int AchievementBonus { get; init; }
 }
 
+public sealed class MentorAllocationCriterionFit
+{
+    public string Key { get; init; } = string.Empty;
+    public int Score { get; init; }
+    public string? Evidence { get; init; }
+}
+
+public sealed class MentorAllocationFitDetails
+{
+    public double ProfileScore { get; init; }
+    public bool HasEvidence { get; init; }
+    public IReadOnlyCollection<MentorAllocationCriterionFit> Criteria { get; init; } = [];
+    public IReadOnlyCollection<string> AvailableProfileFields { get; init; } = [];
+    public IReadOnlyCollection<string> ProjectNeeds { get; init; } = [];
+}
+
+public sealed class MentorAllocationAlternative
+{
+    public Guid MentorProfileId { get; init; }
+    public string MentorName { get; init; } = string.Empty;
+    public int FitScore { get; init; }
+    public bool HasEvidence { get; init; }
+    public IReadOnlyCollection<string> Reasons { get; init; } = [];
+}
+
 public sealed class MentorAllocationRowPreview
 {
     public Guid TeamId { get; init; }
@@ -178,6 +203,8 @@ public sealed class MentorAllocationRowPreview
     public int ResultingSemesterLoad { get; init; }
     // Relative AI fit score, not a probability. Manual and retained rows have no score.
     public int? FitScore { get; init; }
+    public MentorAllocationFitDetails? FitDetails { get; init; }
+    public IReadOnlyCollection<MentorAllocationAlternative> Alternatives { get; init; } = [];
     public MentorAllocationHistoryResponse? History { get; init; }
     public IReadOnlyCollection<string> Reasons { get; init; } = Array.Empty<string>();
     // "Retained" keeps the mentor of the previous semester's team; "Allocated" is a newly chosen mentor.

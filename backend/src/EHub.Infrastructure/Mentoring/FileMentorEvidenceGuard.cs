@@ -33,7 +33,11 @@ public sealed class FileMentorEvidenceGuard : IMentorEvidenceGuard
         foreach (var mentor in mentors)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var denied = MentorEvidenceText.Excluded(Clip(mentor.Experience, 6000) + "\n" + Clip(mentor.Bio, 6000));
+            var professionalFields = new[] { Clip(mentor.Experience, 6000), Clip(mentor.Bio, 6000) }
+                .Concat((mentor.Expertise ?? []).Take(20)).Concat((mentor.StartupDomains ?? []).Take(20))
+                .Concat((mentor.TechnologySkills ?? []).Take(20)).Concat((mentor.Tags ?? []).Take(20))
+                .Concat((mentor.Experiences ?? []).Take(40).Select(item => Clip(item.Area, 200) + "\n" + Clip(item.Notes, 1200)));
+            var denied = MentorEvidenceText.Excluded(string.Join('\n', professionalFields));
             if (topics.Where(topic => requested.Contains(topic.Id))
                 .Any(topic => topic.Aliases.Any(alias => Positions(denied, alias).Any())))
                 result.Add(mentor.Id);

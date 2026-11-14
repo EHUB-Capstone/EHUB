@@ -67,9 +67,7 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         {
             profile.CvStorageUrl = uploaded.Value.Url; profile.CvPublicId = uploaded.Value.PublicId;
             profile.CvFileName = safeName;
-            if (extracted!.Bio is not null) profile.Bio = extracted.Bio;
-            if (extracted.Experience is not null) profile.Experience = extracted.Experience;
-            profile.Expertise = profile.Expertise.Concat(extracted.Expertise).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+            MentorCvProfileEnrichment.Apply(profile, extracted!);
         }
         else
         {

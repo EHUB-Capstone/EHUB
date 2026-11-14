@@ -538,7 +538,7 @@ public sealed class MentorAdminHandler(
                     error.UserMessage);
             }
         }
-        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings);
+        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings, cancellationToken);
         var warnings = outcome.Warnings.ToList();
         if (strategy == AllocationStrategy.Ai && mentors.Any(mentor => mentor.IsTemporary))
             warnings.Add("AI chỉ đề xuất mentor có hồ sơ chuyên môn. Mentor chưa có tài khoản vẫn có thể được chọn thủ công.");
@@ -581,6 +581,8 @@ public sealed class MentorAdminHandler(
             MentorName = proposal.Mentor.Name, MentorEmail = proposal.Mentor.Email,
             ResultingSemesterLoad = proposal.ResultingLoad, Source = MentorAllocationSources.Allocated,
             FitScore = proposal.Ranking?.Score, Reasons = proposal.Ranking?.Reasons ?? [],
+            FitDetails = MentorAllocationExplanationBuilder.Details(proposal.Ranking),
+            Alternatives = MentorAllocationExplanationBuilder.Alternatives(proposal, mentors, rankings),
             History = proposal.Ranking?.History is { } history ? new MentorAllocationHistoryResponse
             {
                 BaseFitScore = history.BaseFitScore, CompletedSessionCount = history.CompletedSessionCount,

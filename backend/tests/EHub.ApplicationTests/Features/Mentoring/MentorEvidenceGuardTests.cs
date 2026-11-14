@@ -37,6 +37,22 @@ public sealed class MentorEvidenceGuardTests
     }
 
     [Theory]
+    [InlineData("experience-note")]
+    [InlineData("technology")]
+    [InlineData("expertise")]
+    public void ExplicitDenialsInStructuredProfileFieldsCannotBeLostWhenSelectingContext(string field)
+    {
+        var mentor = new MentorProfile { Experience = "Product development", TechnologySkills = ["React"] };
+        if (field == "experience-note")
+            mentor.Experiences.Add(new MentorExperience { Kind = "Technology", Area = "React", Notes = "No React experience" });
+        if (field == "technology") mentor.TechnologySkills = ["No React experience"];
+        if (field == "expertise") mentor.Expertise = ["No React experience"];
+        var guard = new FileMentorEvidenceGuard(new ConfigurationBuilder().Build());
+        guard.FindContradictions("React frontend prototype", [mentor], default).Should().Contain(mentor.Id);
+        guard.FindContradictions("Marketing; React is not required", [mentor], default).Should().NotContain(mentor.Id);
+    }
+
+    [Theory]
     [InlineData("{\"topics\":[]}")]
     [InlineData("{\"topics\":[{\"id\":\"a\",\"aliases\":[\"React\"],\"parent\":\"a\"}]}")]
     [InlineData("{\"topics\":[{\"id\":\"a\",\"aliases\":[\"React\"]},{\"id\":\"a\",\"aliases\":[\"Cloud\"]}]}")]

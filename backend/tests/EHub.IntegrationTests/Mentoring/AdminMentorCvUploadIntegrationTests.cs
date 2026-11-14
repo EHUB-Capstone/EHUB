@@ -199,8 +199,9 @@ public sealed class AdminMentorCvUploadIntegrationTests(CustomWebApplicationFact
         var updated = await Stored(target.ProfileId.Value);
         updated.CvFileName.Should().Be("replacement.docx");
         updated.CvPublicId.Should().NotBe(oldId);
-        updated.Experience.Should().Be("Built Python and PostgreSQL tools");
-        updated.TechnologySkills.Should().Equal("Manual TypeScript");
+        updated.Experience.Should().Contain("Original professional evidence").And.Contain("Giám đốc Marketing")
+            .And.Contain("Built Python and PostgreSQL tools");
+        updated.TechnologySkills.Should().Equal("Manual TypeScript", "Python", "PostgreSQL");
         storage.DeletedIds.Should().Equal(oldId);
         storage.Files.Should().ContainSingle().Which.Value.Should().Equal(replacement);
     }

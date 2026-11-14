@@ -344,7 +344,8 @@ public sealed class MentorCvExtractionTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Bio.Should().Be(narrative);
         result.Value.MentorType.Should().Be(mentorType);
-        result.Value.TechnologySkills.Should().Equal("Negotiation", "Python");
+        result.Value.TechnologySkills.Should().Contain(["Negotiation", "Python"]);
+        if (mentorType == "Business") result.Value.TechnologySkills.Should().Contain("Rust");
         result.Value.Expertise.Should().Contain(["Manual skill", expertise]);
         result.Value.Experience.Should().Be("Existing manually reviewed experience");
         result.Value.Organization.Should().Be("Manual organization");
@@ -353,7 +354,8 @@ public sealed class MentorCvExtractionTests
         var saved = await db.MentorProfiles.SingleAsync();
         saved.Bio.Should().Be(narrative);
         saved.MentorType.Should().Be(mentorType);
-        saved.TechnologySkills.Should().Equal("Negotiation", "Python");
+        saved.TechnologySkills.Should().Contain(["Negotiation", "Python"]);
+        if (mentorType == "Business") saved.TechnologySkills.Should().Contain("Rust");
     }
 
     [Theory]

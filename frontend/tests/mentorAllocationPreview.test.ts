@@ -9,6 +9,7 @@ import type {
   MentorAllocationMentorLoad,
   MentorAllocationPreview,
   MentorAllocationRowPreview,
+  MentorAllocationFitDetails,
 } from '../src/types/mentorAdmin.ts';
 import type { TeamGridRow } from '../src/utils/mentorAllocationPreview.ts';
 import {
@@ -17,15 +18,19 @@ import {
   filterTeamGrid,
   formatAllocationReason,
   getAiReviewAssignments,
+  getAvailableFitAlternatives,
+  getMissingProfileFields,
   resolveClassFilter,
   teamClassOptions,
   findEdit,
   getMentorCandidates,
+  getMentorLoadImpact,
   getSubjectColumns,
   isReplaceReasonValid,
   keepAppliedEdits,
   removeEdit,
   summarizePreview,
+  summarizeAllocationQuality,
   upsertEdit,
 } from '../src/utils/mentorAllocationPreview.ts';
 
@@ -75,6 +80,75 @@ const preview = (overrides: Partial<MentorAllocationPreview> = {}): MentorAlloca
   warnings: [],
   assignments: [],
   ...overrides,
+});
+
+const fitDetails = (overrides: Partial<MentorAllocationFitDetails> = {}): MentorAllocationFitDetails => ({
+  profileScore: 75,
+  hasEvidence: true,
+  criteria: [
+    { key: 'experience', score: 75, evidence: 'Synthetic mentoring in customer development' },
+    { key: 'expertise', score: 75, evidence: 'Customer development' },
+    { key: 'startupDomain', score: 0, evidence: null },
+    { key: 'technology', score: 0, evidence: null },
+    { key: 'bio', score: 50, evidence: 'Business education' },
+  ],
+  availableProfileFields: ['experience', 'expertise', 'bio'],
+  projectNeeds: ['Validate the customer problem'],
+  ...overrides,
+});
+
+test('fit criteria, source passages, project needs and alternatives stay on the assessed mentor slot', () => {
+  const details = fitDetails();
+  const alternatives = [{ mentorProfileId: 'alternative', mentorName: 'Synthetic alternative', fitScore: 50,
+    hasEvidence: true, reasons: ['Customer development'] }];
+  const grid = buildTeamGrid(preview({ strategy: 'Ai', assignments: [
+    row({ fitScore: 53, fitDetails: details, alternatives }),
+    row({ mentorType: 'Academic', mentorProfileId: 'technical', source: 'Manual' }),
+  ] }));
+  assert.deepEqual(grid[0].enterprise.fitDetails, details);
+  assert.deepEqual(grid[0].enterprise.alternatives, alternatives);
+  assert.equal(grid[0].academic.fitDetails, undefined);
+  assert.equal(grid[0].academic.alternatives, undefined);
+});
+
+test('missing source fields are distinct from a scored criterion with no relevant evidence', () => {
+  const allFields = ['experience', 'expertise', 'startupDomain', 'technology', 'bio'];
+  assert.deepEqual(getMissingProfileFields(fitDetails()), ['startupDomain', 'technology']);
+  assert.deepEqual(getMissingProfileFields(fitDetails({ availableProfileFields: allFields, hasEvidence: false })), []);
+  assert.equal(getMissingProfileFields(undefined), null, 'a legacy response does not tell us which fields are missing');
+});
+
+test('AI quality summary counts only assessed new proposals and separates missing data from low fit', () => {
+  const value = preview({ strategy: 'Ai', assignments: [
+    row({ teamId: 'supported', fitScore: 56, fitDetails: fitDetails() }),
+    row({ teamId: 'low-fit', fitScore: 0, fitDetails: fitDetails({ hasEvidence: false,
+      availableProfileFields: ['experience', 'expertise', 'startupDomain', 'technology', 'bio'] }) }),
+    row({ teamId: 'not-scored', fitScore: null }),
+    row({ teamId: 'manual', source: 'Manual', fitScore: 99 }),
+    row({ teamId: 'kept', source: 'Retained', fitScore: 99 }),
+  ] });
+  assert.deepEqual(summarizeAllocationQuality(value), {
+    assessed: 2, supported: 1, needsReview: 1, missingProfileData: 1, unknownProfileData: 0, averageFit: 28,
+  });
+  assert.deepEqual(summarizeAllocationQuality(preview({ strategy: 'Ai' })), {
+    assessed: 0, supported: 0, needsReview: 0, missingProfileData: 0, unknownProfileData: 0, averageFit: null,
+  });
+  assert.equal(summarizeAllocationQuality(preview({ strategy: 'Balanced' })), null);
+  assert.equal(summarizeAllocationQuality(preview({ strategy: 'Ai', assignments: [row({ fitScore: 50 })] }))?.unknownProfileData, 1);
+});
+
+test('alternative suggestions require supporting evidence and an eligible mentor, with no duplicates', () => {
+  const alternative = (id: string, score: number, hasEvidence = true) => ({ mentorProfileId: id,
+    mentorName: `Synthetic ${id}`, fitScore: score, hasEvidence, reasons: ['Professional source evidence'] });
+  const slot = { mentorProfileId: 'current', alternatives: [
+    alternative('current', 99), alternative('unavailable', 100), alternative('no-evidence', 90, false),
+    alternative('invalid', Number.NaN), alternative('second', 60), alternative('first', 80),
+    alternative('first', 79), alternative('third', 50), alternative('fourth', 40),
+  ] };
+  const candidates = ['current', 'no-evidence', 'invalid', 'second', 'first', 'third', 'fourth']
+    .map(id => load({ mentorProfileId: id }));
+  assert.deepEqual(getAvailableFitAlternatives(slot, candidates).map(item => item.mentorProfileId), ['first', 'second', 'third']);
+  assert.deepEqual(getAvailableFitAlternatives({ mentorProfileId: 'current' }, candidates), []);
 });
 
 test('buildTeamGrid shows existing, retained, allocated, manual and unfilled slots per team', () => {
@@ -157,6 +231,35 @@ test('getMentorCandidates keeps the matching mentor type and puts the lightest l
   }), 'Enterprise');
 
   assert.deepEqual(candidates.map(item => item.mentorProfileId), ['b', 'a']);
+});
+
+test('changing a mentor forecasts both loads from the current preview without changing its data', () => {
+  const value = preview({ mentorLoads: [
+    load({ mentorProfileId: 'old', mentorName: 'Current mentor', totalAfter: 4 }),
+    load({ mentorProfileId: 'next', mentorName: 'Alternative mentor', totalAfter: 2 }),
+  ] });
+  const before = structuredClone(value);
+  assert.deepEqual(getMentorLoadImpact(value, { mentorProfileId: 'old' }, 'next'), {
+    selected: { mentorName: 'Alternative mentor', before: 2, after: 3 },
+    previous: { mentorName: 'Current mentor', before: 4, after: 3 },
+  });
+  assert.deepEqual(value, before);
+});
+
+test('load forecasts do not add a second team when retaining the same mentor', () => {
+  const value = preview({ mentorLoads: [load({ mentorProfileId: 'same', totalAfter: 5 })] });
+  assert.deepEqual(getMentorLoadImpact(value, { mentorProfileId: 'same' }, 'same'), {
+    selected: { mentorName: 'Mentor 1', before: 5, after: 5 }, previous: null,
+  });
+  assert.equal(getMentorLoadImpact(value, { mentorProfileId: 'same' }, 'unknown'), null);
+});
+
+test('filling an empty slot forecasts only the selected mentor and unknown loads stay unavailable', () => {
+  const value = preview({ mentorLoads: [load({ totalAfter: 0 })] });
+  assert.deepEqual(getMentorLoadImpact(value, { mentorProfileId: null }, 'm1'), {
+    selected: { mentorName: 'Mentor 1', before: 0, after: 1 }, previous: null,
+  });
+  assert.equal(getMentorLoadImpact(preview({ mentorLoads: [load({ totalAfter: Number.NaN })] }), { mentorProfileId: null }, 'm1'), null);
 });
 
 test('getSubjectColumns returns each subject once in natural order', () => {
@@ -318,13 +421,16 @@ test('the AI preview keeps the history and achievement score breakdown on the co
 test('AI client keeps class scope, seed and manual edits, and saves only on explicit acceptance', async () => {
   const mock = new MockAdapter(axiosClient);
   try {
-    const suggested = preview({ sessionId: 'ai-session', strategy: 'Ai' });
+    const suggested = preview({ sessionId: 'ai-session', strategy: 'Ai', assignments: [row({ fitScore: 53, fitDetails: fitDetails(),
+      alternatives: [{ mentorProfileId: 'm2', mentorName: 'Synthetic alternative', fitScore: 49, hasEvidence: true, reasons: ['Customer coaching'] }] })] });
     mock.onPost('/admin/mentors/allocations/preview').reply(200, { success: true, data: suggested });
     mock.onPost('/admin/mentors/allocations/commit').reply(200, { success: true, data: { createdCount: 1, skippedCount: 0 } });
     const edit: MentorAllocationEdit = { teamId: 't1', mentorType: 'Enterprise', mentorProfileId: 'm2' };
     const response = await mentorAdminApi.previewAllocation('sem', 42, 'Ai', [edit], false, ['class-1']);
 
     assert.equal(response.data.sessionId, 'ai-session');
+    assert.deepEqual(response.data.assignments[0].fitDetails, suggested.assignments[0].fitDetails);
+    assert.deepEqual(response.data.assignments[0].alternatives, suggested.assignments[0].alternatives);
     assert.equal(mock.history.post.length, 1);
     assert.equal(mock.history.post[0].timeout, 200_000);
     assert.deepEqual(JSON.parse(mock.history.post[0].data), {

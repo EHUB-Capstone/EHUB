@@ -94,6 +94,26 @@ export interface MentorAllocationHistory {
   achievementBonus: number;
 }
 
+export type MentorFitCriterionKey = 'experience' | 'expertise' | 'startupDomain' | 'technology' | 'bio';
+
+export interface MentorAllocationFitDetails {
+  profileScore: number;
+  hasEvidence: boolean;
+  criteria: { key: MentorFitCriterionKey; score: number; evidence?: string | null }[];
+  /** Fields present in the source profile, independently of how well they fit this project. */
+  availableProfileFields: string[];
+  /** Professional needs quoted from the supplied project description. */
+  projectNeeds: string[];
+}
+
+export interface MentorAllocationAlternative {
+  mentorProfileId: string;
+  mentorName: string;
+  fitScore: number;
+  hasEvidence: boolean;
+  reasons: string[];
+}
+
 export interface MentorAllocationRowPreview {
   teamId: string;
   teamCode: string;
@@ -118,6 +138,8 @@ export interface MentorAllocationRowPreview {
   /** Relative fit score used to rank AI suggestions; not a probability. */
   fitScore?: number | null;
   history?: MentorAllocationHistory | null;
+  fitDetails?: MentorAllocationFitDetails | null;
+  alternatives?: MentorAllocationAlternative[];
   /** Evidence from skills, mentoring history, achievements and workload. */
   reasons?: string[];
 }
