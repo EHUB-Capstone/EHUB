@@ -1,6 +1,6 @@
 import axiosClient from './axiosClient.ts';
 import type { ApiEnvelope } from '../types/workspaceTools';
-import type { CheckpointFigureHistory, CheckpointSummary, CheckpointVersionChanges, SummaryDiagnostics, SummaryFeedback } from '../types/checkpointSummary';
+import type { CheckpointFigureHistory, CheckpointSummary, CheckpointVersionChanges, SummaryDiagnostics, SummaryFeedback, SummaryFeedbackRequest } from '../types/checkpointSummary';
 
 export const checkpointSummaryPath = (teamId: string, checkpointNumber: number) =>
   `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/ai-summary`;
@@ -18,10 +18,11 @@ export const checkpointSummaryApi = {
   figureHistory: (teamId: string, checkpointNumber: number, signal?: AbortSignal) =>
     axiosClient.get(`${checkpointSummaryPath(teamId, checkpointNumber)}/figure-history`, { signal }) as Promise<ApiEnvelope<CheckpointFigureHistory>>,
   /** The reviewer's own verdict on a finished summary. Giving it again replaces the earlier one. */
-  setFeedback: (teamId: string, checkpointNumber: number, fileId: string, feedback: SummaryFeedback, signal?: AbortSignal) =>
+  setFeedback: (teamId: string, checkpointNumber: number, fileId: string, feedback: SummaryFeedbackRequest, signal?: AbortSignal) =>
     axiosClient.put(`${checkpointSummaryPath(teamId, checkpointNumber)}/files/${fileId}/feedback`, feedback, { signal }) as Promise<ApiEnvelope<SummaryFeedback>>,
-  clearFeedback: (teamId: string, checkpointNumber: number, fileId: string, signal?: AbortSignal) =>
-    axiosClient.delete(`${checkpointSummaryPath(teamId, checkpointNumber)}/files/${fileId}/feedback`, { signal }) as Promise<unknown>,
+  clearFeedback: (teamId: string, checkpointNumber: number, fileId: string, generationId?: string | null, signal?: AbortSignal) =>
+    axiosClient.delete(`${checkpointSummaryPath(teamId, checkpointNumber)}/files/${fileId}/feedback`,
+      { signal, params: generationId ? { generationId } : undefined }) as Promise<unknown>,
   /** Stops queued and running files; finished summaries stay. */
   cancel: (teamId: string, checkpointNumber: number, signal?: AbortSignal) =>
     axiosClient.post(`${checkpointSummaryPath(teamId, checkpointNumber)}/cancel`, null, { signal }) as Promise<ApiEnvelope<CheckpointSummary>>,

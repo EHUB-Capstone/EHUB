@@ -1,4 +1,4 @@
-using EHub.Application.Features.Mentoring.TrainedRanking;
+using EHub.Application.Features.Mentoring.Evidence;
 using EHub.Application.Features.Workspaces.CheckpointSummaries;
 using EHub.Contracts.Workspaces;
 using EHub.Shared.Constants;
@@ -36,7 +36,7 @@ public sealed class CheckpointProductionFindingsTests
             "Phân khúc ban đầu: F&B nhiều chi nhánh, nhân viên làm theo ca.",
             "100+ người trả lời khảo sát, 83% là người trực tiếp quản lý nhân viên."
         ];
-        var normalised = file.Select(line => MentorRankingFeatures.Normalize(line)).ToArray();
+        var normalised = file.Select(line => MentorEvidenceText.Normalize(line)).ToArray();
 
         var target = CheckpointCriterionCues.Find("Target Customer Definition",
             "Target customer is specific, well-segmented, and supported by data", file, normalised);

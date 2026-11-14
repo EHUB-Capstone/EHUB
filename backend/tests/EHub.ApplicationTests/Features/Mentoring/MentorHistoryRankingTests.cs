@@ -14,10 +14,44 @@ public sealed class MentorHistoryRankingTests
         var newcomer = MentorHistoryRanking.Apply(new MentorFitRanking(85, ["Relevant software background"], true, 85.1),
             new MentorHistoryEvidence(0, 0, 0, ""));
 
-        experienced.Score.Should().Be(91);
+        experienced.Score.Should().Be(92);
         experienced.RankingValue.Should().BeGreaterThan(newcomer.RankingValue!.Value);
-        experienced.History.Should().Be(new MentorHistoryRankingEvidence(80, 10, 2, 2, 7, 4));
+        experienced.History.Should().Be(new MentorHistoryRankingEvidence(80, 10, 2, 2, 6, 6));
         string.Join(' ', experienced.Reasons).Should().NotContain("PRIVATE_HISTORY");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(1000)]
+    public void CompletedSessionVolumeDoesNotChangeTheScore(int sessions)
+    {
+        var result = MentorHistoryRanking.Apply(new MentorFitRanking(70, [], true, 70.4),
+            new MentorHistoryEvidence(sessions, 2, 0, ""));
+
+        result.Score.Should().Be(76);
+        result.RankingValue.Should().Be(76.4);
+        result.History!.HistoryBonus.Should().Be(6);
+
+        var noTeams = MentorHistoryRanking.Apply(new MentorFitRanking(70, []),
+            new MentorHistoryEvidence(sessions, 0, 0, ""));
+        noTeams.Score.Should().Be(70);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 3)]
+    [InlineData(4, 12)]
+    [InlineData(5, 15)]
+    [InlineData(1000, 15)]
+    public void EachRecordedTeamAddsThreeHistoryPointsUpToFifteen(int teams, int bonus)
+    {
+        var result = MentorHistoryRanking.Apply(new MentorFitRanking(70, []),
+            new MentorHistoryEvidence(0, teams, 0, ""));
+
+        result.Score.Should().Be(70 + bonus);
+        result.History!.HistoryBonus.Should().Be(bonus);
     }
 
     [Fact]
@@ -42,8 +76,8 @@ public sealed class MentorHistoryRankingTests
 
         result.Score.Should().Be(100);
         result.RankingValue.Should().Be(100);
-        result.History!.HistoryBonus.Should().Be(10);
-        result.History.AchievementBonus.Should().Be(10);
+        result.History!.HistoryBonus.Should().Be(15);
+        result.History.AchievementBonus.Should().Be(15);
         result.History.BaseFitScore.Should().Be(95);
     }
 

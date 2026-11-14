@@ -53,7 +53,7 @@ internal sealed class RandomMentorSelector : IMentorSelector
         pool[random.Next(pool.Length)];
 }
 
-/// <summary>Prefers relevant evidence; otherwise proposes the least-loaded eligible profile for review.</summary>
+/// <summary>Balances semester workload first, then chooses the best fit among equally loaded mentors.</summary>
 internal sealed class AiMentorSelector(
     IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> rankings) : IMentorSelector
 {
@@ -62,20 +62,21 @@ internal sealed class AiMentorSelector(
     {
         if (!rankings.TryGetValue(team.Id, out var teamRankings)) return null;
         var persistent = pool.Where(mentor => !mentor.IsTemporary).ToArray();
-        var evidenced = persistent.Where(mentor => teamRankings.TryGetValue(mentor.Id, out var fit)
-                && fit.HasEvidence && IsValid(fit))
+        // An incomplete or invalid result cannot become a workload-only suggestion.
+        if (persistent.Length == 0 || persistent.Any(mentor =>
+                !teamRankings.TryGetValue(mentor.Id, out var fit) || !IsValid(fit))) return null;
+        // Existing, retained and manual assignments already contribute to these semester loads.
+        // Filling a lowest-load mentor first produces floor(N/M) or ceil(N/M) teams when no
+        // protected assignment prevents that balance. Admin edits remain outside this selector.
+        var minimum = persistent.Min(mentor => loads[mentor.Id]);
+        var balanced = persistent.Where(mentor => loads[mentor.Id] == minimum).ToArray();
+        var evidenced = balanced.Where(mentor => teamRankings[mentor.Id].HasEvidence)
             .OrderByDescending(mentor => teamRankings[mentor.Id].RankingValue ?? teamRankings[mentor.Id].Score)
-            .ThenBy(mentor => loads[mentor.Id])
             .ThenBy(_ => random.Next())
             .FirstOrDefault();
         if (evidenced is not null) return evidenced;
 
-        // A model response with missing or invalid entries is not a no-match result.
-        // Only a complete successful response may produce review-needed proposals.
-        if (persistent.Length == 0 || persistent.Any(mentor =>
-                !teamRankings.TryGetValue(mentor.Id, out var fit) || !IsValid(fit))) return null;
-        return persistent.OrderBy(mentor => loads[mentor.Id])
-            .ThenBy(_ => random.Next())
+        return balanced.OrderBy(_ => random.Next())
             .First();
     }
 

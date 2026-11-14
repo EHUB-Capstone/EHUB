@@ -18,6 +18,7 @@ public class CheckpointSummaryFeedbackConfiguration : IEntityTypeConfiguration<C
         builder.Property(item => item.Reason).HasColumnName("reason").HasMaxLength(30);
         builder.Property(item => item.PromptVersion).HasColumnName("prompt_version").HasMaxLength(20);
         builder.Property(item => item.Model).HasColumnName("model").HasMaxLength(100);
+        builder.Property(item => item.SummaryGenerationId).HasColumnName("summary_generation_id");
 
         // One verdict per reviewer and summary. Clearing a verdict deletes the row for real, so this index never blocks a new one.
         builder.HasIndex(item => new { item.SubmissionFileSummaryId, item.UserId }).IsUnique();

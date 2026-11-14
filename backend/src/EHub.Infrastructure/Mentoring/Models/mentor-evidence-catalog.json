@@ -1,0 +1,515 @@
+{
+  "topics": [
+    {
+      "id": "marketing",
+      "aliases": [
+        "marketing",
+        "tiếp thị",
+        "quảng bá",
+        "truyền thông",
+        "thu hút khách hàng",
+        "tìm khách hàng",
+        "tìm khách mới",
+        "quảng cáo trực tuyến",
+        "quảng cáo số",
+        "search engine optimization"
+      ],
+      "parent": null
+    },
+    {
+      "id": "sales",
+      "aliases": [
+        "sales",
+        "bán hàng",
+        "phát triển kinh doanh",
+        "business development",
+        "kênh phân phối",
+        "chốt đơn",
+        "tìm khách mua",
+        "tìm khách hàng doanh nghiệp",
+        "giám đốc kinh doanh",
+        "gđ kinh doanh",
+        "quản lý kinh doanh",
+        "phát triển thị trường",
+        "phát triển khách hàng",
+        "sales leader"
+      ],
+      "parent": null
+    },
+    {
+      "id": "market_research",
+      "aliases": [
+        "market research",
+        "nghiên cứu thị trường",
+        "kiểm chứng nhu cầu",
+        "customer discovery",
+        "phỏng vấn khách hàng",
+        "khảo sát khách hàng",
+        "nghiên cứu khách hàng",
+        "phỏng vấn phụ huynh",
+        "khám phá nhu cầu"
+      ],
+      "parent": null
+    },
+    {
+      "id": "strategy",
+      "aliases": [
+        "strategy",
+        "chiến lược",
+        "business model",
+        "mô hình kinh doanh",
+        "quản trị kinh doanh",
+        "business administration"
+      ],
+      "parent": null
+    },
+    {
+      "id": "finance",
+      "aliases": [
+        "finance",
+        "tài chính",
+        "dòng tiền",
+        "cash flow",
+        "kế toán",
+        "accounting",
+        "ngân sách",
+        "dự phóng chi phí"
+      ],
+      "parent": null
+    },
+    {
+      "id": "fundraising",
+      "aliases": [
+        "fundraising",
+        "gọi vốn",
+        "pitch deck",
+        "huy động vốn",
+        "thuyết trình với nhà đầu tư",
+        "kêu gọi đầu tư",
+        "vốn đầu tư",
+        "đầu tư thiên thần",
+        "angel investment"
+      ],
+      "parent": null
+    },
+    {
+      "id": "operations",
+      "aliases": [
+        "operations",
+        "vận hành",
+        "quản lý chất lượng",
+        "tổ chức hoạt động",
+        "quy trình vận hành"
+      ],
+      "parent": null
+    },
+    {
+      "id": "product",
+      "aliases": [
+        "product management",
+        "quản lý sản phẩm",
+        "product discovery",
+        "thiết kế sản phẩm",
+        "roadmap",
+        "trải nghiệm người dùng",
+        "ux",
+        "phát triển sản phẩm",
+        "quản trị sản phẩm",
+        "lộ trình sản phẩm",
+        "product development",
+        "giám đốc sản phẩm",
+        "trưởng sản phẩm"
+      ],
+      "parent": null
+    },
+    {
+      "id": "legal",
+      "aliases": [
+        "legal",
+        "pháp lý",
+        "sở hữu trí tuệ",
+        "đăng ký doanh nghiệp",
+        "hợp đồng thương mại",
+        "pháp chế",
+        "pháp chế doanh nghiệp"
+      ],
+      "parent": null
+    },
+    {
+      "id": "project_management",
+      "aliases": [
+        "project management",
+        "quản lý dự án",
+        "điều phối dự án",
+        "quản trị dự án",
+        "agile",
+        "scrum",
+        "project manager",
+        "giám đốc dự án"
+      ],
+      "parent": null
+    },
+    {
+      "id": "backend",
+      "aliases": [
+        "backend",
+        "back-end",
+        "thiết kế api",
+        "rest api",
+        "thiết kế hệ thống",
+        "hệ thống đặt hàng",
+        "xử lý đơn hàng",
+        "quản lý đơn hàng",
+        "ứng dụng web",
+        "web application",
+        "hệ thống đặt món",
+        "đặt hàng trực tuyến",
+        "nhận đơn trực tuyến"
+      ],
+      "parent": null
+    },
+    {
+      "id": "frontend",
+      "aliases": [
+        "frontend",
+        "front-end",
+        "javascript",
+        "giao diện web",
+        "website",
+        "trang web"
+      ],
+      "parent": null
+    },
+    {
+      "id": "mobile",
+      "aliases": [
+        "mobile",
+        "android",
+        "ios",
+        "ứng dụng di động",
+        "trên điện thoại",
+        "app di động",
+        "mobile app"
+      ],
+      "parent": null
+    },
+    {
+      "id": "ai",
+      "aliases": [
+        "ai",
+        "artificial intelligence",
+        "trí tuệ nhân tạo",
+        "machine learning",
+        "học máy",
+        "nhận diện hình ảnh"
+      ],
+      "parent": null
+    },
+    {
+      "id": "data",
+      "aliases": [
+        "data science",
+        "khoa học dữ liệu",
+        "data analysis",
+        "phân tích dữ liệu",
+        "business intelligence"
+      ],
+      "parent": null
+    },
+    {
+      "id": "database",
+      "aliases": [
+        "database",
+        "cơ sở dữ liệu",
+        "sql server",
+        "thiết kế dữ liệu",
+        "quản lý dữ liệu",
+        "tồn kho",
+        "lưu trữ dữ liệu",
+        "lưu dữ liệu"
+      ],
+      "parent": null
+    },
+    {
+      "id": "cloud",
+      "aliases": [
+        "cloud",
+        "điện toán đám mây",
+        "aws",
+        "azure",
+        "devops",
+        "docker",
+        "kubernetes"
+      ],
+      "parent": null
+    },
+    {
+      "id": "security",
+      "aliases": [
+        "cybersecurity",
+        "an toàn thông tin",
+        "bảo mật",
+        "security",
+        "kiểm thử xâm nhập",
+        "bảo vệ dữ liệu",
+        "phân quyền truy cập"
+      ],
+      "parent": null
+    },
+    {
+      "id": "food",
+      "aliases": [
+        "f&b",
+        "thực phẩm",
+        "nhà hàng",
+        "đồ ăn",
+        "food",
+        "quán cà phê",
+        "suất ăn",
+        "bữa ăn",
+        "nấu ăn"
+      ],
+      "parent": null
+    },
+    {
+      "id": "education",
+      "aliases": [
+        "edtech",
+        "giáo dục",
+        "đào tạo trực tuyến",
+        "học trực tuyến",
+        "education",
+        "học sinh",
+        "học viên",
+        "giáo viên"
+      ],
+      "parent": null
+    },
+    {
+      "id": "retail",
+      "aliases": [
+        "retail",
+        "bán lẻ",
+        "thương mại điện tử",
+        "e-commerce",
+        "cửa hàng trực tuyến"
+      ],
+      "parent": null
+    },
+    {
+      "id": "tourism",
+      "aliases": [
+        "tourism",
+        "du lịch",
+        "lữ hành",
+        "khách sạn",
+        "travel",
+        "du khách",
+        "tour"
+      ],
+      "parent": null
+    },
+    {
+      "id": "pricing",
+      "aliases": [
+        "định giá sản phẩm",
+        "giá bán",
+        "định giá gói"
+      ],
+      "parent": null
+    },
+    {
+      "id": "logistics",
+      "aliases": [
+        "chuỗi cung ứng",
+        "supply chain",
+        "logistics",
+        "quản lý kho",
+        "giao nhận",
+        "thu mua"
+      ],
+      "parent": "operations"
+    },
+    {
+      "id": "dotnet",
+      "aliases": [
+        "c#",
+        ".net",
+        "asp.net"
+      ],
+      "parent": "backend"
+    },
+    {
+      "id": "java",
+      "aliases": [
+        "java"
+      ],
+      "parent": "backend"
+    },
+    {
+      "id": "node",
+      "aliases": [
+        "node.js"
+      ],
+      "parent": "backend"
+    },
+    {
+      "id": "react",
+      "aliases": [
+        "react"
+      ],
+      "parent": "frontend"
+    },
+    {
+      "id": "typescript",
+      "aliases": [
+        "typescript"
+      ],
+      "parent": "frontend"
+    },
+    {
+      "id": "flutter",
+      "aliases": [
+        "flutter"
+      ],
+      "parent": "mobile"
+    },
+    {
+      "id": "react_native",
+      "aliases": [
+        "react native"
+      ],
+      "parent": "mobile"
+    },
+    {
+      "id": "computer_vision",
+      "aliases": [
+        "computer vision",
+        "thị giác máy tính",
+        "nhận diện lỗi từ hình ảnh",
+        "phân loại ảnh"
+      ],
+      "parent": "ai"
+    },
+    {
+      "id": "postgresql",
+      "aliases": [
+        "postgresql"
+      ],
+      "parent": "database"
+    },
+    {
+      "id": "b2b_sales",
+      "aliases": [
+        "bán hàng b2b",
+        "sales b2b",
+        "b2b sales",
+        "bán hàng doanh nghiệp",
+        "chào bán giải pháp"
+      ],
+      "parent": "sales"
+    },
+    {
+      "id": "agriculture",
+      "aliases": [
+        "nông nghiệp",
+        "nông sản",
+        "agriculture",
+        "agritech",
+        "nông hộ"
+      ],
+      "parent": null
+    },
+    {
+      "id": "biotechnology",
+      "aliases": [
+        "công nghệ sinh học",
+        "lên men",
+        "vật liệu sinh học",
+        "biotechnology",
+        "fermentation"
+      ],
+      "parent": null
+    },
+    {
+      "id": "health",
+      "aliases": [
+        "y tế",
+        "healthcare",
+        "medtech"
+      ],
+      "parent": null
+    },
+    {
+      "id": "manufacturing",
+      "aliases": [
+        "sản xuất công nghiệp",
+        "manufacturing"
+      ],
+      "parent": null
+    },
+    {
+      "id": "event_operations",
+      "aliases": [
+        "tổ chức sự kiện",
+        "quản lý sự kiện",
+        "lập kế hoạch sự kiện",
+        "hoạt động sự kiện",
+        "event management",
+        "event manager",
+        "event logistics"
+      ],
+      "parent": "operations"
+    },
+    {
+      "id": "customer_service",
+      "aliases": [
+        "chăm sóc khách hàng",
+        "dịch vụ khách hàng",
+        "customer service",
+        "customer care",
+        "client management",
+        "call centre",
+        "call center",
+        "tiếp nhận và hỗ trợ khách hàng"
+      ],
+      "parent": null
+    },
+    {
+      "id": "startup_incubation",
+      "aliases": [
+        "chương trình ươm tạo",
+        "hoạt động ươm tạo",
+        "ươm tạo khởi nghiệp",
+        "startup incubation",
+        "business incubation",
+        "chương trình hỗ trợ khởi nghiệp"
+      ],
+      "parent": null
+    },
+    {
+      "id": "partnership",
+      "aliases": [
+        "quan hệ đối tác",
+        "phát triển đối tác",
+        "partnership manager",
+        "partnership management",
+        "kết nối doanh nghiệp",
+        "kết nối các doanh nghiệp",
+        "cộng đồng doanh nghiệp"
+      ],
+      "parent": null
+    },
+    {
+      "id": "business_analysis",
+      "aliases": [
+        "phân tích nghiệp vụ",
+        "business analysis",
+        "business analyst",
+        "yêu cầu nghiệp vụ",
+        "làm rõ yêu cầu nghiệp vụ"
+      ],
+      "parent": null
+    }
+  ]
+}

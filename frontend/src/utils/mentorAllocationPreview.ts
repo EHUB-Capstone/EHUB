@@ -48,6 +48,19 @@ export interface AllocationSummary {
 export const MIN_REPLACE_REASON_LENGTH = 3;
 export const MAX_REPLACE_REASON_LENGTH = 1000;
 
+/** Keep provider/model identifiers out of product copy; numeric scoring and source reasons stay unchanged. */
+export function formatAllocationReason(reason: string): string {
+  const labels: Record<string, string> = {
+    experience: 'Kinh nghiệm', expertise: 'Chuyên môn', startupdomain: 'Lĩnh vực',
+    technology: 'Công nghệ', bio: 'Giới thiệu/học vấn',
+  };
+  return reason
+    .replace(/\bGemini\s*\([^)]*\)/gi, 'AI')
+    .replace(/\bgemini(?:-[a-z0-9.]+)*\b/gi, 'AI')
+    .replace(/^AI (experience|expertise|startupDomain|technology|bio):/i,
+      (_, field: string) => `${labels[field.toLowerCase()]}:`);
+}
+
 const emptySlot = (): SlotView => ({
   state: 'unfilled',
   mentorProfileId: null,

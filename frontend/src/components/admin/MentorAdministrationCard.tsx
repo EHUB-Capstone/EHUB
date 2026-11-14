@@ -6,11 +6,14 @@ import type {
   MentorAllocationEdit,
   MentorAllocationPreview,
   MentorAllocationStrategy,
+  MentorAllocationJob,
+  MentorAllocationJobRequest,
   MentorSemesterClass,
   MentorType,
 } from '../../types/mentorAdmin';
 import { parseApiError } from '../../utils/apiError';
 import { keepAppliedEdits, removeEdit, upsertEdit } from '../../utils/mentorAllocationPreview';
+import { MentorAllocationJobError, waitForMentorAllocationJob } from '../../utils/mentorAllocationJob';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
@@ -30,6 +33,34 @@ interface AllocationScope {
   strategy: MentorAllocationStrategy;
 }
 
+interface SavedAllocationJob {
+  id: string;
+  scope: AllocationScope;
+  request: MentorAllocationJobRequest;
+}
+
+function savedJob(semesterId: string): SavedAllocationJob | null {
+  try {
+    const json = sessionStorage.getItem(`mentor-allocation-job:${semesterId}`);
+    const saved = json ? JSON.parse(json) as Partial<SavedAllocationJob> | null : null;
+    return saved && typeof saved.id === 'string' && saved.request && saved.scope &&
+      Array.isArray(saved.request.classIds) && Array.isArray(saved.request.edits) && saved.request.strategy === 'Ai'
+      ? saved as SavedAllocationJob : null;
+  } catch { return null; }
+}
+
+function storeJob(semesterId: string, job: SavedAllocationJob | null) {
+  try {
+    const key = `mentor-allocation-job:${semesterId}`;
+    if (job) sessionStorage.setItem(key, JSON.stringify(job));
+    else sessionStorage.removeItem(key);
+  } catch { /* Progress remains available until this page is closed when session storage is unavailable. */ }
+}
+
+function allocationError(error: unknown, fallback: string): string {
+  return error instanceof MentorAllocationJobError ? error.message : parseApiError(error, fallback).message;
+}
+
 export default function MentorAdministrationCard({ semesterId, semesterLabel, temporaryMentorCount = 0, onImportCommitted }: MentorAdministrationCardProps) {
   const [allocationPreview, setAllocationPreview] = useState<MentorAllocationPreview | null>(null);
   const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Ai');
@@ -43,8 +74,49 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   const [confirmReplacement, setConfirmReplacement] = useState(false);
   const [busy, setBusy] = useState<'export' | 'preview-allocation' | 'refresh-allocation' | 'commit-allocation' | null>(null);
   const previewRequest = useRef<AbortController | null>(null);
+  const currentSemester = useRef(semesterId);
+  const [jobProgress, setJobProgress] = useState<MentorAllocationJob | null>(null);
 
-  useEffect(() => () => { previewRequest.current?.abort(); }, [semesterId]);
+  useEffect(() => {
+    currentSemester.current = semesterId;
+    setBusy(null);
+    setAllocationPreview(null);
+    setPreviewOpen(false);
+    setJobProgress(null);
+    setPreviewFailure(null);
+    const saved = semesterId ? savedJob(semesterId) : null;
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    if (semesterId && saved?.request.semesterId === semesterId) {
+      setBusy('preview-allocation');
+      setIncludeTemporary(saved.request.includeTemporaryMentors);
+      void mentorAdminApi.getAllocationJob(saved.id, controller.signal)
+        .then(response => waitForMentorAllocationJob(response.data, controller.signal, job => {
+          if (controller.signal.aborted) return;
+          setJobProgress(job);
+          if (job.status === 'Ready' || job.status === 'Failed') storeJob(semesterId, null);
+        }))
+        .then(preview => {
+          if (controller.signal.aborted) return;
+          setPreviewScope(saved.scope);
+          setEdits(keepAppliedEdits(saved.request.edits, preview));
+          setAllocationPreview(preview);
+          setPreviewStale(false);
+          setPreviewOpen(true);
+        })
+        .catch(error => {
+          if (controller.signal.aborted) return;
+          if ((error as { response?: { status?: number } }).response?.status === 404) storeJob(semesterId, null);
+          setPreviewFailure({ scope: saved.scope, message: allocationError(error, 'Failed to retrieve AI allocation') });
+        })
+        .finally(() => { if (!controller.signal.aborted) setBusy(null); });
+    }
+    return () => {
+      currentSemester.current = undefined;
+      controller.abort();
+      previewRequest.current?.abort();
+    };
+  }, [semesterId]);
 
   const exportAssignments = async () => {
     if (!semesterId) return;
@@ -60,7 +132,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to export mentor assignments').message);
     } finally {
-      setBusy(null);
+      if (currentSemester.current === semesterId) setBusy(null);
     }
   };
 
@@ -70,6 +142,28 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
     previewRequest.current?.abort();
     const controller = new AbortController();
     previewRequest.current = controller;
+    setJobProgress(null);
+    if (scope.strategy === 'Ai') {
+      const request: MentorAllocationJobRequest = {
+        semesterId, classIds: scope.classIds, strategy: 'Ai', seed,
+        edits: nextEdits, includeTemporaryMentors: includeTemporary,
+      };
+      const saved = savedJob(semesterId);
+      try {
+        const response = saved && JSON.stringify(saved.request) === JSON.stringify(request)
+          ? await mentorAdminApi.getAllocationJob(saved.id, controller.signal)
+          : await mentorAdminApi.startAllocationJob(request, controller.signal);
+        return await waitForMentorAllocationJob(response.data, controller.signal, job => {
+          if (controller.signal.aborted) return;
+          setJobProgress(job);
+          storeJob(semesterId, job.status === 'Ready' || job.status === 'Failed' ? null : { id: job.id, scope, request });
+        });
+      } catch (error) {
+        if (controller.signal.aborted) return null;
+        if ((error as { response?: { status?: number } }).response?.status === 404) storeJob(semesterId, null);
+        throw error;
+      }
+    }
     const response = await mentorAdminApi.previewAllocation(semesterId, seed, scope.strategy, nextEdits, includeTemporary, scope.classIds, controller.signal);
     if (controller.signal.aborted) return null;
     return response.data;
@@ -88,11 +182,11 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       setPreviewStale(false);
       setPreviewOpen(true);
     } catch (error) {
-      if (!previewRequest.current?.signal.aborted) {
-        setPreviewFailure({ scope, message: parseApiError(error, 'Failed to preview mentor assignment').message });
+      if (currentSemester.current === semesterId && !previewRequest.current?.signal.aborted) {
+        setPreviewFailure({ scope, message: allocationError(error, 'Failed to preview mentor assignment') });
       }
     } finally {
-      setBusy(null);
+      if (currentSemester.current === semesterId) setBusy(null);
     }
   };
 
@@ -114,9 +208,9 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       const notApplied = (preview.conflicts ?? []).find(conflict => conflict.teamId === edit.teamId && conflict.mentorType === edit.mentorType);
       if (notApplied) toast.error(notApplied.message);
     } catch (error) {
-      if (!previewRequest.current?.signal.aborted) toast.error(parseApiError(error, 'Failed to apply the edit').message);
+      if (currentSemester.current === semesterId && !previewRequest.current?.signal.aborted) toast.error(allocationError(error, 'Failed to apply the edit'));
     } finally {
-      setBusy(null);
+      if (currentSemester.current === semesterId) setBusy(null);
     }
   };
 
@@ -130,9 +224,9 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       setAllocationPreview(preview);
       setEdits(keepAppliedEdits(remaining, preview));
     } catch (error) {
-      if (!previewRequest.current?.signal.aborted) toast.error(parseApiError(error, 'Failed to undo the edit').message);
+      if (currentSemester.current === semesterId && !previewRequest.current?.signal.aborted) toast.error(allocationError(error, 'Failed to undo the edit'));
     } finally {
-      setBusy(null);
+      if (currentSemester.current === semesterId) setBusy(null);
     }
   };
 
@@ -231,7 +325,16 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
             </label>
           )}
           <p className="mt-2 text-caption text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
-          {busy === 'preview-allocation' && <p role="status" className="mt-2 text-body-sm text-slate-600">Preparing the proposed assignments…</p>}
+          {(busy === 'preview-allocation' || busy === 'refresh-allocation') && (
+            <div role="status" aria-live="polite" className="mt-2 text-body-sm text-slate-600">
+              {jobProgress?.status === 'Queued' ? 'AI allocation is queued…' : jobProgress?.totalBatches
+                ? `AI has completed ${jobProgress.completedBatches} of ${jobProgress.totalBatches} batches. Preparing the proposal…`
+                : 'Preparing the proposed assignments…'}
+              {jobProgress?.totalBatches ? <progress className="mt-1 block w-full accent-primary"
+                aria-label="AI allocation progress" max={jobProgress.totalBatches} value={jobProgress.completedBatches} /> : null}
+              {jobProgress && <p>You can return to this page while AI continues processing.</p>}
+            </div>
+          )}
           {previewFailure && (
             <div role="alert" className="mt-3 rounded-xl bg-danger-50 px-3 py-2 text-body-sm text-danger-dark">
               <p>{previewFailure.scope.label}: {previewFailure.message}</p>

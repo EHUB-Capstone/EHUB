@@ -143,6 +143,14 @@ public sealed class ShowcaseReportHandler(
             .Where(item => item.ShowcaseProjectId == report.ShowcaseProjectId && item.CommentId == report.CommentId
                 && item.Status == ShowcaseReportStatus.Open)
             .ToListAsync(cancellationToken);
+        // The report can be resolved after the status read but before this query. Without a tracked Open target,
+        // SaveChanges would have no report update (and no xmin check), yet could still hide content or return success.
+        if (!matchingOpenReports.Any(item => item.Id == reportId))
+        {
+            context.ClearChanges();
+            return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict,
+                "The report was changed by another reviewer. Reload and try again.");
+        }
         var resolvedAt = time.UtcNow;
         var resolutionNote = Clean(request.ResolutionNote);
         foreach (var matchingReport in matchingOpenReports)

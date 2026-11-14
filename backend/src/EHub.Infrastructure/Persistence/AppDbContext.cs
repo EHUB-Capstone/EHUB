@@ -40,6 +40,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<MentorImportSession> MentorImportSessions => Set<MentorImportSession>();
     public DbSet<MentorImportDraft> MentorImportDrafts => Set<MentorImportDraft>();
     public DbSet<MentorAllocationSession> MentorAllocationSessions => Set<MentorAllocationSession>();
+    public DbSet<MentorAllocationJob> MentorAllocationJobs => Set<MentorAllocationJob>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<ClassStudent> ClassStudents => Set<ClassStudent>();

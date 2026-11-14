@@ -19,9 +19,7 @@ on:
       - frontend/**
       - docker/**
       - docker-compose.staging.yml
-      - docker-compose.hybrid.yml
-      - docker-compose.trained.yml
-      - tools/mentor-matching/semantic/**
+      - docker-compose.gemini.yml
       - scripts/staging/backup-postgres.sh
   workflow_dispatch:
     inputs:

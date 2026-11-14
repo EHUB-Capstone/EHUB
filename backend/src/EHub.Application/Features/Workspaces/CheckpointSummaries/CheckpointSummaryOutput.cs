@@ -13,12 +13,13 @@ internal static class CheckpointSummaryOutput
     public const string NotChecked = "NotChecked";
 
     /// <param name="grounding">
-    /// When given, key points and later overview sentences that the file's words do not back are dropped. Questions
+    /// When given, key points and every overview sentence that the file's words do not back are dropped. Questions
     /// are about what the file lacks, so they cannot be checked word by word; only those built on a misread figure (a
     /// market size taken as a goal), a figure the file never gives, or a contrast it never makes are dropped. A file that is mostly images gets no questions: the model saw only
     /// titles, so its questions would be guesses.
     /// </param>
-    public static WorkspaceFileSummaryContent? TryBuild(string json, WorkspaceFilePreview preview, CheckpointSummaryGrounding? grounding = null)
+    public static WorkspaceFileSummaryContent? TryBuild(string json, WorkspaceFilePreview preview, CheckpointSummaryGrounding? grounding = null,
+        CheckpointPageLocator? pages = null)
     {
         try
         {
@@ -28,15 +29,34 @@ internal static class CheckpointSummaryOutput
                 overview.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(overview.GetString()))
                 return null;
             var overviewText = CheckpointSummaryText.Clean(overview.GetString());
-            if (grounding is not null) overviewText = grounding.GroundedOverview(overviewText);
+            var overviewFromSource = false;
+            if (grounding is not null)
+            {
+                overviewText = grounding.GroundedOverview(overviewText,
+                    sentence => !CheckpointStatusLines.Contradicts(sentence, preview.StatusItems));
+                if (string.IsNullOrWhiteSpace(overviewText))
+                {
+                    // A usable extract remains available even if the model invented every overview sentence.
+                    overviewText = preview.Highlights.FirstOrDefault(grounding.Supports) ?? "";
+                    overviewFromSource = overviewText.Length > 0;
+                    if (!overviewFromSource)
+                        overviewText = "Chưa đủ bằng chứng để tạo tổng quan. Hãy kiểm tra các trích dẫn trong tài liệu.";
+                }
+            }
+            WorkspaceSummaryClaimEvidence? Citation(string claim) => grounding?.FindEvidence(claim) is { } quote
+                ? new WorkspaceSummaryClaimEvidence { Text = claim, Quote = quote, Page = pages?.Locate(quote) } : null;
+            var overviewEvidence = CheckpointSummaryText.Sentences(overviewText).Select(Citation).OfType<WorkspaceSummaryClaimEvidence>().ToArray();
+            overviewText = CheckpointFigureConflicts.Annotate(overviewText, preview.Conflicts);
             var keyPoints = Clean(Strings(root, "keyPoints"), CheckpointSummaryLimits.MaxKeyPoints);
             if (grounding is not null) keyPoints = keyPoints.Where(grounding.Supports).ToArray();
             // The status list and the conflict list are worked out from the file itself, so they win over the model: a
             // point calling pending work finished is dropped, and a point stating one side of a conflict says so.
-            keyPoints = keyPoints
+            var claims = keyPoints
                 .Where(point => !CheckpointStatusLines.Contradicts(point, preview.StatusItems))
-                .Select(point => CheckpointFigureConflicts.Annotate(point, preview.Conflicts))
+                .Select(point => (Text: CheckpointFigureConflicts.Annotate(point, preview.Conflicts), Evidence: Citation(point)))
+                .Where(claim => grounding is null || claim.Evidence is not null)
                 .ToArray();
+            keyPoints = claims.Select(claim => claim.Text).ToArray();
             string[] questions = preview.LittleText ? []
                 : Clean(Strings(root, "questions"), CheckpointSummaryLimits.MaxQuestions * 2)
                     .Select(CheckpointSummaryText.AsTeamQuestion).OfType<string>().Take(CheckpointSummaryLimits.MaxQuestions).ToArray();
@@ -48,6 +68,10 @@ internal static class CheckpointSummaryOutput
             return new WorkspaceFileSummaryContent
             {
                 Overview = CheckpointSummaryText.Clip(overviewText, CheckpointSummaryLimits.MaxOverviewCharacters),
+                OverviewFromSource = overviewFromSource,
+                OverviewEvidence = overviewEvidence,
+                KeyPointEvidence = claims.Where(claim => claim.Evidence is not null)
+                    .Select(claim => new WorkspaceSummaryClaimEvidence { Text = claim.Text, Quote = claim.Evidence!.Quote, Page = claim.Evidence.Page }).ToArray(),
                 KeyPoints = keyPoints,
                 Questions = questions,
                 Highlights = preview.Highlights,

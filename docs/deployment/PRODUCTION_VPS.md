@@ -187,56 +187,34 @@ output contains secrets.
 
 ## 5. Build, migrate and initialize
 
-For the first pilot, reviewed source is built directly on the VPS:
+Cấu hình Gemini theo [GEMINI_MENTOR_VPS.md](GEMINI_MENTOR_VPS.md), gồm key phía server,
+model được phép và quyền gửi dữ liệu đã rà soát. Luôn ghép override AI:
 
 ```bash
-sudo docker compose --env-file .env.production -f docker-compose.production.yml build
-sudo docker pull ollama/ollama:0.34.0
-sudo docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres ollama
-sudo docker compose --env-file .env.production -f docker-compose.production.yml exec ollama ollama pull bge-m3
-sudo docker compose --env-file .env.production -f docker-compose.production.yml exec ollama ollama list
-sudo docker compose --env-file .env.production -f docker-compose.production.yml run --rm backend --initialize-database
+cd /opt/ehub/app
+COMPOSE=(sudo docker compose --env-file .env.production -f docker-compose.production.yml -f docker-compose.gemini.yml)
+"${COMPOSE[@]}" config --quiet
+"${COMPOSE[@]}" build
+"${COMPOSE[@]}" up -d postgres
+"${COMPOSE[@]}" run --rm --no-deps backend --initialize-database
 ```
 
-PostgreSQL runs the `ehub-postgres-pgvector` image built from
-`docker/postgres-pgvector`, because the mentor matching feature stores
-embeddings in a `vector` column. Start `postgres` (and verify the `vector`
-extension is available) before the initializer; otherwise the AI migration
-fails. When an existing database is switched to this image, create and copy a
-backup first and keep the named data volume. Ollama serves the `bge-m3`
-embedding model on the private Docker network only; the model is kept in the
-`ehub-production-ollama-data` volume, so it is downloaded once. The Ollama
-health check only proves that the server answers, not that the model is
-present, so confirm `bge-m3` in `ollama list`.
+PostgreSQL tiếp tục dùng image pgvector để tương thích schema và migration đã merge.
+Giữ volume database và backup đã duyệt. Initializer chỉ chạy một lần cho release; lỗi migration
+phải dừng triển khai, không sửa schema thủ công.
 
-The one-time initializer applies committed EF Core migrations and idempotent
-reference-data seeders, then exits. Never make it the backend's normal startup
-command. A migration failure must stop the release; do not edit the production
-schema manually in DBeaver.
-
-After successful initialization, remove only the value after
-`ADMIN_SEED_PASSWORD=` from `.env.production`. The one-time container has
-already exited, so no running service needs that credential. Then run:
+Sau khi khởi tạo thành công, chỉ xóa giá trị sau `ADMIN_SEED_PASSWORD=` trong file môi trường.
+Tài khoản và password hash đã lưu vẫn được giữ. Sau đó chạy:
 
 ```bash
-sudo docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
-sudo docker compose --env-file .env.production -f docker-compose.production.yml up -d backend frontend
-sudo docker compose --env-file .env.production -f docker-compose.production.yml ps
+"${COMPOSE[@]}" up -d --no-deps backend frontend
+"${COMPOSE[@]}" ps
 ```
 
-All four services (`postgres`, `ollama`, `backend`, `frontend`) must be running
-and healthy. Before installing host Nginx,
-verify the loopback entry point:
-
-```bash
-curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/healthz
-curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/health/live
-curl --fail --silent --show-error --header 'Host: e-hub.com.vn' http://127.0.0.1:3000/health/ready
-sudo ss -lntup
-```
-
-Expected: all curls return HTTP 200; port 3000 listens only on `127.0.0.1`;
-ports 5432 and 8080 do not appear as public host listeners.
+Ba dịch vụ PostgreSQL, backend và frontend phải healthy. Kiểm tra `/healthz`, `/health/live`,
+`/health/ready` qua loopback và Host header đúng môi trường, rồi thử AI preview trên giao diện.
+Readiness database không chứng minh dịch vụ AI bên ngoài sẵn sàng; preview 503 không được
+biến thành kết quả giả. Xem log giới hạn dòng và không in secret hoặc hồ sơ riêng.
 
 ## 6. Configure domain, Nginx, TLS and Cloudflare
 
@@ -471,6 +449,6 @@ restore verification.
    the class page open Manage, choose a team that has a project description and
    assign a mentor slot. The suggestion list must show scores and reasons, and
    `select count(*) from mentor_embeddings;` must increase. The backend health
-   check does not cover Ollama or the model, so only this test proves the chain.
+   check does not cover the external AI API, so only this test proves the chain.
 9. After the first manual process is proven, publish immutable images to GHCR
    and add an approval-controlled deployment workflow instead of SSH auto-deploy.

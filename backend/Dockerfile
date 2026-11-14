@@ -12,8 +12,7 @@ RUN dotnet restore src/EHub.Api/EHub.Api.csproj
 
 COPY . .
 
-# The deploy scripts check out with umask 077, so copied files such as the mentor model
-# arrive as 0600. The runtime user is not root and must still be able to read them.
+# Deploy checkouts use umask 077. Published application files must be readable by the runtime user.
 RUN dotnet publish src/EHub.Api/EHub.Api.csproj \
     -c Release \
     -o /app/publish \

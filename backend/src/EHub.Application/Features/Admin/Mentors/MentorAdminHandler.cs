@@ -422,9 +422,16 @@ public sealed class MentorAdminHandler(
         return Result.Success(new MentorSemesterClassListResponse { Classes = rows });
     }
 
-    public async Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationAsync(PreviewMentorAllocationRequest request, CancellationToken cancellationToken = default)
+    public Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationAsync(PreviewMentorAllocationRequest request, CancellationToken cancellationToken = default)
     {
-        if (!TryGetAdminId(out var adminId)) return Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required.");
+        if (!TryGetAdminId(out var adminId)) return Task.FromResult(Failure<MentorAllocationPreviewResponse>(ErrorCodes.CommonUnauthorizedError, "An authenticated administrator is required."));
+        return PreviewAllocationForAdminAsync(request, adminId, cancellationToken);
+    }
+
+    // Called by the durable job processor after re-checking the submitting administrator's current access.
+    internal async Task<Result<MentorAllocationPreviewResponse>> PreviewAllocationForAdminAsync(
+        PreviewMentorAllocationRequest request, Guid adminId, CancellationToken cancellationToken)
+    {
         if (!TryParseStrategy(request.Strategy, out var strategy))
             return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorAllocationInvalid, $"The allocation strategy must be {MentorAllocationStrategies.Balanced}, {MentorAllocationStrategies.Random} or {MentorAllocationStrategies.Ai}.");
         if (request.SemesterId == Guid.Empty || !await context.Semesters.AsNoTracking().AnyAsync(item => item.Id == request.SemesterId, cancellationToken))
@@ -444,6 +451,10 @@ public sealed class MentorAdminHandler(
         var teams = await context.Teams.AsNoTracking().Where(item => classIds.Contains(item.ClassId) && item.Status == TeamStatus.Active)
             .OrderBy(item => item.TeamCode).Select(item => new AllocationTeam(item.Id, item.ClassId, item.TeamCode, item.TeamName)).ToListAsync(cancellationToken);
         if (teams.Count == 0) return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorAllocationInvalid, "The selected classes have no active teams.");
+
+        var semesterTeamCount = await context.Teams.AsNoTracking().CountAsync(item =>
+            item.Class.SemesterId == request.SemesterId && item.Class.Status == ClassStatus.Active &&
+            item.Status == TeamStatus.Active, cancellationToken);
 
         var mentors = await context.MentorProfiles.AsNoTracking()
             .Where(profile => profile.Status == MentorProfileStatus.Active && profile.User.Status == UserStatus.Active &&
@@ -507,7 +518,8 @@ public sealed class MentorAdminHandler(
         if (strategy == AllocationStrategy.Ai)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(TimeSpan.FromSeconds(45));
+            deadline.CancelAfter(recommendationRanker is IBatchMentorRecommendationRanker batch
+                ? batch.RequestTimeout : TimeSpan.FromSeconds(45));
             try
             {
                 rankings = await RankAllocationAsync(teams, mentors, engineExisting, deadline.Token);
@@ -515,13 +527,15 @@ public sealed class MentorAdminHandler(
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                logger.LogWarning("AI allocation failed with {FailureKind}", MentorFitFailure.Timeout);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
                     "AI chưa hoàn tất phân bổ trong thời gian cho phép. Vui lòng thử lại với phạm vi lớp nhỏ hơn.");
             }
-            catch (Exception exception) when (exception is MentorEmbeddingUnavailableException or MentorFitRankerUnavailableException)
+            catch (MentorFitRankerUnavailableException error)
             {
+                logger.LogWarning("AI allocation failed with {FailureKind}", error.Failure);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
-                    "Dịch vụ AI phân bổ mentor tạm thời chưa sẵn sàng. Vui lòng thử lại.");
+                    error.UserMessage);
             }
         }
         var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings);
@@ -620,6 +634,11 @@ public sealed class MentorAdminHandler(
                 TotalBefore = item.TotalBefore, TotalAfter = item.TotalAfter
             }).ToList();
 
+        var balance = MentorBalanceSummaryBuilder.Build(semesterTeamCount, mentors, mentorLoads, strategy);
+        if (strategy == AllocationStrategy.Ai)
+            foreach (var item in balance.Where(item => item.EligibleMentorCount > 0 && item.MaxLoadAfter - item.MinLoadAfter > 1))
+                warnings.Add($"Tải mentor {item.MentorType} trong học kỳ còn chênh lệch ({item.MinLoadAfter}–{item.MaxLoadAfter} nhóm). Phân công hiện có, kế thừa và chỉnh tay được giữ nguyên; admin có thể điều chỉnh trước khi chốt.");
+
         // A missing mentor type no longer blocks saving: what can be assigned is saved and the rest is reported as unfilled.
         var canCommit = result.Count > 0;
         var sessionId = Guid.Empty;
@@ -644,7 +663,7 @@ public sealed class MentorAdminHandler(
             UnfilledEnterpriseCount = unfilled.Count(item => item.MentorType == nameof(MentorType.Enterprise)),
             UnfilledAcademicCount = unfilled.Count(item => item.MentorType == nameof(MentorType.Academic)),
             CanCommit = canCommit, Warnings = warnings, Assignments = result, Skipped = skipped,
-            Unfilled = unfilled, MentorLoads = mentorLoads, Conflicts = conflicts, ExistingAssignments = existingAssignments
+            Unfilled = unfilled, MentorLoads = mentorLoads, Balance = balance, Conflicts = conflicts, ExistingAssignments = existingAssignments
         });
     }
 
@@ -689,15 +708,34 @@ public sealed class MentorAdminHandler(
 
         var profiles = await context.MentorProfiles.AsNoTracking().Include(profile => profile.User).Include(profile => profile.Experiences)
             .Where(profile => mentorIds.Contains(profile.Id)).ToListAsync(cancellationToken);
-        var cache = new Dictionary<string, IReadOnlyDictionary<Guid, MentorFitRanking>>(StringComparer.Ordinal);
-        foreach (var project in projects)
+        var rankingProjects = projects.Select(project => new MentorRankingProject(project.Id, project.Description + "\n" + project.Title)
+        {
+            RequiredMentorTypes = candidateTypes.Where(type => !occupied.Contains((project.Id, type))).ToArray()
+        }).ToArray();
+        (string Text, bool Enterprise, bool Academic) Key(MentorRankingProject project) =>
+            (project.Text, project.RequiredMentorTypes!.Contains(MentorType.Enterprise), project.RequiredMentorTypes!.Contains(MentorType.Academic));
+        if (recommendationRanker is IBatchMentorRecommendationRanker batchRanker)
+        {
+            // Identical text with different missing slots must not share the wrong role's ranking.
+            var groups = rankingProjects.GroupBy(Key).ToArray();
+            var scores = await batchRanker.RankForAllocationBatchAsync(groups.Select(group => group.First()).ToArray(), profiles, cancellationToken);
+            foreach (var group in groups)
+            {
+                if (!scores.TryGetValue(group.First().Id, out var projectScores)) throw new MentorFitRankerUnavailableException();
+                foreach (var project in group) rankings[project.Id] = projectScores;
+            }
+            return rankings;
+        }
+        var cache = new Dictionary<(string Text, bool Enterprise, bool Academic), IReadOnlyDictionary<Guid, MentorFitRanking>>();
+        foreach (var project in rankingProjects)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var projectText = project.Description + "\n" + project.Title;
-            if (!cache.TryGetValue(projectText, out var scores))
+            var key = Key(project);
+            if (!cache.TryGetValue(key, out var scores))
             {
-                scores = await recommendationRanker.RankForAllocationAsync(projectText, profiles, cancellationToken);
-                cache[projectText] = scores;
+                var candidates = profiles.Where(profile => project.RequiredMentorTypes!.Contains(profile.Type)).ToArray();
+                scores = await recommendationRanker.RankForAllocationAsync(project.Text, candidates, cancellationToken);
+                cache[key] = scores;
             }
             rankings[project.Id] = scores;
         }

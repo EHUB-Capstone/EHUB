@@ -36,6 +36,9 @@ internal sealed partial class CheckpointSummaryGrounding
     private readonly IReadOnlyList<string> _sentences;
     private readonly string _text;
     private readonly double _minimumWordSupport;
+    private readonly bool _littleText;
+    private readonly Dictionary<string, string?> _evidence = new(StringComparer.Ordinal);
+    private HashSet<string>? _percentages;
 
     /// <param name="littleText">The file is mostly images: key points need more of their words in the text that was read.</param>
     public CheckpointSummaryGrounding(string sourceText, bool littleText = false)
@@ -44,6 +47,7 @@ internal sealed partial class CheckpointSummaryGrounding
         _sentences = CheckpointSummaryText.Sentences(sourceText);
         _text = " " + CheckpointSummaryText.Normalize(sourceText) + " ";
         _minimumWordSupport = littleText ? MinimumWordSupportLittleText : MinimumWordSupport;
+        _littleText = littleText;
     }
 
     public bool Supports(string sentence)
@@ -57,18 +61,38 @@ internal sealed partial class CheckpointSummaryGrounding
         if (words.Any(word => word.Any(char.IsDigit) && !_words.Contains(word))) return false;
         // "15-30 phút" built from a "15" and a "30" that the file never writes together is just as invented.
         if (InventsRange(claim)) return false;
+        // Word matching alone loses the minus sign and can split a decimal into unrelated tokens.
+        foreach (var percentage in PercentageValues(claim))
+        {
+            _percentages ??= _sentences.SelectMany(PercentageValues).ToHashSet(StringComparer.Ordinal);
+            if (!_percentages.Contains(percentage)) return false;
+        }
         var supported = words.Count(_words.Contains);
         if (supported >= _minimumWordSupport * words.Length) return true;
         // Slides are often in English while the summary is in Vietnamese: then distinctive terms carry the evidence.
         return words.Count(word => IsDistinctive(word) && _words.Contains(word)) >= MinimumDistinctiveTerms;
     }
 
-    /// <summary>Keeps the first sentence (the model's statement of what the file is) and every supported one after it.</summary>
-    public string GroundedOverview(string overview)
+    /// <summary>Every sentence, including the opening claim, needs support. Never restore a rejected sentence.</summary>
+    public string GroundedOverview(string overview, Func<string, bool>? accept = null)
     {
         var sentences = SentenceEnd().Split(overview.Replace('\n', ' ').Trim());
-        var kept = sentences.Where((sentence, index) => index == 0 ? !MisusesMarketSize(sentence) : Supports(sentence)).ToArray();
-        return kept.Length > 0 ? string.Join(' ', kept) : sentences[0];
+        return string.Join(' ', sentences.Where(sentence => FindEvidence(sentence) is not null && (accept is null || accept(sentence)))
+            .Distinct(StringComparer.Ordinal).Take(2));
+    }
+
+    /// <summary>A bounded original passage supports each claim independently, rather than words scattered across the file.</summary>
+    public string? FindEvidence(string claim)
+    {
+        if (_evidence.TryGetValue(claim, out var existing)) return existing;
+        if (!Supports(claim)) return _evidence[claim] = null;
+        var terms = Words(claim).Where(word => !FunctionWords.Contains(word)).ToHashSet(StringComparer.Ordinal);
+        var candidates = _sentences.Where(sentence => sentence.Length <= 300 && !CheckpointSummaryText.IsHeading(sentence))
+            .Select(sentence => (Text: sentence, Overlap: Words(sentence).Distinct(StringComparer.Ordinal).Count(terms.Contains)))
+            .Where(candidate => candidate.Overlap > 0)
+            .OrderByDescending(candidate => candidate.Overlap).Take(12);
+        var match = candidates.FirstOrDefault(candidate => new CheckpointSummaryGrounding(candidate.Text, _littleText).Supports(claim));
+        return _evidence[claim] = match.Text;
     }
 
     /// <summary>
@@ -138,6 +162,12 @@ internal sealed partial class CheckpointSummaryGrounding
 
     private static string AmountNumber(string value) => value.Replace(',', '.').TrimEnd('.');
 
+    private static IEnumerable<string> PercentageValues(string text) =>
+        Percentage().Matches(text).Select(match => match.Groups["number"].Value.Replace(',', '.').Replace('−', '-'));
+
+    [GeneratedRegex(@"(?<![\p{L}\d.,])(?<number>[−-]?\d+(?:[.,]\d+)?)\s*(?:%|phần\s+trăm\b|percent\b|per\s+cent\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Percentage();
+
     /// <summary>
     /// True when a figure of the sentence ("5 lỗi") appears in the file only inside quotation marks: a post title or a
     /// slogan such as “5 lỗi formatting sinh viên gặp mỗi tuần” in a content plan, not a finding of the team.
@@ -171,7 +201,8 @@ internal sealed partial class CheckpointSummaryGrounding
         word.Any(char.IsDigit) || (word.Length >= 3 && word.All(character => character is >= 'a' and <= 'z'));
 
     private static IEnumerable<string> Words(string text) =>
-        CheckpointSummaryText.Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        CheckpointSummaryText.Normalize(Percentage().Replace(text, "${number}%"))
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
     // "3.2" or "E-HUB.com.vn" do not end a sentence: only a mark followed by a space does.
     [GeneratedRegex(@"(?<=[.!?])\s+")]

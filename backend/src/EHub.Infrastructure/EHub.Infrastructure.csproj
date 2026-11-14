@@ -35,10 +35,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Mentoring\Models\bootstrap-model.json"
-                      LogicalName="EHub.Mentoring.BootstrapModel.json" />
-    <None Update="Mentoring\Models\allocation-model.json"
-          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Mentoring\Models\mentor-evidence-catalog.json"
+                      LogicalName="EHub.Mentoring.EvidenceCatalog.json" />
   </ItemGroup>
 
 </Project>

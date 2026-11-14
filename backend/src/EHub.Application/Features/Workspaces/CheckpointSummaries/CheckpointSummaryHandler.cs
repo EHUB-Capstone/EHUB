@@ -28,6 +28,7 @@ public sealed class CheckpointSummaryHandler(
     IValidator<RequestCheckpointSummaryRequest> validator) : ICheckpointSummaryHandler
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private sealed record SavedFeedback(WorkspaceSummaryFeedback Value, Guid? GenerationId, string? PromptVersion, string? Model);
 
     public async Task<Result<WorkspaceCheckpointSummaryResponse>> GetAsync(
         Guid teamId, int checkpointNumber, Guid userId, string role, CancellationToken cancellationToken = default)
@@ -67,7 +68,8 @@ public sealed class CheckpointSummaryHandler(
             .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
         // A current summary of an unchanged file, or one already requested, never adds work. A file queued
         // automatically after upload is only promoted ahead of the automatic queue.
-        var toQueue = chosen.Where(file => !existing.TryGetValue(file.Id, out var summary) || NeedsWork(summary)).ToArray();
+        var fingerprint = CheckpointSummarySnapshot.Fingerprint(source.Checklist);
+        var toQueue = chosen.Where(file => !existing.TryGetValue(file.Id, out var summary) || NeedsWork(summary, fingerprint)).ToArray();
         var toPromote = chosen.Where(file => existing.TryGetValue(file.Id, out var summary) && summary.IsAutomatic &&
             summary.Status is CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing).Select(file => existing[file.Id]).ToArray();
         if (toQueue.Length > 0 || toPromote.Length > 0)
@@ -165,17 +167,19 @@ public sealed class CheckpointSummaryHandler(
         Guid teamId, int checkpointNumber, Checkpoint checkpoint, Guid userId, CancellationToken cancellationToken)
     {
         var source = await CheckpointSummarySource.LoadAsync(context, teamId, checkpoint, cancellationToken);
+        var fingerprint = CheckpointSummarySnapshot.Fingerprint(source.Checklist);
         var fileIds = source.Files.Select(file => file.Id).ToArray();
         var summaries = await context.SubmissionFileSummaries.AsNoTracking()
             .Where(item => fileIds.Contains(item.SubmissionFileId))
             .ToDictionaryAsync(item => item.SubmissionFileId, cancellationToken);
         // Only the signed-in reviewer's own verdicts are read; nobody sees what a colleague thought of a summary.
         var summaryIds = summaries.Values.Select(item => item.Id).ToArray();
-        var ownFeedback = summaryIds.Length == 0 ? new Dictionary<Guid, WorkspaceSummaryFeedback>()
+        var ownFeedback = summaryIds.Length == 0 ? new Dictionary<Guid, SavedFeedback>()
             : await context.CheckpointSummaryFeedbacks.AsNoTracking()
                 .Where(item => item.UserId == userId && summaryIds.Contains(item.SubmissionFileSummaryId))
                 .ToDictionaryAsync(item => item.SubmissionFileSummaryId,
-                    item => new WorkspaceSummaryFeedback { Rating = item.Rating.ToString(), Reason = item.Reason }, cancellationToken);
+                    item => new SavedFeedback(new WorkspaceSummaryFeedback { Rating = item.Rating.ToString(), Reason = item.Reason },
+                        item.SummaryGenerationId, item.PromptVersion, item.Model), cancellationToken);
         // The shared queue is bounded (MaxQueuedSummaries plus MaxQueuedAutomaticSummaries), so its order is read once;
         // it mirrors the worker's order: reviewers' requests, then automatic ones.
         var queue = summaries.Values.Any(item => item.Status == CheckpointSummaryStatus.Pending)
@@ -198,16 +202,21 @@ public sealed class CheckpointSummaryHandler(
                 VersionNumber = file.VersionNumber,
                 UploadedAt = file.UploadedAt,
                 Status = summary is null ? "None" : summary.Status.ToString(),
+                NeedsRefresh = summary?.Status == CheckpointSummaryStatus.Ready && NeedsWork(summary, fingerprint),
+                GenerationId = CheckpointSummarySnapshot.GenerationId(summary?.ContentJson),
                 QueueAhead = summary?.Status == CheckpointSummaryStatus.Pending ? Math.Max(0, queue.IndexOf(summary.Id)) : null,
                 IsAutomatic = summary?.IsAutomatic ?? false,
                 // The quick view is shown while the model is still working; a finished summary already contains it.
-                Preview = content is null ? ReadPreview(summary?.PreviewJson) : null,
+                Preview = content is null && CheckpointSummarySnapshot.Matches(summary?.PreviewJson, fingerprint)
+                    ? ReadPreview(summary?.PreviewJson) : null,
                 RequestedAt = summary?.RequestedAtUtc,
                 GeneratedAt = summary?.GeneratedAtUtc,
                 ErrorCode = summary?.Status == CheckpointSummaryStatus.Failed ? summary.LastErrorCode : null,
                 InputTruncated = content is not null && summary!.InputTruncated,
                 Content = content,
-                MyFeedback = summary is not null && ownFeedback.TryGetValue(summary.Id, out var verdict) ? verdict : null
+                MyFeedback = summary?.Status == CheckpointSummaryStatus.Ready && ownFeedback.TryGetValue(summary.Id, out var verdict) &&
+                    verdict.GenerationId == CheckpointSummarySnapshot.GenerationId(summary.ContentJson) &&
+                    verdict.PromptVersion == summary.PromptVersion && verdict.Model == summary.Model ? verdict.Value : null
             };
         }).ToArray();
 
@@ -218,7 +227,9 @@ public sealed class CheckpointSummaryHandler(
             FilePromptCharacters = settings.FilePromptCharacters,
             Files = files,
             Requirements = CheckpointSummaryOutput.CombineWithFiles(source.Checklist,
-                files.Select(file => (FileId: (Guid?)file.FileId, file.Name, Findings: file.Content?.Requirements ?? file.Preview?.Requirements))
+                files.Where(file => summaries.TryGetValue(file.FileId, out var stored) &&
+                        CheckpointSummarySnapshot.Matches(stored.Status == CheckpointSummaryStatus.Ready ? stored.ContentJson : stored.PreviewJson, fingerprint))
+                    .Select(file => (FileId: (Guid?)file.FileId, file.Name, Findings: file.Content?.Requirements ?? file.Preview?.Requirements))
                     .Where(file => file.Findings is not null)
                     .Select(file => (file.FileId, file.Name, file.Findings!)).ToArray()),
             Conflicts = CheckpointCrossFileFigures.Compare(files
@@ -232,12 +243,13 @@ public sealed class CheckpointSummaryHandler(
         };
     }
 
-    /// <summary>Pending or running work is left alone; a ready summary is redone only if it came from an older prompt.</summary>
-    private static bool NeedsWork(SubmissionFileSummary summary) => summary.Status switch
+    /// <summary>Work already queued is left alone; ready results are reusable only for the current policy and checklist.</summary>
+    private static bool NeedsWork(SubmissionFileSummary summary, string fingerprint) => summary.Status switch
     {
         CheckpointSummaryStatus.Pending or CheckpointSummaryStatus.Processing => false,
         CheckpointSummaryStatus.Ready => summary.PromptVersion != CheckpointSummaryPrompt.Version ||
-            Read<WorkspaceFileSummaryContent>(summary.ContentJson) is null,
+            Read<WorkspaceFileSummaryContent>(summary.ContentJson) is null || CheckpointSummarySnapshot.GenerationId(summary.ContentJson) is null ||
+            !CheckpointSummarySnapshot.Matches(summary.ContentJson, fingerprint),
         _ => true
     };
 

@@ -316,9 +316,9 @@ public sealed class WorkspaceCheckpointsController(
     [HttpDelete("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/files/{fileId:guid}/feedback")]
     [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
     public async Task<IActionResult> ClearAiSummaryFeedback(Guid teamId, int checkpointNumber, Guid fileId,
-        [FromServices] ICheckpointSummaryFeedbackHandler handler, CancellationToken cancellationToken)
+        [FromQuery] Guid? generationId, [FromServices] ICheckpointSummaryFeedbackHandler handler, CancellationToken cancellationToken)
     {
-        var result = await handler.ClearAsync(teamId, checkpointNumber, fileId, UserId, Role, cancellationToken);
+        var result = await handler.ClearAsync(teamId, checkpointNumber, fileId, UserId, Role, generationId, cancellationToken);
         return result.IsSuccess ? NoContent() : ToErrorResponse(result.Error);
     }
 
@@ -562,7 +562,7 @@ public sealed class WorkspaceCheckpointsController(
                     ? new ObjectResult(response) { StatusCode = StatusCodes.Status415UnsupportedMediaType }
                     : error.Code == ErrorCodes.WorkspaceUploadSessionExpired
                         ? new ObjectResult(response) { StatusCode = StatusCodes.Status410Gone }
-                    : error.Code == ErrorCodes.WorkspaceUploadObjectMissing
+                    : error.Code is ErrorCodes.WorkspaceUploadObjectMissing or ErrorCodes.WorkspaceConcurrencyConflict
                         ? new ConflictObjectResult(response)
                     : error.Code == ErrorCodes.WorkspaceUploadTooManyPending
                         ? new ObjectResult(response) { StatusCode = StatusCodes.Status429TooManyRequests }

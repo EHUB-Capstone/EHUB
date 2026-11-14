@@ -102,7 +102,7 @@ public sealed class CheckpointSummaryCoverageTests
     {
         var prompt = CheckpointSummaryPrompt.User(1, "Idea", Rubric, "deck.pdf", "Nội dung", excerpt: false, followChecklist: true);
 
-        CheckpointSummaryPrompt.Version.Should().Be("v11");
+        CheckpointSummaryPrompt.Version.Should().Be("v13");
         prompt.Should().Contain("- Problem Clarity: Clearly defined problem statement")
             .And.Contain("mỗi ý về một mục khác nhau trong danh sách cần xem")
             .And.Contain("không ghép số của các phần khác nhau");

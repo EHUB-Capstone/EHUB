@@ -215,6 +215,17 @@ export interface MentorAllocationMentorLoad {
   totalAfter: number;
 }
 
+export interface MentorAllocationBalance {
+  mentorType: MentorType;
+  semesterTeamCount: number;
+  eligibleMentorCount: number;
+  targetMinTeams: number;
+  targetMaxTeams: number;
+  extraTeamMentorCount: number;
+  minLoadAfter: number;
+  maxLoadAfter: number;
+}
+
 export interface MentorAllocationPreview {
   sessionId: string;
   semesterId: string;
@@ -233,6 +244,7 @@ export interface MentorAllocationPreview {
   skipped?: MentorAllocationSkipped[];
   unfilled?: MentorAllocationUnfilled[];
   mentorLoads?: MentorAllocationMentorLoad[];
+  balance?: MentorAllocationBalance[];
   conflicts?: MentorAllocationConflict[];
   existingAssignments?: MentorAllocationExisting[];
 }
@@ -241,6 +253,24 @@ export interface MentorAllocationCommitResult {
   endedCount?: number;
   createdCount: number;
   skippedCount: number;
+}
+
+export interface MentorAllocationJobRequest {
+  semesterId: string;
+  classIds: string[];
+  seed?: number;
+  edits: MentorAllocationEdit[];
+  includeTemporaryMentors: boolean;
+  strategy: 'Ai';
+}
+
+export interface MentorAllocationJob {
+  id: string;
+  status: 'Queued' | 'Processing' | 'Ready' | 'Failed';
+  completedBatches: number;
+  totalBatches: number;
+  message?: string | null;
+  preview?: MentorAllocationPreview | null;
 }
 
 /** One active class of a semester with how many of its mentor slots are still empty. */

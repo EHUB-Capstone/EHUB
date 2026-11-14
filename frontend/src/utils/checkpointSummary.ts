@@ -53,9 +53,10 @@ export function nextFeedback(
 }
 
 /** The summary with one file's verdict replaced; every other file is left as it is. */
-export const withFeedback = (summary: CheckpointSummary, fileId: string, feedback: SummaryFeedback | null): CheckpointSummary => ({
+export const withFeedback = (summary: CheckpointSummary, fileId: string, feedback: SummaryFeedback | null, generationId?: string | null): CheckpointSummary => ({
   ...summary,
-  files: summary.files.map((file) => (file.fileId === fileId ? { ...file, myFeedback: feedback } : file)),
+  files: summary.files.map((file) => (file.fileId === fileId && (generationId === undefined || (file.generationId ?? null) === generationId)
+    ? { ...file, myFeedback: feedback } : file)),
 });
 
 export const isFileInProgress = (status: FileSummaryStatus) => status === 'Pending' || status === 'Processing';
@@ -69,6 +70,7 @@ export const hasWorkInProgress = (summary: CheckpointSummary | null) =>
  */
 export const isFileSelectable = (file: FileSummary) =>
   file.status === 'None' || file.status === 'Failed' || file.status === 'Cancelled' ||
+  (file.status === 'Ready' && file.needsRefresh === true) ||
   (file.status === 'Pending' && file.isAutomatic);
 
 /** The quick view or the summary can be opened; a failed file shows why. */
@@ -123,11 +125,13 @@ export function summaryStatusBadges(summary: CheckpointSummary | null, loadError
   if (loadError) return [{ key: 'error', label: 'Không tải được', tone: 'danger' }];
   if (!summary) return [{ key: 'loading', label: 'Đang kiểm tra…', tone: 'neutral' }];
   const counts = summaryStatusCounts(summary.files);
+  const refreshCount = summary.files.filter((file) => file.status === 'Ready' && file.needsRefresh).length;
   if (counts.total === 0) return [{ key: 'empty', label: 'Chưa có file', tone: 'neutral' }];
-  if (counts.ready === counts.total) {
+  if (counts.ready === counts.total && refreshCount === 0) {
     return [{ key: 'ready', label: counts.total === 1 ? '1 file đã tóm tắt' : `Cả ${counts.total} file đã tóm tắt`, tone: 'success' }];
   }
   const badges: SummaryStatusBadge[] = [];
+  if (refreshCount > 0) badges.push({ key: 'refresh', label: `${refreshCount} cần cập nhật`, tone: 'warning' });
   if (counts.summarising > 0) badges.push({ key: 'summarising', label: `${counts.summarising} đang tóm tắt`, tone: 'info' });
   if (counts.queued > 0) badges.push({ key: 'queued', label: `${counts.queued} đang chờ`, tone: 'warning' });
   if (counts.failed > 0) badges.push({ key: 'failed', label: `${counts.failed} lỗi`, tone: 'danger' });
@@ -149,7 +153,7 @@ export function fileStatusView(file: FileSummary): { label: string; tone: Tone }
     case 'Processing':
       return { label: 'Đang tóm tắt', tone: 'info' };
     case 'Ready':
-      return { label: 'Đã tóm tắt', tone: 'success' };
+      return file.needsRefresh ? { label: 'Cần cập nhật', tone: 'warning' } : { label: 'Đã tóm tắt', tone: 'success' };
     case 'Failed':
       return { label: 'Lỗi', tone: 'danger' };
     case 'Cancelled':
@@ -194,6 +198,7 @@ export const ignoredInstructionsMessage = (count: number | undefined): string | 
     : null;
 
 const ERROR_MESSAGES: Record<string, string> = {
+  WORKSPACE_CONCURRENCY_CONFLICT: 'Bản tóm tắt đã được cập nhật. Hãy tải lại trước khi gửi phản hồi.',
   WORKSPACE_SUMMARY_DISABLED: 'Máy chủ này chưa bật tính năng AI tóm tắt.',
   WORKSPACE_SUMMARY_QUEUE_FULL: 'Đang có nhiều file chờ tóm tắt. Vui lòng thử lại sau vài phút.',
   WORKSPACE_SUMMARY_UNREADABLE: 'Không đọc được chữ trong file này. File PDF scan, ảnh và file có mật khẩu chưa được hỗ trợ.',

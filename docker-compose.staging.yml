@@ -54,8 +54,6 @@ x-backend-environment: &backend-environment
   AdminSeed__Email: ${ADMIN_SEED_EMAIL:-}
   AdminSeed__Password: ${ADMIN_SEED_PASSWORD:-}
   AdminSeed__FullName: ${ADMIN_SEED_FULL_NAME:-EHUB Staging Administrator}
-  Mentoring__OllamaBaseUrl: http://ollama:11434
-  Mentoring__EmbeddingModel: bge-m3
   # AI checkpoint summaries: off unless CHECKPOINT_SUMMARY_PROVIDER=Ollama is in the env file (see
   # docs/workspace/AI_CHECKPOINT_SUMMARY.md). The deploy script then starts ollama and pulls the model.
   Summarization__Provider: ${CHECKPOINT_SUMMARY_PROVIDER:-Disabled}
@@ -161,7 +159,10 @@ services:
       - no-new-privileges:true
     init: true
 
+
+  # Optional runtime for checkpoint summaries only; mentor matching uses Gemini.
   ollama:
+    profiles: [checkpoint-summary]
     image: ollama/ollama:0.34.0
     restart: unless-stopped
     # Budget per instance; account for production and staging on the shared VPS.

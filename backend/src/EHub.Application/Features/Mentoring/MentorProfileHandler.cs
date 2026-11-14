@@ -15,9 +15,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EHub.Application.Features.Mentoring;
 
 public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorDocumentStorageService storage,
-    IMentorEmbeddingSearch embeddingSearch, IMentorCvTextReader cvTextReader,
-    IMentorFitRanker? trainedRanker = null, IMentorSemanticReranker? semanticReranker = null,
-    IMentorRecommendationRanker? recommendationRanker = null, IDateTimeProvider? dateTimeProvider = null) : IMentorProfileHandler
+    IMentorCvTextReader cvTextReader, IMentorRecommendationRanker recommendationRanker,
+    IDateTimeProvider? dateTimeProvider = null) : IMentorProfileHandler
 {
     private const int MaximumDocumentBytes = 10 * 1024 * 1024;
 
@@ -254,29 +253,23 @@ public sealed class MentorProfileHandler(IApplicationDbContext context, IMentorD
         var projectText = description + "\n" + title;
         IReadOnlyDictionary<Guid, MentorFitRanking> rankings;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(45));
+        deadline.CancelAfter(recommendationRanker is IBatchMentorRecommendationRanker batch
+            ? batch.RequestTimeout : TimeSpan.FromSeconds(45));
         try
         {
-            var ranker = recommendationRanker ?? new MentorRecommendationRanker(context, embeddingSearch,
-                trainedRanker, semanticReranker, dateTimeProvider);
-            rankings = await ranker.RankAsync(projectText, profiles, deadline.Token);
+            rankings = await recommendationRanker.RankAsync(projectText, profiles, deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
                 ErrorCodes.MentorMatchingUnavailable, "Dịch vụ đang chuẩn bị dữ liệu mentor. Vui lòng thử lại.");
         }
-        catch (MentorEmbeddingUnavailableException)
+        catch (MentorFitRankerUnavailableException error)
         {
             return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
-                ErrorCodes.MentorMatchingUnavailable, "Dịch vụ gợi ý mentor tạm thời chưa sẵn sàng.");
+                ErrorCodes.MentorMatchingUnavailable, error.UserMessage);
         }
-        catch (MentorFitRankerUnavailableException)
-        {
-            return Result.Failure<IReadOnlyCollection<MentorRecommendationResponse>>(
-                ErrorCodes.MentorMatchingUnavailable, "Mô hình gợi ý mentor tạm thời chưa sẵn sàng.");
-        }
-        var items = profiles.Where(profile => trainedRanker is null || rankings[profile.Id].HasEvidence).Select(profile =>
+        var items = profiles.Select(profile =>
         {
             var count = counts.GetValueOrDefault(profile.Id);
             var fit = rankings[profile.Id];
