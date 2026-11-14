@@ -32,7 +32,7 @@ export default function ProjectSummaryRow({ project, backTo, index }: { project:
       </div>
       <div className="col-span-2 flex flex-wrap items-center justify-between gap-3 pl-17 sm:col-span-1 sm:justify-end sm:pl-0">
         <div className="relative z-10 flex items-center gap-3 text-body-sm text-slate-500 dark:text-slate-400">
-          <ShowcaseUpvoteButton showcaseId={project.id} likeCount={project.likeCount} hasUpvoted={project.hasUpvoted} isOwner={project.isOwner} showLabel className="h-9 min-w-0 rounded-lg px-2" />
+          <ShowcaseUpvoteButton showcaseId={project.id} likeCount={project.likeCount} hasUpvoted={project.hasUpvoted} isOwner={project.isOwner} className="h-9 min-w-0 rounded-lg px-2" />
           <span className="inline-flex items-center gap-1" title="Comments">
             <MessageSquare className="h-4 w-4" aria-hidden="true" />{project.commentCount.toLocaleString()}<span className="sr-only"> comments</span>
           </span>
