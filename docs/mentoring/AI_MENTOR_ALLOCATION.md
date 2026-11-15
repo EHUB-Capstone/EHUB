@@ -11,11 +11,11 @@
    Tác vụ xử lý tối đa 300 dự án cần chấm mỗi loại, trong ngân sách 15 phút.
    Không gửi CV gốc hoặc ghi chú/feedback lịch sử.
 4. Backend chuẩn bị các đoạn bằng chứng nguyên văn dài 2–80 ký tự, có mã riêng trong từng trường hồ sơ.
-   AI trả tối đa hai ứng viên mỗi dự án trong mỗi loại, cùng năm điểm 0–100 và mã bằng chứng
+   AI trả tối đa năm ứng viên mỗi dự án trong mỗi loại, cùng năm điểm 0–100 và mã bằng chứng
    cho từng điểm dương. Backend ánh xạ mã về đúng đoạn nguồn, kiểm tra cấu trúc, điểm, nguồn bằng chứng
    và các phủ định rõ trong hồ sơ. Đây là shortlist, không phải ma trận mọi cặp mentor/dự án.
-5. Backend tính điểm theo chính sách bên dưới. Khi phân công, ưu tiên mentor đang ít nhóm
-   nhất trong loại đó trên cả học kỳ, rồi so điểm phù hợp trong tập cùng tải.
+5. Backend tính điểm theo chính sách bên dưới. Khi phân công, cố định phân bố tải cân bằng nhất
+   khả thi trong từng loại, rồi tối ưu tổng điểm của tất cả vị trí trống cùng lúc bằng min-cost flow.
 6. Admin xem đề xuất, sửa tay hoặc để trống vị trí. Chỉ admin accept mới lưu phân công,
    audit và Outbox cùng transaction; preview không ghi assignment.
 
@@ -43,18 +43,21 @@ DiemCuoi = min(100, round(0.70×L + H + A))
 - Tính tổng N nhóm đang hoạt động trong các lớp đang hoạt động của học kỳ và M mentor hợp lệ
   riêng cho từng loại. Mục tiêu là floor(N/M) hoặc ceil(N/M) nhóm mỗi người.
 - Ví dụ 10 nhóm/3 mentor cùng loại: 3–3–4. Tải đã có ở lớp ngoài phạm vi vẫn được tính.
-- Chia tự động ưu tiên tải thấp nhất trước điểm phù hợp. Sửa tay, phân công đã có và kế thừa
+- Chia tự động tối ưu tổng điểm trong phân bố tải cân bằng nhất khả thi. Sửa tay, phân công đã có và kế thừa
   được giữ nguyên, kể cả khi làm tải chênh lệch; bản xem trước hiển thị cảnh báo để admin quyết định.
 - Response `balance` có tổng nhóm, số mentor, khoảng mục tiêu và khoảng tải sau đề xuất.
 - Mentor chưa có tài khoản không nằm trong tập AI tự động; vẫn có thể được admin chọn tay
   theo điều kiện và quyền hiện có.
-- Người ít tải nhất có thể nằm ngoài shortlist AI. Backend giữ điểm 0 và yêu cầu rà soát,
+- Phương án cân tải có thể cần người nằm ngoài shortlist AI. Backend giữ điểm 0 và yêu cầu rà soát,
   không tự tạo điểm dương để làm đẹp kết quả chia đều.
 
 ## Màn hình
 
 Subject Management → Lecturers & Mentors by Semester → AI preview · all classes.
 Có thể quản lý theo lớp, xem theo nhóm/mentor, sửa từng vị trí và chấp nhận đề xuất.
+Chi tiết có điểm từng tiêu chí, đoạn nguồn và nhu cầu dự án. Hồ sơ thiếu dữ liệu được phân biệt với
+trường có dữ liệu nhưng chưa có bằng chứng phù hợp. Nút Change có ứng viên đã được chấm cùng loại,
+hiển thị dự kiến thay đổi tải; Apply tạo preview mới, Confirm mới lưu.
 Thành tích được cập nhật tại Project Data → tên dự án → Achievements → Save changes.
 
 ## Cấu hình và kiểm thử
@@ -64,3 +67,6 @@ Chỉ còn một provider AI: Gemini. Cấu hình server-side, quota, dữ liệ
 
 Giữ nguyên Balanced/Random là các chế độ chia không dùng AI. Các endpoint vẫn kiểm tra
 đăng nhập, admin, quyền lớp/nhóm, concurrency và dữ liệu đã thay đổi sau preview.
+
+Chi tiết nâng cấp và bộ đánh giá bằng nhãn độc lập:
+[MENTOR_MATCHING_UPGRADE.md](MENTOR_MATCHING_UPGRADE.md).

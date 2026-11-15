@@ -14,5 +14,6 @@ public enum MentorFitFailure
     RequestRejected,
     Timeout,
     Network,
-    InvalidResponse
+    InvalidResponse,
+    OutputLimit
 }

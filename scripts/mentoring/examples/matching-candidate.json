@@ -1,0 +1,52 @@
+{
+  "success": true,
+  "message": "Fictional example for evaluating the tool, not measured real matching quality.",
+  "data": {
+    "semesterId": "00001000-0000-0000-0000-000000000001",
+    "teamCount": 2,
+    "strategy": "Ai",
+    "assignments": [
+      {
+        "teamId": "00000001-0000-0000-0000-000000000001",
+        "classId": "00000500-0000-0000-0000-000000000001",
+        "mentorType": "Enterprise",
+        "mentorProfileId": "00001002-0000-0000-0000-000000000001",
+        "fitScore": 85,
+        "source": "Allocated",
+        "fitDetails": {"hasEvidence": true, "availableProfileFields": ["experience", "expertise", "startupDomain", "technology", "bio"]}
+      },
+      {
+        "teamId": "00000002-0000-0000-0000-000000000001",
+        "classId": "00000500-0000-0000-0000-000000000001",
+        "mentorType": "Enterprise",
+        "mentorProfileId": "00001001-0000-0000-0000-000000000001",
+        "fitScore": 89,
+        "source": "Allocated",
+        "fitDetails": {"hasEvidence": true, "availableProfileFields": ["experience", "expertise", "startupDomain", "technology", "bio"]}
+      },
+      {
+        "teamId": "00000001-0000-0000-0000-000000000001",
+        "classId": "00000500-0000-0000-0000-000000000001",
+        "mentorType": "Academic",
+        "mentorProfileId": "00001003-0000-0000-0000-000000000001",
+        "source": "Retained"
+      }
+    ],
+    "existingAssignments": [
+      {
+        "teamId": "00000002-0000-0000-0000-000000000001",
+        "classId": "00000500-0000-0000-0000-000000000001",
+        "mentorType": "Academic",
+        "mentorProfileId": "00001004-0000-0000-0000-000000000001",
+        "replaced": false
+      }
+    ],
+    "unfilled": [],
+    "mentorLoads": [
+      {"mentorProfileId": "00001001-0000-0000-0000-000000000001", "mentorType": "Enterprise", "totalAfter": 1},
+      {"mentorProfileId": "00001002-0000-0000-0000-000000000001", "mentorType": "Enterprise", "totalAfter": 1},
+      {"mentorProfileId": "00001003-0000-0000-0000-000000000001", "mentorType": "Academic", "totalAfter": 1},
+      {"mentorProfileId": "00001004-0000-0000-0000-000000000001", "mentorType": "Academic", "totalAfter": 1}
+    ]
+  }
+}

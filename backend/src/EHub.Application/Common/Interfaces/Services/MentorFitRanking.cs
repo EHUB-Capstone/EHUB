@@ -12,7 +12,14 @@ public sealed record MentorFitRanking(int Score, string[] Reasons, bool HasEvide
 {
     // Internal scoring input, not an API contract. Gemini supplies semantic assessments; Application applies weights.
     public MentorProfileFitCriteria? Criteria { get; init; }
+    public MentorFitAnalysis? Analysis { get; init; }
 }
+
+// Source excerpts are already filtered professional text. Completeness is separate from fit, never a probability.
+public sealed record MentorFitCriterion(string Key, int Score, string? Evidence);
+public sealed record MentorFitAnalysis(double ProfileScore, bool HasEvidence,
+    IReadOnlyCollection<MentorFitCriterion> Criteria, IReadOnlyCollection<string> AvailableProfileFields,
+    IReadOnlyCollection<string> ProjectNeeds);
 
 public sealed record MentorProfileFitCriteria(int Experience, int Expertise, int StartupDomain, int Technology, int Bio)
 {

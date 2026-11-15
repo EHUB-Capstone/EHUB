@@ -1,35 +1,24 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using EHub.Application.Features.Mentoring.Evidence;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 
 namespace EHub.Application.Features.Mentoring.ExtractCv;
 
-public sealed record MentorCvProfileData(string? Bio, string? Experience, string[] Expertise);
+public sealed record MentorCvProfileEvidence(string Field, string Value, string Quote);
+
+public sealed record MentorCvProfileData(string? Bio, string? Experience, string[] Expertise)
+{
+    public string[] StartupDomains { get; init; } = [];
+    public string[] TechnologySkills { get; init; } = [];
+    public IReadOnlyList<MentorCvProfileEvidence> Evidence { get; init; } = [];
+}
 
 // Keep the original professional wording for semantic matching; do not infer employers, years or mentor type.
 public static class MentorCvProfileParser
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
-    private static readonly (string Label, string[] Aliases)[] ExpertiseKeywords =
-    [
-        ("Marketing", ["marketing", "tiep thi"]),
-        ("Finance", ["finance", "tai chinh"]),
-        ("Business administration", ["business administration", "quan tri kinh doanh"]),
-        ("Business development", ["business development", "phat trien kinh doanh"]),
-        ("Operations management", ["operations", "van hanh"]),
-        ("Project management", ["project management", "quan ly du an", "dieu phoi du an"]),
-        ("Strategy", ["strategy", "chien luoc"]),
-        ("Product management", ["product management", "quan ly san pham"]),
-        ("Sales", ["sales", "ban hang"]),
-        ("AI", ["ai", "artificial intelligence", "tri tue nhan tao"]),
-        ("Data science", ["data science", "khoa hoc du lieu"]),
-        ("Software engineering", ["software engineering", "ky thuat phan mem"]),
-        ("Cloud", ["cloud", "dien toan dam may"]),
-        ("Cybersecurity", ["cybersecurity", "an toan thong tin"])
-    ];
     public static Result<MentorCvProfileData> Parse(string text)
     {
         var summary = new List<string>();
@@ -75,10 +64,15 @@ public static class MentorCvProfileParser
 
         // Preserve the original CV text, but infer tags only from affirmative work/skills.
         // A degree alone is retained in Bio and does not become declared expertise.
-        var professionalText = MentorEvidenceText.Positive(string.Join('\n', declaredExpertise));
-        var expertise = ExpertiseKeywords.Where(skill => skill.Aliases.Any(alias => ContainsTerm(professionalText, alias)))
-            .Select(skill => skill.Label).ToArray();
-        return Result.Success(new MentorCvProfileData(Limit(summary, 2000), Limit(experience, 4000), expertise));
+        var evidence = MentorCvSkillCatalog.Extract(declaredExpertise);
+        return Result.Success(new MentorCvProfileData(Limit(summary, 2000), Limit(experience, 4000), Values("expertise"))
+        {
+            StartupDomains = Values("startupDomain"),
+            TechnologySkills = Values("technology"),
+            Evidence = evidence
+        });
+
+        string[] Values(string field) => evidence.Where(item => item.Field == field).Select(item => item.Value).ToArray();
     }
 
     private static string? Limit(List<string> lines, int length)
@@ -86,9 +80,6 @@ public static class MentorCvProfileParser
         var value = string.Join('\n', lines);
         return value.Length == 0 ? null : value[..Math.Min(value.Length, length)];
     }
-
-    private static bool ContainsTerm(string text, string term) => Regex.IsMatch(text,
-        @"(?<![\p{L}\p{N}+#.])" + Regex.Escape(term) + @"(?![\p{L}\p{N}+#])", RegexOptions.None, RegexTimeout);
 
     private static Section? Heading(string value)
     {
@@ -100,6 +91,10 @@ public static class MentorCvProfileParser
         if (Starts(value, "technical skills", "technology skills", "professional skills", "ky nang", "skills"))
             return Section.Summary;
         if (Starts(value, "kinh nghiem lam viec", "kinh nghiem cong tac", "qua trinh cong tac", "work experience", "professional experience", "employment history", "experience"))
+            return Section.Experience;
+        if (new[] { "du an", "du an da tham gia", "du an tieu bieu", "projects", "selected projects", "project experience",
+                "cac vi tri da dam nhiem", "professional roles" }.Any(heading =>
+                value == heading || value.StartsWith(heading + ":", StringComparison.Ordinal)))
             return Section.Experience;
         if (Starts(value, "qua trinh dao tao", "trinh do hoc van", "hoc van", "education", "academic background", "qualifications"))
             return Section.Education;

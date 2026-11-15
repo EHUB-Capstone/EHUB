@@ -111,7 +111,9 @@ public sealed class AdminMentorCvUploadTests
         result.Value.Experience.Should().Contain("backend").And.NotContain("PRIVATE");
         result.Value.Bio.Should().Contain("Demo Academy").And.NotContain("PRIVATE");
         result.Value.MentorType.Should().Be("IT");
-        result.Value.TechnologySkills.Should().Equal("Manual technology");
+        result.Value.TechnologySkills.Should().Contain(["Manual technology", "C#", "PostgreSQL"]);
+        result.Value.Experiences.Should().Contain(item => item.Kind == "Technology" && item.Area == "C#" &&
+            item.Notes == "CV: Built backend services using C# and PostgreSQL");
         result.Value.Tags.Should().Equal("Manual tag");
         original.Should().Equal(bytes, "the private original document is stored intact, while matching uses only professional extraction");
         db.ChangeTracker.Clear();

@@ -76,7 +76,7 @@ Input gồm tên/mô tả dự án, mã nội bộ tạm và năm phần chuyên
 kinh nghiệm, expertise/tags, lĩnh vực, công nghệ và giới thiệu/học vấn.
 Không gửi CV gốc, thông tin liên hệ hoặc ghi chú/feedback của nhóm đã hướng dẫn.
 
-Mỗi request chỉ chấm một loại mentor. AI trả tối đa hai ứng viên/dự án; mỗi ứng viên
+Mỗi request chỉ chấm một loại mentor. AI trả tối đa năm ứng viên/dự án; mỗi ứng viên
 chỉ có `id` và `criteria` gồm năm cặp `score`/`evidence`. Backend chuẩn bị các đoạn nguyên văn
 2–80 ký tự và gửi mã lựa chọn theo từng trường; AI trả mã trong `evidence` cho điểm dương.
 Backend ánh xạ mã về đoạn gốc và kiểm tra score nguyên 0–100, nguồn trích,
@@ -94,7 +94,8 @@ Tỷ trọng tổng hiện tại cố định 70/15/15. Số buổi hoàn thành
 trong response cũ còn được giữ để tương thích client. Đây là chính sách nghiệp vụ, chưa phải
 trọng số tối ưu được hiệu chỉnh từ kết quả admin chốt hoặc tỷ lệ chính xác được kiểm chứng.
 
-Backend ưu tiên tải thấp nhất trên cả học kỳ trong từng loại, sau đó mới xét điểm phù hợp.
+Backend tối ưu đồng thời các vị trí trống trong phạm vi đã chọn, có tính tải cả học kỳ.
+Trước hết cố định phân bố tải cân bằng nhất khả thi, sau đó dùng min-cost flow để tối đa tổng điểm chưa làm tròn.
 N nhóm/M mentor có mục tiêu floor(N/M)–ceil(N/M); preview một lớp vẫn tính tải lớp khác.
 Vị trí đã có mentor, kế thừa và sửa tay được giữ nguyên. Sửa tay có thể lệch mục tiêu;
 admin được xem cảnh báo và chốt. Mentor ngoài shortlist có thể được ghép theo tải với 0 điểm
@@ -107,6 +108,9 @@ Các kiểm tra quyền, loại mentor, team/class scope và optimistic concurre
 
 - Mỗi loại được chia thành các lô tối đa 20 dự án; mã bằng chứng ngắn và JSON gọn giảm độ dài đầu ra.
   Backend gom đủ lô của cả hai loại rồi mới tạo bản preview.
+- Sau khi các model dự phòng đều không hoàn tất vì `MAX_TOKENS`, backend chia đôi lô và chấm tiếp
+  trong deadline tổng. Một dự án vẫn quá dài thì báo lỗi an toàn. Tiến độ tăng khi lô gốc hoàn tất;
+  không giữ khóa request khi xử lý đệ quy và không chấp nhận JSON bị cắt.
 - Mỗi loại nhận tối đa 300 dự án cần chấm và 200 mentor. Payload mỗi lô tối đa 240.000 ký tự.
 - Giao diện tạo tác vụ bằng `POST /api/admin/mentors/allocations/jobs`, nhận HTTP 202 và ID tác vụ,
   rồi lấy tiến độ bằng `GET /api/admin/mentors/allocations/jobs/{id}`. Các request này kết thúc nhanh;
@@ -165,6 +169,9 @@ Mặc định mới dùng `gemini-3.5-flash-lite`, dự phòng `gemini-3.1-flash
 ngày 2026-11-13. Cấu hình tường minh trong secret store/environment hiện có được ưu tiên hơn
 mặc định: khi nâng cấp cần kiểm tra lại tên model đã cấu hình, không cần đổi key đang hợp lệ.
 Model 3.8 và 2.5 vẫn được phép cấu hình để tương thích, nhưng quyền truy cập và độ sẵn sàng tùy project.
+
+Nâng cấp dữ liệu CV, nguồn bằng chứng, tối ưu toàn cục, ứng viên thay thế và đánh giá offline:
+[MENTOR_MATCHING_UPGRADE.md](../mentoring/MENTOR_MATCHING_UPGRADE.md).
 
 ## Kiểm thử
 

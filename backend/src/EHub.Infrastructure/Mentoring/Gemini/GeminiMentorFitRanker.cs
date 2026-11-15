@@ -57,7 +57,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             var result = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
             foreach (var prompt in prompts)
             {
-                var scores = await RankBatchAsync(prompt, cancellationToken);
+                var scores = await RankWithSplittingAsync(prompt, cancellationToken);
                 foreach (var score in scores) result.Add(score.Key, score.Value);
                 if (execution is not null) await execution.AdvanceAsync(cancellationToken);
             }
@@ -82,6 +82,22 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         }
     }
 
+    private async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankWithSplittingAsync(
+        GeminiMentorPrompt prompt, CancellationToken ct)
+    {
+        try { return await RankBatchAsync(prompt, ct); }
+        catch (MentorFitRankerUnavailableException error) when (error.Failure == MentorFitFailure.OutputLimit && prompt.Projects.Length > 1)
+        {
+            ct.ThrowIfCancellationRequested();
+            logger.LogInformation("AI ranking splitting a truncated batch of {ProjectCount} projects", prompt.Projects.Length);
+            // RankBatchAsync releases the shared request gate before recursion; children retain temporary/source IDs.
+            var (first, second) = prompt.Split();
+            var result = (await RankWithSplittingAsync(first, ct)).ToDictionary(item => item.Key, item => item.Value);
+            foreach (var item in await RankWithSplittingAsync(second, ct)) result.Add(item.Key, item.Value);
+            return result;
+        }
+    }
+
     private async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankBatchAsync(
         GeminiMentorPrompt prompt, CancellationToken cancellationToken)
     {
@@ -98,6 +114,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                     return ParseResults(cached.Json, cached.Model, prompt);
                 if (coordinator.ProjectBlockedUntil > now) throw new MentorFitRankerUnavailableException(MentorFitFailure.Quota);
                 var failure = MentorFitFailure.ModelUnavailable;
+                var outputLimitSeen = false;
                 foreach (var model in settings.Models)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -163,6 +180,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                                 ? value.GetString() : null;
                             logger.LogWarning("AI ranking response did not complete: {FinishReason}", finish is
                                 "MAX_TOKENS" or "SAFETY" or "RECITATION" or "OTHER" ? finish : "UNKNOWN");
+                            if (finish == "MAX_TOKENS") throw new MentorFitRankerUnavailableException(MentorFitFailure.OutputLimit);
                             throw RejectResponse("incomplete_response");
                         }
                         var text = string.Concat(candidates[0].GetProperty("content").GetProperty("parts").EnumerateArray()
@@ -181,13 +199,14 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                         return result;
                     }
                     catch (MentorFitRankerUnavailableException error) when (error.Failure is
-                        MentorFitFailure.Timeout or MentorFitFailure.Network or MentorFitFailure.InvalidResponse)
+                        MentorFitFailure.Timeout or MentorFitFailure.Network or MentorFitFailure.InvalidResponse or MentorFitFailure.OutputLimit)
                     {
                         failure = error.Failure;
+                        outputLimitSeen |= failure == MentorFitFailure.OutputLimit;
                         logger.LogWarning("AI ranking model {Model} failed with {FailureKind}; trying the next configured model; projects {ProjectCount}",
                             model, failure, prompt.Projects.Length);
                         // Invalid output is specific to this input. Do not block the model for unrelated batches.
-                        if (failure != MentorFitFailure.InvalidResponse)
+                        if (failure is not (MentorFitFailure.InvalidResponse or MentorFitFailure.OutputLimit))
                         {
                             coordinator.ModelFailures[model] = failure;
                             coordinator.ModelBlockedUntil[model] = clock.GetUtcNow().AddMinutes(1);
@@ -201,7 +220,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                             model, failure, error.GetType().Name, prompt.Projects.Length);
                     }
                 }
-                throw new MentorFitRankerUnavailableException(failure);
+                throw new MentorFitRankerUnavailableException(outputLimitSeen ? MentorFitFailure.OutputLimit : failure);
             }
             finally { coordinator.Gate.Release(); }
         }
@@ -307,45 +326,83 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             var projectId = row.GetProperty("project").GetString();
             if (projectId is null || !projects.TryGetValue(projectId, out var project) || result.ContainsKey(project.SourceId))
                 throw RejectResponse("project_id");
+            var needs = ReadProjectNeeds(row, project.Text);
             var scores = prompt.Mentors.ToDictionary(mentor => mentor.SourceId, _ =>
                 new MentorFitRanking(0, [$"Gemini ({model}): chưa có đề xuất chuyên môn phù hợp; cần admin xem lại"], false, 0)
                     { Criteria = MentorProfileFitCriteria.Empty });
+            foreach (var mentor in prompt.Mentors)
+                scores[mentor.SourceId] = scores[mentor.SourceId] with
+                {
+                    Analysis = new MentorFitAnalysis(0, false,
+                        GeminiMentorPrompt.ProfileFieldKeys.Select(key => new MentorFitCriterion(key, 0, null)).ToArray(),
+                        AvailableFields(mentor), needs)
+                };
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
             var ranked = row.GetProperty("mentors");
-            if (ranked.GetArrayLength() > 4) throw RejectResponse("candidate_count");
+            if (ranked.GetArrayLength() > GeminiMentorPrompt.MaximumCandidatesPerProject) throw RejectResponse("candidate_count");
             foreach (var candidate in ranked.EnumerateArray())
             {
                 var id = candidate.GetProperty("id").GetString();
                 if (id is null || !mentors.TryGetValue(id, out var mentor) || !seen.Add(id))
                     throw RejectResponse("mentor_id");
                 counts[mentor.Role] = counts.GetValueOrDefault(mentor.Role) + 1;
-                if (counts[mentor.Role] > 2)
+                if (counts[mentor.Role] > GeminiMentorPrompt.MaximumCandidatesPerProject)
                     throw RejectResponse("role_count");
                 var criteria = candidate.GetProperty("criteria");
                 var reasons = new List<string> { $"Gemini ({model}): đánh giá 5 tiêu chí hồ sơ" };
-                var values = new[] { "experience", "expertise", "startupDomain", "technology", "bio" }
-                    .Select(name => ReadCriterion(criteria.GetProperty(name), mentor, name, reasons)).ToArray();
+                var assessed = new List<MentorFitCriterion>();
+                var values = GeminiMentorPrompt.ProfileFieldKeys
+                    .Select(name => ReadCriterion(criteria.GetProperty(name), mentor, name, reasons, assessed)).ToArray();
                 if (values.All(value => value == 0)) throw RejectResponse("no_positive_criteria");
                 // No overall model score exists. Application computes the weighted profile score from these five inputs.
                 scores[mentor.SourceId] = new MentorFitRanking(0, reasons.ToArray(), true, 0)
-                    { Criteria = new(values[0], values[1], values[2], values[3], values[4]) };
+                {
+                    Criteria = new(values[0], values[1], values[2], values[3], values[4]),
+                    Analysis = new MentorFitAnalysis(0, true, assessed, AvailableFields(mentor), needs)
+                };
             }
             result.Add(project.SourceId, scores);
         }
         return result;
     }
 
-    private int ReadCriterion(JsonElement criterion, GeminiMentor mentor, string name, List<string> reasons)
+    private static string[] AvailableFields(GeminiMentor mentor) => mentor.SourceFields.Where(field =>
+        field.Value.Replace("[removed]", "", StringComparison.Ordinal).Count(char.IsLetter) >= 2).Select(field => field.Key).ToArray();
+
+    private string[] ReadProjectNeeds(JsonElement row, string source)
+    {
+        // Older completed cached/test responses remain readable; production schema requests the field explicitly.
+        if (!row.TryGetProperty("needs", out var needs)) return [];
+        if (needs.ValueKind != JsonValueKind.Array || needs.GetArrayLength() > 4) throw RejectResponse("project_needs");
+        var result = new List<string>();
+        foreach (var item in needs.EnumerateArray())
+        {
+            var quote = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+            if (!IsPositiveQuote(source, quote, 2, 2))
+                throw RejectResponse("project_need_evidence");
+            result.Add(quote!);
+        }
+        return result.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private int ReadCriterion(JsonElement criterion, GeminiMentor mentor, string name, List<string> reasons,
+        List<MentorFitCriterion> assessed)
     {
         if (!criterion.GetProperty("score").TryGetInt32(out var score) || score is < 0 or > 100)
             throw RejectResponse("criterion_score");
         var quote = criterion.GetProperty("evidence").GetString();
-        if (score == 0 && quote == "") return 0;
+        if (score == 0 && quote == "")
+        {
+            assessed.Add(new(name, 0, null));
+            return 0;
+        }
         if (quote is not null && mentor.EvidenceOptions[name].TryGetValue(quote, out var selected)) quote = selected;
-        if (score == 0 || !IsPositiveQuote(mentor.Fields[name], quote, 2, 2))
+        if (score == 0 || !IsPositiveQuote(mentor.Fields[name], quote, 2, 2) ||
+            !IsPositiveQuote(mentor.SourceFields[name], quote, 2, 2))
             throw RejectResponse("criterion_evidence");
         reasons.Add($"Gemini {name}: {score}/100; bằng chứng: {quote}");
+        assessed.Add(new(name, score, quote));
         return score;
     }
 
@@ -379,13 +436,14 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             {
                 type = "array", items = new
                 {
-                    type = "object", required = new[] { "project", "mentors" },
+                    type = "object", required = new[] { "project", "needs", "mentors" },
                     properties = new
                     {
                         project = new { type = "string" },
+                        needs = new { type = "array", maxItems = 4, items = new { type = "string", minLength = 2, maxLength = 160 } },
                         mentors = new
                         {
-                            type = "array", maxItems = 2, items = new
+                            type = "array", maxItems = GeminiMentorPrompt.MaximumCandidatesPerProject, items = new
                             {
                                 type = "object", required = new[] { "id", "criteria" },
                                 properties = new

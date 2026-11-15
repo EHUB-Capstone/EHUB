@@ -17,6 +17,7 @@ public sealed class MentorFitRankerUnavailableException : Exception
         MentorFitFailure.Timeout => "AI chưa phản hồi trong thời gian cho phép. Vui lòng thử lại với phạm vi lớp nhỏ hơn.",
         MentorFitFailure.Network => "Máy chủ chưa kết nối được dịch vụ AI. Vui lòng kiểm tra kết nối mạng của VPS.",
         MentorFitFailure.InvalidResponse => "AI trả về kết quả chưa hợp lệ. Vui lòng thử lại để chấm lại lô chưa hoàn tất.",
+        MentorFitFailure.OutputLimit => "Kết quả AI vượt giới hạn đầu ra. Vui lòng thử lại với phạm vi lớp nhỏ hơn.",
         _ => "Dịch vụ AI phân bổ mentor tạm thời chưa sẵn sàng. Vui lòng thử lại."
     };
 

@@ -1,0 +1,17 @@
+{
+  "semesterId": "00001000-0000-0000-0000-000000000001",
+  "synthetic": true,
+  "description": "Fictional demonstration labels. Replace with independent mentor/lecturer judgments before assessing real semantic quality.",
+  "labels": [
+    {
+      "teamId": "00000001-0000-0000-0000-000000000001",
+      "mentorType": "Enterprise",
+      "acceptableMentorIds": ["00001002-0000-0000-0000-000000000001"]
+    },
+    {
+      "teamId": "00000002-0000-0000-0000-000000000001",
+      "mentorType": "Enterprise",
+      "acceptableMentorIds": ["00001001-0000-0000-0000-000000000001"]
+    }
+  ]
+}

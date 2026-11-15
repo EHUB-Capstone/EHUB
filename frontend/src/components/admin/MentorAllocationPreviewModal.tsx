@@ -4,6 +4,7 @@ import type {
   MentorAllocationConflict,
   MentorAllocationEdit,
   MentorAllocationPreview,
+  MentorFitCriterionKey,
   MentorType,
 } from '../../types/mentorAdmin';
 import {
@@ -12,12 +13,16 @@ import {
   filterTeamGrid,
   formatAllocationReason,
   getAiReviewAssignments,
+  getAvailableFitAlternatives,
+  getMentorLoadImpact,
+  getMissingProfileFields,
   resolveClassFilter,
   teamClassOptions,
   getMentorCandidates,
   getSubjectColumns,
   skipReasonLabel,
   summarizePreview,
+  summarizeAllocationQuality,
   type SlotState,
   type SlotView,
   type TeamGridRow,
@@ -25,6 +30,7 @@ import {
 import { buildChangeReason, isChangeReasonValid } from '../../utils/mentorChangeReasons';
 import Badge, { badgeTones, type BadgeTone } from '../ui/Badge';
 import Button from '../ui/Button';
+import Card from '../ui/Card';
 import Modal from '../ui/Modal';
 import MentorChangeReasonField from './MentorChangeReasonField';
 import MentorSearchSelect from './MentorSearchSelect';
@@ -65,6 +71,10 @@ const stateStyle: Record<SlotState, { label: string; tone: BadgeTone }> = {
   unfilled: { label: 'Missing', tone: 'danger' },
 };
 const replacedTone: BadgeTone = 'warning';
+const criterionLabels: Record<MentorFitCriterionKey, string> = {
+  experience: 'Experience', expertise: 'Expertise / tags', startupDomain: 'Startup domain',
+  technology: 'Technology', bio: 'Background / education',
+};
 
 export default function MentorAllocationPreviewModal({
   isOpen,
@@ -89,6 +99,7 @@ export default function MentorAllocationPreviewModal({
 
   const grid = useMemo(() => (preview ? buildTeamGrid(preview) : []), [preview]);
   const summary = useMemo(() => (preview ? summarizePreview(preview) : null), [preview]);
+  const quality = useMemo(() => (preview ? summarizeAllocationQuality(preview) : null), [preview]);
   const classOptions = useMemo(() => teamClassOptions(grid), [grid]);
   const activeClass = resolveClassFilter(classFilter, classOptions);
   const visibleRows = useMemo(() => filterTeamGrid(grid, { filter, search, classCode: activeClass }), [grid, filter, search, activeClass]);
@@ -139,7 +150,7 @@ export default function MentorAllocationPreviewModal({
         </div>
         {preview.strategy === 'Ai' && (
           <p className="rounded-xl bg-info-50 px-3 py-2 text-body-sm text-info-dark">
-            AI balances semester workload by mentor type first, then uses fit scores among mentors with the same workload.
+            AI compares project needs with mentor evidence and optimizes the proposed assignments while balancing semester workload by mentor type.
             {' '}Review suggestions with a fit score of 0 closely. You can change a mentor or leave a slot empty before accepting.
             {' '}Eligible mentors stay with continuing teams from EXE101 to EXE201. Fit scores are not probabilities.
           </p>
@@ -186,6 +197,17 @@ export default function MentorAllocationPreviewModal({
           <Metric label="Missing enterprise" value={summary.unfilledEnterprise} tone={summary.unfilledEnterprise > 0 ? stateStyle.unfilled.tone : 'neutral'} />
           <Metric label="Missing lecturer" value={summary.unfilledAcademic} tone={summary.unfilledAcademic > 0 ? stateStyle.unfilled.tone : 'neutral'} />
         </div>
+
+        {quality && <Card tone="inset" hover={false} padding="p-3" role="region" aria-label="AI evidence coverage" className="space-y-2 text-body-sm text-slate-600">
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <p><strong className="text-slate-800">{quality.supported}/{quality.assessed}</strong> suggestions with supporting evidence</p>
+            <p><strong className="text-slate-800">{quality.needsReview}</strong> need fit review</p>
+            <p><strong className="text-slate-800">{quality.missingProfileData}</strong> have incomplete profile data</p>
+            {quality.unknownProfileData > 0 && <p>Profile data coverage unavailable for <strong className="text-slate-800">{quality.unknownProfileData}</strong></p>}
+            {quality.averageFit !== null && <p>Average fit <strong className="text-slate-800">{quality.averageFit.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100</strong></p>}
+          </div>
+          <p className="text-caption text-slate-500">Profile 70% · mentoring history up to 15 points · recorded achievements up to 15 points. Evidence coverage and fit scores are not accuracy probabilities.</p>
+        </Card>}
 
         <div role="tablist" aria-label="Preview views" className="flex flex-wrap gap-1 border-b border-slate-200">
           <TabButton active={tab === 'teams'} onClick={() => setTab('teams')}>By team ({grid.length})</TabButton>
@@ -329,6 +351,8 @@ function TeamRow({
                 type={type}
                 slot={slot}
                 candidates={getMentorCandidates(preview, type)}
+                preview={preview}
+                disabled={disabled}
                 presetMentorId={editor.presetMentorId}
                 onCancel={onCloseEditor}
                 onApply={onApplyEdit}
@@ -344,6 +368,7 @@ function TeamRow({
 
 function SlotCell({ slot }: { slot: SlotView }) {
   const style = stateStyle[slot.state];
+  const missingFields = getMissingProfileFields(slot.fitDetails);
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -353,9 +378,12 @@ function SlotCell({ slot }: { slot: SlotView }) {
           ? <span className="font-medium text-slate-800">{slot.mentorName}</span>
           : <span className="text-slate-400">No mentor</span>}
       </div>
-      {(slot.fitScore != null || (slot.reasons?.length ?? 0) > 0) && (
+      {(slot.fitScore != null || (slot.reasons?.length ?? 0) > 0 || slot.fitDetails) && (
         <div className="mt-2 space-y-1 text-caption text-slate-600">
           {slot.fitScore != null && <p className="font-semibold">Điểm phù hợp: {slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100</p>}
+          {missingFields && <p className={missingFields.length ? 'text-warning-dark' : 'text-slate-500'}>
+            Profile data: {5 - missingFields.length}/5 criteria available{missingFields.length > 0 ? ` · Missing: ${missingFields.map(key => criterionLabels[key]).join(', ')}` : ''}
+          </p>}
           {slot.history && <div role="group" aria-label={`Mentoring history for ${slot.mentorName ?? 'mentor'}`} className="space-y-1">
             <p>{slot.history.mentoredTeamCount || slot.history.achievementCount
               ? `${slot.history.mentoredTeamCount} nhóm · ${slot.history.achievementCount} dự án có thành tích`
@@ -365,7 +393,7 @@ function SlotCell({ slot }: { slot: SlotView }) {
             )}
           </div>}
           {slot.needsReview && <p className="text-warning-dark">Cần kiểm tra mức phù hợp trước khi chốt.</p>}
-          <AssignmentDetails key={slot.mentorProfileId} mentorName={slot.mentorName} reasons={slot.reasons} />
+          <AssignmentDetails key={slot.mentorProfileId} mentorName={slot.mentorName} reasons={slot.reasons} fitDetails={slot.fitDetails} />
         </div>
       )}
       {slot.replacesCurrent && slot.currentMentorName && (
@@ -375,10 +403,10 @@ function SlotCell({ slot }: { slot: SlotView }) {
   );
 }
 
-function AssignmentDetails({ mentorName, reasons }: { mentorName: string | null; reasons?: string[] }) {
+function AssignmentDetails({ mentorName, reasons, fitDetails }: { mentorName: string | null; reasons?: string[]; fitDetails?: SlotView['fitDetails'] }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
-  if (!reasons?.length) return null;
+  if (!reasons?.length && !fitDetails) return null;
   return (
     <div>
       <Button
@@ -391,22 +419,46 @@ function AssignmentDetails({ mentorName, reasons }: { mentorName: string | null;
         <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </Button>
       {expanded && (
-        <ul id={detailsId} className="mt-1 list-disc space-y-1 pl-4" aria-label={`Assignment reasons for ${mentorName ?? 'mentor'}`}>
-          {reasons.map((reason, index) => <li key={`${index}-${reason}`}>{formatAllocationReason(reason)}</li>)}
-        </ul>
+        <div id={detailsId} className="mt-2 space-y-3" aria-label={`Assignment reasons for ${mentorName ?? 'mentor'}`}>
+          {fitDetails && <>
+            <p className="font-semibold">Profile fit: {fitDetails.profileScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100 · weighted at 70%</p>
+            {fitDetails.projectNeeds.length > 0 && <div>
+              <p className="font-semibold text-slate-700">Project support needs</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">{fitDetails.projectNeeds.map((need, index) => <li key={`${index}-${need}`}>{need}</li>)}</ul>
+            </div>}
+            <dl className="space-y-2" aria-label="Profile criteria and supporting passages">
+              {(Object.keys(criterionLabels) as MentorFitCriterionKey[]).map(key => {
+                const criterion = fitDetails.criteria.find(item => item.key === key);
+                const available = fitDetails.availableProfileFields.includes(key);
+                return <div key={key} className="border-l-2 border-slate-200 pl-2">
+                  <dt className="font-semibold text-slate-700">{criterionLabels[key]} · {available ? `${criterion?.score ?? 0}/100` : 'Missing profile data'}</dt>
+                  <dd className="mt-0.5 break-words text-slate-500">{!available
+                    ? 'Add source information to assess this criterion.'
+                    : criterion?.evidence ? <blockquote>“{criterion.evidence}”</blockquote>
+                      : 'No relevant supporting passage for this project.'}</dd>
+                </div>;
+              })}
+            </dl>
+          </>}
+          {!fitDetails && (reasons?.length ?? 0) > 0 && <ul className="list-disc space-y-1 pl-4">
+            {reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{formatAllocationReason(reason)}</li>)}
+          </ul>}
+        </div>
       )}
     </div>
   );
 }
 
 function SlotEditor({
-  teamId, teamName, type, slot, candidates, presetMentorId, onCancel, onApply,
+  teamId, teamName, type, slot, candidates, preview, disabled, presetMentorId, onCancel, onApply,
 }: {
   teamId: string;
   teamName: string;
   type: MentorType;
   slot: SlotView;
   candidates: ReturnType<typeof getMentorCandidates>;
+  preview: MentorAllocationPreview;
+  disabled: boolean;
   presetMentorId?: string;
   onCancel: () => void;
   onApply: (edit: MentorAllocationEdit) => void;
@@ -419,8 +471,11 @@ function SlotEditor({
   const needsReason = occupied && mentorId !== '' && !sameAsCurrent;
   const reasonOk = !needsReason || isChangeReasonValid(reasonCode, reasonNote);
   const alreadyEmpty = slot.state === 'unfilled' && mentorId === '';
-  const canApply = !sameAsCurrent && !alreadyEmpty && reasonOk && (mentorId !== '' || !occupied);
+  const canApply = !disabled && !sameAsCurrent && !alreadyEmpty && reasonOk && (mentorId !== '' || !occupied);
   const fieldId = `${teamId}-${type}`;
+  const alternatives = getAvailableFitAlternatives(slot, candidates);
+  const loadImpact = getMentorLoadImpact(preview, slot, mentorId);
+  const selectedAlternative = alternatives.find(candidate => candidate.mentorProfileId === mentorId);
   const options = useMemo(() => candidates.map(candidate => ({
     id: candidate.mentorProfileId,
     label: candidate.mentorName,
@@ -438,7 +493,7 @@ function SlotEditor({
   };
 
   return (
-    <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+    <fieldset disabled={disabled} aria-label={`Edit ${slotLabel[type].toLowerCase()} of ${teamName}`} className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
       <label htmlFor={`mentor-${fieldId}`} className="block text-caption font-semibold text-slate-600">
         {slotLabel[type]} for {teamName}
       </label>
@@ -447,9 +502,24 @@ function SlotEditor({
         options={options}
         value={mentorId}
         onChange={setMentorId}
+        disabled={disabled}
         emptyLabel={occupied ? undefined : 'Leave empty (no mentor)'}
         placeholder={occupied ? 'Search or choose a mentor...' : 'Search a mentor, or leave empty'}
       />
+      {alternatives.length > 0 && <div className="space-y-1" aria-label={`Assessed alternatives for ${teamName} ${slotLabel[type].toLowerCase()}`}>
+        <p className="text-caption font-semibold text-slate-600">Alternatives with supporting evidence</p>
+        <div className="flex flex-wrap gap-1">{alternatives.map(candidate => <Button key={candidate.mentorProfileId}
+          variant="outline" size="xs" aria-pressed={mentorId === candidate.mentorProfileId}
+          onClick={() => setMentorId(candidate.mentorProfileId)}>
+          {candidate.mentorName} · {candidate.fitScore}/100
+        </Button>)}</div>
+      </div>}
+      {loadImpact && <div role="status" aria-live="polite" className="space-y-1 text-caption text-slate-600">
+        <p>Projected semester load: <strong>{loadImpact.selected.mentorName}: {loadImpact.selected.before} → {loadImpact.selected.after} teams</strong></p>
+        {loadImpact.previous && <p>{loadImpact.previous.mentorName}: {loadImpact.previous.before} → {loadImpact.previous.after} teams</p>}
+        <p className="text-slate-500">Apply to update the preview before confirming assignments.</p>
+      </div>}
+      {selectedAlternative && <AssignmentDetails key={selectedAlternative.mentorProfileId} mentorName={selectedAlternative.mentorName} reasons={selectedAlternative.reasons} />}
       {candidates.length === 0 && <p className="text-caption text-amber-700">No active {slotLabel[type].toLowerCase()} in this semester.</p>}
       {needsReason && (
         <MentorChangeReasonField
@@ -465,7 +535,7 @@ function SlotEditor({
         <Button size="xs" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button size="xs" variant="outline" disabled={!canApply} onClick={apply}>{needsReason ? 'Replace' : mentorId === '' && !occupied ? 'Leave empty' : occupied ? 'Replace' : 'Apply'}</Button>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -538,7 +608,7 @@ function AttentionPanel({
               <li key={`${item.teamId}-${item.mentorType}`} className="rounded-lg border border-warning-light bg-warning-50 px-3 py-2 text-body-sm text-warning-dark">
                 <strong>{item.teamName}</strong> · {item.classCode} · {slotLabel[item.mentorType]}
                 <p>{item.mentorName} · Fit score: 0 <Badge variant="warning">Needs review</Badge></p>
-                <AssignmentDetails mentorName={item.mentorName} reasons={item.reasons} />
+                <AssignmentDetails mentorName={item.mentorName} reasons={item.reasons} fitDetails={item.fitDetails} />
               </li>
             ))}
           </ul>

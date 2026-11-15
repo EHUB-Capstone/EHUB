@@ -206,7 +206,7 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
     }
 
     [Fact]
-    public async Task ManualSkillsStayUnchangedWhenCvIsUploadedReplacedOrRejected()
+    public async Task ManualSkillsAreRetainedWhenCvAddsVerifiedFactsOrIsRejected()
     {
         using var app = App();
         using var client = app.CreateClient();
@@ -231,9 +231,9 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         using var replaced = await client.SendAsync(replace);
         replaced.StatusCode.Should().Be(HttpStatusCode.OK);
         var replacementProfile = (await replaced.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
-        replacementProfile.TechnologySkills.Should().Equal("Negotiation", "Facilitation");
-        replacementProfile.Bio.Should().Be("Demo University - Software engineering\nAWS, Azure");
-        replacementProfile.Experience.Should().Be("Built Python and PostgreSQL tools");
+        replacementProfile.TechnologySkills.Should().Equal("Negotiation", "Facilitation", "Python", "PostgreSQL", "AWS", "Azure");
+        replacementProfile.Bio.Should().Contain("Đại học Demo").And.Contain("Demo University - Software engineering\nAWS, Azure");
+        replacementProfile.Experience.Should().Contain("Giám đốc Marketing").And.Contain("Built Python and PostgreSQL tools");
         // Preserve the manually entered Finance tag; an education-only degree is
         // kept in Bio without being promoted to declared professional expertise.
         replacementProfile.Expertise.Should().Contain("Finance").And.NotContain("Software engineering");
@@ -244,9 +244,9 @@ public sealed class MentorCvUploadIntegrationTests(CustomWebApplicationFactory f
         using var storedResponse = await client.SendAsync(get);
         storedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var stored = (await storedResponse.Content.ReadFromJsonAsync<ApiResponse<MentorProfileResponse>>())!.Data!;
-        stored.TechnologySkills.Should().Equal("Negotiation", "Facilitation");
+        stored.TechnologySkills.Should().Equal("Negotiation", "Facilitation", "Python", "PostgreSQL", "AWS", "Azure");
         stored.CvFileName.Should().Be("replacement.docx");
-        stored.Experience.Should().Be("Built Python and PostgreSQL tools");
+        stored.Experience.Should().Contain("Giám đốc Marketing").And.Contain("Built Python and PostgreSQL tools");
     }
 
     [Theory]
