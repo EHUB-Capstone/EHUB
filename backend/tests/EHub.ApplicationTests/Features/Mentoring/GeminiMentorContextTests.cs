@@ -32,10 +32,12 @@ public sealed class GeminiMentorContextTests
         rig.MaximumCandidates.Should().Be(5);
     }
 
-    [Fact]
-    public async Task FitDetailsExposeExactProfessionalSourcesAndProjectNeedsWithoutInventingConfidence()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FitDetailsExposeExactProfessionalSourcesAndProjectNeedsWithoutInventingConfidence(bool legacyQuote)
     {
-        using var rig = new Rig(input => Output(input, 1, ["Marketing support"]));
+        using var rig = new Rig(input => Output(input, 1, [legacyQuote ? "Marketing support" : "N01"]));
         var profile = Profile();
         profile.Expertise = ["Marketing"];
         var raw = (await rig.Ranker.RankAsync([new(Guid.NewGuid(), "Marketing support")], [profile], MentorRankingScope.AllSpecialties, default))
@@ -55,6 +57,8 @@ public sealed class GeminiMentorContextTests
     [Theory]
     [InlineData("Unstated fundraising requirement")]
     [InlineData("[removed]")]
+    [InlineData("N99")]
+    [InlineData("N02")]
     public async Task ModelCannotInventProjectNeedsOrQuoteMaskedData(string needs)
     {
         using var rig = new Rig(input => Output(input, 1, [needs]));
@@ -82,6 +86,149 @@ public sealed class GeminiMentorContextTests
         var task = rig.Ranker.RankAsync([new(Guid.NewGuid(), "Marketing support; AI is not required")],
             [Profile()], MentorRankingScope.AllSpecialties, default);
         (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => task)).Failure.Should().Be(MentorFitFailure.InvalidResponse);
+    }
+
+    [Fact]
+    public void NeedOptionsKeepFullSourceDenialsAndMaskedInformationOutOfPositiveEvidence()
+    {
+        var prompt = new GeminiMentorPrompt([new(Guid.NewGuid(),
+            "Cần hỗ trợ marketing và kiểm chứng thị trường; Không cần AI; AI is not required; Contact: synthetic@example.test")],
+            [Profile()], MentorRankingScope.AllSpecialties);
+        var project = prompt.Projects.Single();
+        project.NeedOptions.Values.Should().Contain("Cần hỗ trợ marketing và kiểm chứng thị trường");
+        project.NeedOptions.Values.Should().NotContain(quote => quote.Contains("AI") || quote.Contains("[removed]"));
+        project.NeedOptions.Should().OnlyContain(option => project.Text.Contains(option.Value, StringComparison.Ordinal));
+        prompt.Json.Should().NotContain("synthetic@example.test");
+        using var input = JsonDocument.Parse(prompt.Json);
+        input.RootElement.GetProperty("projects")[0].GetProperty("needOptions").GetProperty("N01").GetString()
+            .Should().Be(project.NeedOptions["N01"]);
+    }
+
+    [Fact]
+    public async Task AnIdNotOfferedByThisProjectCannotBorrowAnotherProjectsNeed()
+    {
+        using var rig = new Rig(input => Output(input, 1, ["N02"]));
+        var projects = new[] { new MentorRankingProject(Guid.NewGuid(), "Marketing support; Product validation"),
+            new MentorRankingProject(Guid.NewGuid(), "Marketing support") };
+        (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(projects,
+            [Profile()], MentorRankingScope.AllSpecialties, default))).Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        rig.ProjectCounts.Should().HaveCountLessThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public async Task VietnameseTwentyProjectBatchResolvesShortNeedIdsToItsOwnExactSource()
+    {
+        using var rig = new Rig(input => Output(input, 5));
+        var projects = Enumerable.Range(1, 20).Select(index => new MentorRankingProject(Guid.NewGuid(),
+            $"Dự án giả lập {index}: Nền tảng bán hàng và quản lý chuỗi cung ứng nông sản; " +
+            "Cần kiểm chứng khách hàng, thiết kế mô hình kinh doanh và chiến lược tiếp cận thị trường; " +
+            "Cần xây dựng ứng dụng React và API quản lý đơn hàng; " +
+            "Giai đoạn thử nghiệm với cửa hàng nhỏ, cần đánh giá chi phí vận hành và bảo mật dữ liệu; " +
+            "Không cần nhận diện khuôn mặt; AI is not required")).ToArray();
+        var profiles = Enumerable.Range(0, 30).Select(_ => Profile()).ToArray();
+        var result = await rig.Ranker.RankAsync(projects, profiles, MentorRankingScope.AllSpecialties, default);
+        result.Keys.Should().BeEquivalentTo(projects.Select(project => project.Id));
+        foreach (var project in projects)
+        {
+            var row = result[project.Id];
+            row.Values.Count(fit => fit.HasEvidence).Should().Be(5);
+            row.Values.Should().OnlyContain(fit => fit.Analysis!.ProjectNeeds.Count > 0 &&
+                fit.Analysis.ProjectNeeds.All(need => project.Text.Contains(need, StringComparison.Ordinal) &&
+                    !need.Contains("Không cần") && !need.Contains("AI is not required")));
+        }
+        rig.ProjectCounts.Should().Equal(20);
+        rig.MaximumNeedIdLength.Should().Be(3);
+    }
+
+    [Fact]
+    public void NearBudgetPromptsReduceOnlyExplanationOptionsAndKeepScoringContext()
+    {
+        var (projects, profiles) = RichInput(30);
+        var unconstrained = new GeminiMentorPrompt([projects[0]], [profiles[0]], MentorRankingScope.AllSpecialties);
+        var prompt = new GeminiMentorPrompt(projects, profiles, MentorRankingScope.AllSpecialties);
+        prompt.Json.Length.Should().BeLessThanOrEqualTo(240_000);
+        prompt.Projects.Should().OnlyContain(project => project.Text == unconstrained.Projects[0].Text &&
+            project.NeedOptions.Count < unconstrained.Projects[0].NeedOptions.Count);
+        prompt.Mentors.Should().OnlyContain(mentor => mentor.Fields.All(field =>
+            field.Value == unconstrained.Mentors[0].Fields[field.Key]));
+        foreach (var project in prompt.Projects)
+            project.NeedOptions.Should().OnlyContain(option => unconstrained.Projects[0].NeedOptions[option.Key] == option.Value);
+        var (first, second) = prompt.Split();
+        first.Projects.Concat(second.Projects).Should().Equal(prompt.Projects);
+    }
+
+    [Fact]
+    public async Task ScoringInputStillOverBudgetAfterRemovingOptionalNeedsStopsBeforeAnyHttpCall()
+    {
+        using var rig = new Rig(input => Output(input, 1));
+        var (projects, profiles) = RichInput(60);
+        (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(projects,
+            profiles, MentorRankingScope.AllSpecialties, default))).Failure.Should().Be(MentorFitFailure.InputLimit);
+        rig.ProjectCounts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InvalidLargeBatchIsSplitOnceAndCompletedChildrenAreReusedOnRetry()
+    {
+        using var rig = new Rig(input => input.GetProperty("projects").GetArrayLength() > 10
+            ? new { results = Array.Empty<object>() } : Output(input, 1));
+        var projects = Enumerable.Range(0, 20).Select(index => new MentorRankingProject(Guid.NewGuid(), $"Marketing support {index}")).ToArray();
+        var profiles = new[] { Profile() };
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var result = await rig.Ranker.RankAsync(projects, profiles, MentorRankingScope.AllSpecialties, default)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            result.Keys.Should().BeEquivalentTo(projects.Select(project => project.Id));
+            result.Values.Should().OnlyContain(row => row.Values.Single().HasEvidence &&
+                row.Values.Single().Analysis!.ProjectNeeds.Count > 0);
+        }
+        rig.ProjectCounts.Should().Equal(20, 10, 10, 20);
+    }
+
+    [Fact]
+    public async Task SystematicInvalidOutputStopsAfterOneSplitInsteadOfWalkingEveryProject()
+    {
+        using var rig = new Rig(_ => new { results = Array.Empty<object>() });
+        var projects = Enumerable.Range(0, 20).Select(index => new MentorRankingProject(Guid.NewGuid(), $"Marketing support {index}")).ToArray();
+        (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(projects,
+            [Profile()], MentorRankingScope.AllSpecialties, default))).Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        rig.ProjectCounts.Should().Equal(20, 10);
+    }
+
+    [Fact]
+    public async Task CancellationAfterAnInvalidParentDoesNotSendAChildRequest()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var rig = new Rig(_ => { cancellation.Cancel(); return new { results = Array.Empty<object>() }; });
+        var projects = Enumerable.Range(0, 20).Select(index => new MentorRankingProject(Guid.NewGuid(), $"Marketing support {index}")).ToArray();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => rig.Ranker.RankAsync(projects,
+            [Profile()], MentorRankingScope.AllSpecialties, cancellation.Token));
+        rig.ProjectCounts.Should().Equal(20);
+    }
+
+    [Fact]
+    public async Task OutputLimitChildrenShareTheSameInvalidOutputRecoveryBudget()
+    {
+        using var rig = new Rig(input => input.GetProperty("projects").GetArrayLength() == 10
+            ? new { results = Array.Empty<object>() } : Output(input, 1), truncateAbove: 10);
+        var projects = Enumerable.Range(0, 20).Select(index => new MentorRankingProject(Guid.NewGuid(), $"Marketing support {index}")).ToArray();
+        (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(projects,
+            [Profile()], MentorRankingScope.AllSpecialties, default))).Failure.Should().Be(MentorFitFailure.InvalidResponse);
+        rig.ProjectCounts.Should().Equal(20, 10, 5, 5, 10);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, MentorFitFailure.Authentication)]
+    [InlineData(HttpStatusCode.Forbidden, MentorFitFailure.Permission)]
+    [InlineData(HttpStatusCode.TooManyRequests, MentorFitFailure.Quota)]
+    public async Task AuthenticationPermissionAndSharedQuotaAreNeverSplitOrRetriedAsInvalidOutput(
+        HttpStatusCode status, MentorFitFailure expected)
+    {
+        using var rig = new Rig(input => Output(input, 1), failureStatus: status);
+        var projects = Enumerable.Range(0, 20).Select(index => new MentorRankingProject(Guid.NewGuid(), $"Marketing support {index}")).ToArray();
+        (await Assert.ThrowsAsync<MentorFitRankerUnavailableException>(() => rig.Ranker.RankAsync(projects,
+            [Profile()], MentorRankingScope.AllSpecialties, default))).Failure.Should().Be(expected);
+        rig.ProjectCounts.Should().Equal(20);
     }
 
     [Fact]
@@ -133,11 +280,27 @@ public sealed class GeminiMentorContextTests
         User = new User { FullName = "Synthetic mentor", Email = "fictional@example.test" }
     };
 
+    private static (MentorRankingProject[] Projects, MentorProfile[] Profiles) RichInput(int mentorCount)
+    {
+        var clauses = Enumerable.Range(0, 40).Select(index =>
+            $"Phát triển sản phẩm React và chiến lược marketing trong lĩnh vực bán lẻ {index:00}").ToArray();
+        var text = string.Join("; ", clauses);
+        var projects = Enumerable.Range(0, 20).Select(_ => new MentorRankingProject(Guid.NewGuid(), text)).ToArray();
+        var profiles = Enumerable.Range(0, mentorCount).Select(_ => new MentorProfile
+        {
+            Experience = text, Expertise = clauses[..20], StartupDomains = clauses[..20],
+            TechnologySkills = clauses[..20], Bio = text,
+            User = new User { FullName = "Synthetic mentor", Email = "fictional@example.test" }
+        }).ToArray();
+        return (projects, profiles);
+    }
+
     private static object Output(JsonElement input, int count, string[]? needs = null) => new
     {
         results = input.GetProperty("projects").EnumerateArray().Select(project => new
         {
-            project = project.GetProperty("id").GetString(), needs = needs ?? [],
+            project = project.GetProperty("id").GetString(), needs = needs ?? project.GetProperty("needOptions")
+                .EnumerateObject().Take(4).Select(option => option.Name).ToArray(),
             mentors = input.GetProperty("mentors").EnumerateArray().Take(count).Select(mentor => new
             {
                 id = mentor.GetProperty("id").GetString(), criteria = new
@@ -156,8 +319,9 @@ public sealed class GeminiMentorContextTests
         private readonly GeminiRequestCoordinator coordinator = new();
         public GeminiMentorFitRanker Ranker { get; }
         public int MaximumCandidates { get; private set; }
+        public int MaximumNeedIdLength { get; private set; }
         public List<int> ProjectCounts { get; } = [];
-        public Rig(Func<JsonElement, object> respond, int? truncateAbove = null)
+        public Rig(Func<JsonElement, object> respond, int? truncateAbove = null, HttpStatusCode? failureStatus = null)
         {
             client = new HttpClient(new Handler(async (request, ct) =>
             {
@@ -165,12 +329,15 @@ public sealed class GeminiMentorContextTests
                 MaximumCandidates = body.RootElement.GetProperty("generationConfig").GetProperty("responseJsonSchema")
                     .GetProperty("properties").GetProperty("results").GetProperty("items").GetProperty("properties")
                     .GetProperty("mentors").GetProperty("maxItems").GetInt32();
+                MaximumNeedIdLength = body.RootElement.GetProperty("generationConfig").GetProperty("responseJsonSchema")
+                    .GetProperty("properties").GetProperty("results").GetProperty("items").GetProperty("properties")
+                    .GetProperty("needs").GetProperty("items").GetProperty("maxLength").GetInt32();
                 using var input = JsonDocument.Parse(body.RootElement.GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString()!);
                 var count = input.RootElement.GetProperty("projects").GetArrayLength();
                 ProjectCounts.Add(count);
                 var finish = truncateAbove.HasValue && count > truncateAbove.Value ? "MAX_TOKENS" : "STOP";
                 var text = JsonSerializer.Serialize(respond(input.RootElement));
-                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new
+                return new(failureStatus ?? HttpStatusCode.OK) { Content = JsonContent.Create(new
                     { candidates = new[] { new { finishReason = finish, content = new { parts = new[] { new { text } } } } } }) };
             }));
             Ranker = new(client, Options.Create(new GeminiMentorOptions { ApiKey = "SYNTHETIC_CONTEXT_TEST_KEY",

@@ -9,7 +9,8 @@ using EHub.Domain.Entities;
 
 namespace EHub.Infrastructure.Mentoring.Gemini;
 
-internal sealed record GeminiProject(string Id, string Text, Guid SourceId);
+internal sealed record GeminiProject(string Id, string Text, Guid SourceId,
+    IReadOnlyDictionary<string, string> NeedOptions);
 internal sealed record GeminiMentor(string Id, string Role, IReadOnlyDictionary<string, string> Fields,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> EvidenceOptions, Guid SourceId,
     IReadOnlyDictionary<string, string> SourceFields);
@@ -28,7 +29,8 @@ internal sealed class GeminiMentorPrompt
         Use only the supplied temporary project and mentor IDs. Never invent experience, qualifications or achievements.
         Each request contains only ONE mentor role, specified by mentorRole. Evaluate that role independently for EVERY supplied project.
         First analyze each project's goal, stage, domain, practical difficulties and requested support using ONLY its supplied text.
-        Return up to FOUR short exact source excerpts in needs to show what support is requested, preferably below 80 characters each.
+        Select up to FOUR need IDs from that SAME project's needOptions to show what support is requested, for example "N01".
+        Return only those IDs in needs, never quote text, paraphrases or IDs from another project. Return [] when no supplied option describes a requested need.
         Do not infer a stage or requirement that is not stated; denied or explicitly unneeded expertise is not a requested need.
         Rank up to FIVE relevant mentors from the supplied role for each project, comparing the strengths and gaps of the candidates.
         Include every supported candidate when fewer than five exist. Return an empty mentors array only when no relevant evidence exists in that pool.
@@ -43,15 +45,15 @@ internal sealed class GeminiMentorPrompt
         Empty/missing/unrelated fields or fields without evidenceOptions MUST have score 0 and evidence "".
         A positive criterion requires the ID of one relevant supporting option, for example "E01".
         Read the full profile for context and relevance. Never return the quote text, join options or invent an evidence ID.
-        A candidate must have at least one positive criterion. For short labels, quote the exact label.
+        A candidate must have at least one positive criterion. For short labels, select the supporting evidence ID.
         Never select evidence from another field or mentor.
         Preserve negation: absence of experience, a denial or an unrelated topic is not positive evidence.
         Do not return an overall score or overall evidence. Do not calculate a weighted profile score or final score.
         Do not choose weights or give history/achievement/load bonuses.
         E-HUB applies the formula, bonuses and all eligibility rules locally.
         Do not assign mentors or claim an admin decision. E-HUB optimizes the assignments across all projects under workload constraints.
-        Output shape (needs must quote supplied project text exactly, at most 160 characters per excerpt):
-        {"results":[{"project":"P001","needs":["Startup seeking marketing support"],"mentors":[{"id":"M001","criteria":{"experience":{"score":75,"evidence":"E01"},"expertise":{"score":50,"evidence":"E02"},"startupDomain":{"score":0,"evidence":""},"technology":{"score":0,"evidence":""},"bio":{"score":0,"evidence":""}}}]}]}
+        Output shape (needs contains only supplied project need IDs):
+        {"results":[{"project":"P001","needs":["N01"],"mentors":[{"id":"M001","criteria":{"experience":{"score":75,"evidence":"E01"},"expertise":{"score":50,"evidence":"E02"},"startupDomain":{"score":0,"evidence":""},"technology":{"score":0,"evidence":""},"bio":{"score":0,"evidence":""}}}]}]}
         """;
 
     internal GeminiProject[] Projects { get; }
@@ -70,7 +72,10 @@ internal sealed class GeminiMentorPrompt
             mentors.Select(x => x.Id).Distinct().Count() != mentors.Count || mentors.Select(x => x.Type).Distinct().Count() != 1)
             throw new MentorFitRankerUnavailableException(MentorFitFailure.InvalidInput);
         Projects = projects.OrderBy(x => x.Id).Select((project, index) =>
-            new GeminiProject($"P{index + 1:000}", ProfessionalText(project.Text, [], 2400), project.Id)).ToArray();
+        {
+            var text = ProfessionalText(project.Text, [], 2400);
+            return new GeminiProject($"P{index + 1:000}", text, project.Id, EvidenceOptions(text, text, [text], "N"));
+        }).ToArray();
         var projectTexts = Projects.Select(project => project.Text).ToArray();
         Mentors = mentors.OrderBy(x => x.Id).Select((mentor, index) =>
         {
@@ -97,6 +102,17 @@ internal sealed class GeminiMentorPrompt
             throw new MentorFitRankerUnavailableException(MentorFitFailure.InvalidInput);
         // Whitelist DTOs explicitly. Never serialize an entity, file, contact details or historical notes.
         Json = Serialize();
+        // Needs explain the result; they do not score it. Keep full project/scoring context when
+        // duplicated explanation excerpts alone would push a previously fitting batch over budget.
+        while (Json.Length > 240_000 && Projects.Any(project => project.NeedOptions.Count > 0))
+        {
+            Projects = Projects.Select(project => project with
+            {
+                NeedOptions = project.NeedOptions.Take(project.NeedOptions.Count / 2)
+                    .ToDictionary(option => option.Key, option => option.Value, StringComparer.Ordinal)
+            }).ToArray();
+            Json = Serialize();
+        }
         if (Json.Length > 240_000) throw new MentorFitRankerUnavailableException(MentorFitFailure.InputLimit);
     }
 
@@ -117,11 +133,11 @@ internal sealed class GeminiMentorPrompt
         {
             scope = scope.ToString(),
             mentorRole = Mentors[0].Role,
-            projects = Projects.Select(x => new { id = x.Id, text = x.Text }),
+            projects = Projects.Select(x => new { id = x.Id, text = x.Text, needOptions = x.NeedOptions }),
             mentors = Mentors.Select(x => new { id = x.Id, role = x.Role, profile = x.Fields, evidenceOptions = x.EvidenceOptions })
         }, PromptJsonOptions);
 
-    private static IReadOnlyDictionary<string, string> EvidenceOptions(string source, string fullSource, string[] projects)
+    private static IReadOnlyDictionary<string, string> EvidenceOptions(string source, string fullSource, string[] projects, string prefix = "E")
     {
         var quotes = new List<string>();
         // Retrieval must not manufacture positive evidence by omitting an earlier denial.
@@ -148,7 +164,7 @@ internal sealed class GeminiMentorPrompt
             }
         }
         return GeminiProfileContext.Prioritize(quotes.Distinct(StringComparer.Ordinal).ToArray(), projects).Take(32)
-            .Select((quote, index) => (Id: $"E{index + 1:00}", Quote: quote))
+            .Select((quote, index) => (Id: $"{prefix}{index + 1:00}", Quote: quote))
             .ToDictionary(item => item.Id, item => item.Quote);
     }
 

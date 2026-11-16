@@ -57,7 +57,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             var result = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
             foreach (var prompt in prompts)
             {
-                var scores = await RankWithSplittingAsync(prompt, cancellationToken);
+                var scores = await RankWithSplittingAsync(prompt, new BatchRecovery(), cancellationToken);
                 foreach (var score in scores) result.Add(score.Key, score.Value);
                 if (execution is not null) await execution.AdvanceAsync(cancellationToken);
             }
@@ -82,18 +82,28 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         }
     }
 
+    // Shared by every descendant of one original batch, including output-limit splits.
+    // A systematic validation error must not trigger an unbounded tree of additional model calls.
+    private sealed class BatchRecovery
+    {
+        public bool InvalidResponseSplitUsed { get; set; }
+    }
+
     private async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>> RankWithSplittingAsync(
-        GeminiMentorPrompt prompt, CancellationToken ct)
+        GeminiMentorPrompt prompt, BatchRecovery recovery, CancellationToken ct)
     {
         try { return await RankBatchAsync(prompt, ct); }
-        catch (MentorFitRankerUnavailableException error) when (error.Failure == MentorFitFailure.OutputLimit && prompt.Projects.Length > 1)
+        catch (MentorFitRankerUnavailableException error) when (prompt.Projects.Length > 1 &&
+            (error.Failure == MentorFitFailure.OutputLimit ||
+                error.Failure == MentorFitFailure.InvalidResponse && !recovery.InvalidResponseSplitUsed))
         {
             ct.ThrowIfCancellationRequested();
-            logger.LogInformation("AI ranking splitting a truncated batch of {ProjectCount} projects", prompt.Projects.Length);
+            if (error.Failure == MentorFitFailure.InvalidResponse) recovery.InvalidResponseSplitUsed = true;
+            logger.LogInformation("AI ranking splitting a batch after {FailureKind}; projects {ProjectCount}", error.Failure, prompt.Projects.Length);
             // RankBatchAsync releases the shared request gate before recursion; children retain temporary/source IDs.
             var (first, second) = prompt.Split();
-            var result = (await RankWithSplittingAsync(first, ct)).ToDictionary(item => item.Key, item => item.Value);
-            foreach (var item in await RankWithSplittingAsync(second, ct)) result.Add(item.Key, item.Value);
+            var result = (await RankWithSplittingAsync(first, recovery, ct)).ToDictionary(item => item.Key, item => item.Value);
+            foreach (var item in await RankWithSplittingAsync(second, recovery, ct)) result.Add(item.Key, item.Value);
             return result;
         }
     }
@@ -326,7 +336,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             var projectId = row.GetProperty("project").GetString();
             if (projectId is null || !projects.TryGetValue(projectId, out var project) || result.ContainsKey(project.SourceId))
                 throw RejectResponse("project_id");
-            var needs = ReadProjectNeeds(row, project.Text);
+            var needs = ReadProjectNeeds(row, project);
             var scores = prompt.Mentors.ToDictionary(mentor => mentor.SourceId, _ =>
                 new MentorFitRanking(0, [$"Gemini ({model}): chưa có đề xuất chuyên môn phù hợp; cần admin xem lại"], false, 0)
                     { Criteria = MentorProfileFitCriteria.Empty });
@@ -370,7 +380,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
     private static string[] AvailableFields(GeminiMentor mentor) => mentor.SourceFields.Where(field =>
         field.Value.Replace("[removed]", "", StringComparison.Ordinal).Count(char.IsLetter) >= 2).Select(field => field.Key).ToArray();
 
-    private string[] ReadProjectNeeds(JsonElement row, string source)
+    private string[] ReadProjectNeeds(JsonElement row, GeminiProject project)
     {
         // Older completed cached/test responses remain readable; production schema requests the field explicitly.
         if (!row.TryGetProperty("needs", out var needs)) return [];
@@ -379,7 +389,11 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         foreach (var item in needs.EnumerateArray())
         {
             var quote = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
-            if (!IsPositiveQuote(source, quote, 2, 2))
+            if (quote is not null && project.NeedOptions.TryGetValue(quote, out var selected)) quote = selected;
+            // Legacy exact excerpts remain readable, but an unknown ID cannot become evidence by coincidence.
+            else if (quote is { Length: 3 } && quote[0] == 'N' && char.IsAsciiDigit(quote[1]) && char.IsAsciiDigit(quote[2]))
+                throw RejectResponse("project_need_id");
+            if (!IsPositiveQuote(project.Text, quote, 2, 2))
                 throw RejectResponse("project_need_evidence");
             result.Add(quote!);
         }
@@ -440,7 +454,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                     properties = new
                     {
                         project = new { type = "string" },
-                        needs = new { type = "array", maxItems = 4, items = new { type = "string", minLength = 2, maxLength = 160 } },
+                        needs = new { type = "array", maxItems = 4, items = new { type = "string", minLength = 3, maxLength = 3 } },
                         mentors = new
                         {
                             type = "array", maxItems = GeminiMentorPrompt.MaximumCandidatesPerProject, items = new

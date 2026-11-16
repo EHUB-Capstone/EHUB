@@ -137,7 +137,13 @@ Các kiểm tra quyền, loại mentor, team/class scope và optimistic concurre
   chuyển ngay sang model tiếp theo; không thử ba lần chờ 55 giây trên cùng model. Hủy từ người gọi
   hoặc hết deadline tổng thì dừng, không chuyển model.
 - Kết quả không hợp lệ của một model được ghi mã lỗi và thử model dự phòng với cùng lô.
-  Kiểm tra bằng chứng/đủ dự án vẫn nghiêm ngặt; không biến kết quả sai thành điểm hợp lệ.
+  Nếu các model dự phòng đều trả kết quả không hợp lệ, lô có nhiều dự án được chia đôi để thử lại,
+  tối đa một lần chia bổ sung cho mỗi lô gốc (ngân sách dùng chung cả các nhánh `MAX_TOKENS`).
+  Nếu vẫn sai thì tác vụ thất bại; không sinh preview thiếu hoặc biến kết quả sai thành điểm hợp lệ.
+  Các lô con thành công dùng cache khi thử lại. Xác thực/quyền, quota chung và cancellation vẫn là lỗi dừng.
+- Nhu cầu dự án dùng mã `N01`… do backend cấp từ đoạn nguồn, thay vì bắt model chép nguyên văn.
+  Backend trả lại nội dung gốc cho giao diện; mã lạ, sai dự án, phủ định hoặc đoạn bị che dữ liệu bị từ chối.
+  Thay đổi này chỉ cần deploy backend mới, không cần key mới, upload lại CV hoặc migration mới.
 - Không âm thầm thay đánh giá AI bằng một thuật toán cục bộ khác.
 - Chạy model trong test bằng phản hồi giả lập chỉ chứng minh logic và API, không chứng minh
   chất lượng hoặc độ sẵn sàng của dịch vụ AI thật.
