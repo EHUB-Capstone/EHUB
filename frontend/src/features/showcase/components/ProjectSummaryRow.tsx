@@ -1,4 +1,4 @@
-import { MessageSquare, SquareArrowOutUpRight } from 'lucide-react';
+import { MessageSquare, SquareArrowOutUpRight, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ShowcaseUpvoteButton from '../../../components/showcase/ShowcaseUpvoteButton';
 import type { ShowcaseCardDto } from '../../../types/showcase';
@@ -17,6 +17,7 @@ export default function ProjectSummaryRow({ project, backTo, index }: { project:
           <Link to={`/showcase/${project.id}`} state={{ showcaseBackTo: backTo, showcaseBackLabel: 'Project Showcase' }} className="line-clamp-1 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:underline">
             {project.projectName}
           </Link>
+          {project.isFeatured && <Star className="h-4 w-4 shrink-0 fill-current text-primary-700 dark:text-primary-300" role="img" aria-label="Featured by faculty"><title>Featured by faculty</title></Star>}
           <Link to={`/showcase/${project.id}`} state={{ showcaseBackTo: backTo, showcaseBackLabel: 'Project Showcase' }} aria-label={`View ${project.projectName} showcase detail`} className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:hover:bg-primary-900/30 dark:hover:text-primary-300">
             <SquareArrowOutUpRight className="h-4 w-4" aria-hidden="true" />
           </Link>

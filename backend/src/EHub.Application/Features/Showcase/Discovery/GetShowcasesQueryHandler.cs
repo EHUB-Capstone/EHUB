@@ -62,6 +62,26 @@ public sealed class GetShowcasesQueryHandler(
                 ? recent
                 : query.Where(row => row.Showcase.PublishedAt >= now.AddDays(-14) && row.Showcase.PublishedAt <= now);
         }
+        else if (string.Equals(period, "trending", StringComparison.OrdinalIgnoreCase))
+        {
+            // "Trending now" ranks recent activity (3 per upvote, 2 per comment, 1 per distinct daily viewer in the
+            // last seven days) regardless of when the page was published, and only keeps pages with some activity.
+            var activitySince = now.AddDays(-7);
+            var viewsSince = DateOnly.FromDateTime(activitySince);
+            var today = DateOnly.FromDateTime(now);
+            query = query.Where(row =>
+                3L * context.ShowcaseUpvotes.LongCount(vote => vote.ShowcaseProjectId == row.Showcase.Id && vote.CreatedAt >= activitySince && vote.CreatedAt <= now)
+                + 2L * context.ShowcaseComments.LongCount(comment => comment.ShowcaseProjectId == row.Showcase.Id && comment.CreatedAt >= activitySince && comment.CreatedAt <= now)
+                + context.ShowcaseViewsDaily.LongCount(view => view.ShowcaseProjectId == row.Showcase.Id && view.ViewDateUtc >= viewsSince && view.ViewDateUtc <= today) > 0);
+        }
+        else if (string.Equals(period, "earlier", StringComparison.OrdinalIgnoreCase))
+        {
+            // Archive rail: everything published before last week's Monday, so it never repeats the weekly rails
+            // and older projects stay reachable during quiet periods.
+            var mondayOfThisWeek = now.Date.AddDays(-(((int)now.DayOfWeek + 6) % 7));
+            var earlierThan = mondayOfThisWeek.AddDays(-7);
+            query = query.Where(row => row.Showcase.PublishedAt < earlierThan);
+        }
         else if (!string.IsNullOrWhiteSpace(period))
         {
             var monday = now.Date.AddDays(-(((int)now.DayOfWeek + 6) % 7));
@@ -74,7 +94,18 @@ public sealed class GetShowcasesQueryHandler(
         var total = await query.CountAsync(cancellationToken);
         var sort = string.Equals(period, "topThisWeek", StringComparison.OrdinalIgnoreCase) ? "trending" : request.Sort.Trim();
         var ordered = query.OrderByDescending(row => row.Showcase.PublishedAt);
-        if (string.Equals(sort, "trending", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(period, "trending", StringComparison.OrdinalIgnoreCase))
+        {
+            var activitySince = now.AddDays(-7);
+            var viewsSince = DateOnly.FromDateTime(activitySince);
+            var today = DateOnly.FromDateTime(now);
+            ordered = query.OrderByDescending(row =>
+                3L * context.ShowcaseUpvotes.LongCount(vote => vote.ShowcaseProjectId == row.Showcase.Id && vote.CreatedAt >= activitySince && vote.CreatedAt <= now)
+                + 2L * context.ShowcaseComments.LongCount(comment => comment.ShowcaseProjectId == row.Showcase.Id && comment.CreatedAt >= activitySince && comment.CreatedAt <= now)
+                + context.ShowcaseViewsDaily.LongCount(view => view.ShowcaseProjectId == row.Showcase.Id && view.ViewDateUtc >= viewsSince && view.ViewDateUtc <= today))
+                .ThenByDescending(row => row.Showcase.PublishedAt);
+        }
+        else if (string.Equals(sort, "trending", StringComparison.OrdinalIgnoreCase))
         {
             var todayUtc = DateOnly.FromDateTime(now);
             var oneDayAgo = now.AddDays(-1);
@@ -147,17 +178,30 @@ public sealed class GetShowcasesQueryHandler(
 
     public async Task<Result<ShowcaseFilterOptionsDto>> GetFilterOptionsAsync(CancellationToken cancellationToken = default)
     {
-        // Filter choices come from catalogs, independently of the current showcase results.
+        // Industries come from the catalog, independently of the current showcase results.
         // Match the existing startup-industry options endpoint: only active, non-deleted entries.
         var industries = await context.StartupIndustries.AsNoTracking()
             .Where(industry => industry.Status == StartupIndustryStatus.Active)
             .OrderBy(industry => industry.Name).Select(industry => industry.Name).ToListAsync(cancellationToken);
-        var semesters = await context.Semesters.AsNoTracking()
+        // Only semesters that actually have a published showcase are offered, each with its project count, so choosing
+        // one never leads to an empty page. A showcase counts for the semester of its newest project profile.
+        var publishedPerSemester = await (from showcase in context.ShowcaseProjects.AsNoTracking()
+                                          join project in LatestProjects() on showcase.ProjectLineageId equals project.ProjectLineageId
+                                          where showcase.Status == ShowcaseStatus.Published
+                                          group project by project.Team.Class.SemesterId into semesterGroup
+                                          select new { SemesterId = semesterGroup.Key, Count = semesterGroup.Count() })
+            .ToDictionaryAsync(row => row.SemesterId, row => row.Count, cancellationToken);
+        var catalog = await context.Semesters.AsNoTracking()
             .OrderByDescending(semester => semester.Year)
             .ThenByDescending(semester => semester.Term == SemesterTerm.Fall ? 2 : semester.Term == SemesterTerm.Summer ? 1 : 0)
             .ThenBy(semester => semester.Id)
-            .Select(semester => new ShowcaseSemesterOptionDto { Id = semester.Id, Code = semester.Code, Name = semester.Name })
+            .Select(semester => new { semester.Id, semester.Code, semester.Name })
             .ToListAsync(cancellationToken);
+        var semesters = catalog.Where(semester => publishedPerSemester.ContainsKey(semester.Id))
+            .Select(semester => new ShowcaseSemesterOptionDto
+            {
+                Id = semester.Id, Code = semester.Code, Name = semester.Name, ProjectCount = publishedPerSemester[semester.Id]
+            }).ToList();
         return Result.Success(new ShowcaseFilterOptionsDto { Industries = industries, Semesters = semesters });
     }
 }

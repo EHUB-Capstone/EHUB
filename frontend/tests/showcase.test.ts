@@ -129,6 +129,8 @@ test('launch period filters round-trip to the API without dropping the other dis
   assert.equal(request.industry, 'AI');
   assert.equal(discoveryRequest(new URLSearchParams('period=thisWeek')).period, 'thisWeek');
   assert.equal(discoveryRequest(new URLSearchParams('period=lastWeek')).period, 'lastWeek');
+  assert.equal(discoveryRequest(new URLSearchParams('period=earlier')).period, 'earlier');
+  assert.equal(discoveryRequest(new URLSearchParams('period=trending')).period, 'trending');
   assert.equal(discoveryRequest(new URLSearchParams('period=unknown')).period, undefined);
   mock.onGet('/showcase', { params: { ...request, page: 2 } }).reply(200, {
     data: { items: [], totalItems: 8, totalPages: 1, pageIndex: 2, pageSize: 8 },
@@ -487,5 +489,36 @@ test('showcase detail client passes reviewer reference data through and keeps it
     const publicView = await showcaseApi.get('public');
     assert.equal(publicView.referenceData, null);
     assert.deepEqual(publicView.industries, ['HealthTech']);
+  } finally { mock.restore(); }
+});
+
+import { filterCandidates, groupByClass, splitSelection } from '../src/utils/featureCandidates.ts';
+import type { FeaturedCandidateDto } from '../src/types/showcase.ts';
+
+const candidate = (id: string, classCode: string, lecturerName: string, isFeatured = false, name = id): FeaturedCandidateDto => ({
+  id, projectName: name, logoUrl: null, developmentStage: 'Mvp', teamName: `Team ${id}`, classCode, lecturerName, isFeatured,
+});
+
+test('feature candidates group by class, count featured, and filter by lecturer, class and search', () => {
+  const items = [candidate('a', 'SE1801', 'An', true, 'EduMatch'), candidate('b', 'SE1801', 'An'), candidate('c', 'MK1901', 'Binh')];
+  const groups = groupByClass(items);
+  assert.deepEqual(groups.map(group => [group.classCode, group.items.length, group.featuredCount]), [['SE1801', 2, 1], ['MK1901', 1, 0]]);
+  assert.deepEqual(filterCandidates(items, { lecturer: 'Binh' }).map(item => item.id), ['c']);
+  assert.deepEqual(filterCandidates(items, { classCode: 'SE1801', search: 'edu' }).map(item => item.id), ['a']);
+  assert.deepEqual(filterCandidates(items, { stage: 'Beta' }), []);
+});
+
+test('selection splits into projects to feature and to unfeature', () => {
+  const items = [candidate('a', 'X', 'An', true), candidate('b', 'X', 'An'), candidate('c', 'X', 'An')];
+  assert.deepEqual(splitSelection(items, new Set(['a', 'b'])), { toFeature: ['b'], toUnfeature: ['a'] });
+});
+
+test('bulk feature client posts ids and the featured flag and exposes candidates', async () => {
+  const mock = new MockAdapter(axiosClient);
+  try {
+    mock.onPost('/showcase/feature/bulk').reply(config => { assert.deepEqual(JSON.parse(config.data), { ids: ['a', 'b'], featured: true }); return [200, { data: { updated: 2, unchanged: 0, skipped: 0 } }]; });
+    mock.onGet('/showcase/feature/candidates').reply(200, { data: [candidate('a', 'X', 'An')] });
+    assert.equal((await showcaseApi.featureMany(['a', 'b'], true)).updated, 2);
+    assert.equal((await showcaseApi.getFeatureCandidates()).length, 1);
   } finally { mock.restore(); }
 });

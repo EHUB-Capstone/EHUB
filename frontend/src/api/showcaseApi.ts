@@ -5,6 +5,8 @@ import type {
   ShowcaseDiscoveryPageDto,
   ShowcaseFilterOptionsDto,
   ShowcaseFeaturedDto,
+  BulkFeatureShowcasesResultDto,
+  FeaturedCandidateDto,
   MyShowcaseEntryDto,
   SaveShowcaseRequest,
   ShowcaseDecision,
@@ -69,6 +71,10 @@ export const showcaseApi = {
     unwrap<ShowcaseFeaturedDto>(axiosClient.post(`/showcase/${id}/feature`)),
   unfeature: (id: string) =>
     unwrap<ShowcaseFeaturedDto>(axiosClient.delete(`/showcase/${id}/feature`)),
+  featureMany: (ids: string[], featured: boolean) =>
+    unwrap<BulkFeatureShowcasesResultDto>(axiosClient.post('/showcase/feature/bulk', { ids, featured })),
+  getFeatureCandidates: (signal?: AbortSignal) =>
+    unwrap<FeaturedCandidateDto[]>(axiosClient.get('/showcase/feature/candidates', { signal })),
   getFilterOptions: (signal?: AbortSignal) =>
     unwrap<ShowcaseFilterOptionsDto>(axiosClient.get('/showcase/filter-options', { signal })),
   list: (params: GetShowcasesRequest = {}, signal?: AbortSignal) =>

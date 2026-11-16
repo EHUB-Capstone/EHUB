@@ -69,6 +69,20 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         Guid id, [FromServices] IShowcaseFeaturedHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.SetAsync(id, false, UserId, FeaturedRole, cancellationToken), "Featured selection removed.");
 
+    [HttpPost("feature/bulk")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    public async Task<IActionResult> FeatureMany(
+        [FromBody] BulkFeatureShowcasesRequest request, [FromServices] IShowcaseFeaturedHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SetManyAsync(request.Ids, request.Featured, UserId, FeaturedRole, cancellationToken),
+            request.Featured ? "Showcases featured." : "Featured selection removed.");
+
+    [HttpGet("feature/candidates")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> FeatureCandidates(
+        [FromServices] IShowcaseFeaturedHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListCandidatesAsync(UserId, FeaturedRole, cancellationToken), "Featured candidates retrieved.");
+
     private string FeaturedRole => currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
         ?? currentUser.Roles.FirstOrDefault(role => role.Equals(SystemRoles.Lecturer, StringComparison.OrdinalIgnoreCase)) ?? Role;
 

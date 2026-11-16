@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
@@ -50,13 +50,14 @@ interface ComposerProps {
   initialText?: string;
   placeholder: string;
   submitLabel: string;
+  iconOnly?: boolean;
   autoFocus?: boolean;
   small?: boolean;
   onPosted?: () => void;
   onCancel?: () => void;
 }
 
-function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, submitLabel, autoFocus, small, onPosted, onCancel }: ComposerProps) {
+function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, submitLabel, iconOnly = false, autoFocus, small, onPosted, onCancel }: ComposerProps) {
   const queryClient = useQueryClient();
   const { user } = useAuthContext();
   const [text, setText] = useState(initialText);
@@ -92,7 +93,9 @@ function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, 
           <CharacterCounter value={text} max={SHOWCASE_LIMITS.comment} />
           <div className="flex items-center gap-2">
             {onCancel && <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={post.isPending}>Cancel</Button>}
-            <Button type="submit" size="sm" isLoading={post.isPending} disabled={!canPost}>{submitLabel}</Button>
+            <Button type="submit" size="sm" isLoading={post.isPending} disabled={!canPost} aria-label={submitLabel} title={submitLabel} className={cn(iconOnly && 'h-8 w-8 rounded-full bg-primary-200 p-0 text-white hover:bg-primary-300')}>
+              {iconOnly ? <Send className="h-4 w-4" aria-hidden="true" /> : submitLabel}
+            </Button>
           </div>
         </div>
       </div>
@@ -290,7 +293,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
         </Card.Title>
       </Card.Header>
 
-      <Composer showcaseId={showcaseId} placeholder="Share feedback or ask the team a question…" submitLabel="Post comment" />
+      <Composer showcaseId={showcaseId} placeholder="Share feedback or ask the team a question…" submitLabel="Post comment" iconOnly />
 
       <div className="mt-6">
         {comments.isPending && <div role="status" aria-label="Loading comments" className="space-y-3"><LoadingSkeleton lines={3} /></div>}

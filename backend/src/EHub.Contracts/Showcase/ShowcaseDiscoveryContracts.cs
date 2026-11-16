@@ -12,7 +12,9 @@ public sealed class GetShowcasesRequest
     public string Sort { get; init; } = "newest";
     /// <summary>
     /// Optional publication window: topThisWeek ranks the last seven days (falling back to fourteen days only when
-    /// there are no matches); thisWeek and lastWeek use Monday-based UTC boundaries.
+    /// there are no matches); thisWeek and lastWeek use Monday-based UTC boundaries;
+    /// earlier returns everything published before last week's Monday; trending ranks pages by activity in the last
+    /// seven days (upvotes, comments and daily viewers) whatever their publication date and omits pages with none.
     /// </summary>
     public string? Period { get; init; }
     public int Page { get; init; } = 1;
@@ -47,6 +49,8 @@ public sealed class ShowcaseSemesterOptionDto
     public Guid Id { get; init; }
     public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
+    /// <summary>Published showcases whose newest project profile belongs to this semester.</summary>
+    public int ProjectCount { get; init; }
 }
 
 public sealed class ShowcaseFilterOptionsDto

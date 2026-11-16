@@ -10,6 +10,7 @@ Only non-deleted Published showcases with an existing project profile are discov
 | industry | omitted | Exact normalized startup-industry name, at most 100 characters; matches ProjectTags of type StartupField |
 | featured | omitted | true: faculty-selected Published showcases; false: non-featured Published showcases; omitted: all |
 | semesterId | omitted | Non-empty GUID; semester of the latest Project |
+| period | omitted | thisWeek / lastWeek: Monday-based UTC calendar weeks; earlier: published before last week's Monday; trending: ranked by the last seven days of activity (3 per upvote, 2 per comment, 1 per distinct daily viewer), whatever the publication date, pages with no activity omitted; topThisWeek: legacy seven-day launch rail |
 | sort | newest | newest: PublishedAt descending; popular: LikeCount descending, then PublishedAt descending |
 | page | 1 | Positive integer, at most int.MaxValue / 50 to prevent offset overflow |
 | pageSize | 20 | Between 1 and 50 |
@@ -33,9 +34,9 @@ on discovery for authenticated users. Existing owner/moderation access rules rem
 
 The existing status and published_at indexes are reused for Discovery. Featured adds the migration described below.
 `GET /api/showcase/filter-options` also requires authentication and returns an ApiResponse with
-industries (active catalog names) and semesters (id, code, name). Choices are independent of
-showcase results: all active, non-deleted startup industries and all non-deleted semesters
-(including planned and archived semesters) are returned, even when they have no Published showcase.
+industries (active catalog names) and semesters (id, code, name, projectCount). Industries are all active,
+non-deleted catalog entries. Semesters are only the non-deleted ones that hold at least one Published showcase
+(counted by the semester of each showcase's latest Project), newest first, so choosing one never yields an empty page.
 Student and Mentor can use these filters without staff-only APIs. Stage always offers all four stages.
 
 The Gallery calls showcaseApi.list and getFilterOptions. Project cards open the existing detail page.
