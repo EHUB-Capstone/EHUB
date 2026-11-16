@@ -20,8 +20,12 @@ dịch vụ ngoài, dependency solver hoặc schema/migration trong lần nâng 
   kinh nghiệm 1.200, chuyên môn 450, lĩnh vực 250, công nghệ 350, giới thiệu 250 ký tự. Dự án tối đa
   2.400 ký tự. Masking không bảo đảm ẩn danh; không coi đây là đọc đầy đủ mọi CV hoặc mọi mô tả dài.
 - Model được yêu cầu phân tích mục tiêu, giai đoạn, lĩnh vực và hỗ trợ cần thiết, chỉ theo văn bản đã cung cấp.
-  Response `needs` chứa tối đa bốn đoạn ngắn nguyên văn của dự án. Backend kiểm tra nguồn và phủ định;
-  không tạo giai đoạn hoặc yêu cầu thiếu dữ liệu.
+  Backend tạo `needOptions` bằng các đoạn nguồn đã kiểm tra phủ định, gắn mã `N01`… riêng trong từng dự án.
+  Response `needs` chỉ chọn tối đa bốn mã đó; backend tra lại nội dung gốc để trả giao diện. Model không phải
+  chép lại câu tiếng Việt đúng từng ký tự. Mã không thuộc dự án bị từ chối; câu trích nguyên văn của phiên bản
+  cũ vẫn đọc được nếu qua kiểm tra nguồn/phủ định. Không tạo giai đoạn hoặc yêu cầu thiếu dữ liệu.
+  Nếu các lựa chọn giải thích làm payload vượt 240.000 ký tự, backend giảm số lựa chọn, giữ nguyên mã
+  còn lại và dữ liệu dự án/hồ sơ dùng chấm điểm. Nếu vẫn vượt giới hạn thì dừng trước khi gọi API.
 - Tối đa năm ứng viên có bằng chứng cho mỗi dự án/mỗi loại. Năm tiêu chí vẫn cần điểm nguyên
   0–100 và mã đoạn nguồn thuộc đúng mentor/field. Backend kiểm tra cả đoạn đã chọn và nguồn đầy đủ
   trong giới hạn xử lý, để việc rút gọn không biến câu phủ định thành bằng chứng dương.
@@ -72,6 +76,10 @@ transaction. Ownership admin, quyền tài nguyên, stale preview và xmin tiế
 
 Output quá dài (`MAX_TOKENS`) được thử model dự phòng rồi chia đôi lô trong deadline tổng, tới tối thiểu
 một dự án. Không chấp nhận JSON thiếu, không tạo preview một phần; tiến độ tính theo lô gốc đã hoàn tất.
+Khi các model dự phòng đều trả `InvalidResponse`, mỗi lô gốc được chia bổ sung tối đa một lần để thử với
+ít dự án hơn. Ngân sách này dùng chung cho cả các nhánh chia do output quá dài; lỗi có hệ thống vẫn dừng.
+Các lô con thành công được cache như lô thường. Lỗi xác thực/quyền, quota chung và hủy request không kích
+hoạt cơ chế chia do kết quả sai. Việc phục hồi không bỏ kiểm tra ID, điểm hoặc bằng chứng.
 Giới hạn request, cache, quota chung/model và retry an toàn vẫn theo tài liệu deploy.
 
 ## Đánh giá chất lượng độc lập

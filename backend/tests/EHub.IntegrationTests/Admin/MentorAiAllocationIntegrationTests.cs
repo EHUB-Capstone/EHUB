@@ -547,11 +547,13 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
     }
 
     [Theory]
-    [InlineData(100, 30, false)]
-    [InlineData(300, 50, true)]
-    public async Task GeminiHandlesLargeScopesInBoundedRoleBatchesAndOnlyAdminAcceptanceSaves(int projectCount, int mentorCount, bool background)
+    [InlineData(100, 30, false, false)]
+    [InlineData(300, 50, true, false)]
+    [InlineData(40, 30, true, true)]
+    public async Task GeminiHandlesLargeScopesInBoundedRoleBatchesAndOnlyAdminAcceptanceSaves(
+        int projectCount, int mentorCount, bool background, bool recoverInvalidBatch)
     {
-        var gemini = new RecordingGemini();
+        var gemini = new RecordingGemini { RejectLargeBusinessBatchesAfterFirst = recoverInvalidBatch };
         using var app = App(gemini: gemini);
         using var client = app.CreateClient();
         var admin = await Identity(SystemRoles.Admin);
@@ -603,8 +605,8 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             using var poll = await client.SendAsync(Authorized(HttpMethod.Get, $"/api/admin/mentors/allocations/jobs/{queued.Id}", admin.Token));
             var completed = (await poll.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
             completed.Status.Should().Be("Ready");
-            completed.CompletedBatches.Should().Be(30);
-            completed.TotalBatches.Should().Be(30);
+            completed.CompletedBatches.Should().Be(projectCount / 20 * 2);
+            completed.TotalBatches.Should().Be(projectCount / 20 * 2);
             preview = completed.Preview!;
         }
         else
@@ -630,11 +632,28 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             balance.TargetMaxTeams.Should().Be((projectCount + mentorCount / 2) / (mentorCount / 2));
         }
         preview.CanCommit.Should().BeTrue();
-        gemini.Inputs.Should().HaveCount(projectCount / 20 * 2);
+        gemini.Inputs.Should().HaveCount(projectCount / 20 * 2 + (recoverInvalidBatch ? 3 : 0));
         gemini.ProjectCount.Should().Be(20);
-        gemini.Batches.Should().BeEquivalentTo(
-            Enumerable.Repeat(("Business", 20, mentorCount / 2), projectCount / 20)
-                .Concat(Enumerable.Repeat(("IT", 20, mentorCount / 2), projectCount / 20)));
+        if (recoverInvalidBatch)
+        {
+            gemini.Batches.Should().Equal(("Business", 20, 15), ("Business", 20, 15), ("Business", 20, 15),
+                ("Business", 10, 15), ("Business", 10, 15), ("IT", 20, 15), ("IT", 20, 15));
+            preview.Assignments.Should().OnlyContain(row => row.FitDetails != null && row.FitDetails.ProjectNeeds.Count > 0);
+            preview.Assignments.SelectMany(row => row.FitDetails!.ProjectNeeds)
+                .Should().OnlyContain(need => gemini.NeedSources.Contains(need), "temporary need IDs resolve to source text before returning a preview");
+            using var retry = await client.SendAsync(Authorized(HttpMethod.Post, PreviewUrl, admin.Token,
+                new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId],
+                    Strategy = MentorAllocationStrategies.Ai, Seed = 23 }));
+            retry.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await retry.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationPreviewResponse>>())!.Data!.Assignments
+                .Should().HaveCount(projectCount * 2);
+            gemini.Inputs.Should().HaveCount(9, "the invalid parent is tried again on both configured models, while completed original and split batches are cached");
+            gemini.Batches.Skip(7).Should().Equal(("Business", 20, 15), ("Business", 20, 15));
+        }
+        else
+            gemini.Batches.Should().BeEquivalentTo(
+                Enumerable.Repeat(("Business", 20, mentorCount / 2), projectCount / 20)
+                    .Concat(Enumerable.Repeat(("IT", 20, mentorCount / 2), projectCount / 20)));
         gemini.Inputs.Should().OnlyContain(input => !input.Contains(PrivateMarker) && !input.Contains(admin.Id.ToString()));
         using (var scope = factory.Services.CreateScope())
         {
@@ -967,8 +986,10 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         public bool InvalidOutput { get; init; }
         public HttpStatusCode? FailureStatus { get; init; }
         public bool CompareBackendRules { get; init; }
+        public bool RejectLargeBusinessBatchesAfterFirst { get; init; }
         public string? InvalidRole { get; init; }
         public List<(string Role, int Projects, int Mentors)> Batches { get; } = [];
+        public HashSet<string> NeedSources { get; } = [];
         public int ProjectCount { get; private set; }
         public int MentorCount { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -980,6 +1001,8 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             using var envelope = JsonDocument.Parse(body);
             using var data = JsonDocument.Parse(envelope.RootElement.GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString()!);
             var projects = data.RootElement.GetProperty("projects").EnumerateArray().ToArray();
+            foreach (var need in projects.SelectMany(project => project.GetProperty("needOptions").EnumerateObject()))
+                NeedSources.Add(need.Value.GetString()!);
             var mentors = data.RootElement.GetProperty("mentors").EnumerateArray().ToArray();
             ProjectCount = projects.Length;
             MentorCount = mentors.Length;
@@ -988,12 +1011,14 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
             Batches.Add((role, projects.Length, mentors.Length));
             var selected = mentors.GroupBy(item => item.GetProperty("role").GetString())
                 .SelectMany(group => group.Take(CompareBackendRules ? 2 : 1)).ToArray();
-            var text = InvalidOutput || InvalidRole == role ? "{\"results\":[]}" : JsonSerializer.Serialize(new
+            var rejectLargeBatch = RejectLargeBusinessBatchesAfterFirst && role == "Business" && projects.Length > 10 &&
+                Batches.Count(batch => batch.Role == "Business" && batch.Projects > 10) > 1;
+            var text = InvalidOutput || InvalidRole == role || rejectLargeBatch ? "{\"results\":[]}" : JsonSerializer.Serialize(new
             {
                 results = projects.Select(project => new
                 {
                     project = project.GetProperty("id").GetString(),
-                    needs = new[] { project.GetProperty("text").GetString()![..Math.Min(80, project.GetProperty("text").GetString()!.Length)] },
+                    needs = project.GetProperty("needOptions").EnumerateObject().Take(1).Select(option => option.Name).ToArray(),
                     mentors = selected.Select(mentor =>
                     {
                         var candidate = new Dictionary<string, object?>
