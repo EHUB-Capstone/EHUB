@@ -6,13 +6,32 @@ export type ShowcaseReportReason = 'Spam' | 'Harassment' | 'InappropriateContent
 export type ShowcaseStage = 'Idea' | 'Mvp' | 'Beta' | 'Launched';
 export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other';
 export type ShowcaseDecision = 'approve' | 'reject' | 'hide' | 'unhide';
-export type ShowcaseLaunchPeriod = 'topThisWeek' | 'thisWeek' | 'lastWeek';
+export type ShowcaseLaunchPeriod = 'topThisWeek' | 'thisWeek' | 'lastWeek' | 'earlier' | 'trending';
 
 export interface ShowcaseFeaturedDto {
   id: string;
   isFeatured: boolean;
   featuredAt: string | null;
   rowVersion: number;
+}
+
+export interface BulkFeatureShowcasesResultDto {
+  updated: number;
+  unchanged: number;
+  /** Ids that are missing, unpublished or outside the caller's classes. */
+  skipped: number;
+}
+
+/** A published showcase the caller may feature; the server returns only the caller's own classes (all for an admin). */
+export interface FeaturedCandidateDto {
+  id: string;
+  projectName: string;
+  logoUrl: string | null;
+  developmentStage: ShowcaseStage;
+  teamName: string;
+  classCode: string;
+  lecturerName: string;
+  isFeatured: boolean;
 }
 
 export interface ShowcaseUpvoteDto {
@@ -155,7 +174,8 @@ export interface ShowcaseDiscoveryPageDto {
 
 export interface ShowcaseFilterOptionsDto {
   industries: string[];
-  semesters: { id: string; code: string; name: string }[];
+  /** Only semesters with at least one published showcase, with how many they hold. */
+  semesters: { id: string; code: string; name: string; projectCount: number }[];
 }
 
 export interface ShowcaseLinkDto {

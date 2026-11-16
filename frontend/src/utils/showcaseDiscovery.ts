@@ -6,12 +6,15 @@ export const SHOWCASE_LAUNCH_PERIODS: ReadonlyArray<{ value: ShowcaseLaunchPerio
   { value: 'topThisWeek', label: 'Top launches this week' },
   { value: 'thisWeek', label: 'This week' },
   { value: 'lastWeek', label: 'Last week' },
+  { value: 'earlier', label: 'Earlier' },
+  { value: 'trending', label: 'Trending now' },
 ];
 export const SHOWCASE_DISCOVER_OPTIONS = [
   { value: 'featured', label: 'Featured products' },
-  { value: 'topThisWeek', label: 'Top products launching' },
+  { value: 'trending', label: 'Trending now' },
   { value: 'thisWeek', label: "This week's products" },
   { value: 'lastWeek', label: "Last week's products" },
+  { value: 'earlier', label: 'Earlier projects' },
 ] as const;
 /** How many projects the "Newly published" rail shows before "View more". */
 export const NEWLY_PUBLISHED_COUNT = 5;

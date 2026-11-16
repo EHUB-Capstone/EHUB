@@ -47,27 +47,34 @@ public sealed class ShowcaseDiscoveryTests
     }
 
     [Fact]
-    public async Task FilterOptions_ReturnAllActiveCatalogIndustriesAndSemesters_WithoutAnyShowcase()
+    public async Task FilterOptions_ReturnActiveCatalogIndustries_AndOnlySemestersWithPublishedShowcases()
     {
         await using var db = ShowcaseTestData.NewContext();
         var names = new[] { "BIT_SE", "chatgpt", "ecommom", "infomation", "logictics" };
         db.StartupIndustries.AddRange(names.Select(name => new StartupIndustry { Name = name, NormalizedName = name.ToUpperInvariant() }));
         db.StartupIndustries.Add(new StartupIndustry { Name = "Inactive", NormalizedName = "INACTIVE", Status = StartupIndustryStatus.Inactive });
         db.StartupIndustries.Add(new StartupIndustry { Name = "Deleted", NormalizedName = "DELETED", IsDeleted = true });
-        db.Semesters.AddRange(new Semester { Code = "SP26", Year = 2026, Term = SemesterTerm.Spring },
-            new Semester { Code = "SU26", Year = 2026, Term = SemesterTerm.Summer },
-            new Semester { Code = "FA26", Year = 2026, Term = SemesterTerm.Fall, Status = SemesterStatus.Archived },
-            new Semester { Code = "SP27", Year = 2027, Term = SemesterTerm.Spring },
-            new Semester { Code = "DELETED", Year = 2028, IsDeleted = true });
+        var sp26 = new Semester { Code = "SP26", Year = 2026, Term = SemesterTerm.Spring };
+        var su26 = new Semester { Code = "SU26", Year = 2026, Term = SemesterTerm.Summer };
+        var fa26 = new Semester { Code = "FA26", Year = 2026, Term = SemesterTerm.Fall, Status = SemesterStatus.Archived };
+        var sp27 = new Semester { Code = "SP27", Year = 2027, Term = SemesterTerm.Spring };
+        db.Semesters.AddRange(sp26, su26, fa26, sp27, new Semester { Code = "DELETED", Year = 2028, IsDeleted = true });
+        await db.SaveChangesAsync();
+        // SP26 has two published showcases and FA26 one; SU26 only has a draft and SP27 has none, so neither is offered.
+        foreach (var (semester, status) in new[] { (sp26, ShowcaseStatus.Published), (sp26, ShowcaseStatus.Published), (fa26, ShowcaseStatus.Published), (su26, ShowcaseStatus.Draft) })
+        {
+            var seed = await ShowcaseTestData.SeedAsync(db, status);
+            (await db.Projects.Include(p => p.Team).ThenInclude(t => t.Class).SingleAsync(p => p.ProjectLineageId == seed.LineageId)).Team.Class.SemesterId = semester.Id;
+        }
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
         var result = await Handler(db).GetFilterOptionsAsync();
         result.Value.Industries.Should().BeEquivalentTo(names);
-        result.Value.Semesters.Select(semester => semester.Code).Should().Equal("SP27", "FA26", "SU26", "SP26");
+        result.Value.Semesters.Select(semester => (semester.Code, semester.ProjectCount)).Should().Equal(("FA26", 1), ("SP26", 2));
         db.ChangeTracker.Entries().Should().BeEmpty();
         foreach (var name in names)
             (await Handler(db).HandleAsync(new() { Industry = name })).Value.TotalItems.Should().Be(0);
-        (await Handler(db).HandleAsync(new() { SemesterId = result.Value.Semesters.First().Id })).Value.TotalItems.Should().Be(0);
+        (await Handler(db).HandleAsync(new() { SemesterId = result.Value.Semesters.First().Id })).Value.TotalItems.Should().Be(1);
     }
 
     // InMemory does not implement PostgreSQL ILIKE; its SQL translation is tested separately below.
@@ -348,6 +355,48 @@ public sealed class ShowcaseDiscoveryTests
         (await handler.HandleAsync(new() { Period = "thisWeek", Featured = true }))
             .Value.Items.Single().Id.Should().Be(thisMonday.ShowcaseId);
         (await handler.HandleAsync(new())).Value.TotalItems.Should().Be(6);
+    }
+
+    [Fact]
+    public async Task EarlierPeriod_ReturnsOnlyProjectsPublishedBeforeLastWeek_NewestFirst()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+        var previousMonday = new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
+        var oldest = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: previousMonday.AddDays(-30));
+        var older = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: previousMonday.AddTicks(-10));
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: previousMonday);
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now);
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Draft, publishedAt: null);
+
+        var result = await Handler(db, now).HandleAsync(new() { Period = "earlier" });
+
+        result.Value.Items.Select(item => item.Id).Should().Equal(older.ShowcaseId, oldest.ShowcaseId);
+        result.Value.TotalItems.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task TrendingPeriod_RanksLastSevenDaysOfActivity_RegardlessOfPublicationDate_AndOmitsIdlePages()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var now = new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc);
+        var oldButBusy = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-90));
+        var newButQuiet = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-1));
+        var staleActivity = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-30));
+        await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published, publishedAt: now.AddDays(-2));
+        // 2 upvotes (6) + 1 comment (2) = 8 points for the old page; one view = 1 point for the new page.
+        foreach (var offset in new[] { 1, 3 })
+            db.ShowcaseUpvotes.Add(new ShowcaseUpvote { ShowcaseProjectId = oldButBusy.ShowcaseId, UserId = Guid.NewGuid(), CreatedAt = now.AddDays(-offset) });
+        db.ShowcaseComments.Add(new ShowcaseComment { ShowcaseProjectId = oldButBusy.ShowcaseId, AuthorUserId = Guid.NewGuid(), Content = "Nice", CreatedAt = now.AddDays(-2) });
+        db.ShowcaseViewsDaily.Add(new ShowcaseViewDaily { ShowcaseProjectId = newButQuiet.ShowcaseId, UserId = Guid.NewGuid(), ViewDateUtc = DateOnly.FromDateTime(now.AddDays(-1)) });
+        // Activity older than seven days must not count.
+        db.ShowcaseUpvotes.Add(new ShowcaseUpvote { ShowcaseProjectId = staleActivity.ShowcaseId, UserId = Guid.NewGuid(), CreatedAt = now.AddDays(-10) });
+        await db.SaveChangesAsync();
+
+        var result = await Handler(db, now).HandleAsync(new() { Period = "trending", PageSize = 5 });
+
+        result.Value.Items.Select(item => item.Id).Should().Equal(oldButBusy.ShowcaseId, newButQuiet.ShowcaseId);
+        result.Value.TotalItems.Should().Be(2);
     }
 
     [Fact]

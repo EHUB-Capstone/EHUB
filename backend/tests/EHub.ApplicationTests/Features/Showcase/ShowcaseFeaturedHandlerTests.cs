@@ -142,6 +142,50 @@ public sealed class ShowcaseFeaturedHandlerTests
         restored.Value.FeaturedAt.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Bulk_FeaturesInScopeIds_CountsUnchangedAndSkipped_WithOneHistoryPerChange()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var handler = new ShowcaseFeaturedHandler(db, Clock());
+        var ids = new[] { seed.ShowcaseId, seed.ShowcaseId, Guid.NewGuid() };
+        var first = await handler.SetManyAsync(ids, true, seed.LecturerUserId, SystemRoles.Lecturer);
+        (first.Value.Updated, first.Value.Unchanged, first.Value.Skipped).Should().Be((1, 0, 1));
+        (await db.ShowcaseProjects.AsNoTracking().SingleAsync()).IsFeatured.Should().BeTrue();
+        var again = await handler.SetManyAsync(ids, true, seed.LecturerUserId, SystemRoles.Lecturer);
+        (again.Value.Updated, again.Value.Unchanged, again.Value.Skipped).Should().Be((0, 1, 1));
+        (await db.ShowcaseReviewHistories.CountAsync()).Should().Be(1);
+        var cleared = await handler.SetManyAsync([seed.ShowcaseId], false, seed.LecturerUserId, SystemRoles.Lecturer);
+        cleared.Value.Updated.Should().Be(1);
+        (await db.ShowcaseProjects.AsNoTracking().SingleAsync()).FeaturedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Bulk_ForeignLecturerAndUnpublished_AreSkipped_AdminIsNotScoped()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var handler = new ShowcaseFeaturedHandler(db, Clock());
+        var foreign = await handler.SetManyAsync([seed.ShowcaseId], true, Guid.NewGuid(), SystemRoles.Lecturer);
+        (foreign.Value.Updated, foreign.Value.Skipped).Should().Be((0, 1));
+        (await handler.SetManyAsync([seed.ShowcaseId], true, Guid.NewGuid(), SystemRoles.Admin)).Value.Updated.Should().Be(1);
+        (await handler.SetManyAsync([seed.ShowcaseId], true, seed.OwnerUserId, SystemRoles.Student)).Error.Code.Should().Be(ErrorCodes.ShowcaseAccessDenied);
+        (await handler.SetManyAsync([], true, seed.LecturerUserId, SystemRoles.Lecturer)).Error.Code.Should().Be(ErrorCodes.ShowcaseValidationError);
+    }
+
+    [Fact]
+    public async Task Candidates_ListPublishedInScopeOnly_WithClassAndLecturer()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var handler = new ShowcaseFeaturedHandler(db, Clock());
+        var own = await handler.ListCandidatesAsync(seed.LecturerUserId, SystemRoles.Lecturer);
+        own.Value.Should().ContainSingle().Which.ClassCode.Should().NotBeNullOrEmpty();
+        (await handler.ListCandidatesAsync(Guid.NewGuid(), SystemRoles.Lecturer)).Value.Should().BeEmpty();
+        (await handler.ListCandidatesAsync(Guid.NewGuid(), SystemRoles.Admin)).Value.Should().HaveCount(1);
+        (await handler.ListCandidatesAsync(seed.OwnerUserId, SystemRoles.Student)).Error.Code.Should().Be(ErrorCodes.ShowcaseAccessDenied);
+    }
+
     private sealed class ConflictOnSave : SaveChangesInterceptor
     {
         public bool Enabled { get; set; }
