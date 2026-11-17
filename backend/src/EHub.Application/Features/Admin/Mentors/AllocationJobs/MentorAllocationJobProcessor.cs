@@ -4,13 +4,16 @@ using EHub.Application.Common.Interfaces.Services;
 using EHub.Contracts.Mentors;
 using EHub.Domain.Enums;
 using EHub.Shared.Constants;
+using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EHub.Application.Features.Admin.Mentors.AllocationJobs;
 
 public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, MentorAdminHandler previews,
-    MentorRankingExecution execution, IDateTimeProvider clock, ILogger<MentorAllocationJobProcessor> logger)
+    MentorRankingExecution execution, IDateTimeProvider clock, ILogger<MentorAllocationJobProcessor> logger,
+    IOptions<MentorAllocationOptions>? allocationOptions = null)
     : IMentorAllocationJobProcessor
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -72,7 +75,18 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
                 completedBatches = completed;
                 totalBatches = total;
             });
-            var result = await previews.PreviewAllocationForAdminAsync(request, job.AdminUserId, ct);
+            var settings = allocationOptions?.Value ?? new MentorAllocationOptions();
+            Result<MentorAllocationPreviewResponse> result;
+            for (var retry = 0; ; retry++)
+            {
+                result = await previews.PreviewAllocationForAdminAsync(request, job.AdminUserId, ct);
+                if (result.IsSuccess || retry >= settings.MaxProviderRetries || !IsTemporaryProviderProblem(previews.LastRankingFailure)) break;
+                // The models are cooled down for a minute after a failure; waiting past it lets the retry succeed, and batches
+                // that already finished are served from the ranker's cache. The worker keeps the lease alive meanwhile.
+                logger.LogWarning("Mentor allocation task {JobId} hit a temporary AI problem ({FailureKind}); retry {Retry}/{MaxRetries} in {Seconds} seconds",
+                    id, previews.LastRankingFailure, retry + 1, settings.MaxProviderRetries, settings.ProviderRetryDelaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(settings.ProviderRetryDelaySeconds), ct);
+            }
             ct.ThrowIfCancellationRequested();
             if (!await IsAdminAsync(job.AdminUserId, ct)) throw new InvalidOperationException("Administrator access changed.");
             now = clock.UtcNow;
@@ -102,6 +116,10 @@ public sealed class MentorAllocationJobProcessor(IApplicationDbContext db, Mento
                 CancellationToken.None);
         }
     }
+
+    // Authentication, permission, quota, configuration and input problems do not go away by waiting, so they are not retried.
+    private static bool IsTemporaryProviderProblem(MentorFitFailure? failure) => failure is MentorFitFailure.ServiceUnavailable or
+        MentorFitFailure.Timeout or MentorFitFailure.Network or MentorFitFailure.InvalidResponse;
 
     private Task<bool> IsAdminAsync(Guid adminId, CancellationToken ct) => db.Users.AnyAsync(user => user.Id == adminId &&
         user.Status == UserStatus.Active && user.UserRoles.Any(role => role.Role.Name == SystemRoles.Admin), ct);

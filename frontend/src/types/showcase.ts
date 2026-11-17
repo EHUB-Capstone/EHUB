@@ -8,6 +8,39 @@ export type ShowcaseLinkType = 'Website' | 'Demo' | 'Video' | 'Social' | 'Other'
 export type ShowcaseDecision = 'approve' | 'reject' | 'hide' | 'unhide';
 export type ShowcaseLaunchPeriod = 'topThisWeek' | 'thisWeek' | 'lastWeek';
 
+// Mirrors EHub.Contracts/Showcase/ShowcaseAssistantContracts.cs. Keep both in sync.
+export type ShowcaseAssistantRole = 'user' | 'assistant';
+
+export interface ShowcaseAssistantTurn {
+  role: ShowcaseAssistantRole;
+  content: string;
+}
+
+export interface ShowcaseAssistantChatRequest {
+  message: string;
+  history: ShowcaseAssistantTurn[];
+}
+
+export interface ShowcaseAssistantProjectDto {
+  id: string;
+  projectName: string;
+  description: string;
+  logoUrl: string | null;
+  developmentStage: ShowcaseStage;
+  teamName: string;
+  industries: string[];
+  likeCount: number;
+  viewCount: number;
+  /** One sentence from the assistant explaining why the project matches the question. */
+  reason: string;
+}
+
+export interface ShowcaseAssistantReplyDto {
+  answer: string;
+  projects: ShowcaseAssistantProjectDto[];
+  suggestions: string[];
+}
+
 export interface ShowcaseFeaturedDto {
   id: string;
   isFeatured: boolean;

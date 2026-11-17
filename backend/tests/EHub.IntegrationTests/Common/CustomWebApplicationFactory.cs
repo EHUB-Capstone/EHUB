@@ -58,7 +58,11 @@ public sealed class CustomWebApplicationFactory
             ["Mentoring:MatchingProvider"] = "Gemini",
             ["Mentoring:Gemini:ApiKey"] = "SYNTHETIC_GEMINI_TEST_KEY",
             ["Mentoring:Gemini:DataTransferEnabled"] = "true",
-            ["Mentoring:Gemini:MinimumRequestIntervalSeconds"] = "0"
+            ["Mentoring:Gemini:MinimumRequestIntervalSeconds"] = "0",
+            // Production retries a failed AI job after waiting out the provider cool-down; tests run deterministically without waiting.
+            ["Mentoring:Allocation:MaxProviderRetries"] = "0",
+            // Existing scenarios ask the model about both mentor types; the production default is covered by its own test.
+            ["Mentoring:Allocation:AcademicMethod"] = "Ai"
         }));
 
         builder.ConfigureServices(services =>

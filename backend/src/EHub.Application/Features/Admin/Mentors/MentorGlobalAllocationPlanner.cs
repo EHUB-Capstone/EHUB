@@ -9,12 +9,13 @@ internal static class MentorGlobalAllocationPlanner
     public static AllocationOutcome Allocate(IReadOnlyCollection<AllocationTeam> teams,
         IReadOnlyCollection<AllocationMentor> mentors,
         IReadOnlyCollection<AllocationExistingAssignment> existing, int seed,
-        IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> rankings, CancellationToken ct)
+        IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>> rankings, CancellationToken ct,
+        IReadOnlyCollection<MentorType>? slots = null)
     {
         var proposals = new List<AllocationProposal>();
         var warnings = new List<string>();
         var random = new Random(seed);
-        foreach (var slot in new[] { MentorType.Enterprise, MentorType.Academic })
+        foreach (var slot in new[] { MentorType.Enterprise, MentorType.Academic }.Where(type => slots is null || slots.Contains(type)))
         {
             ct.ThrowIfCancellationRequested();
             // Canonicalize before shuffling so the same inputs/seed give the same ties regardless of query ordering.

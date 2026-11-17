@@ -1,10 +1,17 @@
-import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { lazy, Suspense, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
+import { isShowcaseAssistantRoute } from '../../utils/showcaseAssistant';
+
+const ShowcaseAssistant = lazy(() => import('../../features/showcase/components/ShowcaseAssistant'));
 
 const DashboardLayout = (): React.ReactElement => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { pathname } = useLocation();
+  // Rendered here, not inside each page, so the conversation survives moving between the gallery and a project.
+  const showAssistant = releaseFeatureFlags.showcase && isShowcaseAssistantRoute(pathname);
 
   return (
     <div className="dashboard-shell min-h-screen">
@@ -28,6 +35,7 @@ const DashboardLayout = (): React.ReactElement => {
           <Outlet />
         </main>
       </div>
+      {showAssistant && <Suspense fallback={null}><ShowcaseAssistant /></Suspense>}
     </div>
   );
 };

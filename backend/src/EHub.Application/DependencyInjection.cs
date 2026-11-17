@@ -205,6 +205,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Showcase.Insights.IShowcaseInsightsHandler, EHub.Application.Features.Showcase.Insights.ShowcaseInsightsHandler>();
         services.AddScoped<EHub.Application.Features.Showcase.Comments.IShowcaseCommentHandler, EHub.Application.Features.Showcase.Comments.ShowcaseCommentHandler>();
         services.AddScoped<EHub.Application.Features.Showcase.Reports.IShowcaseReportHandler, EHub.Application.Features.Showcase.Reports.ShowcaseReportHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Assistant.IShowcaseAssistantHandler, EHub.Application.Features.Showcase.Assistant.ShowcaseAssistantHandler>();
 
 
         services.AddScoped<EHub.Application.Common.Interfaces.Authorization.IPermissionService, EHub.Application.Common.Services.Authorization.PermissionService>();

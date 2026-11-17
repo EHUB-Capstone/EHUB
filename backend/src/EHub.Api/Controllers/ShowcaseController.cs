@@ -1,5 +1,6 @@
 using EHub.Api.Models.Common;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Showcase.Assistant;
 using EHub.Application.Features.Showcase.Manage;
 using EHub.Application.Features.Showcase.Moderation;
 using EHub.Application.Features.Showcase.Query;
@@ -56,6 +57,15 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     public async Task<IActionResult> FilterOptions(
         [FromServices] IGetShowcasesQueryHandler handler, CancellationToken cancellationToken) =>
         ToResponse(await handler.GetFilterOptionsAsync(cancellationToken), "Showcase filters retrieved.");
+
+    [HttpPost("assistant/chat")]
+    [EnableRateLimiting(ShowcaseAssistantRateLimitPolicies.Chat)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> AssistantChat(
+        [FromBody] ShowcaseAssistantChatRequest request,
+        [FromServices] IShowcaseAssistantHandler handler,
+        CancellationToken cancellationToken) =>
+        ToResponse(await handler.AskAsync(request, UserId, cancellationToken), "Showcase assistant replied.");
 
     [HttpPost("{id:guid}/feature")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
@@ -321,6 +331,7 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
             ErrorCodes.ShowcaseInvalidState or
             ErrorCodes.ShowcaseConcurrencyConflict => Conflict(body),
             ErrorCodes.ShowcaseImageUploadFailed => StatusCode(StatusCodes.Status502BadGateway, body),
+            ErrorCodes.ShowcaseAssistantUnavailable => StatusCode(StatusCodes.Status503ServiceUnavailable, body),
             _ => BadRequest(body)
         };
     }

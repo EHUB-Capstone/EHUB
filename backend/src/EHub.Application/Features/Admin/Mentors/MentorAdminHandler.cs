@@ -16,6 +16,7 @@ using EHub.Shared.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EHub.Application.Features.Admin.Mentors;
 
@@ -26,12 +27,16 @@ public sealed class MentorAdminHandler(
     IDateTimeProvider dateTimeProvider,
     IUnitOfWork unitOfWork,
     ILogger<MentorAdminHandler> logger,
-    IMentorRecommendationRanker? recommendationRanker = null) : IMentorAdminHandler
+    IMentorRecommendationRanker? recommendationRanker = null,
+    IOptions<MentorAllocationOptions>? allocationOptions = null) : IMentorAdminHandler
 {
     private const long MaximumFileSize = 5 * 1024 * 1024;
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan ProcessingLease = TimeSpan.FromMinutes(5);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Why the last AI ranking of this handler instance failed; lets the background job decide whether a retry can help.</summary>
+    public MentorFitFailure? LastRankingFailure { get; private set; }
 
     public Task<Result<(byte[] FileBytes, string ContentType, string FileName)>> GetTemplateAsync(CancellationToken cancellationToken = default)
     {
@@ -515,6 +520,10 @@ public sealed class MentorAdminHandler(
             .Concat(excluded.Select(item => new AllocationExistingAssignment(item.TeamId, Guid.Empty, item.Slot)))
             .ToArray();
         IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>? rankings = null;
+        // With the AI strategy, the server may fill the IT (Academic) slot without AI so only business mentors are sent to the model.
+        var academicStrategy = strategy == AllocationStrategy.Ai
+            ? (allocationOptions?.Value ?? new MentorAllocationOptions()).AcademicStrategy : AllocationStrategy.Ai;
+        LastRankingFailure = null;
         if (strategy == AllocationStrategy.Ai)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -522,24 +531,32 @@ public sealed class MentorAdminHandler(
                 ? batch.RequestTimeout : TimeSpan.FromSeconds(45));
             try
             {
-                rankings = await RankAllocationAsync(teams, mentors, engineExisting, deadline.Token);
+                IReadOnlyCollection<AllocationMentor> aiMentors = academicStrategy == AllocationStrategy.Ai
+                    ? mentors : mentors.Where(mentor => mentor.Type == MentorType.Enterprise).ToArray();
+                rankings = await RankAllocationAsync(teams, aiMentors, engineExisting, deadline.Token);
                 deadline.Token.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                LastRankingFailure = MentorFitFailure.Timeout;
                 logger.LogWarning("AI allocation failed with {FailureKind}", MentorFitFailure.Timeout);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
                     "AI chưa hoàn tất phân bổ trong thời gian cho phép. Vui lòng thử lại với phạm vi lớp nhỏ hơn.");
             }
             catch (MentorFitRankerUnavailableException error)
             {
+                LastRankingFailure = error.Failure;
                 logger.LogWarning("AI allocation failed with {FailureKind}", error.Failure);
                 return Failure<MentorAllocationPreviewResponse>(ErrorCodes.MentorMatchingUnavailable,
                     error.UserMessage);
             }
         }
-        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings, cancellationToken);
+        var outcome = MentorAllocationEngine.Allocate(teams, mentors, engineExisting, seed, strategy, rankings, cancellationToken, academicStrategy);
         var warnings = outcome.Warnings.ToList();
+        if (strategy == AllocationStrategy.Ai && academicStrategy != AllocationStrategy.Ai)
+            warnings.Add(academicStrategy == AllocationStrategy.Random
+                ? "AI chỉ chấm mentor Business; mentor IT được chia ngẫu nhiên theo cấu hình máy chủ."
+                : "AI chỉ chấm mentor Business; mentor IT được chia đều theo tải (ngẫu nhiên khi bằng nhau) theo cấu hình máy chủ.");
         if (strategy == AllocationStrategy.Ai && mentors.Any(mentor => mentor.IsTemporary))
             warnings.Add("AI chỉ đề xuất mentor có hồ sơ chuyên môn. Mentor chưa có tài khoản vẫn có thể được chọn thủ công.");
 
@@ -636,7 +653,7 @@ public sealed class MentorAdminHandler(
                 TotalBefore = item.TotalBefore, TotalAfter = item.TotalAfter
             }).ToList();
 
-        var balance = MentorBalanceSummaryBuilder.Build(semesterTeamCount, mentors, mentorLoads, strategy);
+        var balance = MentorBalanceSummaryBuilder.Build(semesterTeamCount, mentors, mentorLoads, strategy, academicStrategy);
         if (strategy == AllocationStrategy.Ai)
             foreach (var item in balance.Where(item => item.EligibleMentorCount > 0 && item.MaxLoadAfter - item.MinLoadAfter > 1))
                 warnings.Add($"Tải mentor {item.MentorType} trong học kỳ còn chênh lệch ({item.MinLoadAfter}–{item.MaxLoadAfter} nhóm). Phân công hiện có, kế thừa và chỉnh tay được giữ nguyên; admin có thể điều chỉnh trước khi chốt.");

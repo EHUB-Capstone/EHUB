@@ -70,18 +70,42 @@ internal static class MentorAllocationEngine
         int seed,
         AllocationStrategy strategy = AllocationStrategy.Balanced,
         IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>? rankings = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AllocationStrategy academicStrategy = AllocationStrategy.Ai)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (strategy == AllocationStrategy.Ai)
-            return MentorGlobalAllocationPlanner.Allocate(teams, mentors, existingAssignments, seed,
-                rankings ?? new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>(), cancellationToken);
+        {
+            var scores = rankings ?? new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
+            if (academicStrategy == AllocationStrategy.Ai)
+                return MentorGlobalAllocationPlanner.Allocate(teams, mentors, existingAssignments, seed, scores, cancellationToken);
+            // Business mentors are matched by AI; IT (Academic) mentors are filled by the configured simple strategy.
+            // The two mentor types never share a pool, so their loads do not interact.
+            var business = MentorGlobalAllocationPlanner.Allocate(
+                teams, mentors, existingAssignments, seed, scores, cancellationToken, [MentorType.Enterprise]);
+            var academic = AllocateWithSelector(
+                teams, mentors, existingAssignments, seed, academicStrategy, [MentorType.Academic], cancellationToken);
+            return new AllocationOutcome(
+                business.Proposals.Concat(academic.Proposals).ToArray(), business.Warnings.Concat(academic.Warnings).ToArray());
+        }
+        return AllocateWithSelector(teams, mentors, existingAssignments, seed, strategy, SlotOrder, cancellationToken);
+    }
+
+    private static AllocationOutcome AllocateWithSelector(
+        IReadOnlyCollection<AllocationTeam> teams,
+        IReadOnlyCollection<AllocationMentor> mentors,
+        IReadOnlyCollection<AllocationExistingAssignment> existingAssignments,
+        int seed,
+        AllocationStrategy strategy,
+        IReadOnlyCollection<MentorType> slots,
+        CancellationToken cancellationToken)
+    {
         var selector = CreateSelector(strategy);
         var random = new Random(seed);
         var proposals = new List<AllocationProposal>();
         var warnings = new List<string>();
 
-        foreach (var slot in SlotOrder)
+        foreach (var slot in slots)
         {
             var pool = GetEligiblePool(mentors, slot);
             var missing = GetTeamsMissingSlot(teams, existingAssignments, slot)

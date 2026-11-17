@@ -49,3 +49,35 @@ test('the entry point and SPA routes are always revalidated and keep nosniff', (
 test('the /assets/ prefix is not "^~", which would skip the .mjs regex rule and serve the worker as octet-stream', () => {
   assert.doesNotMatch(nginxConfig, /location \^~ \/assets\//);
 });
+
+const aiProxyConfigs = [
+  { name: 'frontend', config: nginxConfig, normalPrefix: '/api/' },
+  { name: 'staging host', config: readFileSync(new URL('../../deploy/nginx/staging.e-hub.com.vn.conf', import.meta.url), 'utf8'), normalPrefix: '/' },
+  { name: 'production host', config: readFileSync(new URL('../../deploy/nginx/e-hub.com.vn.conf', import.meta.url), 'utf8'), normalPrefix: '/' },
+];
+
+for (const { name, config, normalPrefix } of aiProxyConfigs) {
+  test(`${name} nginx routes Showcase chat through the AI timeout budget and keeps ordinary API calls bounded`, () => {
+    const regexLocations = [...config.matchAll(/^\s*location\s+~\s+(\S+)\s*\{([\s\S]*?)^\s*\}/gm)]
+      .map(match => ({ pattern: new RegExp(match[1]), body: match[2] }));
+    const chat = regexLocations.find(location => location.pattern.test('/api/showcase/assistant/chat'));
+    assert.ok(chat, 'Showcase chat must match a regex location before the normal API prefix');
+    const readTimeout = chat.body.match(/proxy_read_timeout\s+(\d+)s;/);
+    assert.ok(readTimeout && Number(readTimeout[1]) >= 90, 'proxy must outlast the complete 90-second chat request budget');
+    assert.match(chat.body, /proxy_pass http:\/\/[^;]+;/);
+    assert.match(chat.body, /proxy_set_header X-Forwarded-Proto\s+[^;]+;/);
+
+    for (const path of [
+      '/api/admin/mentors/allocations/preview',
+      '/api/mentoring/teams/11111111-1111-1111-1111-111111111111/recommendations',
+    ]) assert.ok(chat.pattern.test(path), `existing mentor route must retain its AI budget: ${path}`);
+    for (const path of [
+      '/api/showcase', '/api/auth/login', '/api/showcase/assistant/chatty', '/api/showcase/assistant/chat/extra',
+    ]) assert.ok(!chat.pattern.test(path), `ordinary API route must not receive the AI budget: ${path}`);
+
+    const normal = [...config.matchAll(/^\s*location\s+(\S+)\s*\{([\s\S]*?)^\s*\}/gm)]
+      .find(match => match[1] === normalPrefix && match[2].includes('proxy_pass'));
+    assert.ok(normal, 'normal API proxy must still exist');
+    assert.match(normal[2], /proxy_read_timeout 60s;/);
+  });
+}

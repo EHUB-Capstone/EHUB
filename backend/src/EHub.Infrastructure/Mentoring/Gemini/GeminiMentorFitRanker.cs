@@ -55,13 +55,47 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
             var prompts = projects.OrderBy(project => project.Id).Chunk(ProjectsPerRequest)
                 .Select(batch => new GeminiMentorPrompt(batch, mentors, scope)).ToArray();
             var result = new Dictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>();
-            foreach (var prompt in prompts)
+            var concurrency = Math.Min(Math.Max(settings.MaxConcurrentRequests, 1), prompts.Length);
+            if (concurrency == 1)
             {
-                var scores = await RankWithSplittingAsync(prompt, new BatchRecovery(), cancellationToken);
-                foreach (var score in scores) result.Add(score.Key, score.Value);
-                if (execution is not null) await execution.AdvanceAsync(cancellationToken);
+                foreach (var prompt in prompts)
+                {
+                    var scores = await RankWithSplittingAsync(prompt, new BatchRecovery(), cancellationToken);
+                    foreach (var score in scores) result.Add(score.Key, score.Value);
+                    if (execution is not null) await execution.AdvanceAsync(cancellationToken);
+                }
+                return result;
             }
-            return result;
+
+            // Several batches in flight. The coordinator still caps real requests and spaces their start times. Results and
+            // progress are only recorded here, one at a time: the progress callback writes through a scoped DbContext.
+            using var batches = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var running = new List<Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, MentorFitRanking>>>>();
+            try
+            {
+                async Task CollectOneAsync()
+                {
+                    var finished = await Task.WhenAny(running);
+                    running.Remove(finished);
+                    foreach (var score in await finished) result.Add(score.Key, score.Value);
+                    if (execution is not null) await execution.AdvanceAsync(cancellationToken);
+                }
+                foreach (var prompt in prompts)
+                {
+                    if (running.Count >= concurrency) await CollectOneAsync();
+                    running.Add(RankWithSplittingAsync(prompt, new BatchRecovery(), batches.Token));
+                }
+                while (running.Count > 0) await CollectOneAsync();
+                return result;
+            }
+            catch
+            {
+                // The first failure decides the outcome (as in the sequential path): stop the other batches, wait until
+                // they have really stopped and ignore their own errors so none is left unobserved.
+                await batches.CancelAsync();
+                await Task.WhenAll(running.Select(task => task.ContinueWith(static _ => { }, TaskScheduler.Default)));
+                throw;
+            }
         }
         catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
         {
@@ -131,11 +165,12 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                     now = clock.GetUtcNow();
                     if (coordinator.ModelBlockedUntil.TryGetValue(model, out var until) && until > now)
                     {
-                        failure = coordinator.ModelFailures.GetValueOrDefault(model, MentorFitFailure.ModelUnavailable);
+                        failure = coordinator.ModelFailures.TryGetValue(model, out var knownFailure) ? knownFailure : MentorFitFailure.ModelUnavailable;
                         continue;
                     }
                     try
                     {
+                        var requestStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                         var response = await SendRequestAsync(model, prompt, cancellationToken);
                         var body = response.Body;
                         if ((int)response.StatusCode is < 200 or >= 300)
@@ -144,16 +179,16 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                             logger.LogWarning("Gemini mentor ranking returned HTTP {StatusCode} for {Model}", (int)response.StatusCode, model);
                             if (IsTransient(response.StatusCode))
                             {
-                                failure = coordinator.ModelFailures[model] = MentorFitFailure.ServiceUnavailable;
+                                failure = MentorFitFailure.ServiceUnavailable;
                                 var blockedUntil = clock.GetUtcNow().AddMinutes(1);
                                 var retryAfter = HeaderRetryAt(response.RetryAfter, clock.GetUtcNow());
-                                coordinator.ModelBlockedUntil[model] = retryAfter > blockedUntil ? retryAfter : blockedUntil;
+                                coordinator.BlockModelUntil(model, retryAfter > blockedUntil ? retryAfter : blockedUntil, failure);
                                 continue;
                             }
                             if (response.StatusCode == HttpStatusCode.NotFound)
                             {
-                                failure = coordinator.ModelFailures[model] = MentorFitFailure.ModelUnavailable;
-                                coordinator.ModelBlockedUntil[model] = clock.GetUtcNow().AddMinutes(10);
+                                failure = MentorFitFailure.ModelUnavailable;
+                                coordinator.BlockModelUntil(model, clock.GetUtcNow().AddMinutes(10), failure);
                                 continue;
                             }
                             if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -161,9 +196,9 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                                 var retryAt = RetryAt(body, response.RetryAfter, clock.GetUtcNow());
                                 if (IsModelSpecificQuota(body, model, out var daily))
                                 {
-                                    failure = coordinator.ModelFailures[model] = MentorFitFailure.Quota;
+                                    failure = MentorFitFailure.Quota;
                                     var resetAt = daily ? NextPacificMidnight(clock.GetUtcNow()) : retryAt;
-                                    coordinator.ModelBlockedUntil[model] = resetAt > retryAt ? resetAt : retryAt;
+                                    coordinator.BlockModelUntil(model, resetAt > retryAt ? resetAt : retryAt, failure);
                                     continue;
                                 }
                                 // Ambiguous/shared quota cannot safely be treated as a per-model allowance.
@@ -198,15 +233,21 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                             .Select(part => part.TryGetProperty("text", out var value) ? value.GetString() : null));
                         var result = ParseResults(text, model, prompt);
                         foreach (var expired in coordinator.Cache.Where(item => item.Value.ExpiresAt <= clock.GetUtcNow()).Select(item => item.Key).ToArray())
-                            coordinator.Cache.Remove(expired);
-                        if (coordinator.Cache.Count >= 32)
-                            coordinator.Cache.Remove(coordinator.Cache.MinBy(item => item.Value.ExpiresAt).Key);
+                            coordinator.Cache.TryRemove(expired, out _);
+                        if (coordinator.Cache.Count >= 32 && coordinator.Cache.OrderBy(item => item.Value.ExpiresAt).FirstOrDefault() is { Key: { } oldest })
+                            coordinator.Cache.TryRemove(oldest, out _);
                         coordinator.Cache[cacheKey] = new GeminiCachedResponse(text, model, clock.GetUtcNow().AddMinutes(10));
-                        logger.LogInformation("Gemini mentor ranking completed using {Model}: {ProjectCount} projects, {MentorCount} profiles; input {InputTokens}, output {OutputTokens}, thoughts {ThoughtTokens}, total {TotalTokens} tokens",
-                            model, prompt.Projects.Length, prompt.Mentors.Length, UsageCount(envelope.RootElement, "promptTokenCount"),
+                        logger.LogInformation("Gemini mentor ranking completed using {Model} in {ElapsedMs} ms (including pacing): {ProjectCount} projects, {MentorCount} profiles; input {InputTokens}, output {OutputTokens}, thoughts {ThoughtTokens}, total {TotalTokens} tokens",
+                            model, (long)System.Diagnostics.Stopwatch.GetElapsedTime(requestStarted).TotalMilliseconds,
+                            prompt.Projects.Length, prompt.Mentors.Length, UsageCount(envelope.RootElement, "promptTokenCount"),
                             UsageCount(envelope.RootElement, "candidatesTokenCount"), UsageCount(envelope.RootElement, "thoughtsTokenCount"),
                             UsageCount(envelope.RootElement, "totalTokenCount"));
                         return result;
+                    }
+                    catch (ModelCooldownException blocked)
+                    {
+                        // Another in-flight allocation learned this model's cooldown while this one was waiting.
+                        failure = blocked.Failure;
                     }
                     catch (MentorFitRankerUnavailableException error) when (error.Failure is
                         MentorFitFailure.Timeout or MentorFitFailure.Network or MentorFitFailure.InvalidResponse or MentorFitFailure.OutputLimit)
@@ -218,8 +259,7 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                         // Invalid output is specific to this input. Do not block the model for unrelated batches.
                         if (failure is not (MentorFitFailure.InvalidResponse or MentorFitFailure.OutputLimit))
                         {
-                            coordinator.ModelFailures[model] = failure;
-                            coordinator.ModelBlockedUntil[model] = clock.GetUtcNow().AddMinutes(1);
+                            coordinator.BlockModelUntil(model, clock.GetUtcNow().AddMinutes(1), failure);
                         }
                     }
                     catch (Exception error) when (error is JsonException or InvalidOperationException or
@@ -246,6 +286,20 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
 
     private sealed record GeminiResponse(HttpStatusCode StatusCode, byte[] Body, RetryConditionHeaderValue? RetryAfter);
 
+    private sealed class ModelCooldownException(MentorFitFailure failure) : Exception
+    {
+        public MentorFitFailure Failure { get; } = failure;
+    }
+
+    private void EnsureProviderAllowed(string model)
+    {
+        var now = clock.GetUtcNow();
+        if (coordinator.ProjectBlockedUntil > now) throw new MentorFitRankerUnavailableException(MentorFitFailure.Quota);
+        if (coordinator.ModelBlockedUntil.TryGetValue(model, out var until) && until > now)
+            throw new ModelCooldownException(coordinator.ModelFailures.TryGetValue(model, out var known)
+                ? known : MentorFitFailure.ModelUnavailable);
+    }
+
     private static bool IsTransient(HttpStatusCode status) => status is HttpStatusCode.InternalServerError or
         HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
 
@@ -254,9 +308,6 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
         var settings = options.Value;
         for (var attempt = 0; attempt < MaximumAttemptsPerModel; attempt++)
         {
-            var wait = coordinator.NextRequestAt - clock.GetUtcNow();
-            if (wait > TimeSpan.Zero) await Task.Delay(wait, clock, ct);
-            coordinator.NextRequestAt = clock.GetUtcNow().AddSeconds(settings.MinimumRequestIntervalSeconds);
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
             request.Headers.Add("x-goog-api-key", settings.ApiKey);
@@ -274,17 +325,26 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                 }
             });
             // The deadline covers headers AND body. HttpClient.Timeout alone ends after headers in this mode.
-            using var timeout = new CancellationTokenSource(ModelRequestTimeout, clock);
-            using var requestDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            CancellationTokenSource? timeout = null;
+            CancellationTokenSource? requestDeadline = null;
             try
             {
-                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestDeadline.Token);
+                var responseTask = await coordinator.StartRequestAsync(clock,
+                    TimeSpan.FromSeconds(settings.MinimumRequestIntervalSeconds), () => EnsureProviderAllowed(model), () =>
+                    {
+                        // Pacing does not consume the model's network budget. Dispatch is serialized with cooldown updates.
+                        timeout = new CancellationTokenSource(ModelRequestTimeout, clock);
+                        requestDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+                        return client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestDeadline.Token);
+                    }, ct);
+                using var response = await responseTask;
+                var responseToken = requestDeadline!.Token;
                 byte[] body = [];
                 // Only 400/429 need structured error details. A broken error body must never turn an
                 // authentication/shared-quota status into a retryable transport/validation failure.
                 if (response.IsSuccessStatusCode || response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.TooManyRequests)
                 {
-                    try { body = await ReadBoundedAsync(response, requestDeadline.Token); }
+                    try { body = await ReadBoundedAsync(response, responseToken); }
                     catch (Exception error) when (!response.IsSuccessStatusCode && !ct.IsCancellationRequested &&
                         error is OperationCanceledException or HttpRequestException or IOException or MentorFitRankerUnavailableException)
                     {
@@ -293,13 +353,13 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                     }
                 }
                 ct.ThrowIfCancellationRequested();
-                if (response.IsSuccessStatusCode) requestDeadline.Token.ThrowIfCancellationRequested();
+                if (response.IsSuccessStatusCode) responseToken.ThrowIfCancellationRequested();
                 if (!IsTransient(response.StatusCode) || attempt == MaximumAttemptsPerModel - 1)
                     return new(response.StatusCode, body, response.Headers.RetryAfter);
                 logger.LogWarning("Gemini mentor ranking returned HTTP {StatusCode} for {Model}; retry {Attempt}",
                     (int)response.StatusCode, model, attempt + 1);
                 var providerRetryAt = HeaderRetryAt(response.Headers.RetryAfter, clock.GetUtcNow());
-                if (providerRetryAt > coordinator.NextRequestAt) coordinator.NextRequestAt = providerRetryAt;
+                coordinator.DelayNextRequestUntil(providerRetryAt);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -314,10 +374,15 @@ public sealed class GeminiMentorFitRanker(HttpClient client, IOptions<GeminiMent
                 logger.LogWarning("AI ranking transport failed for {Model}; retry {Attempt}; exception type {ExceptionType}",
                     model, attempt + 1, error.GetType().Name);
             }
+            finally
+            {
+                requestDeadline?.Dispose();
+                timeout?.Dispose();
+            }
             ct.ThrowIfCancellationRequested();
             // Bounded exponential backoff + jitter, combined with (never replacing) normal request pacing.
             var retryAt = clock.GetUtcNow().AddSeconds((2 << attempt) + Random.Shared.NextDouble());
-            if (retryAt > coordinator.NextRequestAt) coordinator.NextRequestAt = retryAt;
+            coordinator.DelayNextRequestUntil(retryAt);
         }
         throw new MentorFitRankerUnavailableException(MentorFitFailure.ServiceUnavailable);
     }

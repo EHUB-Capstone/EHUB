@@ -177,6 +177,7 @@ public static class ErrorCodes
     public const string ShowcaseCommentInvalid = "SHOWCASE_COMMENT_INVALID";
     public const string ShowcaseConcurrencyConflict = "SHOWCASE_CONCURRENCY_CONFLICT";
     public const string ShowcaseImageUploadFailed = "SHOWCASE_IMAGE_UPLOAD_FAILED";
+    public const string ShowcaseAssistantUnavailable = "SHOWCASE_ASSISTANT_UNAVAILABLE";
 
     // Project data (cross-semester project list and achievements) error codes
     public const string ProjectDataAccessDenied = "PROJECT_DATA_ACCESS_DENIED";

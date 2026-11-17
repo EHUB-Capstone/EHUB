@@ -1,0 +1,90 @@
+# Bật chatbot Showcase trên VPS
+
+Chatbot Hubby dùng Gemini thật để tìm và giải thích các dự án đã công bố trên Showcase.
+Tính năng mặc định tắt; key và lịch sử sử dụng API của local không được đưa lên Git.
+
+## Cấu hình Docker Compose
+
+Ghép `docker-compose.gemini.yml` với Compose staging hoặc production hiện có. Trong file env
+riêng trên VPS, đặt các biến không nhạy cảm sau:
+
+```dotenv
+SHOWCASE_ASSISTANT_ENABLED=true
+SHOWCASE_ASSISTANT_MODEL=gemini-3.5-flash-lite
+SHOWCASE_ASSISTANT_FALLBACK_MODELS=gemini-3.1-flash-lite
+SHOWCASE_ASSISTANT_REQUESTS_PER_USER_PER_MINUTE=8
+SHOWCASE_ASSISTANT_API_KEY=
+```
+
+Để `SHOWCASE_ASSISTANT_API_KEY` trống thì backend dùng key mentor Gemini đang cấu hình bằng
+`GEMINI_API_KEY`. Key này phải còn hợp lệ và có quyền gọi model. Nếu cần key riêng cho chatbot,
+đặt `SHOWCASE_ASSISTANT_API_KEY` trong secret store hoặc file env riêng trên VPS; không ghi
+key vào repo, `VITE_*`, lệnh shell có thể lưu vào history, log hoặc chat.
+
+Các biến Compose được chuyển sang tên cấu hình .NET tương ứng:
+
+| Biến trong file env của Compose | Biến môi trường trong backend |
+| --- | --- |
+| `SHOWCASE_ASSISTANT_ENABLED` | `Showcase__Assistant__Enabled` |
+| `SHOWCASE_ASSISTANT_API_KEY` | `Showcase__Assistant__ApiKey` |
+| `SHOWCASE_ASSISTANT_MODEL` | `Showcase__Assistant__Model` |
+| `SHOWCASE_ASSISTANT_FALLBACK_MODELS` | `Showcase__Assistant__FallbackModels` |
+| `SHOWCASE_ASSISTANT_REQUESTS_PER_USER_PER_MINUTE` | `ShowcaseAssistantRateLimiting__RequestsPerUserPerMinute` |
+
+`backend/.env.example` dùng tên biến .NET ở cột phải cho cách chạy backend trực tiếp. Nếu nền
+tảng deploy cấp environment variables trực tiếp cho container, dùng các tên .NET đó. ASP.NET
+Core User Secrets chỉ phục vụ local; VPS cần cấu hình riêng bằng environment/secret storage.
+
+## Deploy và nạp cấu hình mới
+
+Deploy backend và frontend từ cùng commit đã review theo quy trình hiện có. Nếu pipeline lấy
+nhánh `develop`, merge nhánh `AI` trước khi deploy. Chatbot không có migration mới; các migration
+của tính năng khác vẫn theo quy trình khởi tạo database hiện có.
+
+Ví dụ kiểm tra cấu hình và tạo lại container backend staging sau khi đã cập nhật image/env:
+
+```bash
+cd /opt/ehub/staging/app
+docker compose --env-file .env.staging -f docker-compose.staging.yml -f docker-compose.gemini.yml config --quiet
+docker compose --env-file .env.staging -f docker-compose.staging.yml -f docker-compose.gemini.yml up -d --no-deps --force-recreate backend
+```
+
+Production dùng `.env.production` và `docker-compose.production.yml` thay cho hai file staging.
+Chỉ `docker restart` không nạp lại biến môi trường mới. Không chạy `docker compose config`
+không có `--quiet` để tránh in các secret đã nội suy.
+
+Route `/api/showcase/assistant/chat` dùng riêng ngân sách AI: frontend Nginx chờ 120 giây,
+Nginx host staging/production chờ 210 giây, đủ cho client 90 giây và tối đa ba model × 25 giây.
+Các API thông thường vẫn chờ 60 giây. Build/deploy frontend mới để nạp cấu hình Nginx bên trong
+container; cập nhật file host tương ứng trong `deploy/nginx/`, chạy `nginx -t` rồi reload Nginx
+theo quy trình deploy hiện có. Chỉ cập nhật backend không thay cấu hình proxy host đang chạy.
+
+## Kiểm tra sau deploy
+
+Đăng nhập rồi mở `/showcase`, chọn **Hỏi Hubby** và hỏi về một dự án đã công bố trong database
+của môi trường đó. API `POST /api/showcase/assistant/chat` yêu cầu đăng nhập, có hạn mức theo
+người dùng, và key chỉ nằm ở backend. Model nhận câu hỏi, các lượt hội thoại gần nhất và thông
+tin dự án đã công bố; chỉ bật khi chấp nhận việc gửi các dữ liệu này đến Google.
+
+Card dự án được dựng lại từ database theo mã model chọn. Bản nháp và dự án ẩn không nằm trong
+catalog. Nếu chưa có dự án Published, chatbot báo chưa có dữ liệu và không gọi AI.
+
+- Thông báo chưa bật/chưa cấu hình: kiểm tra `SHOWCASE_ASSISTANT_ENABLED`, key server và việc
+  container đã được tạo lại sau khi thay env.
+- Lỗi xác thực/quyền từ Google: kiểm tra hoặc thay key qua secret store; không gửi key vào log/chat.
+- Lỗi tạm thời hoặc hạn mức: chờ rồi thử lại; không có phản hồi giả lập thay thế trong code sản phẩm.
+
+Mười dự án mẫu từng dùng để test local được lưu trong database local riêng, không nằm trong
+Git và không tự xuất hiện trên VPS sau deploy. Cần công bố dự án của môi trường đó bằng luồng
+quản lý Showcase bình thường. Xem thêm [hướng dẫn Gemini hiện tại](GEMINI_MENTOR_VPS.md).
+
+## Local Windows
+
+Chạy helper nhập key ẩn rồi khởi động lại backend Development:
+
+```powershell
+& '.\scripts\showcase\configure-showcase-assistant.ps1'
+```
+
+Helper lưu cấu hình Showcase riêng trong User Secrets của `backend/src/EHub.Api`, không sửa
+key mentor, không ghi key vào Git và không gọi AI trong bước lưu cấu hình.

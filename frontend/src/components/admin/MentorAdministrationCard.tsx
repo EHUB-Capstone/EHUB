@@ -264,10 +264,10 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
   };
 
   const strategyHint = strategy === 'Ai'
-    ? 'AI proposes mentors using skills, experience, achievements, mentoring history and current workload. Continuing EXE201 teams keep eligible EXE101 mentors. Review the reasons and accept to save.'
+    ? 'AI matches business mentors by skills, experience and workload; IT mentors are assigned evenly at random.'
     : strategy === 'Balanced'
-    ? 'Balanced gives each missing slot to the mentor with the fewest teams this semester.'
-    : 'Random picks any eligible mentor for each missing slot, whatever their current load.';
+    ? 'Each empty slot goes to the mentor with the fewest teams.'
+    : 'Each empty slot goes to any eligible mentor, whatever their load.';
 
   return (
     <section className="rounded-2xl border border-primary-100 bg-white px-4 py-3 shadow-sm dark:border-primary/35 dark:bg-dark-surface dark:shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
@@ -281,7 +281,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
               <h2 className="font-bold text-slate-900">Mentor assignment</h2>
               <span className="rounded-full bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-700">{semesterLabel}</span>
             </div>
-            <p className="text-xs text-slate-500">Keeps mentors of continuing teams, fills only missing slots. Nothing is saved before you confirm.</p>
+            <p className="text-xs text-slate-500">Continuing teams keep their mentors; only empty slots are filled. Nothing is saved until you confirm.</p>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
               Include {temporaryMentorCount} mentor{temporaryMentorCount === 1 ? '' : 's'} without an account yet
             </label>
           )}
-          <p className="mt-2 text-caption text-slate-400">{strategyHint} New mentors are imported in User Management, then added with Add mentors.</p>
+          <p className="mt-2 text-caption text-slate-400">{strategyHint} Import new mentors in User Management, then use Add mentors.</p>
           {(busy === 'preview-allocation' || busy === 'refresh-allocation') && (
             <div role="status" aria-live="polite" className="mt-2 text-body-sm text-slate-600">
               {jobProgress?.status === 'Queued' ? 'AI allocation is queued…' : jobProgress?.totalBatches
