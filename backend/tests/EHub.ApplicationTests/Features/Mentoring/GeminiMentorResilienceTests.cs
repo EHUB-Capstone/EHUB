@@ -323,7 +323,7 @@ public sealed class GeminiMentorResilienceTests
             Func<TState, Exception?, string> formatter) => Messages.Enqueue(formatter(state, exception));
     }
 
-    private sealed class ManualClock : TimeProvider
+    internal sealed class ManualClock : TimeProvider
     {
         private readonly object sync = new();
         private readonly List<ManualTimer> timers = [];

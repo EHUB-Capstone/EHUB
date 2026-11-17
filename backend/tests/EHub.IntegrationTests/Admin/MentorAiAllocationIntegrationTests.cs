@@ -5,6 +5,7 @@ using System.Text.Json;
 using EHub.Application.Common.Interfaces.Identity;
 using EHub.Application.Common.Interfaces.Services;
 using EHub.Application.Features.Mentoring.Scoring;
+using EHub.Application.Features.Admin.Mentors;
 using EHub.Application.Features.Admin.Mentors.AllocationJobs;
 using EHub.Contracts.Common;
 using EHub.Contracts.Mentors;
@@ -117,6 +118,97 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         (await db.MentorAssignments.AnyAsync(row => row.TeamId == fixture.TeamId)).Should().BeFalse();
         (await db.MentorAllocationSessions.AnyAsync(row => row.SemesterId == fixture.SemesterId)).Should().BeFalse();
         (await db.OutboxMessages.AnyAsync(row => row.AggregateId == fixture.ClassId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ABackgroundJobRecoversByItselfFromATemporaryAiProblem()
+    {
+        // Both configured models return unusable output for the first business batch, then the provider behaves.
+        var gemini = new RecordingGemini { InvalidFirstCalls = 2 };
+        using var app = App(gemini: gemini, providerRetries: 1);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        using (var setup = factory.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.MentorProfiles.Where(profile => db.SemesterStaffAssignments.Any(staff =>
+                staff.SemesterId == fixture.SemesterId && staff.UserId == profile.UserId))
+                .ExecuteUpdateAsync(update => update.SetProperty(profile => profile.Experience, RecordingGemini.Evidence));
+        }
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        using var started = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        var id = (await started.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claim = (await processor.ClaimAsync(default))!.Value;
+        await processor.ProcessAsync(id, claim.LeaseId, default);
+
+        using var polled = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", admin.Token));
+        var job = (await polled.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+        job.Status.Should().Be("Ready", because: job.Message);
+        job.Message.Should().BeNull();
+        job.Preview.Should().NotBeNull();
+        gemini.Requests.Should().BeGreaterThan(2, "the first attempt used up the two unusable answers before the retry succeeded");
+    }
+
+    [Fact]
+    public async Task ByDefaultTheModelOnlySeesBusinessMentorsAndItMentorsAreAssignedWithEvenLoads()
+    {
+        var gemini = new RecordingGemini();
+        using var app = App(gemini: gemini, academicMethod: new MentorAllocationOptions().AcademicMethod);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        using (var setup = factory.Services.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.MentorProfiles.Where(profile => db.SemesterStaffAssignments.Any(staff =>
+                staff.SemesterId == fixture.SemesterId && staff.UserId == profile.UserId))
+                .ExecuteUpdateAsync(update => update.SetProperty(profile => profile.Experience, RecordingGemini.Evidence));
+        }
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        using var started = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        var id = (await started.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claim = (await processor.ClaimAsync(default))!.Value;
+        await processor.ProcessAsync(id, claim.LeaseId, default);
+
+        using var polled = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", admin.Token));
+        var job = (await polled.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+        job.Status.Should().Be("Ready", because: job.Message);
+        gemini.Batches.Should().NotBeEmpty().And.OnlyContain(batch => batch.Role == "Business", "IT mentors never go to the model");
+        job.TotalBatches.Should().Be(gemini.Batches.Count);
+        job.Preview!.Assignments.Select(row => row.MentorType).Should().BeEquivalentTo(["Enterprise", "Academic"]);
+        job.Preview.UnfilledAcademicCount.Should().Be(0);
+        job.Preview.Warnings.Should().Contain(message => message.Contains("mentor IT được chia đều theo tải"));
+    }
+
+    [Fact]
+    public async Task ABackgroundJobDoesNotRetryAProblemThatWaitingCannotFix()
+    {
+        var gemini = new RecordingGemini { FailureStatus = HttpStatusCode.Unauthorized };
+        using var app = App(gemini: gemini, providerRetries: 2);
+        using var client = app.CreateClient();
+        var admin = await Identity(SystemRoles.Admin);
+        var fixture = await Seed(admin.Id);
+        const string jobs = "/api/admin/mentors/allocations/jobs";
+        using var started = await client.SendAsync(Authorized(HttpMethod.Post, jobs, admin.Token,
+            new PreviewMentorAllocationRequest { SemesterId = fixture.SemesterId, ClassIds = [fixture.ClassId], Strategy = "Ai" }));
+        var id = (await started.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!.Id;
+        using var scope = app.Services.CreateScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IMentorAllocationJobProcessor>();
+        var claim = (await processor.ClaimAsync(default))!.Value;
+        await processor.ProcessAsync(id, claim.LeaseId, default);
+
+        using var polled = await client.SendAsync(Authorized(HttpMethod.Get, $"{jobs}/{id}", admin.Token));
+        var job = (await polled.Content.ReadFromJsonAsync<ApiResponse<MentorAllocationJobResponse>>())!.Data!;
+        job.Status.Should().Be("Failed");
+        job.Message.Should().Be(new MentorFitRankerUnavailableException(MentorFitFailure.Authentication).UserMessage);
+        gemini.Requests.Should().Be(1, "an invalid API key is not a temporary problem");
     }
 
     [Fact]
@@ -966,8 +1058,13 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         (await dbContext.MentorAssignments.AnyAsync(row => row.TeamId == fixture.TeamId)).Should().BeFalse();
     }
 
-    private WebApplicationFactory<Program> App(bool unavailable = false, RecordingGemini? gemini = null) => factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+    // Most scenarios exercise the model on both mentor types ("Ai"); the production default ("Random") has its own test.
+    private WebApplicationFactory<Program> App(bool unavailable = false, RecordingGemini? gemini = null, int providerRetries = 0,
+        string academicMethod = MentorAllocationOptions.Ai) => factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
     {
+        // Retries wait for provider cool-downs in production; tests state explicitly whether a retry is wanted.
+        services.AddSingleton<IOptions<MentorAllocationOptions>>(Options.Create(new MentorAllocationOptions
+            { MaxProviderRetries = providerRetries, ProviderRetryDelaySeconds = 0, AcademicMethod = academicMethod }));
         services.AddSingleton<IOptions<MentorScoringOptions>>(Options.Create(new MentorScoringOptions()));
         services.AddSingleton<IMentorEvidenceGuard>(new FileMentorEvidenceGuard(new ConfigurationBuilder().Build()));
         services.AddSingleton<IOptions<GeminiMentorOptions>>(Options.Create(new GeminiMentorOptions
@@ -985,6 +1082,10 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         public List<string> Inputs { get; } = [];
         public bool InvalidOutput { get; init; }
         public HttpStatusCode? FailureStatus { get; init; }
+        // The first calls return unusable output, then the provider behaves: a temporary problem a retry can recover from.
+        public int InvalidFirstCalls { get; init; }
+        private int requests;
+        public int Requests => Volatile.Read(ref requests);
         public bool CompareBackendRules { get; init; }
         public bool RejectLargeBusinessBatchesAfterFirst { get; init; }
         public string? InvalidRole { get; init; }
@@ -994,6 +1095,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
         public int MentorCount { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            var received = Interlocked.Increment(ref requests);
             if (FailureStatus is { } status)
                 return new(status) { Content = JsonContent.Create(new { error = new { message = "PRIVATE_PROVIDER_BODY" } }) };
             var body = await request.Content!.ReadAsStringAsync(cancellationToken);
@@ -1013,7 +1115,7 @@ public sealed class MentorAiAllocationIntegrationTests(CustomWebApplicationFacto
                 .SelectMany(group => group.Take(CompareBackendRules ? 2 : 1)).ToArray();
             var rejectLargeBatch = RejectLargeBusinessBatchesAfterFirst && role == "Business" && projects.Length > 10 &&
                 Batches.Count(batch => batch.Role == "Business" && batch.Projects > 10) > 1;
-            var text = InvalidOutput || InvalidRole == role || rejectLargeBatch ? "{\"results\":[]}" : JsonSerializer.Serialize(new
+            var text = InvalidOutput || InvalidRole == role || rejectLargeBatch || received <= InvalidFirstCalls ? "{\"results\":[]}" : JsonSerializer.Serialize(new
             {
                 results = projects.Select(project => new
                 {

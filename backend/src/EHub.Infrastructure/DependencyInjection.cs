@@ -20,6 +20,7 @@ using EHub.Application.Common.Interfaces.Storage;
 using EHub.Infrastructure.Storage;
 using EHub.Infrastructure.Mentoring;
 using EHub.Infrastructure.Mentoring.Gemini;
+using EHub.Infrastructure.Showcase.Assistant;
 using EHub.Application.Features.Mentoring.Scoring;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pgvector.EntityFrameworkCore;
@@ -41,6 +42,10 @@ public static class DependencyInjection
         var matchingProvider = configuration["Mentoring:MatchingProvider"] ?? "Gemini";
         if (!string.Equals(matchingProvider, "Gemini", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Mentoring:MatchingProvider supports only Gemini. Configure the current AI service before starting.");
+        services.AddOptions<EHub.Application.Features.Admin.Mentors.MentorAllocationOptions>()
+            .Bind(configuration.GetSection(EHub.Application.Features.Admin.Mentors.MentorAllocationOptions.SectionName))
+            .Validate(options => options.IsValid(), "Mentoring:Allocation:AcademicMethod must be Ai, Balanced or Random.")
+            .ValidateOnStart();
         services.AddOptions<MentorScoringOptions>().Bind(configuration.GetSection(MentorScoringOptions.SectionName))
             .Validate(options => options.IsValid(), "Mentoring:Scoring requires criterion weights from 0 to 100 with a positive total.")
             .ValidateOnStart();
@@ -50,9 +55,20 @@ public static class DependencyInjection
                 "Configure Mentoring:Gemini with a server-side API key, reviewed professional-data transfer enabled and approved model IDs.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
-        services.AddSingleton<GeminiRequestCoordinator>();
+        services.AddSingleton(provider => new GeminiRequestCoordinator(
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<GeminiMentorOptions>>().Value.MaxConcurrentRequests));
         services.AddHttpClient<IGenerativeMentorFitRanker, GeminiMentorFitRanker>(client =>
             client.Timeout = TimeSpan.FromSeconds(55))
+            .RedactLoggedHeaders(["x-goog-api-key"])
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        // Optional feature: a missing key or Enabled=false must not stop the API, so there is no ValidateOnStart.
+        services.AddOptions<ShowcaseAssistantOptions>().Bind(configuration.GetSection(ShowcaseAssistantOptions.SectionName))
+            .PostConfigure(assistant =>
+            {
+                if (assistant.ApiKey.Length == 0) assistant.ApiKey = configuration[$"{GeminiMentorOptions.SectionName}:ApiKey"] ?? string.Empty;
+            });
+        services.AddHttpClient<IShowcaseAssistantModel, GeminiShowcaseAssistantModel>(client =>
+            client.Timeout = TimeSpan.FromSeconds(30))
             .RedactLoggedHeaders(["x-goog-api-key"])
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         AddCheckpointSummaries(services, configuration);

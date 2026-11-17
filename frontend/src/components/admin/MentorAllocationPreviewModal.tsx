@@ -150,9 +150,9 @@ export default function MentorAllocationPreviewModal({
         </div>
         {preview.strategy === 'Ai' && (
           <p className="rounded-xl bg-info-50 px-3 py-2 text-body-sm text-info-dark">
-            AI compares project needs with mentor evidence and optimizes the proposed assignments while balancing semester workload by mentor type.
-            {' '}Review suggestions with a fit score of 0 closely. You can change a mentor or leave a slot empty before accepting.
-            {' '}Eligible mentors stay with continuing teams from EXE101 to EXE201. Fit scores are not probabilities.
+            AI matches business mentors to project needs and balances workload; IT mentors are assigned evenly without AI.
+            {' '}Check suggestions with a fit score of 0. You can change a mentor or leave a slot empty before accepting.
+            {' '}Fit scores are not probabilities.
           </p>
         )}
         {(preview.balance?.length ?? 0) > 0 && (

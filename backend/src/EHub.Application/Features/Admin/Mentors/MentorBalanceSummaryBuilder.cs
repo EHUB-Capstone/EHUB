@@ -7,10 +7,12 @@ internal static class MentorBalanceSummaryBuilder
 {
     public static IReadOnlyCollection<MentorAllocationBalancePreview> Build(int semesterTeamCount,
         IReadOnlyCollection<AllocationMentor> mentors, IReadOnlyCollection<MentorAllocationMentorLoad> loads,
-        AllocationStrategy strategy) => new[] { MentorType.Enterprise, MentorType.Academic }.Select(type =>
+        AllocationStrategy strategy, AllocationStrategy academicStrategy = AllocationStrategy.Ai) =>
+        new[] { MentorType.Enterprise, MentorType.Academic }.Select(type =>
     {
-        var eligible = mentors.Where(mentor => mentor.Type == type &&
-            (strategy != AllocationStrategy.Ai || !mentor.IsTemporary)).ToArray();
+        // Only AI-matched mentor types exclude temporary mentors; IT mentors chosen by a simple strategy keep them.
+        var matchedByAi = strategy == AllocationStrategy.Ai && (type == MentorType.Enterprise || academicStrategy == AllocationStrategy.Ai);
+        var eligible = mentors.Where(mentor => mentor.Type == type && (!matchedByAi || !mentor.IsTemporary)).ToArray();
         var count = eligible.Length;
         var afterByMentor = loads.ToDictionary(load => load.MentorProfileId, load => load.TotalAfter);
         var after = eligible.Select(mentor => afterByMentor.GetValueOrDefault(mentor.Id)).ToArray();

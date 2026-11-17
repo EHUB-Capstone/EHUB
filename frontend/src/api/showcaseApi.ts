@@ -27,6 +27,8 @@ import type {
   ShowcaseReportReceiptDto,
   ShowcaseReportDto,
   ShowcaseReportStatus,
+  ShowcaseAssistantChatRequest,
+  ShowcaseAssistantReplyDto,
 } from '../types/showcase.ts';
 
 // axiosClient resolves to the response body, so each call yields the ApiEnvelope.
@@ -39,8 +41,12 @@ const imageForm = (file: File): FormData => {
 };
 
 const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
+// The backend can try three models for 25 seconds each; leave time for catalog queries and transport.
+const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
+  askAssistant: (body: ShowcaseAssistantChatRequest, signal?: AbortSignal) =>
+    unwrap<ShowcaseAssistantReplyDto>(axiosClient.post('/showcase/assistant/chat', body, { signal, timeout: assistantRequestTimeout })),
   recordView: (id: string, signal?: AbortSignal) =>
     unwrap<ShowcaseViewDto>(axiosClient.post(`/showcase/${id}/view`, undefined, { signal })),
   getInsights: (id: string, signal?: AbortSignal) =>

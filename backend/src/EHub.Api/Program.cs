@@ -36,6 +36,7 @@ builder.Services.AddAuthRateLimiting(builder.Configuration);
 builder.Services.AddCheckpointSummaryRateLimiting(builder.Configuration);
 builder.Services.AddShowcaseCommentRateLimiting(builder.Configuration);
 builder.Services.AddShowcaseReportRateLimiting(builder.Configuration);
+builder.Services.AddShowcaseAssistantRateLimiting(builder.Configuration);
 
 // Customize Model State Binding validation response format
 builder.Services.Configure<ApiBehaviorOptions>(options =>

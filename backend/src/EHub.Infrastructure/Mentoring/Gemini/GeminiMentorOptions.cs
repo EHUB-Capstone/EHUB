@@ -13,6 +13,10 @@ public sealed class GeminiMentorOptions
     // Enable only after reviewing the professional summaries; automatic masking is not anonymization.
     public bool DataTransferEnabled { get; set; }
     public int MinimumRequestIntervalSeconds { get; set; } = 12;
+    public const int MaximumConcurrentRequests = 4;
+    // 1 keeps batches strictly sequential. Raise it only when the key's per-minute request/token quota allows it:
+    // a shared-quota 429 stops the whole allocation instead of being retried.
+    public int MaxConcurrentRequests { get; set; } = 1;
 
     internal string[] Models => new[] { Model }.Concat(FallbackModels.Split(',',
         StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).ToArray();
@@ -20,5 +24,6 @@ public sealed class GeminiMentorOptions
     internal bool IsValid() => DataTransferEnabled && ApiKey.Length is > 0 and <= 2048 &&
         ApiKey.All(character => character is >= '!' and <= '~') &&
         Models.Length is >= 1 and <= 3 && Models.All(model => ApprovedModels.Contains(model, StringComparer.Ordinal)) &&
-        MinimumRequestIntervalSeconds is >= 0 and <= 120;
+        MinimumRequestIntervalSeconds is >= 0 and <= 120 &&
+        MaxConcurrentRequests is >= 1 and <= MaximumConcurrentRequests;
 }

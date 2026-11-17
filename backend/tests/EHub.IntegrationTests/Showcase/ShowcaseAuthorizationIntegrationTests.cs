@@ -32,6 +32,7 @@ public sealed class ShowcaseAuthorizationIntegrationTests
     [InlineData("DELETE", "/api/showcase/reports/00000000-0000-0000-0000-000000000001")]
     [InlineData("DELETE", "/api/showcase/reports/history?status=Dismissed")]
     [InlineData("GET", "/api/showcase/filter-options")]
+    [InlineData("POST", "/api/showcase/assistant/chat")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData("DELETE", "/api/showcase/00000000-0000-0000-0000-000000000001/feature")]
     [InlineData("POST", "/api/showcase/00000000-0000-0000-0000-000000000001/upvote")]
@@ -99,6 +100,25 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         using var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData(SystemRoles.Student)]
+    [InlineData(SystemRoles.Lecturer)]
+    [InlineData(SystemRoles.Mentor)]
+    [InlineData(SystemRoles.Admin)]
+    public async Task AssistantChat_IsOpenToEverySignedInRole_AndRejectsAnEmptyQuestion(string role)
+    {
+        using var client = _factory.CreateClient();
+        using var request = AuthorizedRequest(HttpMethod.Post, "/api/showcase/assistant/chat", role,
+            new ShowcaseAssistantChatRequest { Message = "   " });
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        // The global ValidationFilter runs the FluentValidation validator before the handler.
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body!.Code.Should().Be(ErrorCodes.CommonValidationError);
     }
 
     [Fact]

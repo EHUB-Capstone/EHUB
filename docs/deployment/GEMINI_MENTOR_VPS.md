@@ -13,6 +13,22 @@ giữ phân công đã có/kế thừa và cho admin sửa tay trước khi ch�
   Mặc định hiện tại là `gemini-3.5-flash-lite`, dự phòng `gemini-3.1-flash-lite`.
   Khả năng truy cập, quota và chi phí phụ thuộc project/provider; ứng dụng không xác minh billing.
 - `Mentoring:Gemini:MinimumRequestIntervalSeconds`: mặc định 12, dùng chung giữa các request loại.
+- `Mentoring:Allocation:AcademicMethod`: cách xếp mentor IT (Academic) khi admin chọn chiến lược AI.
+  `Balanced` (mặc định): AI chỉ chấm mentor Business (Enterprise); mỗi vị trí IT trao cho mentor IT đang có ít nhóm
+  nhất (ngẫu nhiên khi bằng nhau, không gọi Gemini), nên số nhóm của các mentor IT luôn đều nhau. `Random`: mentor IT
+  được chọn ngẫu nhiên bất kể tải; mô phỏng 40 nhóm / 10 mentor cho thấy người nhiều nhất trung bình 7,3 nhóm, người
+  ít nhất 1,3 nhóm và 14,5% lần có mentor 0 nhóm. `Ai`: AI chấm cả hai loại mentor như trước. `Balanced` và `Random`
+  giảm một nửa số lô gửi Gemini nên nhanh và ít rủi ro lỗi hơn; preview có dòng thông báo "AI chỉ chấm mentor
+  Business…". Giá trị không hợp lệ làm API không khởi động.
+- `Mentoring:Allocation:MaxProviderRetries` (0–5, mặc định 2) và `ProviderRetryDelaySeconds` (0–300, mặc định 65):
+  tác vụ nền tự thử lại khi Gemini chỉ tạm thời có vấn đề (quá tải, hết giờ, lỗi mạng, kết quả không dùng được).
+  Thời gian chờ phải dài hơn 1 phút tạm khóa model; các lô đã chấm xong được lấy từ cache trong bộ nhớ nên chỉ
+  chấm lại phần còn thiếu. Lỗi key, quyền, hạn mức, cấu hình hoặc dữ liệu đầu vào không được thử lại. Đặt 0 để tắt.
+  Chỉ áp dụng cho tác vụ nền (POST allocations/jobs), không áp dụng cho endpoint preview đồng bộ.
+- `Mentoring:Gemini:MaxConcurrentRequests`: số lô được gọi Gemini cùng lúc, từ 1 đến 4, mặc định 1
+  (tuần tự như trước). Các lần bắt đầu request vẫn cách nhau ít nhất `MinimumRequestIntervalSeconds`.
+  Chỉ tăng khi hạn mức request/token mỗi phút của key cho phép: 429 do quota chung vẫn làm dừng cả tác vụ.
+  Log "Gemini mentor ranking completed ... in N ms" cho biết thời gian thật của từng lô để chỉnh hai giá trị này.
 - `Mentoring:Gemini:RuleCatalogPath`: tùy chọn file alias chỉ phục vụ phát hiện phủ định rõ.
   Mặc định dùng resource `Mentoring/Models/mentor-evidence-catalog.json`, không có trọng số model.
 
@@ -50,6 +66,10 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite
 GEMINI_DATA_TRANSFER_ENABLED=true
 GEMINI_MINIMUM_REQUEST_INTERVAL_SECONDS=12
+GEMINI_MAX_CONCURRENT_REQUESTS=1
+MENTOR_ACADEMIC_METHOD=Balanced
+MENTOR_AI_PROVIDER_RETRIES=2
+MENTOR_AI_PROVIDER_RETRY_DELAY_SECONDS=65
 MENTOR_RULE_EXPERIENCE_WEIGHT=35
 MENTOR_RULE_EXPERTISE_WEIGHT=25
 MENTOR_RULE_STARTUP_DOMAIN_WEIGHT=15
