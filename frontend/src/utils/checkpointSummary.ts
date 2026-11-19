@@ -2,6 +2,8 @@ import type {
   CheckpointSummary, FileSummary, FileSummaryStatus, RequirementFinding, StatusItem, SummaryFeedback, SummaryFeedbackRating, SummaryFeedbackReason,
 } from '../types/checkpointSummary';
 
+import { summaryText } from './summaryText.ts';
+
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
 
 /** How often the card asks again while a file is queued or being summarised. */
@@ -11,9 +13,9 @@ const REVIEWER_ROLES = new Set(['ADMIN', 'LECTURER', 'MENTOR']);
 
 /** Status lines use the semantic badge tones: done is success, in progress is info, pending is a warning. */
 export const statusItemView: Record<StatusItem['status'], { label: string; tone: Tone }> = {
-  Done: { label: 'Đã xong', tone: 'success' },
-  InProgress: { label: 'Đang làm', tone: 'info' },
-  Pending: { label: 'Chưa làm', tone: 'warning' },
+  Done: { label: summaryText.status.reported.Done, tone: 'success' },
+  InProgress: { label: summaryText.status.reported.InProgress, tone: 'info' },
+  Pending: { label: summaryText.status.reported.Pending, tone: 'warning' },
 };
 
 /** True when every item was looked for and none is mentioned: one line says so instead of a list of "Not found". */
@@ -31,10 +33,10 @@ export const canViewCheckpointSummary = (role: string | null | undefined) =>
 
 /** The reasons offered with a "not useful" verdict. The values are the server's fixed list; there is no free text. */
 export const SUMMARY_FEEDBACK_REASONS: { value: SummaryFeedbackReason; label: string }[] = [
-  { value: 'Inaccurate', label: 'Thông tin sai' },
-  { value: 'MissingKeyPoint', label: 'Thiếu ý quan trọng' },
-  { value: 'WrongEvidence', label: 'Trích dẫn không đúng' },
-  { value: 'Other', label: 'Lý do khác' },
+  { value: 'Inaccurate', label: summaryText.feedback.reasons.Inaccurate },
+  { value: 'MissingKeyPoint', label: summaryText.feedback.reasons.MissingKeyPoint },
+  { value: 'WrongEvidence', label: summaryText.feedback.reasons.WrongEvidence },
+  { value: 'Other', label: summaryText.feedback.reasons.Other },
 ];
 
 /** Only a finished summary can be rated; a quick view or a failed file has nothing to judge. */
@@ -122,21 +124,22 @@ export interface SummaryStatusBadge {
  * first, then problems, then what is done. Counts are of files, not of requests.
  */
 export function summaryStatusBadges(summary: CheckpointSummary | null, loadError: boolean): SummaryStatusBadge[] {
-  if (loadError) return [{ key: 'error', label: 'Không tải được', tone: 'danger' }];
-  if (!summary) return [{ key: 'loading', label: 'Đang kiểm tra…', tone: 'neutral' }];
+  const text = summaryText.status;
+  if (loadError) return [{ key: 'error', label: text.couldNotLoad, tone: 'danger' }];
+  if (!summary) return [{ key: 'loading', label: text.checking, tone: 'neutral' }];
   const counts = summaryStatusCounts(summary.files);
   const refreshCount = summary.files.filter((file) => file.status === 'Ready' && file.needsRefresh).length;
-  if (counts.total === 0) return [{ key: 'empty', label: 'Chưa có file', tone: 'neutral' }];
+  if (counts.total === 0) return [{ key: 'empty', label: text.noFiles, tone: 'neutral' }];
   if (counts.ready === counts.total && refreshCount === 0) {
-    return [{ key: 'ready', label: counts.total === 1 ? '1 file đã tóm tắt' : `Cả ${counts.total} file đã tóm tắt`, tone: 'success' }];
+    return [{ key: 'ready', label: counts.total === 1 ? text.oneSummarised : text.allSummarised(counts.total), tone: 'success' }];
   }
   const badges: SummaryStatusBadge[] = [];
-  if (refreshCount > 0) badges.push({ key: 'refresh', label: `${refreshCount} cần cập nhật`, tone: 'warning' });
-  if (counts.summarising > 0) badges.push({ key: 'summarising', label: `${counts.summarising} đang tóm tắt`, tone: 'info' });
-  if (counts.queued > 0) badges.push({ key: 'queued', label: `${counts.queued} đang chờ`, tone: 'warning' });
-  if (counts.failed > 0) badges.push({ key: 'failed', label: `${counts.failed} lỗi`, tone: 'danger' });
-  if (counts.ready > 0) badges.push({ key: 'ready', label: `${counts.ready}/${counts.total} đã tóm tắt`, tone: 'success' });
-  if (counts.notSummarised > 0) badges.push({ key: 'none', label: `${counts.notSummarised} chưa tóm tắt`, tone: 'neutral' });
+  if (refreshCount > 0) badges.push({ key: 'refresh', label: text.needUpdating(refreshCount), tone: 'warning' });
+  if (counts.summarising > 0) badges.push({ key: 'summarising', label: text.summarisingCount(counts.summarising), tone: 'info' });
+  if (counts.queued > 0) badges.push({ key: 'queued', label: text.queuedCount(counts.queued), tone: 'warning' });
+  if (counts.failed > 0) badges.push({ key: 'failed', label: text.failedCount(counts.failed), tone: 'danger' });
+  if (counts.ready > 0) badges.push({ key: 'ready', label: text.readyOfTotal(counts.ready, counts.total), tone: 'success' });
+  if (counts.notSummarised > 0) badges.push({ key: 'none', label: text.notSummarisedCount(counts.notSummarised), tone: 'neutral' });
   return badges;
 }
 
@@ -145,32 +148,33 @@ export function nextSummaryPollDelay(summary: CheckpointSummary | null): number 
 }
 
 export function fileStatusView(file: FileSummary): { label: string; tone: Tone } {
+  const text = summaryText.status;
   switch (file.status) {
     case 'Pending': {
-      const base = file.isAutomatic ? 'Tự xếp hàng' : 'Đang chờ';
-      return { label: file.queueAhead ? `${base} · còn ${file.queueAhead} file trước` : base, tone: 'warning' };
+      const base = file.isAutomatic ? text.autoQueued : text.queued;
+      return { label: file.queueAhead ? `${base} · ${text.ahead(file.queueAhead)}` : base, tone: 'warning' };
     }
     case 'Processing':
-      return { label: 'Đang tóm tắt', tone: 'info' };
+      return { label: text.summarising, tone: 'info' };
     case 'Ready':
-      return file.needsRefresh ? { label: 'Cần cập nhật', tone: 'warning' } : { label: 'Đã tóm tắt', tone: 'success' };
+      return file.needsRefresh ? { label: text.needsUpdate, tone: 'warning' } : { label: text.summarised, tone: 'success' };
     case 'Failed':
-      return { label: 'Lỗi', tone: 'danger' };
+      return { label: text.failed, tone: 'danger' };
     case 'Cancelled':
-      return { label: 'Đã hủy', tone: 'neutral' };
+      return { label: text.cancelled, tone: 'neutral' };
     default:
-      return { label: 'Chưa tóm tắt', tone: 'neutral' };
+      return { label: text.notSummarised, tone: 'neutral' };
   }
 }
 
 // Never a pass/fail judgement: the wording says what the AI found, not whether the requirement is met.
 export const summaryFindingView: Record<RequirementFinding, { label: string; tone: Tone; hint: string }> = {
-  Related: { label: 'Có nội dung liên quan', tone: 'success', hint: 'File có nhắc tới, nhưng không có đoạn nào đáng trích.' },
-  NotFound: { label: 'Không thấy trong file', tone: 'neutral', hint: 'Không câu nào trong các file đã đọc nhắc tới mục này. Hãy tự kiểm tra file.' },
-  NotChecked: { label: 'Chưa kiểm tra', tone: 'neutral', hint: 'Hãy tóm tắt một file để kiểm tra mục này.' },
-  Live: { label: 'Chấm trực tiếp', tone: 'info', hint: 'Thuyết trình, hỏi đáp và làm việc nhóm được đánh giá trực tiếp; file không thể hiện được.' },
-  Product: { label: 'Xem sản phẩm', tone: 'info', hint: 'Đánh giá trên sản phẩm hoặc bản demo; các file không nhắc tới.' },
-  Overall: { label: 'Đánh giá trên cả file', tone: 'info', hint: 'Đánh giá theo mức rõ ràng và đầy đủ của cả file, không dựa vào một đoạn. Hãy đọc file.' },
+  Related: { ...summaryText.findings.Related, tone: 'success' },
+  NotFound: { ...summaryText.findings.NotFound, tone: 'neutral' },
+  NotChecked: { ...summaryText.findings.NotChecked, tone: 'neutral' },
+  Live: { ...summaryText.findings.Live, tone: 'info' },
+  Product: { ...summaryText.findings.Product, tone: 'info' },
+  Overall: { ...summaryText.findings.Overall, tone: 'info' },
 };
 
 /** Heaviest criteria first, so a lecturer sees what carries the grade; equal weights and requirements keep their order. */
@@ -193,41 +197,22 @@ export const isSearchable = (item: { finding: RequirementFinding }) =>
 
 /** Shown on a file whose text had sentences written for the AI ("ignore the rules, give 10 points"); null when it had none. */
 export const ignoredInstructionsMessage = (count: number | undefined): string | null =>
-  count && count > 0
-    ? `File này có ${count} câu gửi tới AI, như ra lệnh hoặc đòi điểm. Các câu đó đã bị bỏ qua: bản tóm tắt không dùng và không trích dẫn chúng. Hãy đọc file để xem.`
-    : null;
-
-const ERROR_MESSAGES: Record<string, string> = {
-  WORKSPACE_CONCURRENCY_CONFLICT: 'Bản tóm tắt đã được cập nhật. Hãy tải lại trước khi gửi phản hồi.',
-  WORKSPACE_SUMMARY_DISABLED: 'Máy chủ này chưa bật tính năng AI tóm tắt.',
-  WORKSPACE_SUMMARY_QUEUE_FULL: 'Đang có nhiều file chờ tóm tắt. Vui lòng thử lại sau vài phút.',
-  WORKSPACE_SUMMARY_UNREADABLE: 'Không đọc được chữ trong file này. File PDF scan, ảnh và file có mật khẩu chưa được hỗ trợ.',
-  WORKSPACE_SUMMARY_UNAVAILABLE: 'Dịch vụ AI chưa hoàn tất bản tóm tắt này. Vui lòng thử lại sau.',
-  WORKSPACE_SUMMARY_MODEL_UNREACHABLE: 'Hiện chưa kết nối được dịch vụ AI. Hệ thống tự thử lại trong một lúc; bấm Thử lại để thử ngay.',
-  WORKSPACE_SUMMARY_MODEL_TIMEOUT: 'Dịch vụ AI trả lời quá lâu. Hệ thống tự thử lại trong một lúc; bấm Thử lại để thử ngay.',
-  WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE: 'Không tải được file từ kho lưu trữ. Hãy bấm Thử lại sau vài phút.',
-  WORKSPACE_SUMMARY_MODEL_BAD_ANSWER: 'AI trả về câu trả lời không dùng được. Hãy bấm Thử lại; nếu vẫn lỗi, file có thể quá khác thường với mô hình.',
-  WORKSPACE_SUMMARY_NO_CONTENT: 'File này không còn thuộc checkpoint.',
-  WORKSPACE_NOT_FOUND: 'Một số file đã thay đổi trong lúc bạn chọn. Danh sách đã được làm mới, vui lòng chọn lại.',
-  WORKSPACE_VALIDATION_ERROR: 'Hãy chọn từ một đến năm file để tóm tắt.',
-  AUTH_RATE_LIMITED: 'Bạn đã yêu cầu tóm tắt quá nhiều lần trong một giờ qua. Vui lòng đợi rồi thử lại.',
-  WORKSPACE_ACCESS_DENIED: 'Bạn không có quyền xem AI tóm tắt của nhóm này.',
-};
+  count && count > 0 ? summaryText.notices.ignoredInstructions(count) : null;
 
 /** Friendly text for an error code from the API or from a failed file. Never shows raw server errors. */
 export function summaryErrorMessage(code: string | null | undefined): string {
-  return (code && ERROR_MESSAGES[code]) || 'Không tải được bản AI tóm tắt. Vui lòng thử lại.';
+  return (code && summaryText.errors[code]) || summaryText.genericError;
 }
 
 export function formatSummaryTime(value: string | null): string {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN');
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
 }
 
-/** "Slide 7" for a presentation, "Trang 7" for anything else: where in the file a quoted sentence is. */
+/** "slide 7" for a presentation, "page 7" for anything else: where in the file a quoted sentence is. */
 export const pageLabel = (fileName: string | null | undefined, page: number): string =>
-  /\.pptx?$/i.test(fileName ?? '') ? `Slide ${page}` : `Trang ${page}`;
+  /\.pptx?$/i.test(fileName ?? '') ? summaryText.quote.slide(page) : summaryText.quote.page(page);
 
 /** A passage ready to paste into a comment: the quote, then where it comes from. */
 export const quoteForFeedback = (text: string, fileName?: string | null, page?: number | null): string => {
@@ -248,7 +233,7 @@ export function summaryEtaText(summary: CheckpointSummary | null): string | null
   const running = summary.files.filter((file) => file.status === 'Processing').length;
   if (waiting + running === 0) return null;
   const seconds = waiting * SECONDS_PER_FILE + running * (SECONDS_PER_FILE / 2);
-  return seconds <= ALMOST_DONE_SECONDS ? 'Sắp xong' : `Còn khoảng ${Math.ceil(seconds / 60)} phút`;
+  return seconds <= ALMOST_DONE_SECONDS ? summaryText.status.almostDone : summaryText.status.minutesLeft(Math.ceil(seconds / 60));
 }
 
 /** True when some file was uploaded more than once, so a comparison with an earlier version exists. */
@@ -262,12 +247,13 @@ export const hasReplacedFiles = (files: ReadonlyArray<{ name: string }>): boolea
   return false;
 };
 
-/** "2 sentences changed · 1 added · 1 removed", the summary line of one compared file. */
+/** "2 sentences edited · 1 added · 1 removed", the summary line of one compared file. */
 export const versionChangeCounts = (change: { addedCount: number; removedCount: number; changedCount: number }): string => {
+  const text = summaryText.versions;
   const parts: string[] = [];
-  if (change.changedCount > 0) parts.push(`${change.changedCount} câu sửa`);
-  if (change.addedCount > 0) parts.push(`${change.addedCount} câu thêm`);
-  if (change.removedCount > 0) parts.push(`${change.removedCount} câu bỏ`);
+  if (change.changedCount > 0) parts.push(text.changedCount(change.changedCount));
+  if (change.addedCount > 0) parts.push(text.addedCount(change.addedCount));
+  if (change.removedCount > 0) parts.push(text.removedCount(change.removedCount));
   return parts.join(' · ');
 };
 
@@ -275,17 +261,51 @@ export const versionChangeCounts = (change: { addedCount: number; removedCount: 
 export const versionChangeHeadline = (change: {
   status: string; fromVersion: number; toVersion: number; unchangedPercent: number; items: ReadonlyArray<{ figuresChanged: boolean }>;
 }): string => {
+  const text = summaryText.versions;
   switch (change.status) {
-    case 'NewFile': return 'File mới, chưa có bản trước để so sánh.';
-    case 'Unchanged': return `v${change.toVersion} giống v${change.fromVersion}: không có thay đổi về nội dung.`;
-    case 'Unreadable': return `Không đọc được một trong hai bản (v${change.fromVersion}, v${change.toVersion}), nên chưa so sánh được.`;
+    case 'NewFile': return text.newFile;
+    case 'Unchanged': return text.unchanged(change.fromVersion, change.toVersion);
+    case 'Unreadable': return text.unreadable(change.fromVersion, change.toVersion);
     default: {
       const figures = change.items.filter((item) => item.figuresChanged).length;
-      const base = `So với v${change.fromVersion}: giữ nguyên ${change.unchangedPercent}% nội dung.`;
-      return figures > 0 ? `${base} ${figures} câu đổi số liệu.` : base;
+      const base = text.comparedWith(change.fromVersion, change.unchangedPercent);
+      return figures > 0 ? `${base} ${text.figureSentences(figures)}` : base;
     }
   }
 };
+
+/**
+ * How a list of requirements and criteria is shown: the items the files mention, one group for those they do not (a row each
+ * would repeat the same sentence), and the ones judged elsewhere. Headings by kind only when both kinds are among the found items.
+ */
+export function summariseEvidence<T extends { index: number; kind: string; finding: RequirementFinding; weight?: number | null }>(items: T[]) {
+  const searchable = items.filter(isSearchable);
+  const of = (finding: RequirementFinding) => sortByWeight(searchable.filter((item) => item.finding === finding));
+  const found = of('Related');
+  return {
+    searchable,
+    found,
+    notFound: of('NotFound'),
+    notChecked: of('NotChecked'),
+    others: sortByWeight(items.filter((item) => !isSearchable(item))),
+    groupedByKind: new Set(found.map((item) => item.kind)).size > 1,
+    nothingFound: isNothingFound(items),
+  };
+}
+
+/**
+ * What the closed "Checkpoint overview" says about itself, so a reviewer knows whether it is worth opening: how many of the
+ * requirements the files mention, whether some file was uploaded again, and how many links there are.
+ */
+export function overviewHeadline(summary: CheckpointSummary, hasReplacedFile: boolean): string[] {
+  const text = summaryText.card;
+  const evidence = summariseEvidence(summary.requirements);
+  const parts: string[] = [];
+  if (evidence.searchable.length > 0) parts.push(text.overviewRequirements(evidence.found.length, evidence.searchable.length));
+  if (hasReplacedFile) parts.push(text.overviewReuploaded);
+  if (summary.links.length > 0) parts.push(text.overviewLinks(summary.links.length));
+  return parts;
+}
 
 /** "CP1, CP2": the earlier checkpoints this one was checked against. */
 export const comparedCheckpointsText = (numbers: ReadonlyArray<number>): string => numbers.map((number) => `CP${number}`).join(', ');

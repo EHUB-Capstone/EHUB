@@ -91,7 +91,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         fixture.Context.ChangeTracker.Clear();
         var rows = await fixture.Context.CheckpointSummaryFeedbacks.AsNoTracking().Where(row => row.UserId == fixture.Seed.LecturerId || row.UserId == admin).ToListAsync();
         rows.Should().HaveCount(2);
-        rows.Should().OnlyContain(row => row.PromptVersion == "v13" && row.Model == "scripted-model", "the verdict remembers which prompt and model made the summary");
+        rows.Should().OnlyContain(row => row.PromptVersion == "v20" && row.Model == "scripted-model", "the verdict remembers which prompt and model made the summary");
 
         // Clearing removes only the caller's verdict, and it can be given again afterwards.
         (await feedback.ClearAsync(teamId, 1, plan.Id, fixture.Seed.LecturerId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();

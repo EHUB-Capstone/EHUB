@@ -118,7 +118,8 @@ internal static class CheckpointSummaryEvidence
 
         // Sentences already quoted for an earlier criterion. Three criteria of one rubric (problem, research, fit) often
         // match the same intro sentence of a survey; each should show the sentence that is most about it.
-        var quoted = new HashSet<int>();
+        // A rubric criterion and a checkpoint requirement are two lists: "Startup Idea Clarity" and "Startup Idea" may show the same sentence.
+        var quotedByKind = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
         var usedEvidence = new HashSet<string>(StringComparer.Ordinal);
         return checklist.Select(item =>
         {
@@ -130,6 +131,7 @@ internal static class CheckpointSummaryEvidence
                     Index = item.Index, Kind = item.Kind, Title = item.Title, Finding = Live, Weight = item.Weight,
                     Assessment = item.Assessment
                 };
+            if (!quotedByKind.TryGetValue(item.Kind, out var quoted)) quotedByKind[item.Kind] = quoted = new HashSet<int>();
             var terms = item.Title + ". " + item.Description;
             var itemPairs = Pairs(MentorEvidenceText.Normalize(terms));
             var itemTopics = topics.Find(terms);
@@ -160,7 +162,9 @@ internal static class CheckpointSummaryEvidence
                 (2.0 * sentence.Pairs.Count(itemPairs.Contains) + sentence.Topics.Count(itemTopics.Contains) +
                 ((sentence.Title || sentence.Short) && nameWords.Count > 0 && nameWords.IsSubsetOf(sentence.Words) ? 1 : 0) +
                 (sentence.Title ? 0 : 2.0 * CheckpointCriterionCues.CountMentions(wanted, normalised[position]))) *
-                (!wantsResearch && CheckpointSummaryText.IsMethodology(sentences[position]) ? MethodologyShare : 1.0)).ToArray();
+                (!wantsResearch && CheckpointSummaryText.IsMethodology(sentences[position]) ? MethodologyShare : 1.0) *
+                // "Project Name: J4U – Jobs for You" names the work; a rubric criterion about the idea is shown better by the sentence that describes it.
+                (item.Kind == CheckpointSummarySource.CriterionKind && IsShortLabelValue(sentences[position]) ? NameLineShare : 1.0)).ToArray();
 
             // A title is never quoted: it says only what the slide is about. A matching slide title lends half its weight
             // to the lines around it, nearer lines more (they say what the title promises without repeating its words).
@@ -178,7 +182,9 @@ internal static class CheckpointSummaryEvidence
             }
             var best = Enumerable.Range(0, sentences.Count)
                 .Where(i => !prepared[i].Title && total[i] > 0 && !hollow[i] && !hidden[i])
-                .OrderByDescending(i => total[i] * (quoted.Contains(i) ? RepeatedQuoteShare : 1.0))
+                // A name line ("Project Name: J4U – Jobs for You") comes after any line that describes, for a criterion about the work.
+                .OrderBy(i => item.Kind == CheckpointSummarySource.CriterionKind && IsShortLabelValue(sentences[i]) ? 1 : 0)
+                .ThenByDescending(i => total[i] * (quoted.Contains(i) ? RepeatedQuoteShare : 1.0))
                 .ThenBy(i => prepared[i].Short)
                 .ThenByDescending(i => own[i]).ThenByDescending(i => prepared[i].Words.Count(itemWords.Contains)).ThenBy(i => i)
                 .DefaultIfEmpty(-1).First();
@@ -199,7 +205,7 @@ internal static class CheckpointSummaryEvidence
             var cueEvidence = best >= 0 ? null
                 : cues.FirstOrDefault(cue => cue.Found && !string.IsNullOrWhiteSpace(cue.Evidence) && !usedEvidence.Contains(EvidenceKey(cue.Evidence!)))?.Evidence;
             var evidence = best >= 0
-                ? CheckpointSummaryText.Clip(WithContext(sentences, titles, best, prepared[best].Short), CheckpointSummaryLimits.MaxEvidenceCharacters)
+                ? CheckpointSummaryText.Clip(WithContext(sentences, titles, best, prepared[best].Short && !CheckpointSummaryText.IsLabelWithValue(sentences[best])), CheckpointSummaryLimits.MaxEvidenceCharacters)
                 : cueEvidence;
             if (evidence is not null) usedEvidence.Add(EvidenceKey(evidence));
             return new WorkspaceFileRequirementFinding
@@ -254,10 +260,20 @@ internal static class CheckpointSummaryEvidence
     private static string EvidenceKey(string evidence) =>
         CheckpointSummaryText.Normalize(evidence) is { Length: > EvidenceKeyCharacters } text ? text[..EvidenceKeyCharacters] : CheckpointSummaryText.Normalize(evidence);
 
-    /// <summary>A heading that no line with content follows: the next line is a table cell, a title, or missing.</summary>
+    /// <summary>
+    /// A heading that no line with content follows: the next line is a table cell, a title, or missing. A line that already
+    /// carries its value ("Group Name: J4U") is not a heading: it says something by itself, whatever follows it.
+    /// </summary>
     private static bool IsHollow(IReadOnlyList<string> sentences, bool[] titles, int position) =>
-        position + 1 >= sentences.Count || titles[position + 1] || CheckpointSummaryText.IsThin(sentences[position + 1]) ||
-        (CheckpointSummaryText.IsNumberedLabel(sentences[position]) && CheckpointSummaryText.IsNumberedLabel(sentences[position + 1]));
+        !CheckpointSummaryText.IsLabelWithValue(sentences[position]) && (position + 1 >= sentences.Count || titles[position + 1] || CheckpointSummaryText.IsThin(sentences[position + 1]) ||
+        (CheckpointSummaryText.IsNumberedLabel(sentences[position]) && CheckpointSummaryText.IsNumberedLabel(sentences[position + 1])));
+
+    private const double NameLineShare = 0.6;
+    private const int DescribingWords = 8;
+
+    /// <summary>A "Label: value" line whose value is a name or a few words, not a description.</summary>
+    private static bool IsShortLabelValue(string sentence) =>
+        CheckpointSummaryText.IsLabelWithValue(sentence) && sentence.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < DescribingWords;
 
     /// <summary>A short line without a full stop: a heading in a report, a bullet on a slide.</summary>
     private static bool IsShortLine(string sentence) =>

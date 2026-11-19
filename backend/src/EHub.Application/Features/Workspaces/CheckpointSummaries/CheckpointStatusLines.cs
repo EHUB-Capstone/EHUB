@@ -154,8 +154,8 @@ internal static partial class CheckpointStatusLines
 
     // A short table row whose second column is a status: "Market Research Completed Problem validated". English only:
     // Vietnamese "hoàn thành" inside a row is ordinary prose ("Đo lường hiệu quả thay vì chỉ hoàn thành khóa học").
-    [GeneratedRegex(@"^(?<item>\p{L}[^:]{1,40}?)\s+(?<status>completed|in progress|pending|done)\b\s*(?<text>.*)$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?<item>\p{L}[^:]{1,40}?)\s+(?<status>Completed|COMPLETED|In Progress|IN PROGRESS|Pending|PENDING|Done|DONE)\b\s*(?<text>.*)$",
+        RegexOptions.CultureInvariant)]
     private static partial Regex TableRow();
 
     [GeneratedRegex(@"^(?<number>\d{1,2})[.)]\s*(?<text>\S.*)$")]

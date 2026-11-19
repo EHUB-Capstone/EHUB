@@ -43,7 +43,10 @@ internal static class CheckpointGapQuestions
         ["Research"] = "kết quả nghiên cứu hoặc khảo sát",
         ["Financials"] = "số liệu tài chính",
         ["Team roles"] = "phân công vai trò",
-        ["Innovation"] = "điểm khác biệt"
+        ["Innovation"] = "điểm khác biệt",
+        ["Team name"] = "tên nhóm",
+        ["Startup idea"] = "ý tưởng khởi nghiệp",
+        ["Startup field"] = "lĩnh vực khởi nghiệp"
     };
 
     /// <summary>Concepts that have no Vietnamese name here yet; empty while the two lists agree (a test keeps them so).</summary>

@@ -19,7 +19,7 @@ internal static class CheckpointSummaryOutput
     /// titles, so its questions would be guesses.
     /// </param>
     public static WorkspaceFileSummaryContent? TryBuild(string json, WorkspaceFilePreview preview, CheckpointSummaryGrounding? grounding = null,
-        CheckpointPageLocator? pages = null)
+        CheckpointPageLocator? pages = null, Action<string>? onOverviewRejected = null)
     {
         try
         {
@@ -28,24 +28,41 @@ internal static class CheckpointSummaryOutput
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("overview", out var overview) ||
                 overview.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(overview.GetString()))
                 return null;
-            var overviewText = CheckpointSummaryText.Clean(overview.GetString());
+            var originalOverview = CheckpointSummaryText.Clean(overview.GetString());
+            var overviewText = originalOverview;
             var overviewFromSource = false;
+            IReadOnlyList<(int Position, string Sentence)> keptSentences = [];
             if (grounding is not null)
             {
-                overviewText = grounding.GroundedOverview(overviewText,
+                keptSentences = grounding.KeptOverviewSentences(originalOverview,
                     sentence => !CheckpointStatusLines.Contradicts(sentence, preview.StatusItems));
+                overviewText = string.Join(' ', keptSentences.Select(item => item.Sentence));
                 if (string.IsNullOrWhiteSpace(overviewText))
                 {
+                    // Why the model's overview was dropped, so a recurring cause can be found; no text is passed on.
+                    onOverviewRejected?.Invoke(string.Join("; ", grounding.DiagnoseOverview(originalOverview)));
                     // A usable extract remains available even if the model invented every overview sentence.
-                    overviewText = preview.Highlights.FirstOrDefault(grounding.Supports) ?? "";
+                    overviewText = IdeaSentence(preview, grounding) ?? preview.Highlights.FirstOrDefault(grounding.Supports) ?? "";
                     overviewFromSource = overviewText.Length > 0;
                     if (!overviewFromSource)
                         overviewText = "Chưa đủ bằng chứng để tạo tổng quan. Hãy kiểm tra các trích dẫn trong tài liệu.";
+                    keptSentences = [];
                 }
             }
             WorkspaceSummaryClaimEvidence? Citation(string claim) => grounding?.FindEvidence(claim) is { } quote
                 ? new WorkspaceSummaryClaimEvidence { Text = claim, Quote = quote, Page = pages?.Locate(quote) } : null;
-            var overviewEvidence = CheckpointSummaryText.Sentences(overviewText).Select(Citation).OfType<WorkspaceSummaryClaimEvidence>().ToArray();
+            var overviewEvidence = CheckpointSummaryText.Sentences(overviewText).SelectMany(sentence => grounding?.FindOverviewEvidence(sentence) ?? [], (sentence, quote) =>
+                new WorkspaceSummaryClaimEvidence { Text = sentence, Quote = quote, Page = pages?.Locate(quote) }).ToArray();
+            // An overview of an English document is checked in English, word by word; the reviewer reads its Vietnamese translation.
+            // The translation is written sentence by sentence, so the sentences the file backs keep theirs and a dropped sentence
+            // takes its translation with it. A translation is used only when it keeps every figure of its sentence and adds none.
+            if (keptSentences.Count > 0 && CheckpointSummaryPrompt.IsMostlyEnglish(overviewText))
+            {
+                var translated = TranslateKept(root, originalOverview, keptSentences, out var reason);
+                if (translated is not null) overviewText = translated;
+                // Reported like a rejected overview so that a missing translation can be explained; no text is passed on.
+                else onOverviewRejected?.Invoke("translation-skipped: " + reason);
+            }
             overviewText = CheckpointFigureConflicts.Annotate(overviewText, preview.Conflicts);
             var keyPoints = Clean(Strings(root, "keyPoints"), CheckpointSummaryLimits.MaxKeyPoints);
             if (grounding is not null) keyPoints = keyPoints.Where(grounding.Supports).ToArray();
@@ -85,6 +102,60 @@ internal static class CheckpointSummaryOutput
             };
         }
         catch (JsonException) { return null; }
+    }
+
+    /// <summary>
+    /// The Vietnamese of the kept sentences, from the model's <c>overviewVi</c>: one item per sentence of the English overview, in the
+    /// same order. Null (with the reason) when it is missing, does not match the sentences, or changes a figure.
+    /// </summary>
+    private static string? TranslateKept(JsonElement root, string original, IReadOnlyList<(int Position, string Sentence)> kept, out string reason)
+    {
+        reason = "missing";
+        if (!root.TryGetProperty("overviewVi", out var translation) || translation.ValueKind != JsonValueKind.Array) return null;
+        var items = translation.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => CheckpointSummaryText.Clean(item.GetString()).TrimStart('*', '-', '•', ' ')).ToArray();
+        if (items.Length != CheckpointSummaryGrounding.OverviewSentenceList(original).Length) { reason = "count-differs"; return null; }
+        var sentences = new List<string>();
+        foreach (var (position, sentence) in kept)
+        {
+            if (!IsFaithfulTranslation(sentence, items[position])) { reason = "figures-or-length-differ"; return null; }
+            sentences.Add(items[position]);
+        }
+        reason = "";
+        return string.Join(' ', sentences);
+    }
+
+    private const int MinimumTranslationCharacters = 20;
+
+    /// <summary>
+    /// A translation is trusted only as far as it can be checked without understanding it: it differs from the original, is not
+    /// empty, and contains exactly the figures the checked original contains (a changed or invented number is the worst error).
+    /// </summary>
+    internal static bool IsFaithfulTranslation(string original, string translation) =>
+        translation.Length >= MinimumTranslationCharacters && !string.Equals(original, translation, StringComparison.Ordinal) &&
+        Figures(original).SetEquals(Figures(translation));
+
+    private static HashSet<string> Figures(string text) =>
+        System.Text.RegularExpressions.Regex.Matches(text, @"\d+(?:[.,]\d+)?").Select(match => match.Value.Replace(',', '.'))
+            .ToHashSet(StringComparer.Ordinal);
+
+    private const int MinimumIdeaWords = 8;
+
+    /// <summary>
+    /// When the model's overview cannot be used, the file's own statement of the idea ("Startup Idea: a trusted two-sided
+    /// platform where…") says more about the submission than whichever sentence scored highest. The label in front is dropped.
+    /// </summary>
+    private static string? IdeaSentence(WorkspaceFilePreview preview, CheckpointSummaryGrounding grounding)
+    {
+        foreach (var finding in preview.Requirements)
+        {
+            if (string.IsNullOrWhiteSpace(finding.Evidence) || !finding.Cues.Any(cue => cue.Found && cue.Label == "Startup idea")) continue;
+            var sentence = finding.Evidence.Split(" … ")[0].Trim();
+            var colon = sentence.IndexOf(':');
+            if (colon is > 0 and < 30) sentence = sentence[(colon + 1)..].Trim();
+            if (sentence.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= MinimumIdeaWords && grounding.Supports(sentence)) return sentence;
+        }
+        return null;
     }
 
     /// <summary>
