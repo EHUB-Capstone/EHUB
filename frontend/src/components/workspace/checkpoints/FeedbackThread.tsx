@@ -413,7 +413,7 @@ ${insertText.text}` : insertText.text));
       {/* Comment list */}
       {roots.length === 0 ? (
         <div className="text-center py-10 text-slate-400 text-sm bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
-          Chưa có phản hồi. Hãy là người đầu tiên phản hồi!
+          No feedback yet. Be the first to comment!
         </div>
       ) : (
         <div ref={feedbackListRef} className={`space-y-5 overflow-y-auto pr-1 scrollbar-thin ${fullHeight ? 'max-h-[min(50vh,480px)]' : 'max-h-[340px]'}`}>
@@ -449,7 +449,7 @@ ${insertText.text}` : insertText.text));
       ) : <form onSubmit={handlePost} className="flex gap-3 items-start pt-1">
         <Avatar name={user?.name} avatarUrl={user?.avatarUrl || user?.avatar} />
         <div className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <label className="block text-caption font-semibold text-slate-700" htmlFor="regular-feedback">Phản hồi của bạn</label>
+          <label className="block text-caption font-semibold text-slate-700" htmlFor="regular-feedback">Your feedback</label>
           <AutoSizeTextarea
             id="regular-feedback"
             minRows={2}
@@ -457,8 +457,8 @@ ${insertText.text}` : insertText.text));
             value={text}
             onChange={(e) => setText(e.target.value)}
             submitOnEnter={submitForm}
-            aria-label="Phản hồi của bạn"
-            placeholder="Chia sẻ phản hồi hoặc đặt câu hỏi về checkpoint này…"
+            aria-label="Your feedback"
+            placeholder="Share feedback or ask a question about this checkpoint…"
             className="mt-1 w-full resize-none border-0 bg-transparent px-0 py-1 text-body-sm leading-relaxed outline-none placeholder:text-slate-400 focus:ring-0"
           />
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">

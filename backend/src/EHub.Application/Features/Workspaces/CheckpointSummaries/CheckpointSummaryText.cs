@@ -290,6 +290,9 @@ internal static partial class CheckpointSummaryText
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
+    /// <summary>A label followed by its value on the same line ("Group Name: J4U", "Lĩnh vực: HRTech"); a label ending in a colon is a heading.</summary>
+    internal static bool IsLabelWithValue(string sentence) => LabelWithValue().IsMatch(sentence);
+
     /// <summary>A table cell or a stray letter ("Nhu cầu/JTB", "D"): too short to say anything on its own.</summary>
     internal static bool IsFragment(string sentence) =>
         sentence.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < FragmentWords;
@@ -398,6 +401,9 @@ internal static partial class CheckpointSummaryText
     [GeneratedRegex(@"(?<![a-z0-9])(?:se|dang|sap) (?:hoan thien|bo sung|cap nhat)(?![a-z0-9]).*(?:\bsau\b|con lai|noi dung)",
         RegexOptions.CultureInvariant)]
     private static partial Regex Deferral();
+
+    [GeneratedRegex(@"^[^:]{2,40}:\s*\S")]
+    private static partial Regex LabelWithValue();
 
     [GeneratedRegex(@"^\s*(?:instructors?|supervisors?|lecturers?|mentors?|advisors?|course|class|semester|giảng viên|giáo viên hướng dẫn|gvhd|môn học|lớp|học kỳ)\s*:",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

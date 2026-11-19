@@ -110,7 +110,7 @@ Thư mục chính: `backend/src/EHub.Application/Features/Workspaces/CheckpointS
 | `CheckpointSummaryCircuitBreaker.cs` | Cầu dao: 3 lần liên tiếp không gọi được mô hình thì tạm dừng worker 2/5/15 phút (xem 4.3). |
 | `CheckpointSummaryDiagnosticsHandler.cs` | Dữ liệu chẩn đoán cho Admin: mô hình, cầu dao, hàng đợi, mã lỗi (xem 8). |
 | `CheckpointSummaryFeedbackHandler.cs` | Verdict "hữu ích / chưa hữu ích" của người chấm trên từng bản tóm tắt (xem 7.4). |
-| `CheckpointGapQuestions.cs` | Câu hỏi cho nhóm do **luật** tạo từ điều tiêu chí rubric đòi mà file chưa nhắc tới (xem 6.5). |
+| `CheckpointGapQuestions.cs` | Câu hỏi cho nhóm do **luật** tạo từ điều tiêu chí rubric đòi mà file chưa nhắc tới (xem 6.7). |
 | `CheckpointSummarySettings.cs`, `CheckpointSummarySource.cs` | Cấu hình runtime; nạp file/link/checklist (yêu cầu + tiêu chí rubric, tối đa 20 mục) của checkpoint. |
 | `CheckpointPageLocator.cs` | Tìm trang/slide chứa một câu trích (so khớp đầu câu, bỏ qua dấu câu và khoảng trắng). |
 | `CheckpointTextDiff.cs`, `CheckpointVersionChangesHandler.cs` | So sánh phiên bản (gói nâng cấp 3). |
@@ -133,7 +133,9 @@ Các file khác liên quan:
 
 | File | Vai trò |
 |---|---|
-| `src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx` (~700 dòng) | Thẻ AI trong màn hình checkpoint. Không vẽ gì khi `enabled !== true` (dòng ~537), trừ khi lỗi tải (hiện Retry). |
+| `src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx` | Thẻ AI trong màn hình checkpoint: **giữ state** (tải, poll 5 giây, các hành động, khóa bấm đúp) và **thứ tự bố cục**: Files → Needs attention (số liệu lệch giữa các file, chỉ hiện khi có) → một mục **Checkpoint overview thu gọn** (yêu cầu/rubric gộp, so sánh phiên bản, liên kết). Không vẽ gì khi `enabled !== true`, trừ khi lỗi tải (hiện Retry). |
+| `src/components/workspace/checkpoints/ai-summary/` | Các mảnh của thẻ: `SummaryParts.tsx` (trích dẫn có nút, nhãn, ghi chú), `RequirementEvidence.tsx` (**một** component vẽ danh sách yêu cầu/tiêu chí, dùng cho cả từng file lẫn bản gộp), `FileSummaryRow.tsx` (dòng file, chi tiết, thanh phản hồi), `FigureNotes.tsx` (dòng trạng thái, số liệu lệch), `useFigureHistory.ts`, `summaryContext.ts`. |
+| `src/utils/summaryText.ts` | **Toàn bộ chữ giao diện của thẻ AI, bằng tiếng Anh**, ở một chỗ (dự án không có thư viện i18n). Chữ do AI viết và câu trích từ file giữ ngôn ngữ của bài nộp (thường tiếng Việt). Có test chặn tiếng Việt lọt vào mã giao diện của thẻ. |
 | `src/components/workspace/checkpoints/CheckpointVersionChanges.tsx` | Khối "Thay đổi so với bản trước". |
 | `src/components/workspace/checkpoints/CheckpointPanel.tsx` | Gắn thẻ vào màn hình (chỉ khi `canViewCheckpointSummary(role)`); gọi `review-seen` khi mở checkpoint. |
 | `src/components/workspace/ReviewInboxCard.tsx`, `src/hooks/useReviewInbox.ts` | Widget "Needs a look today" trên Dashboard của Lecturer và Mentor. |
@@ -287,7 +289,31 @@ giá trị của số liệu đang mâu thuẫn được chú thích "(tài li�
 
 Lớp này bắt được chi tiết **bịa**, **không** bắt được việc **hiểu sai** những từ có thật. Vì vậy giao diện luôn ghi AI có thể sai.
 
-### 6.5 Câu hỏi gợi ý do luật tạo (`CheckpointGapQuestions`, từ prompt v11)
+### 6.5 Tổng quan: ngôn ngữ, nguồn và bản dịch (prompt v14–v18, đợt chất lượng đầu ra)
+
+Nguyên tắc: **chỉ đối chiếu được những gì cùng ngôn ngữ với file**. Tổng quan tiếng Việt của slide tiếng Anh gần như không trùng từ nào nên luôn bị loại (log: `no-single-passage best-overlap 1/27`).
+
+- **Ngôn ngữ**: `CheckpointSummaryPrompt.IsMostlyEnglish` (file gần như không có chữ Việt) thêm vào cuối prompt một chỉ dẫn **viết bằng tiếng Anh**: mô hình nhỏ tuân theo chỉ dẫn cùng ngôn ngữ tốt hơn. Mô hình viết `overview` và `keyPoints` bằng tiếng Anh; được kiểm chứng như thường.
+- **Bản dịch tiếng Việt** (từ prompt v20): với file tiếng Anh, schema (`SchemaEnglish`) **bắt buộc** mô hình trả `overviewVi`, một **danh sách** gồm một câu tiếng Việt cho mỗi câu của `overview` tiếng Anh, cùng thứ tự. `CheckpointSummaryOutput.TryBuild` giữ câu nào đã được kiểm chứng và lấy bản dịch cùng vị trí; câu bị loại thì bản dịch của nó bị loại theo. Bản dịch của một câu chỉ được dùng khi **đúng các con số** của câu tiếng Anh (`IsFaithfulTranslation`); danh sách sai độ dài thì bỏ cả bản dịch. Ký hiệu gạch đầu dòng mô hình thêm ở đầu bị bỏ. Bản dịch **không** được kiểm từng chữ: dịch sai nghĩa nhưng giữ số vẫn hiện. Lý do không dùng bản dịch được ghi ở log (`translation-skipped: missing | count-differs | figures-or-length-differ`).
+- **Câu tiếng Anh không được dùng "thuật ngữ đặc trưng"**: trong `Supports`, nhánh "≥ 2 thuật ngữ đặc trưng" dành cho tóm tắt tiếng Việt về slide tiếng Anh. Với câu tiếng Anh, mọi từ đều là "đặc trưng", nên hai từ chung chung ("design", "two") đủ để đỡ một ý bịa. Câu tiếng Anh nay phải có **ít nhất 3 từ và ≥ 20% số từ nội dung** nằm trong đoạn nguồn (`EnglishMinimumShared`, `EnglishMinimumShare`; `IsMostlyEnglish(claim)`). Một lần siết lên "một nửa số từ" làm **mất hết ý chính** vì câu diễn đạt lại hiếm khi trùng nửa số từ, nên đã nới về mức này. Đánh đổi: một ý ghép nhiều chuyện vẫn có thể lọt khi đủ 3 từ chung; bộ lọc chỉ bắt được chi tiết hoàn toàn không có trong file.
+- **Số câu**: tổng quan 3 câu (tài liệu là gì, nội dung chính, điểm đáng chú ý nhất) thay vì 2, tối đa `OverviewSentences = 3` ở `GroundedOverview`. Dài hơn thì sinh lâu hơn (CPU khoảng 12 token/giây).
+- **Nguồn của câu tổng quan** (`FindOverviewEvidence`): một đoạn đỡ được cả câu thì trích đoạn đó; không thì chọn tối đa **3 đoạn** (một dòng, hoặc 2–3 dòng liền nhau ≤ 450 ký tự) sao cho cùng nhau phủ ≥ 50% số từ của câu có trong file, mỗi đoạn thêm ≥ 2 từ mới. Câu có số liệu **không** dùng cách này (số của dòng này sẽ bị ghép vào chủ thể của dòng khác). Mỗi đoạn là một dòng riêng trong "Sources of the overview". Ý chính (`keyPoints`) vẫn cần **một** đoạn duy nhất (test "không trộn thông tin giữa các dòng" bảo vệ điều này).
+- **Khi bản AI vẫn bị loại**: tổng quan là câu file tự nêu ý tưởng (câu quote của một mục có dấu hiệu `Startup idea`, `IdeaSentence`), nếu không có thì câu nổi bật đầu tiên; giao diện ghi "The overview is quoted from the document."
+- **Log lý do bị loại** (không chứa chữ nào của file/mô hình): `File summary {id}: the model overview was rejected (invented-number; low-word-support 2/9)`. Các mã: `market-size-as-goal`, `quoted-slogan`, `invented-currency`, `money-read-as-count`, `no-content-words`, `invented-number`, `invented-range`, `invented-percentage`, `low-word-support x/y`, `no-single-passage best-overlap n/m`. Đây là cách duy nhất để biết vì sao tổng quan bị thay bằng trích dẫn.
+- Muốn đổi số câu hay giọng văn: sửa `Rules` trong prompt, `OverviewSentences`, **nâng `Version`** và sửa các test kiểm số phiên bản.
+
+### 6.6 Nhận diện yêu cầu bằng từ đồng nghĩa và chọn câu trích
+
+- Rubric và slide gọi cùng một thứ bằng tên khác ("Team Name" ↔ "Group Name", "Startup Idea" ↔ "Project Name", "Startup Field" ↔ "Business Area/HRTech"). `CheckpointCriterionCues` có thêm ba khái niệm **Team name / Startup idea / Startup field**; khái niệm Problem có thêm từ tiếng Anh (`struggle`, `fake`, `scam`, `unreliable`, `lack of`, `late or not`, `not suitable`). **Thêm khái niệm mới thì thêm tên vào `CheckpointGapQuestions.Names`.**
+- Dòng dạng "Nhãn: giá trị" ("Group Name: J4U") là nội dung, không phải tiêu đề rỗng (`IsLabelWithValue`), và được trích **một mình**, không ghép thêm dòng sau (dòng sau có thể thuộc slide khác, làm mất số trang). Ngưỡng dò số trang hạ còn 10 ký tự (`CheckpointPageLocator.MinimumCharacters`).
+- Với **tiêu chí rubric**, dòng "Nhãn: giá trị" ngắn (dưới 8 từ) xếp **sau** mọi dòng mô tả; tiêu chí rubric và yêu cầu checkpoint là hai danh sách nên **được phép trích chung một câu** (trước đây câu đã trích cho tiêu chí không được dùng lại cho yêu cầu).
+- Dòng trạng thái: chữ "done/completed/pending/in progress" chỉ được coi là trạng thái khi viết hoa chữ đầu hoặc viết hoa toàn bộ; "recruitment is mainly done through…" không phải trạng thái.
+- Ngưỡng "file ít chữ" của PDF hạ từ 300 xuống **150 ký tự/trang** (`LittleTextPerPdfPage`): một bộ slide giới thiệu có đủ chữ (khoảng 170 ký tự/trang, logo trang trí) bị báo nhầm là "chủ yếu hình ảnh". Review 2.pdf (khoảng 100) vẫn bị báo. Đây chỉ dựa trên hai file mẫu; kiểm lại khi có thêm bài thật.
+- Bộ lọc câu hỏi loại câu nói "chưa/không có X" khi file có X (X: đánh giá, xác minh/kiểm duyệt, thanh toán, chat, bảo mật) — danh sách ngắn trong `DeniableThings`. Chưa bắt được tiền đề tự thêm khác (ví dụ "thanh toán tiền mặt" khi file không nhắc tiền mặt).
+- **OCR chưa làm**: các lỗi "không thấy trong file" đã gặp đều do từ khác nhau, không do ảnh (ảnh trong bài mẫu chỉ là logo). OCR chỉ có giá trị khi chữ nằm trong ảnh (PDF scan, ảnh chụp màn hình dán vào slide); khi cần, thứ tự đề xuất: báo "trang N chỉ có ảnh" → Tesseract chỉ chạy trên trang không có chữ (cần đo trên VPS 2 CPU/3 GB) → mô hình đọc ảnh.
+- Link Canva/Google Slides **không** được đọc (xem thẻ: "The AI does not open links"). Sinh viên cần xuất PDF và upload.
+
+### 6.7 Câu hỏi gợi ý do luật tạo (`CheckpointGapQuestions`, từ prompt v11)
 
 Khi một **tiêu chí rubric** được file phủ (Related, loại `Document`, ít nhất một dấu hiệu đã thấy) nhưng một dấu hiệu khác của mức
 Excellent chưa thấy, người xem được gợi ý một câu hỏi cố định: *"Nhóm đã có hành trình khách hàng (CJM) chưa? File này chưa nhắc tới,
@@ -321,7 +347,21 @@ Dùng lại các câu số liệu đã lưu trong xem nhanh/tóm tắt (không t
 Chỉ nhận hai dạng: **cỡ mẫu** và **phần trăm cùng nội dung**. Tối đa 6 cảnh báo; không báo lại chỗ hai checkpoint cũ lệch nhau.
 Bản tóm tắt cũ chưa có `figures` phải tóm tắt lại mới so được. Giao diện chỉ khuyên hỏi nhóm, không kết luận ai sai.
 
+### 3.2.1 Ngôn ngữ và bố cục của thẻ AI (đợt tinh gọn giao diện)
+
+- **Giao diện bằng tiếng Anh** cho khớp phần còn lại của dự án. **Nội dung AI viết** theo ngôn ngữ của file (xem mục 6.5); **câu trích** luôn nguyên văn từ file.
+- Thẻ **không còn** ba dòng giải thích (phụ đề "Visible to mentors…", cảnh báo "AI-generated and may be inaccurate…", hướng dẫn "Tick files…") để gọn mắt; tiêu đề "AI summary" vẫn cho người xem biết đây là nội dung AI. Muốn khôi phục, thêm lại ba chuỗi vào `summaryText.card` và vào `CheckpointAiSummaryCard.tsx`.
+- Danh sách yêu cầu/tiêu chí: bỏ huy hiệu loại ở từng dòng (chỉ có tiêu đề nhóm "Rubric criteria" / "Checkpoint requirements" khi có cả hai loại), trọng số là chữ mờ, các mục "không thấy" gộp thành một nhóm với **một** câu giải thích. Logic nhóm nằm ở `summariseEvidence` (có test), không nằm trong component.
+- Phần nói về cả checkpoint **không hiện sẵn**: nó nằm sau một dòng "Checkpoint overview" đóng, kèm tóm tắt ngắn ("Requirements 1 of 2 found · Files re-uploaded · 2 links", hàm `overviewHeadline`) để người xem biết có đáng mở không. Mặc định thẻ chỉ có danh sách file và bản tóm tắt từng file. Riêng **Needs attention** (số liệu hai file ghi khác nhau) luôn hiện nổi vì là cảnh báo. Danh sách yêu cầu/rubric gộp **không phải bản tóm tắt AI**: nó ghép bằng luật từ kết quả từng file.
+- Checkpoint **một file**: bản tóm tắt tự mở khi xong, danh sách yêu cầu/tiêu chí của file **mở sẵn** ngay trong bản tóm tắt, và mục "Checkpoint overview" **không hiện** nếu không còn gì ngoài danh sách này (không có liên kết, không có file nộp lại, không có số liệu đối chiếu); danh sách gộp bị bỏ vì trùng. Nhiều file: danh sách theo từng file nằm trong mục thu gọn "Evidence by requirement", và danh sách gộp nằm trong "Checkpoint overview".
+- Mỗi câu hỏi gợi ý có nút "Feedback" để đưa nguyên văn câu hỏi vào ô góp ý của checkpoint. Trích dẫn chỉ có nút mở file ở trang (`page N`); không có nút sao chép hay Feedback.
+- Nút `page N` trên mỗi trích dẫn được thu nhỏ; tên đầy đủ nằm ở `aria-label` và tooltip.
+- Không dùng `EmptyState`/`ErrorState` có sẵn của dự án cho trạng thái trống/lỗi của thẻ vì chúng là cỡ cả trang (đệm `py-16`/`p-12`), quá lớn cho một thẻ lồng; thẻ dùng dòng chữ gọn cùng nút Retry.
+- Các test đọc mã nguồn của thẻ (regex) đọc **cả thư mục** `ai-summary/` qua `aiSummarySources()`; khi chuyển mã giữa các file không cần sửa test.
+
 ### 7.4 Phản hồi chất lượng và dọn dữ liệu khi xóa file
+
+> **Giao diện hiện tại:** hai nút 👍/👎 vẫn còn dưới mỗi bản tóm tắt (đã thử bỏ rồi khôi phục). Trên các **trích dẫn** chỉ còn nút mở file ở đúng trang; hai nút "Copy" và "Feedback" đã bỏ khỏi trích dẫn cho gọn. Nút "Feedback" chỉ còn ở **câu hỏi gợi ý**, đưa nguyên văn câu hỏi vào ô góp ý của checkpoint để hỏi nhóm.
 
 **Phản hồi "hữu ích / chưa hữu ích".** Đây là phép đo chất lượng duy nhất trên bài nộp thật: bộ đánh giá C# chỉ dùng bài mẫu bịa. Trong thẻ AI, mỗi bản tóm tắt đã xong có hai nút
 (👍/👎, `aria-pressed`, tối thiểu 36 px); chọn "chưa hữu ích" thì hiện thêm các lý do cố định (Thông tin sai, Thiếu ý quan trọng, Trích dẫn không đúng, Lý do khác).

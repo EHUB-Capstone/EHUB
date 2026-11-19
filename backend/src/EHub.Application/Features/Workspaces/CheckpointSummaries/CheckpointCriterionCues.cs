@@ -37,7 +37,7 @@ internal static class CheckpointCriterionCues
         C("UI/UX", @"ui|ux|giao dien|wireframe|figma|mock ?up|trai nghiem nguoi dung"),
         C("Stability", @"stability|bugs?\b|on dinh|crash"),
         // Not "hạn chế" (limitation): a slide listing the product's own limits is not the customers' problem.
-        C("Problem", @"problem(?![- ]solving)|van de|pain points?|noi dau|kho khan|rui ro|thach thuc|bat cap|phai cho|cho qua|(?:ton|mat) (?:nhieu )?thoi gian|bat tien|lang phi|khong co thoi gian|gap kho|rat kho|kho (?:tim|biet|truy|quan|tinh)|thieu hut"),
+        C("Problem", @"problem(?![- ]solving)|van de|pain points?|noi dau|kho khan|rui ro|thach thuc|bat cap|phai cho|cho qua|(?:ton|mat) (?:nhieu )?thoi gian|bat tien|lang phi|khong co thoi gian|gap kho|rat kho|kho (?:tim|biet|truy|quan|tinh)|thieu hut|struggles?\b|fake\b|scams?\b|unreliable|lack of|late or not|not suitable"),
         C("Solution / value", @"solution|giai phap|giai quyet|khac phuc|value proposition|gia tri|loi the canh tranh|competitive advantage|tu dong (?:ghep|sap xep|hoa)|canh bao (?:do|tu dong)"),
         C("Case requirements", @"case|requirements?|yeu cau|de bai|brief"),
         C("Launch", @"launch|ra mat|go live|phat hanh|soft launch"),
@@ -56,7 +56,12 @@ internal static class CheckpointCriterionCues
         C("Research", @"research|interview|survey|questionnaire|respondents?|sample size|khao sat|bang hoi|phieu hoi|nguoi tra loi|phong van|nghien cuu|focus group|desk research"),
         C("Financials", @"financial|tai chinh|costs?|chi phi|break even|hoa von|cash flow|dong tien|unit economics|cac|ltv"),
         C("Team roles", @"roles?|vai tro|ceo|cto|phan cong|members?|thanh vien"),
-        C("Innovation", @"innovat|sang tao|unique|differentiat|khac biet|usp|original")
+        C("Innovation", @"innovat|sang tao|unique|differentiat|khac biet|usp|original"),
+        // Identity items of an introduction deck. Slides and rubrics name the same thing differently ("Project Name" and
+        // "Group Name" for "Team Name", "Business Area" for "Startup Field"), so each concept lists the usual names.
+        C("Team name", @"team names?|group names?|ten (?:nhom|team|doi)"),
+        C("Startup idea", @"startup ideas?|business ideas?|product ideas?|y tuong|ideas?|project names?|ten du an|tagline|slogan|one ?liner"),
+        C("Startup field", @"startup fields?|business areas?|industry|industries|sector|linh vuc|nganh|hrtech|fintech|edtech|healthtech|agritech|proptech|foodtech|legaltech")
     ];
 
     /// <summary>

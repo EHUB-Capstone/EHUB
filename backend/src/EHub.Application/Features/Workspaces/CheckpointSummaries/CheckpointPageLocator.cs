@@ -10,7 +10,7 @@ namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 /// </summary>
 internal sealed class CheckpointPageLocator
 {
-    private const int MinimumCharacters = 14;
+    private const int MinimumCharacters = 10;
     private const int MaximumCharacters = 40;
 
     private readonly string[] _pages;

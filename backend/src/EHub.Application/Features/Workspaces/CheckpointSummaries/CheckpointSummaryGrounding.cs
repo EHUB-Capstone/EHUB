@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EHub.Application.Features.Mentoring.Evidence;
 
 namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 
@@ -35,6 +36,7 @@ internal sealed partial class CheckpointSummaryGrounding
     private readonly HashSet<string> _words;
     private readonly IReadOnlyList<string> _sentences;
     private readonly string _text;
+    private readonly string _plain;
     private readonly double _minimumWordSupport;
     private readonly bool _littleText;
     private readonly Dictionary<string, string?> _evidence = new(StringComparer.Ordinal);
@@ -46,6 +48,7 @@ internal sealed partial class CheckpointSummaryGrounding
         _words = Words(sourceText).ToHashSet(StringComparer.Ordinal);
         _sentences = CheckpointSummaryText.Sentences(sourceText);
         _text = " " + CheckpointSummaryText.Normalize(sourceText) + " ";
+        _plain = " " + MentorEvidenceText.Normalize(sourceText) + " ";
         _minimumWordSupport = littleText ? MinimumWordSupportLittleText : MinimumWordSupport;
         _littleText = littleText;
     }
@@ -69,17 +72,62 @@ internal sealed partial class CheckpointSummaryGrounding
         }
         var supported = words.Count(_words.Contains);
         if (supported >= _minimumWordSupport * words.Length) return true;
-        // Slides are often in English while the summary is in Vietnamese: then distinctive terms carry the evidence.
+        // Slides are often in English while the summary is in Vietnamese: then distinctive terms carry the evidence. An English
+        // claim has no such excuse: every English word is "distinctive", so two common words ("design", "two") would back anything.
+        // A paraphrase of English text shares only some of its words, so an English claim needs several of them, not a half.
+        if (CheckpointSummaryPrompt.IsMostlyEnglish(claim)) return supported >= EnglishMinimumShared && supported >= EnglishMinimumShare * words.Length;
         return words.Count(word => IsDistinctive(word) && _words.Contains(word)) >= MinimumDistinctiveTerms;
     }
 
-    /// <summary>Every sentence, including the opening claim, needs support. Never restore a rejected sentence.</summary>
-    public string GroundedOverview(string overview, Func<string, bool>? accept = null)
+    /// <summary>
+    /// Why a sentence is not supported, as a short code that quotes nothing from the file or the model (a log line must not
+    /// carry document text): which check failed first, and how many of its words the file backs.
+    /// </summary>
+    public string Diagnose(string sentence)
     {
-        var sentences = SentenceEnd().Split(overview.Replace('\n', ' ').Trim());
-        return string.Join(' ', sentences.Where(sentence => FindEvidence(sentence) is not null && (accept is null || accept(sentence)))
-            .Distinct(StringComparer.Ordinal).Take(2));
+        if (MisusesMarketSize(sentence)) return "market-size-as-goal";
+        if (QuotesSlogan(sentence)) return "quoted-slogan";
+        if (InventsCurrency(sentence)) return "invented-currency";
+        if (ReadsMoneyAsCount(sentence)) return "money-read-as-count";
+        var claim = Label().Replace(sentence, string.Empty, 1);
+        var words = Words(claim).Where(word => !FunctionWords.Contains(word)).Distinct(StringComparer.Ordinal).ToArray();
+        if (words.Length == 0) return "no-content-words";
+        if (words.Any(word => word.Any(char.IsDigit) && !_words.Contains(word))) return "invented-number";
+        if (InventsRange(claim)) return "invented-range";
+        _percentages ??= _sentences.SelectMany(PercentageValues).ToHashSet(StringComparer.Ordinal);
+        if (PercentageValues(claim).Any(percentage => !_percentages.Contains(percentage))) return "invented-percentage";
+        var supported = words.Count(_words.Contains);
+        var distinctive = words.Count(word => IsDistinctive(word) && _words.Contains(word));
+        var english = CheckpointSummaryPrompt.IsMostlyEnglish(claim);
+        if (supported < _minimumWordSupport * words.Length &&
+            (english ? supported < EnglishMinimumShared || supported < EnglishMinimumShare * words.Length : distinctive < MinimumDistinctiveTerms))
+            return $"low-word-support {supported}/{words.Length}";
+        if (FindOverviewEvidence(sentence).Count > 0) return "supported";
+        var terms = words.ToHashSet(StringComparer.Ordinal);
+        var best = _sentences.Select(source => Words(source).Distinct(StringComparer.Ordinal).Count(terms.Contains)).DefaultIfEmpty(0).Max();
+        return $"no-single-passage best-overlap {best}/{terms.Count}";
     }
+
+    /// <summary>The reasons each sentence of an overview is rejected, without its text.</summary>
+    public IReadOnlyList<string> DiagnoseOverview(string overview) =>
+        OverviewSentenceList(overview).Select(Diagnose).ToArray();
+
+    /// <summary>The sentences of an overview, in order.</summary>
+    public static string[] OverviewSentenceList(string overview) => SentenceEnd().Split(overview.Replace("\n", " ").Trim());
+
+    /// <summary>
+    /// The sentences of the overview that the file backs, with their position among all the sentences (so a translation written
+    /// sentence by sentence can be matched). Every sentence needs support, the opening claim included. A rejected sentence is
+    /// never restored.
+    /// </summary>
+    public IReadOnlyList<(int Position, string Sentence)> KeptOverviewSentences(string overview, Func<string, bool>? accept = null) =>
+        OverviewSentenceList(overview).Select((sentence, position) => (Position: position, Sentence: sentence))
+            .Where(item => FindOverviewEvidence(item.Sentence).Count > 0 && (accept is null || accept(item.Sentence)))
+            .DistinctBy(item => item.Sentence, StringComparer.Ordinal).Take(OverviewSentences).ToArray();
+
+    /// <summary>Every sentence, including the opening claim, needs support. Never restore a rejected sentence.</summary>
+    public string GroundedOverview(string overview, Func<string, bool>? accept = null) =>
+        string.Join(' ', KeptOverviewSentences(overview, accept).Select(item => item.Sentence));
 
     /// <summary>A bounded original passage supports each claim independently, rather than words scattered across the file.</summary>
     public string? FindEvidence(string claim)
@@ -93,6 +141,64 @@ internal sealed partial class CheckpointSummaryGrounding
             .OrderByDescending(candidate => candidate.Overlap).Take(12);
         var match = candidates.FirstOrDefault(candidate => new CheckpointSummaryGrounding(candidate.Text, _littleText).Supports(claim));
         return _evidence[claim] = match.Text;
+    }
+
+    private const int OverviewSentences = 3;
+    private const int EnglishMinimumShared = 3;
+    private const double EnglishMinimumShare = 0.2;
+
+    private readonly Dictionary<string, IReadOnlyList<string>> _overviewEvidence = new(StringComparer.Ordinal);
+
+    private const int OverviewPassages = 3;
+    private const int MinimumNewTerms = 2;
+    private const double CoveredShare = 0.5;
+    private const int WindowLines = 3;
+    private const int WindowCharacters = 450;
+
+    /// <summary>
+    /// The passages that back one sentence of the overview. A sentence that one passage backs is cited by that passage. An overview
+    /// sentence often joins several lines of a slide (the idea, the problem, the plan), and the summary may be in another language than
+    /// the slide, so no single line holds it: then up to three passages (a line, or two or three neighbouring lines) are chosen so
+    /// that together they hold at least half of the claim's words that the file has, each adding new ones. A claim with a figure is
+    /// never backed this way: a figure of one line would be joined to the subject of another. Each passage is cited on its own.
+    /// </summary>
+    public IReadOnlyList<string> FindOverviewEvidence(string claim)
+    {
+        if (_overviewEvidence.TryGetValue(claim, out var existing)) return existing;
+        var single = FindEvidence(claim);
+        if (single is not null) return _overviewEvidence[claim] = [single];
+        if (!Supports(claim) || Words(claim).Any(IsFigure)) return _overviewEvidence[claim] = [];
+        var wanted = Words(claim).Where(word => !FunctionWords.Contains(word) && _words.Contains(word)).ToHashSet(StringComparer.Ordinal);
+        if (wanted.Count == 0) return _overviewEvidence[claim] = [];
+        var passages = _sentences.Where(sentence => sentence.Length <= WindowCharacters).Concat(Windows())
+            .Select(text => (Text: text, Words: Words(text).ToHashSet(StringComparer.Ordinal))).ToArray();
+        var uncovered = wanted.ToHashSet(StringComparer.Ordinal);
+        var chosen = new List<string>();
+        while (chosen.Count < OverviewPassages)
+        {
+            var next = passages.Select(passage => (passage.Text, passage.Words, Gain: passage.Words.Count(uncovered.Contains)))
+                .Where(passage => passage.Gain >= MinimumNewTerms)
+                .OrderByDescending(passage => passage.Gain).ThenBy(passage => passage.Text.Length)
+                .FirstOrDefault();
+            if (next.Text is null) break;
+            chosen.Add(next.Text);
+            uncovered.ExceptWith(next.Words);
+        }
+        var covered = wanted.Count - uncovered.Count;
+        return _overviewEvidence[claim] = chosen.Count > 0 && covered >= CoveredShare * wanted.Count ? chosen : [];
+    }
+
+    private static bool IsFigure(string word) => word.Any(char.IsDigit) && word.All(character => char.IsDigit(character) || character is '%' or '.' or ',');
+
+    /// <summary>Two or three neighbouring lines, joined as the quotes of the screen join them, short enough to read as one passage.</summary>
+    private IEnumerable<string> Windows()
+    {
+        for (var length = 2; length <= WindowLines; length++)
+            for (var start = 0; start + length <= _sentences.Count; start++)
+            {
+                var joined = string.Join(" … ", _sentences.Skip(start).Take(length));
+                if (joined.Length <= WindowCharacters) yield return joined;
+            }
     }
 
     /// <summary>
@@ -154,7 +260,36 @@ internal sealed partial class CheckpointSummaryGrounding
     /// what the file lacks is fine; one that invents the premise sends the reviewer asking about something that is not there.
     /// </summary>
     public bool AssumesUnseenFact(string question) =>
-        Words(question).Any(word => word.Any(char.IsDigit) && !_words.Contains(word)) || UnseenContrast().IsMatch(question);
+        Words(question).Any(word => word.Any(char.IsDigit) && !_words.Contains(word)) || UnseenContrast().IsMatch(question) ||
+        DeniesWhatTheFileStates(question);
+
+    // Things a question may wrongly say the team lacks: what the question says in Vietnamese (accent-free), and how the file
+    // may state the same thing in either language.
+    private static readonly (Regex Asked, Regex Stated)[] DeniableThings =
+    [
+        (Plain("danh gia|xep hang|uy tin"), Plain("reviews?\b|ratings?\b|reputation|danh gia|xep hang|uy tin")),
+        (Plain("xac minh|kiem duyet"), Plain("verif|moderat|xac minh|kiem duyet")),
+        (Plain("thanh toan"), Plain("payments?\b|escrow|thanh toan")),
+        (Plain("tro chuyen|nhan tin|chat\b"), Plain("chat\b|messag|nhan tin|tro chuyen")),
+        (Plain("bao mat|an toan"), Plain("secur|safe|bao mat|an toan"))
+    ];
+
+    private static Regex Plain(string terms) => new("(?<![a-z0-9])(?:" + terms + ")", RegexOptions.CultureInvariant);
+
+    private static readonly Regex Denial = new(@"(?<![a-z0-9])(?:chua|khong|thieu)(?: co| duoc)?(?: he thong| co che| quy trinh| ke hoach)?\s*$", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// True when a question says the team has no X ("trong môi trường chưa có hệ thống đánh giá") although the file states X
+    /// ("two-way ratings and reviews"): the question would send the reviewer asking about something that is there.
+    /// </summary>
+    private bool DeniesWhatTheFileStates(string question)
+    {
+        var plain = MentorEvidenceText.Normalize(question);
+        foreach (var (asked, stated) in DeniableThings)
+            foreach (Match thing in asked.Matches(plain))
+                if (Denial.IsMatch(plain[..thing.Index].TrimEnd()) && stated.IsMatch(_plain)) return true;
+        return false;
+    }
 
     /// <summary>True when the sentence gives a range ("200-1.000") whose two ends the file never states next to each other.</summary>
     private bool InventsRange(string sentence) =>

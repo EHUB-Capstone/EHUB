@@ -43,7 +43,10 @@ internal static class CheckpointGapQuestions
         ["Research"] = "research or survey results",
         ["Financials"] = "financial figures",
         ["Team roles"] = "a division of team roles",
-        ["Innovation"] = "a point of difference"
+        ["Innovation"] = "a point of difference",
+        ["Team name"] = "a team name",
+        ["Startup idea"] = "a statement of the startup idea",
+        ["Startup field"] = "the startup field"
     };
 
     /// <summary>Concepts that have no name here yet; empty while the two lists agree (a test keeps them so).</summary>

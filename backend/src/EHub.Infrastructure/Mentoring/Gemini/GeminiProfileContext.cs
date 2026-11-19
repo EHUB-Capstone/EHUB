@@ -7,7 +7,9 @@ namespace EHub.Infrastructure.Mentoring.Gemini;
 /// <summary>Selects bounded source passages; all semantic scores still come from the configured model.</summary>
 internal static class GeminiProfileContext
 {
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
+    // The patterns are linear, so the timeout only bounds hostile input. 100 ms was short enough to trip on a busy CI runner
+    // (RegexMatchTimeoutException in NearBudgetPromptsReduceOnlyExplanationOptionsAndKeepScoringContext while heavy tests ran in parallel).
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
         { "the", "and", "with", "for", "from", "this", "that", "project", "startup", "mentor", "can", "have", "has",
           "cua", "cho", "cac", "nhung", "voi", "trong", "duoc", "mot", "nhom", "can", "kinh", "nghiem", "du", "an" };

@@ -164,11 +164,12 @@ public sealed class CheckpointSummaryGenerator(
         var answer = await summarizer.CompleteJsonAsync(CheckpointSummaryPrompt.System,
             CheckpointSummaryPrompt.User(checkpoint.CheckpointNumber, checkpoint.Name, outline, read.Value.File.OriginalName, prompt,
                 condensed, read.Value.LittleText, followChecklist, preview.StatusItems.Count > 0),
-            CheckpointSummaryPrompt.Schema, cancellationToken);
+            CheckpointSummaryPrompt.IsMostlyEnglish(prompt) ? CheckpointSummaryPrompt.SchemaEnglish : CheckpointSummaryPrompt.Schema, cancellationToken);
         if (answer.IsFailure) return Result.Failure<Generated>(answer.Error);
 
         // Checked against the whole file, not only the condensed prompt: a detail from the file is never wrongly dropped.
-        var content = CheckpointSummaryOutput.TryBuild(answer.Value, preview, new CheckpointSummaryGrounding(text, read.Value.LittleText), read.Value.Pages);
+        var content = CheckpointSummaryOutput.TryBuild(answer.Value, preview, new CheckpointSummaryGrounding(text, read.Value.LittleText), read.Value.Pages,
+            reasons => logger.LogInformation("File summary {SummaryId}: the overview needed a fallback ({Reasons}).", summaryId, reasons));
         if (content is null)
             return Result.Failure<Generated>(ErrorCodes.WorkspaceSummaryModelBadAnswer, "The model returned an answer that could not be used.");
         return Result.Success(new Generated(CheckpointSummarySnapshot.Serialize(content, checklist, newGeneration: true), previewJson, read.Value.Truncated || condensed));

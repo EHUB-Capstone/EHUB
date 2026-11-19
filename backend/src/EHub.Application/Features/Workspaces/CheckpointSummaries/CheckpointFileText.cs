@@ -30,8 +30,10 @@ public sealed class CheckpointFileText(
     CheckpointSummarySettings settings)
 {
     // Below these averages a document is mostly images: a text page holds well over 1,000 characters and a slide with
-    // a few bullet points several hundred, while Review 2.pdf (39 slides of diagrams) had about 100 per page.
-    private const int LittleTextPerPdfPage = 300;
+    // a few bullet points several hundred, while Review 2.pdf (39 slides of diagrams) had about 100 per page. An
+    // introduction deck whose logos and photos are decoration but whose slides all carry their text (J4U, 9 slides) has
+    // about 170, and its text is complete: it must not be called a deck of pictures.
+    private const int LittleTextPerPdfPage = 150;
     private const int LittleTextPerSlide = 80;
     private const int MinimumPagesToJudge = 3;
 
