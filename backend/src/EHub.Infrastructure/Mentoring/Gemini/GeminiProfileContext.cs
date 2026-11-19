@@ -12,12 +12,11 @@ internal static class GeminiProfileContext
         { "the", "and", "with", "for", "from", "this", "that", "project", "startup", "mentor", "can", "have", "has",
           "cua", "cho", "cac", "nhung", "voi", "trong", "duoc", "mot", "nhom", "can", "kinh", "nghiem", "du", "an" };
 
-    internal static string Select(string source, IReadOnlyCollection<string> projects, int maximum)
+    internal static string Select(string source, IReadOnlyList<IReadOnlySet<string>> queryTerms, int maximum)
     {
         if (source.Length <= maximum) return source;
         var passages = Regex.Split(source, @";\s*|(?<=[.!?])\s+", RegexOptions.CultureInvariant, RegexTimeout)
             .Select(text => text.Trim()).Where(text => text.Length > 0).ToArray();
-        var queryTerms = projects.Select(Terms).ToArray();
         var passageTerms = passages.Select(Terms).ToArray();
         var overlap = passageTerms.Select(terms => queryTerms.Select(query => terms.Count(query.Contains)).ToArray()).ToArray();
         var selected = new HashSet<int>();
@@ -29,7 +28,7 @@ internal static class GeminiProfileContext
             if (length + added <= maximum) { selected.Add(index); length += added; }
         }
         // Cover individual project needs, so a frequently repeated topic cannot exclude all other topics in the batch.
-        for (var project = 0; project < queryTerms.Length; project++)
+        for (var project = 0; project < queryTerms.Count; project++)
         {
             var index = Enumerable.Range(0, passages.Length).Where(index => overlap[index][project] > 0)
                 .OrderByDescending(index => overlap[index][project]).ThenBy(index => passages[index].Length).ThenBy(index => index)
@@ -48,13 +47,12 @@ internal static class GeminiProfileContext
         return string.Join("; ", selected.Order().Select(index => passages[index]));
     }
 
-    internal static IEnumerable<string> Prioritize(string[] passages, IReadOnlyCollection<string> projects)
+    internal static IEnumerable<string> Prioritize(string[] passages, IReadOnlyList<IReadOnlySet<string>> queries)
     {
-        var queries = projects.Select(Terms).ToArray();
         var terms = passages.Select(Terms).ToArray();
         var overlaps = terms.Select(words => queries.Select(query => words.Count(query.Contains)).ToArray()).ToArray();
         var seen = new HashSet<int>();
-        for (var project = 0; project < queries.Length; project++)
+        for (var project = 0; project < queries.Count; project++)
         {
             var best = Enumerable.Range(0, passages.Length).Where(index => overlaps[index][project] > 0)
                 .OrderByDescending(index => overlaps[index][project]).ThenBy(index => passages[index].Length).ThenBy(index => index)
@@ -65,12 +63,28 @@ internal static class GeminiProfileContext
             if (seen.Add(index)) yield return passages[index];
     }
 
-    private static HashSet<string> Terms(string text)
+    internal static IReadOnlySet<string> Terms(string text)
     {
         var folded = new StringBuilder();
         foreach (var character in text.ToLowerInvariant().Replace('đ', 'd').Normalize(NormalizationForm.FormD))
             if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark) folded.Append(character);
-        return Regex.Matches(folded.ToString(), @"[\p{L}\p{N}+#.]{2,}", RegexOptions.CultureInvariant, RegexTimeout)
-            .Select(match => match.Value.Trim('.')).Where(term => term.Length >= 2 && !StopWords.Contains(term)).ToHashSet(StringComparer.Ordinal);
+
+        var value = folded.ToString();
+        var terms = new HashSet<string>(StringComparer.Ordinal);
+        var start = 0;
+        for (var end = 0; end <= value.Length; end++)
+        {
+            if (end < value.Length && (char.IsLetter(value[end]) || char.IsNumber(value[end]) || value[end] is '+' or '#' or '.'))
+                continue;
+
+            var token = value.AsSpan(start, end - start).Trim('.');
+            if (token.Length >= 2)
+            {
+                var term = token.ToString();
+                if (!StopWords.Contains(term)) terms.Add(term);
+            }
+            start = end + 1;
+        }
+        return terms;
     }
 }
