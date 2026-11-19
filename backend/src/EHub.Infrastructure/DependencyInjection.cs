@@ -61,12 +61,9 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(55))
             .RedactLoggedHeaders(["x-goog-api-key"])
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-        // Optional feature: a missing key or Enabled=false must not stop the API, so there is no ValidateOnStart.
-        services.AddOptions<ShowcaseAssistantOptions>().Bind(configuration.GetSection(ShowcaseAssistantOptions.SectionName))
-            .PostConfigure(assistant =>
-            {
-                if (assistant.ApiKey.Length == 0) assistant.ApiKey = configuration[$"{GeminiMentorOptions.SectionName}:ApiKey"] ?? string.Empty;
-            });
+        // Optional feature: Enabled=false must not stop the API, so there is no ValidateOnStart.
+        // The assistant has no server-side key: every user supplies their own, so nothing here falls back to the mentor key.
+        services.AddOptions<ShowcaseAssistantOptions>().Bind(configuration.GetSection(ShowcaseAssistantOptions.SectionName));
         services.AddHttpClient<IShowcaseAssistantModel, GeminiShowcaseAssistantModel>(client =>
             client.Timeout = TimeSpan.FromSeconds(30))
             .RedactLoggedHeaders(["x-goog-api-key"])

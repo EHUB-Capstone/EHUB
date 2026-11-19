@@ -1,6 +1,6 @@
 import axiosClient from './axiosClient.ts';
 import type { ApiEnvelope } from '../types/workspaceTools';
-import type { CheckpointFigureHistory, CheckpointSummary, CheckpointVersionChanges, SummaryDiagnostics, SummaryFeedback, SummaryFeedbackRequest } from '../types/checkpointSummary';
+import type { CheckpointFigureHistory, CheckpointProgress, CheckpointSummary, CheckpointVersionChanges, SummaryDiagnostics, SummaryFeedback, SummaryFeedbackRequest } from '../types/checkpointSummary';
 
 export const checkpointSummaryPath = (teamId: string, checkpointNumber: number) =>
   `/workspace/checkpoints/teams/${teamId}/checkpoints/${checkpointNumber}/ai-summary`;
@@ -17,6 +17,9 @@ export const checkpointSummaryApi = {
   /** Figures this checkpoint states differently from the team's earlier checkpoints. Uses figures already taken from the files; not available while AI summaries are off. */
   figureHistory: (teamId: string, checkpointNumber: number, signal?: AbortSignal) =>
     axiosClient.get(`${checkpointSummaryPath(teamId, checkpointNumber)}/figure-history`, { signal }) as Promise<ApiEnvelope<CheckpointFigureHistory>>,
+  /** What each checkpoint of the team mentions of the things the rubrics ask for. Uses what the files already stored; not available while AI summaries are off. */
+  progress: (teamId: string, checkpointNumber: number, signal?: AbortSignal) =>
+    axiosClient.get(`${checkpointSummaryPath(teamId, checkpointNumber)}/progress`, { signal }) as Promise<ApiEnvelope<CheckpointProgress>>,
   /** The reviewer's own verdict on a finished summary. Giving it again replaces the earlier one. */
   setFeedback: (teamId: string, checkpointNumber: number, fileId: string, feedback: SummaryFeedbackRequest, signal?: AbortSignal) =>
     axiosClient.put(`${checkpointSummaryPath(teamId, checkpointNumber)}/files/${fileId}/feedback`, feedback, { signal }) as Promise<ApiEnvelope<SummaryFeedback>>,

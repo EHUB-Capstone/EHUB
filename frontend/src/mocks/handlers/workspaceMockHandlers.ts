@@ -1696,6 +1696,30 @@ export function registerWorkspaceMockHandlers(mock: MockAdapter): void {
     }, 'Figure history retrieved.');
   });
 
+  // Progress across checkpoints: a persona that appears, a roadmap that is no longer mentioned and a competitor analysis that never is.
+  const progressRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/progress$/;
+  mock.onGet(progressRoute).reply((config) => {
+    const [, teamId = '', number = '1'] = config.url?.match(progressRoute) || [];
+    const denied = summaryReviewerFailure(teamId);
+    if (denied) return denied;
+    const disabled = summaryDisabledFailure();
+    if (disabled) return disabled;
+    const current = Number(number);
+    const numbers = [1, 2, 3, 4].filter((item) => item <= current && filesForCheckpoint(teamId, item).length > 0);
+    if (numbers.length < 2 || numbers[numbers.length - 1] !== current) return ok({ checkpointNumber: current, checkpoints: [], concepts: [] }, 'Checkpoint progress retrieved.');
+    const states = (pattern: ('Found' | 'NotMentioned')[]) => numbers.map((item, position) => ({
+      checkpointNumber: item, state: pattern[Math.min(position, pattern.length - 1)] }));
+    return ok({
+      checkpointNumber: current,
+      checkpoints: numbers.map((item) => ({ number: item, fileCount: filesForCheckpoint(teamId, item).length, readFileCount: filesForCheckpoint(teamId, item).length })),
+      concepts: [
+        { label: 'Roadmap', change: 'Dropped', cells: states(['Found', 'NotMentioned']) },
+        { label: 'Competitors', change: 'Missing', cells: states(['NotMentioned']) },
+        { label: 'Persona', change: 'Gained', cells: states(['NotMentioned', 'Found']) },
+      ],
+    }, 'Checkpoint progress retrieved.');
+  });
+
   // What changed in files uploaded again: each file is paired with its previous version by name, like the server does.
   const changesRoute = /^\/workspace\/checkpoints\/teams\/([^/]+)\/checkpoints\/(\d+)\/ai-summary\/changes$/;
   mock.onGet(changesRoute).reply((config) => {

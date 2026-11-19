@@ -279,6 +279,18 @@ public sealed class WorkspaceCheckpointsController(
         return Ok(ApiResponse<WorkspaceCheckpointFigureHistoryResponse>.SuccessResponse(result.Value, "Figure history retrieved."));
     }
 
+    /// <summary>How the team's checkpoints mention the things the rubrics ask for, from the earliest to this one.</summary>
+    [HttpGet("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/progress")]
+    [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
+    public async Task<IActionResult> GetProgress(Guid teamId, int checkpointNumber,
+        [FromServices] ICheckpointProgressHandler handler, CancellationToken cancellationToken)
+    {
+        var result = await handler.GetAsync(teamId, checkpointNumber, UserId, Role, cancellationToken);
+        if (result.IsFailure) return ToErrorResponse(result.Error);
+        Response.Headers.CacheControl = "private, no-store";
+        return Ok(ApiResponse<WorkspaceCheckpointProgressResponse>.SuccessResponse(result.Value, "Checkpoint progress retrieved."));
+    }
+
     [HttpPost("teams/{teamId:guid}/checkpoints/{checkpointNumber:int}/ai-summary/cancel")]
     [Authorize(Policy = SystemPolicies.CheckpointReviewers)]
     public async Task<IActionResult> CancelAiSummary(Guid teamId, int checkpointNumber,

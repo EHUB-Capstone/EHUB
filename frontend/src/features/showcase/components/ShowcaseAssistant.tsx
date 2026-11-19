@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Eye, RotateCcw, Send, ThumbsUp, X } from 'lucide-react';
+import { ExternalLink, Eye, KeyRound, RotateCcw, Send, ThumbsUp, X } from 'lucide-react';
 import { showcaseApi } from '../../../api/showcaseApi';
 import AutoSizeTextarea from '../../../components/ui/AutoSizeTextarea';
 import Button from '../../../components/ui/Button';
@@ -11,10 +11,14 @@ import { parseApiError } from '../../../utils/apiError';
 import { cn } from '../../../utils/cn';
 import { stageLabel } from '../../../utils/showcase';
 import {
+  ASSISTANT_KEY_URL,
   ASSISTANT_MAX_MESSAGE_LENGTH,
   ASSISTANT_STARTER_QUESTIONS,
   assistantErrorMessage,
+  assistantKeyProblem,
   buildAssistantHistory,
+  cleanAssistantKey,
+  isAssistantKeyError,
   type AssistantChatMessage,
 } from '../../../utils/showcaseAssistant';
 
@@ -54,6 +58,63 @@ function ProjectResult({ project, backTo }: { project: ShowcaseAssistantProjectD
   );
 }
 
+/**
+ * The assistant runs on the user's own Gemini key: the server keeps none. This is where it is pasted. The key is checked for
+ * shape only (nothing is sent anywhere to test it); Google's answer to the first question tells whether it works.
+ */
+function KeyForm({ draft, notice, inputRef, onDraft, onSubmit }: {
+  draft: string;
+  notice: string;
+  inputRef: React.Ref<HTMLInputElement>;
+  onDraft: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const id = useId();
+  return (
+    <form onSubmit={onSubmit} aria-label="Nhập API key Gemini" className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="flex flex-col items-center gap-2 text-center"><HubbyMascot className="hubby-float h-20 w-auto" /></div>
+      <h3 className="text-body font-semibold text-secondary dark:text-white">Nhập API key Gemini của bạn</h3>
+      <p className="text-body-sm text-slate-600 dark:text-slate-300">
+        Hubby chạy bằng key của chính bạn, nên hệ thống không giữ key AI nào. Bạn cần key để hỏi Hubby.
+      </p>
+      <ul className="list-disc space-y-1 pl-5 text-caption text-slate-500 dark:text-slate-400">
+        <li>Key chỉ nằm trong bộ nhớ của tab này: tải lại trang hoặc rời Showcase là phải nhập lại.</li>
+        <li>Key được gửi kèm từng câu hỏi qua HTTPS, máy chủ không lưu và không ghi log key.</li>
+        <li>Câu hỏi và thông tin các dự án đã công bố được gửi tới Google bằng key của bạn.</li>
+      </ul>
+      <a
+        href={ASSISTANT_KEY_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-9 items-center gap-1 text-body-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
+      >
+        Lấy key tại Google AI Studio <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="sr-only"> (mở trong tab mới)</span>
+      </a>
+      <div>
+        <label htmlFor={`${id}-key`} className="text-caption font-semibold text-slate-700 dark:text-slate-200">API key Gemini</label>
+        <input
+          id={`${id}-key`}
+          ref={inputRef}
+          type="password"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          value={draft}
+          maxLength={512}
+          placeholder="Dán key vào đây"
+          aria-invalid={notice ? true : undefined}
+          aria-describedby={notice ? `${id}-notice` : undefined}
+          onChange={event => onDraft(event.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-body-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-dark-surface dark:text-slate-100"
+        />
+        {notice && <p id={`${id}-notice`} role="alert" className="mt-1.5 text-body-sm text-danger-dark">{notice}</p>}
+      </div>
+      <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="w-full">Lưu key và bắt đầu</Button>
+    </form>
+  );
+}
+
 export default function ShowcaseAssistant(): React.ReactElement {
   const location = useLocation();
   const backTo = `${location.pathname}${location.search}`;
@@ -70,6 +131,12 @@ export default function ShowcaseAssistant(): React.ReactElement {
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(false);
   const [greeting, setGreeting] = useState(false);
+  // The user's own Gemini key. It lives only in this component's memory: reloading the page or leaving Showcase forgets it. It is
+  // never written to storage, and the server keeps none.
+  const [apiKey, setApiKey] = useState('');
+  const [keyDraft, setKeyDraft] = useState('');
+  const [keyNotice, setKeyNotice] = useState('');
+  const keyInputRef = useRef<HTMLInputElement | null>(null);
 
   // Hubby waves hello once per browser session, then stays quiet.
   useEffect(() => {
@@ -89,10 +156,15 @@ export default function ShowcaseAssistant(): React.ReactElement {
   useEffect(() => () => controller.current?.abort(), []);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-    else if (wasOpen.current) launcherRef.current?.focus();
+    // With no key yet the first thing to do is paste one, so focus goes there; afterwards it goes to the question box.
+    if (open) (apiKey ? inputRef : keyInputRef).current?.focus();
+    else {
+      if (wasOpen.current) launcherRef.current?.focus();
+      // A half-typed key does not wait around in memory once the panel is closed.
+      setKeyDraft('');
+    }
     wasOpen.current = open;
-  }, [open]);
+  }, [open, apiKey]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -105,6 +177,10 @@ export default function ShowcaseAssistant(): React.ReactElement {
     const question = rawQuestion.trim();
     // inFlight is a ref so two quick clicks cannot both pass before React re-renders the disabled state.
     if (!question || question.length > ASSISTANT_MAX_MESSAGE_LENGTH || inFlight.current) return;
+    if (!apiKey) {
+      setKeyNotice('Hãy nhập API key Gemini của bạn để hỏi Hubby.');
+      return;
+    }
     inFlight.current = true;
     const userId = nextId();
     const history = buildAssistantHistory(messages, replace);
@@ -114,7 +190,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
     const request = new AbortController();
     controller.current = request;
     try {
-      const reply = await showcaseApi.askAssistant({ message: question, history }, request.signal);
+      const reply = await showcaseApi.askAssistant({ message: question, history }, apiKey, request.signal);
       if (request.signal.aborted) return;
       setMessages(current => [...current, {
         id: nextId(), role: 'assistant', content: reply.answer, projects: reply.projects, suggestions: reply.suggestions,
@@ -122,16 +198,45 @@ export default function ShowcaseAssistant(): React.ReactElement {
     } catch (error) {
       if (request.signal.aborted) return;
       const message = assistantErrorMessage(error, parseApiError(error, '').message || undefined);
+      if (isAssistantKeyError(error)) {
+        // The key is the problem, not the question: forget it, hand the question back and ask for a key that works.
+        setMessages(current => current.filter(item => item.id !== userId));
+        setDraft(question);
+        setApiKey('');
+        setKeyNotice(message);
+        return;
+      }
       setMessages(current => [...current, { id: nextId(), role: 'error', content: message, question, userMessageId: userId }]);
     } finally {
       inFlight.current = false;
       if (!request.signal.aborted) setPending(false);
     }
-  }, [messages]);
+  }, [messages, apiKey]);
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     void send(draft);
+  };
+
+  const saveKey = (event: FormEvent) => {
+    event.preventDefault();
+    const problem = assistantKeyProblem(keyDraft);
+    if (problem) {
+      setKeyNotice(problem);
+      return;
+    }
+    setApiKey(cleanAssistantKey(keyDraft));
+    setKeyDraft('');
+    setKeyNotice('');
+  };
+
+  const forgetKey = () => {
+    controller.current?.abort();
+    inFlight.current = false;
+    setPending(false);
+    setApiKey('');
+    setKeyDraft('');
+    setKeyNotice('');
   };
 
   const onPanelKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -180,7 +285,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-50 dark:bg-secondary-800"><HubbyMascot mood={pending ? 'thinking' : 'idle'} className="h-9 w-auto" /></span>
           <div className="min-w-0">
             <h2 id={titleId} className="text-subheading font-bold text-secondary dark:text-white">Hubby · Trợ lý Showcase</h2>
-            <p className="text-caption text-slate-500 dark:text-slate-400">Hỏi về các dự án đã công bố</p>
+            <p className="text-caption text-slate-500 dark:text-slate-400">{apiKey ? 'Hỏi về các dự án đã công bố' : 'Cần API key Gemini của bạn để hoạt động'}</p>
           </div>
         </div>
         <button type="button" onClick={() => setOpen(false)} aria-label="Đóng trợ lý" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
@@ -188,6 +293,10 @@ export default function ShowcaseAssistant(): React.ReactElement {
         </button>
       </header>
 
+      {!apiKey ? (
+        <KeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onSubmit={saveKey} />
+      ) : (
+      <>
       <div ref={listRef} role="log" aria-live="polite" aria-label="Cuộc trò chuyện" className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
           <div className="space-y-3">
@@ -254,8 +363,19 @@ export default function ShowcaseAssistant(): React.ReactElement {
           </div>
           <Button type="submit" size="md" icon={Send} isLoading={pending} disabled={!draft.trim()} aria-label="Gửi câu hỏi" className="shrink-0 px-3" />
         </div>
-        <p className="mt-1.5 text-caption text-slate-500 dark:text-slate-400">Trợ lý AI có thể nhầm. Hãy mở dự án để xem thông tin chính xác.</p>
+        <p className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 text-caption text-slate-500 dark:text-slate-400">
+          <span>Trợ lý AI có thể nhầm. Hãy mở dự án để xem thông tin chính xác.</span>
+          <button
+            type="button"
+            onClick={forgetKey}
+            className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
+          >
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />Đổi API key
+          </button>
+        </p>
       </form>
+      </>
+      )}
     </div>
   );
 }

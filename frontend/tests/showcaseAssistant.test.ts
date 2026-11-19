@@ -3,13 +3,20 @@ import test from 'node:test';
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
+import { readFileSync } from 'node:fs';
 import {
   ASSISTANT_HISTORY_TURNS,
+  ASSISTANT_KEY_HEADER,
   assistantErrorMessage,
+  assistantKeyProblem,
   buildAssistantHistory,
+  cleanAssistantKey,
+  isAssistantKeyError,
   isShowcaseAssistantRoute,
   type AssistantChatMessage,
 } from '../src/utils/showcaseAssistant.ts';
+
+const KEY = 'AIzaSyFrontendTestKey0123456789abcd';
 
 const user = (id: string, content: string): AssistantChatMessage => ({ id, role: 'user', content });
 const assistant = (id: string, content: string): AssistantChatMessage => ({ id, role: 'assistant', content, projects: [], suggestions: [] });
@@ -59,11 +66,13 @@ test('assistant client posts the question with its history and returns the reply
   mock.onPost('/showcase/assistant/chat').reply(config => {
     assert.deepEqual(JSON.parse(config.data), { message: 'Có dự án giáo dục không?', history: [{ role: 'user', content: 'chào' }] });
     assert.equal(config.signal, controller.signal);
+    assert.equal(config.headers?.[ASSISTANT_KEY_HEADER], KEY, 'the user own key travels in a header');
+    assert.doesNotMatch(String(config.url) + String(config.data), /AIzaSy/, 'never in the URL or the body');
     assert.equal(config.timeout, 90_000, 'the chat request must cover the backend model fallback budget');
     return [200, { data: { answer: 'Có EduBot', projects: [], suggestions: ['Còn gì nữa?'] } }];
   });
   try {
-    const reply = await showcaseApi.askAssistant({ message: 'Có dự án giáo dục không?', history: [{ role: 'user', content: 'chào' }] }, controller.signal);
+    const reply = await showcaseApi.askAssistant({ message: 'Có dự án giáo dục không?', history: [{ role: 'user', content: 'chào' }] }, KEY, controller.signal);
     assert.equal(reply.answer, 'Có EduBot');
     assert.deepEqual(reply.suggestions, ['Còn gì nữa?']);
   } finally {
@@ -82,10 +91,53 @@ test('the assistant timeout does not change the timeout of other showcase reques
     return [200, { data: {} }];
   });
   try {
-    await showcaseApi.askAssistant({ message: 'Có dự án giáo dục không?', history: [] });
+    await showcaseApi.askAssistant({ message: 'Có dự án giáo dục không?', history: [] }, KEY);
     await showcaseApi.getInsights(id, controller.signal);
     assert.equal(axiosClient.defaults.timeout, 15_000);
   } finally {
     mock.restore();
   }
+});
+
+test('a pasted key is checked for shape only, with a reason the user can act on', () => {
+  assert.equal(assistantKeyProblem(KEY), null);
+  assert.equal(assistantKeyProblem('  ' + KEY + '\n'), null, 'a trailing space or newline is still the key');
+  assert.equal(cleanAssistantKey('  ' + KEY + '\n'), KEY);
+  assert.match(assistantKeyProblem('') ?? '', /dán/);
+  assert.match(assistantKeyProblem('AIza with spaces inside the key 123') ?? '', /khoảng trắng/);
+  assert.match(assistantKeyProblem('GEMINI_API_KEY=' + KEY) ?? '', /giá trị/);
+  assert.match(assistantKeyProblem('https://aistudio.google.com/app/apikey') ?? '', /giá trị/);
+  assert.match(assistantKeyProblem('AIzaShort') ?? '', /quá ngắn/);
+  assert.match(assistantKeyProblem('A'.repeat(300)) ?? '', /ký tự thông thường/);
+  // No message ever repeats what the user pasted.
+  for (const bad of ['GEMINI_API_KEY=' + KEY, 'AIza with spaces inside the key 123']) assert.doesNotMatch(assistantKeyProblem(bad) ?? '', /AIza/);
+});
+
+test('a key problem reported by the server is told apart from a server fault', () => {
+  const keyError = { response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_INVALID' } } };
+  assert.equal(isAssistantKeyError(keyError), true);
+  assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_REQUIRED' } } }), true);
+  assert.equal(isAssistantKeyError({ response: { status: 503, data: { code: 'SHOWCASE_ASSISTANT_UNAVAILABLE' } } }), false);
+  assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }), false);
+  assert.equal(isAssistantKeyError(new Error('boom')), false);
+  assert.equal(isAssistantKeyError(null), false);
+  // The server words it for the user and never repeats the key, so it is shown; any other 400 stays generic.
+  assert.equal(assistantErrorMessage(keyError, 'Google không chấp nhận API key này.'), 'Google không chấp nhận API key này.');
+  assert.match(assistantErrorMessage({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }, 'raw validation text'), /Không gửi được/);
+});
+
+test('the key stays in memory: never stored, never sent anywhere but the chat request', () => {
+  const component = readFileSync(new URL('../src/features/showcase/components/ShowcaseAssistant.tsx', import.meta.url), 'utf8');
+  const client = readFileSync(new URL('../src/api/showcaseApi.ts', import.meta.url), 'utf8');
+  // The only storage this component touches is the one-time greeting flag, and never next to the key.
+  assert.doesNotMatch(component, /localStorage|indexedDB|document\.cookie/);
+  assert.equal((component.match(/sessionStorage/g) ?? []).length, 2, 'only the greeting flag is read and written');
+  assert.match(component, /const \[apiKey, setApiKey\] = useState\(''\)/);
+  assert.match(component, /type="password"/);
+  assert.match(component, /autoComplete="off"/);
+  assert.match(component, /showcaseApi\.askAssistant\(\{ message: question, history \}, apiKey, request\.signal\)/);
+  // A key the server refuses is forgotten and the question is given back, so nothing is lost and nothing is retried with it.
+  assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?setApiKey\(''\)/);
+  assert.match(client, /headers: \{ \[ASSISTANT_KEY_HEADER\]: apiKey \}/);
+  assert.doesNotMatch(client, /assistant\/chat\?/, 'the key is never put in the URL');
 });

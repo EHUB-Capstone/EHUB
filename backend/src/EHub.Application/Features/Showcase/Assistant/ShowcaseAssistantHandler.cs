@@ -34,13 +34,21 @@ public sealed class ShowcaseAssistantHandler(
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     public async Task<Result<ShowcaseAssistantReplyDto>> AskAsync(
-        ShowcaseAssistantChatRequest request, Guid userId, CancellationToken cancellationToken = default)
+        ShowcaseAssistantChatRequest request, string? apiKey, Guid userId, CancellationToken cancellationToken = default)
     {
         if (userId == Guid.Empty)
             return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.CommonUnauthorizedError, "Bạn cần đăng nhập để dùng trợ lý.");
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
             return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseValidationError, validation.Errors[0].ErrorMessage);
+
+        // The key is the caller's own and never stored: refuse before any database or provider work when it is missing or malformed.
+        // A key pasted with a trailing space or newline is still the user's key.
+        var key = apiKey?.Trim();
+        if (string.IsNullOrEmpty(key))
+            return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseAssistantKeyRequired, "Hãy nhập API key Gemini của bạn để dùng trợ lý.");
+        if (!ShowcaseAssistantApiKey.IsWellFormed(key))
+            return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseAssistantKeyInvalid, "API key không đúng định dạng. Hãy dán lại đúng key từ Google AI Studio.");
 
         var message = request.Message.Trim();
         var history = request.History.TakeLast(MaximumHistoryTurnsSent)
@@ -66,7 +74,11 @@ public sealed class ShowcaseAssistantHandler(
         try
         {
             reply = await model.AskAsync(
-                new ShowcaseAssistantModelInput(message, history, entries, total, DateOnly.FromDateTime(time.UtcNow)), cancellationToken);
+                new ShowcaseAssistantModelInput(message, history, entries, total, DateOnly.FromDateTime(time.UtcNow)), key, cancellationToken);
+        }
+        catch (ShowcaseAssistantKeyRejectedException exception)
+        {
+            return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseAssistantKeyInvalid, exception.UserMessage);
         }
         catch (ShowcaseAssistantUnavailableException exception)
         {

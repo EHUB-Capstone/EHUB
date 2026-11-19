@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using EHub.Application.Common.Interfaces.Services;
 using Microsoft.Extensions.Logging;
@@ -7,7 +8,10 @@ using Microsoft.Extensions.Options;
 
 namespace EHub.Infrastructure.Showcase.Assistant;
 
-/// <summary>Asks Gemini one question per call. Tries each configured model once; the API key never leaves the server.</summary>
+/// <summary>
+/// Asks Gemini one question per call with the caller's own key. Tries each configured model once. The key lives only for the
+/// call: it is sent in a header (never in the URL), is not stored, and is not written to any log.
+/// </summary>
 public sealed class GeminiShowcaseAssistantModel(
     HttpClient client, IOptions<ShowcaseAssistantOptions> options, ILogger<GeminiShowcaseAssistantModel> logger)
     : IShowcaseAssistantModel
@@ -35,17 +39,17 @@ public sealed class GeminiShowcaseAssistantModel(
         8. "suggestions": 2 đến 3 câu hỏi tiếp theo thật ngắn (dưới 70 ký tự) mà catalog có thể trả lời.
         """;
 
-    public async Task<ShowcaseAssistantModelReply> AskAsync(ShowcaseAssistantModelInput input, CancellationToken cancellationToken)
+    public async Task<ShowcaseAssistantModelReply> AskAsync(ShowcaseAssistantModelInput input, string apiKey, CancellationToken cancellationToken)
     {
         var settings = options.Value;
         if (!settings.IsValid())
         {
-            logger.LogWarning("Showcase assistant is disabled or not configured");
+            logger.LogWarning("Showcase assistant is disabled or its models are not configured");
             throw new ShowcaseAssistantUnavailableException("Trợ lý AI chưa được bật trên máy chủ. Vui lòng liên hệ quản trị viên.");
         }
 
         var contents = BuildContents(input);
-        var failure = "Trợ lý AI tạm thời không phản hồi. Vui lòng thử lại sau ít phút.";
+        var quotaLimited = false;
         foreach (var model in settings.Models)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -55,7 +59,7 @@ public sealed class GeminiShowcaseAssistantModel(
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post,
                     $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
-                request.Headers.Add("x-goog-api-key", settings.ApiKey);
+                request.Headers.Add("x-goog-api-key", apiKey);
                 request.Content = JsonContent.Create(new
                 {
                     systemInstruction = new { parts = new[] { new { text = Instruction } } },
@@ -73,10 +77,12 @@ public sealed class GeminiShowcaseAssistantModel(
                 if (!response.IsSuccessStatusCode)
                 {
                     logger.LogWarning("Showcase assistant: {Model} returned HTTP {StatusCode}", model, (int)response.StatusCode);
-                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                        throw new ShowcaseAssistantUnavailableException("Trợ lý AI chưa được cấu hình hợp lệ trên máy chủ. Vui lòng liên hệ quản trị viên.");
-                    if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                        failure = "Trợ lý AI đang có quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.";
+                    // The key is the user's own, so a refusal is something they can fix: say so, and never echo the key.
+                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ||
+                        (response.StatusCode == HttpStatusCode.BadRequest && await IsInvalidKeyAsync(response, deadline.Token)))
+                        throw new ShowcaseAssistantKeyRejectedException("Google không chấp nhận API key này (sai, đã thu hồi hoặc bị giới hạn). Hãy kiểm tra lại key của bạn.");
+                    // Each model has its own quota, so a limit on one is not final; the fallback model may still answer.
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests) quotaLimited = true;
                     continue;
                 }
                 var body = await ReadBoundedAsync(response, deadline.Token);
@@ -95,7 +101,24 @@ public sealed class GeminiShowcaseAssistantModel(
                 logger.LogWarning("Showcase assistant: unusable response from {Model}; exception type {ExceptionType}", model, error.GetType().Name);
             }
         }
-        throw new ShowcaseAssistantUnavailableException(failure);
+        // Every model failed. Hitting the limit is about the user's own key, so say so; anything else is a temporary fault.
+        if (quotaLimited)
+            throw new ShowcaseAssistantKeyRejectedException("API key của bạn đã hết hạn mức hoặc đang bị Google giới hạn. Hãy thử lại sau ít phút hoặc dùng key khác.");
+        throw new ShowcaseAssistantUnavailableException("Trợ lý AI tạm thời không phản hồi. Vui lòng thử lại sau ít phút.");
+    }
+
+    /// <summary>Google answers a wrong key with HTTP 400 and the reason API_KEY_INVALID; any other 400 is our request, not the key.</summary>
+    private static async Task<bool> IsInvalidKeyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var body = Encoding.UTF8.GetString(await ReadBoundedAsync(response, cancellationToken));
+            return body.Contains("API_KEY_INVALID", StringComparison.Ordinal) || body.Contains("API key not valid", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException or HttpRequestException)
+        {
+            return false;
+        }
     }
 
     private static object[] BuildContents(ShowcaseAssistantModelInput input)

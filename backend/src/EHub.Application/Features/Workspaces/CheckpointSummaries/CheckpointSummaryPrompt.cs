@@ -26,7 +26,10 @@ internal static class CheckpointSummaryPrompt
     // summaries made with v10 are redone when a reviewer asks again.
     // v12: verify every overview sentence, expose safe extractive fallback and invalidate changed checklist snapshots.
     // v13: require a percentage with its sign and unit in the passage supporting a generated claim.
-    public const string Version = "v13";
+    // v14: same prompt wording. The notes the system adds to a summary (the question about a missing rubric item, "the file also
+    // says 15%", the fallback overview) are now English to match the screens, so summaries made with v13 are redone when a
+    // reviewer asks again. The model itself still writes in Vietnamese (see System).
+    public const string Version = "v14";
 
     public const string System =
         "Bạn là trợ lý giúp giảng viên và mentor đọc tài liệu checkpoint của nhóm sinh viên khởi nghiệp. " +

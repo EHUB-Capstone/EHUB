@@ -189,6 +189,7 @@ public static class DependencyInjection
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointFileText>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointFigureHistoryHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointFigureHistoryHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointVersionChangesHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointVersionChangesHandler>();
+        services.AddScoped<EHub.Application.Features.Workspaces.CheckpointSummaries.ICheckpointProgressHandler, EHub.Application.Features.Workspaces.CheckpointSummaries.CheckpointProgressHandler>();
 
         services.AddScoped<EHub.Application.Features.Workspaces.CheckpointEvaluations.ICheckpointEvaluationHandler, EHub.Application.Features.Workspaces.CheckpointEvaluations.CheckpointEvaluationHandler>();
         services.AddScoped<EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.ICourseAssessmentEvaluationHandler, EHub.Application.Features.Workspaces.CourseAssessmentEvaluations.CourseAssessmentEvaluationHandler>();

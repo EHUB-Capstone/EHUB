@@ -141,6 +141,13 @@ public sealed class GeminiMentorContextTests
     }
 
     [Fact]
+    public void ProfileTermsFoldVietnameseAndKeepTechnologyAndNumericTokens()
+    {
+        GeminiProfileContext.Terms("Cho ĐÀO-TẠO, C#, C++, .NET..., ½kg; a 7...")
+            .Should().BeEquivalentTo("dao", "tao", "c#", "c++", "net", "½kg");
+    }
+
+    [Fact]
     public void NearBudgetPromptsReduceOnlyExplanationOptionsAndKeepScoringContext()
     {
         var (projects, profiles) = RichInput(30);

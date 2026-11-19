@@ -16,6 +16,7 @@ import {
   ALL_CLASSES,
   buildTeamGrid,
   filterTeamGrid,
+  formatAllocationPreviewReasons,
   formatAllocationReason,
   getAiReviewAssignments,
   getAvailableFitAlternatives,
@@ -40,6 +41,14 @@ test('assignment copy uses AI without exposing the provider or model identifier'
   assert.equal(formatAllocationReason('Model: gemini-3.1-flash-lite'), 'Model: AI');
   assert.equal(formatAllocationReason('Gemini startupDomain: 75/100; bằng chứng: Ươm tạo'), 'Lĩnh vực: 75/100; bằng chứng: Ươm tạo');
   assert.equal(formatAllocationReason('Ưu tiên lịch sử: +4 điểm'), 'Ưu tiên lịch sử: +4 điểm');
+});
+
+test('preview reasons omit the Technology criterion and retain other supporting passages', () => {
+  assert.deepEqual(formatAllocationPreviewReasons([
+    'Gemini technology: 75/100; bằng chứng: React',
+    'AI technology: 50/100; bằng chứng: PostgreSQL',
+    'Gemini experience: 75/100; bằng chứng: Led a technology project',
+  ]), ['Kinh nghiệm: 75/100; bằng chứng: Led a technology project']);
 });
 
 const row = (overrides: Partial<MentorAllocationRowPreview>): MentorAllocationRowPreview => ({
@@ -112,9 +121,9 @@ test('fit criteria, source passages, project needs and alternatives stay on the 
 });
 
 test('missing source fields are distinct from a scored criterion with no relevant evidence', () => {
-  const allFields = ['experience', 'expertise', 'startupDomain', 'technology', 'bio'];
-  assert.deepEqual(getMissingProfileFields(fitDetails()), ['startupDomain', 'technology']);
-  assert.deepEqual(getMissingProfileFields(fitDetails({ availableProfileFields: allFields, hasEvidence: false })), []);
+  const visibleFields = ['experience', 'expertise', 'startupDomain', 'bio'];
+  assert.deepEqual(getMissingProfileFields(fitDetails()), ['startupDomain']);
+  assert.deepEqual(getMissingProfileFields(fitDetails({ availableProfileFields: visibleFields, hasEvidence: false })), []);
   assert.equal(getMissingProfileFields(undefined), null, 'a legacy response does not tell us which fields are missing');
 });
 
@@ -122,7 +131,7 @@ test('AI quality summary counts only assessed new proposals and separates missin
   const value = preview({ strategy: 'Ai', assignments: [
     row({ teamId: 'supported', fitScore: 56, fitDetails: fitDetails() }),
     row({ teamId: 'low-fit', fitScore: 0, fitDetails: fitDetails({ hasEvidence: false,
-      availableProfileFields: ['experience', 'expertise', 'startupDomain', 'technology', 'bio'] }) }),
+      availableProfileFields: ['experience', 'expertise', 'startupDomain', 'bio'] }) }),
     row({ teamId: 'not-scored', fitScore: null }),
     row({ teamId: 'manual', source: 'Manual', fitScore: 99 }),
     row({ teamId: 'kept', source: 'Retained', fitScore: 99 }),

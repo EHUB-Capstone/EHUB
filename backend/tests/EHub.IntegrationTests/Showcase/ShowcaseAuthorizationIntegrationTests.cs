@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using EHub.Application.Common.Interfaces.Identity;
+using EHub.Application.Features.Showcase.Assistant;
 using EHub.Contracts.Common;
 using EHub.Contracts.Showcase;
 using EHub.Domain.Entities;
@@ -119,6 +120,37 @@ public sealed class ShowcaseAuthorizationIntegrationTests
         // The global ValidationFilter runs the FluentValidation validator before the handler.
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         body!.Code.Should().Be(ErrorCodes.CommonValidationError);
+    }
+
+    [Fact]
+    public async Task AssistantChat_WithoutTheCallersOwnKey_IsRefusedAsBadRequest_NotAsAServerFault()
+    {
+        using var client = _factory.CreateClient();
+        using var request = AuthorizedRequest(HttpMethod.Post, "/api/showcase/assistant/chat", SystemRoles.Student,
+            new ShowcaseAssistantChatRequest { Message = "Có dự án nào về giáo dục không?" });
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+
+        // 400, never 401: the web app signs a user out on 401, and a missing key is not a sign-in problem.
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        body!.Code.Should().Be(ErrorCodes.ShowcaseAssistantKeyRequired);
+    }
+
+    [Fact]
+    public async Task AssistantChat_WithAMalformedKey_IsRefused_AndTheKeyIsNeverEchoedBack()
+    {
+        const string key = "GEMINI_API_KEY=AIzaSyIntegrationTestKey0123456789";
+        using var client = _factory.CreateClient();
+        using var request = AuthorizedRequest(HttpMethod.Post, "/api/showcase/assistant/chat", SystemRoles.Student,
+            new ShowcaseAssistantChatRequest { Message = "Có dự án nào về giáo dục không?" });
+        request.Headers.Add(ShowcaseAssistantApiKey.HeaderName, key);
+
+        using var response = await client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        text.Should().Contain(ErrorCodes.ShowcaseAssistantKeyInvalid).And.NotContain("AIzaSyIntegrationTestKey");
     }
 
     [Fact]

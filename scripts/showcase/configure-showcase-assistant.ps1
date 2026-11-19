@@ -11,66 +11,25 @@ if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
     throw 'EHub.Api project was not found next to this script.'
 }
 if ($DryRun) {
-    Write-Output "Ready: Showcase assistant User Secrets for EHub.Api; model $Model. No key read or configuration changed."
+    Write-Output "Ready: Showcase assistant User Secrets for EHub.Api; model $Model. Nothing was changed."
     return
 }
 
-Write-Host 'Configure real Showcase AI for the local E-HUB backend.'
-Write-Host 'The key is entered invisibly and saved in ASP.NET Core User Secrets, outside the repository.'
-Write-Host 'Only published showcase content and chat questions are sent to the AI provider.'
+Write-Host 'Turn on the Showcase AI chat (Hubby) for the local E-HUB backend.'
+Write-Host 'The server keeps no AI key for it: each user pastes their own Gemini API key in the chat.'
+Write-Host 'Only published showcase content and chat questions are sent to Google, under that user key.'
 
-$secureKey = $null
-$keyPointer = [IntPtr]::Zero
-$keyValue = $null
-$settingsJson = $null
-$process = $null
-try {
-    $secureKey = Read-Host 'Paste Gemini API key from AI Studio (hidden)' -AsSecureString
-    $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
-    $keyValue = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer).Trim()
-    if ($keyValue.Length -eq 0 -or $keyValue.Length -gt 2048 -or $keyValue -match '[^\x21-\x7E]' -or
-        $keyValue -match '^(https?://|GEMINI_API_KEY=|GOOGLE_API_KEY=)' -or $keyValue.StartsWith('"') -or $keyValue.StartsWith("'")) {
-        throw 'Paste only the API key value.'
+# These are switches and model names, not secrets, so they can be passed as arguments.
+$settings = [ordered]@{
+    'Showcase:Assistant:Enabled'        = 'true'
+    'Showcase:Assistant:Model'          = $Model
+    'Showcase:Assistant:FallbackModels' = 'gemini-3.1-flash-lite'
+}
+foreach ($name in $settings.Keys) {
+    & dotnet user-secrets set $name $settings[$name] --project $projectPath | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'Showcase AI setup was not completed. Check that dotnet is installed, then run this helper again.'
+        exit 1
     }
-    $settingsJson = @{
-        'Showcase:Assistant:Enabled' = 'true'
-        'Showcase:Assistant:ApiKey' = $keyValue
-        'Showcase:Assistant:Model' = $Model
-        'Showcase:Assistant:FallbackModels' = 'gemini-3.1-flash-lite'
-    } | ConvertTo-Json -Compress
-
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = 'dotnet'
-    # The secret goes through stdin, never through command arguments or shell history.
-    $startInfo.Arguments = 'user-secrets set --project "' + $projectPath + '"'
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-    $process.StandardInput.WriteLine($settingsJson)
-    $process.StandardInput.Close()
-    $process.WaitForExit()
-    [void]$stdoutTask.GetAwaiter().GetResult()
-    [void]$stderrTask.GetAwaiter().GetResult()
-    if ($process.ExitCode -ne 0) { throw 'The configuration could not be saved.' }
-    Write-Host 'Saved Showcase AI configuration. Restart the backend to use real AI replies.'
-    Write-Host 'No key was written into the repository. No AI request was made by this helper.'
 }
-catch {
-    # CLI errors may contain input; never print them or the configuration JSON.
-    Write-Error 'Showcase AI setup was not completed. Check dotnet and the copied API key, then run this helper again.'
-    exit 1
-}
-finally {
-    $settingsJson = $null
-    $keyValue = $null
-    if ($keyPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer) }
-    if ($null -ne $secureKey) { $secureKey.Dispose() }
-    if ($null -ne $process) { $process.Dispose() }
-}
+Write-Host 'Saved. Restart the backend; users are asked for their own Gemini key the first time they open Hubby.'
