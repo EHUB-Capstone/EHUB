@@ -1,8 +1,8 @@
 import type {
-  CheckpointSummary, FileSummary, FileSummaryStatus, RequirementFinding, StatusItem, SummaryFeedback, SummaryFeedbackRating, SummaryFeedbackReason,
+  CheckpointProgress, CheckpointSummary, FileSummary, FileSummaryStatus, ProgressChange, ProgressState, RequirementFinding, StatusItem, SummaryFeedback, SummaryFeedbackRating, SummaryFeedbackReason,
 } from '../types/checkpointSummary';
 
-import { summaryText } from './summaryText.ts';
+import { plural, summaryText } from './summaryText.ts';
 
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
 
@@ -313,3 +313,209 @@ export const comparedCheckpointsText = (numbers: ReadonlyArray<number>): string 
 /** True when the figure history has something to say: a disagreement, or files that could not be checked. */
 export const figureHistoryHasNews = (history: { conflicts: ReadonlyArray<unknown>; uncheckedFiles: ReadonlyArray<string> } | null): boolean =>
   history !== null && (history.conflicts.length > 0 || history.uncheckedFiles.length > 0);
+
+// ---- Review brief: the card's at-a-glance panel, worked out from what the card already holds (no extra request, no AI). ----
+
+export interface RequirementCoverage {
+  /** Every checklist item: requirements the lecturer wrote and rubric criteria. */
+  total: number;
+  /** Items a file can show; the rest are judged live, on the product or on the whole file. */
+  searchable: number;
+  found: number;
+  notFound: number;
+  notChecked: number;
+  /** Judged live, on the product or on the whole file. */
+  elsewhere: number;
+}
+
+/** How many checklist items the files mention. "Found" means related content exists, never that the item is met. */
+export function requirementCoverage(requirements: ReadonlyArray<{ finding: RequirementFinding }>): RequirementCoverage {
+  const count = (finding: RequirementFinding) => requirements.filter((item) => item.finding === finding).length;
+  const searchable = requirements.filter(isSearchable).length;
+  return {
+    total: requirements.length,
+    searchable,
+    found: count('Related'),
+    notFound: count('NotFound'),
+    notChecked: count('NotChecked'),
+    elsewhere: requirements.length - searchable,
+  };
+}
+
+export interface AttentionItem {
+  key: string;
+  tone: 'danger' | 'warning' | 'info';
+  text: string;
+}
+
+/** What the reader of a file's summary gets, finished or still a quick view; null when nothing could be read yet. */
+const readableData = (file: FileSummary) => file.content ?? file.preview;
+
+/**
+ * Things a reviewer should look at before relying on the summaries, worst first. Each line is a count of what was already
+ * found in the files, so it can be checked: nothing here is a judgement of the team's work.
+ */
+export function summaryAttentionItems(summary: CheckpointSummary | null): AttentionItem[] {
+  if (!summary) return [];
+  const files = summary.files;
+  const counts = summaryStatusCounts(files);
+  const data = files.map(readableData).filter((item): item is NonNullable<ReturnType<typeof readableData>> => item !== null);
+  const items: AttentionItem[] = [];
+
+  if (counts.failed > 0) {
+    items.push({ key: 'failed', tone: 'danger', text: `${counts.failed} ${plural(counts.failed, 'file')} could not be summarised. Open ${counts.failed === 1 ? 'it' : 'them'} to see why.` });
+  }
+  const stale = files.filter((file) => file.status === 'Ready' && file.needsRefresh).length;
+  if (stale > 0) {
+    items.push({ key: 'stale', tone: 'warning', text: `${stale} ${plural(stale, 'summary is', 'summaries are')} out of date. Summarise again for current results.` });
+  }
+  const figures = (summary.conflicts?.length ?? 0) + data.reduce((total, item) => total + (item.conflicts?.length ?? 0), 0);
+  if (figures > 0) {
+    items.push({ key: 'figures', tone: 'warning', text: `${figures} ${plural(figures, 'figure is', 'figures are')} stated with different values. Ask the team which one is right.` });
+  }
+  const instructed = data.filter((item) => (item.ignoredInstructions ?? 0) > 0).length;
+  if (instructed > 0) {
+    items.push({ key: 'instructions', tone: 'warning', text: `${instructed} ${plural(instructed, 'file contains', 'files contain')} sentences addressed to the AI. They were left out; read the ${plural(instructed, 'file')}.` });
+  }
+  const open = data.reduce((total, item) => total + (item.statusItems ?? []).filter((status) => status.status !== 'Done').length, 0);
+  if (open > 0) {
+    items.push({ key: 'open', tone: 'info', text: `${open} ${plural(open, 'item is', 'items are')} reported as pending or in progress in the files.` });
+  }
+  const imageHeavy = data.filter((item) => item.littleText).length;
+  if (imageHeavy > 0) {
+    items.push({ key: 'images', tone: 'info', text: `${imageHeavy} ${plural(imageHeavy, 'file is', 'files are')} mostly images or diagrams; only titles and a few lines could be read.` });
+  }
+  if (counts.ready > 0 && counts.notSummarised > 0) {
+    items.push({ key: 'partial', tone: 'info', text: `${counts.notSummarised} ${plural(counts.notSummarised, 'file is', 'files are')} not summarised yet, so this brief is partial.` });
+  }
+  return items;
+}
+
+const DRAFT_MAX_COVERED = 5;
+const DRAFT_MAX_MISSING = 8;
+const DRAFT_MAX_OPEN = 4;
+const DRAFT_MAX_FIGURES = 3;
+const DRAFT_MAX_QUESTIONS = 4;
+const DRAFT_QUOTE_CHARACTERS = 220;
+
+const clip = (text: string, limit: number) => {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length <= limit ? clean : `${clean.slice(0, limit - 1).trimEnd()}…`;
+};
+
+const unique = <T>(items: T[], key: (item: T) => string): T[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const id = key(item).trim().toLowerCase();
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+};
+
+/**
+ * A first draft of the reviewer's feedback to the team, to be edited before it is posted: what the files cover (with the quote),
+ * what could not be found, work the files report as still open, figures to clarify and questions to ask. The team reads the
+ * feedback box, so it holds nothing internal (no AI notes, no warnings about the file) and no judgement of the work. Empty when
+ * there is nothing to say yet.
+ */
+export function buildFeedbackDraft(summary: CheckpointSummary): string {
+  const sections: string[] = [];
+  const section = (title: string, lines: string[]) => { if (lines.length > 0) sections.push([title, ...lines].join('\n')); };
+  const contents = summary.files.flatMap((file) => (file.status === 'Ready' && file.content ? [file.content] : []));
+
+  const covered = sortByWeight(summary.requirements.filter((item) => item.finding === 'Related' && item.evidence)).slice(0, DRAFT_MAX_COVERED);
+  section('What the files cover:', covered.map((item) => {
+    const where = [item.source, item.source && item.evidencePage ? pageLabel(item.source, item.evidencePage) : null].filter(Boolean).join(', ');
+    return `- ${item.title}: “${clip(item.evidence ?? '', DRAFT_QUOTE_CHARACTERS)}”${where ? ` (${where})` : ''}`;
+  }));
+
+  const missing = sortByWeight(summary.requirements.filter((item) => item.finding === 'NotFound')).slice(0, DRAFT_MAX_MISSING);
+  section('Could not find in the submitted files (please point to where it is, or add it):', missing.map((item) => `- ${item.title}`));
+
+  const open = unique(contents.flatMap((content) => content.statusItems ?? []).filter((item) => item.status !== 'Done'), (item) => `${item.request ?? ''}${item.text}`)
+    .slice(0, DRAFT_MAX_OPEN);
+  section('Still open according to the files:', open.map((item) => `- ${statusItemView[item.status].label}: ${item.request ? `${item.request} – ` : ''}${clip(item.text, DRAFT_QUOTE_CHARACTERS)}`));
+
+  const conflicts = unique([...(summary.conflicts ?? []), ...contents.flatMap((content) => content.conflicts ?? [])], (item) => item.subject).slice(0, DRAFT_MAX_FIGURES);
+  section('Figures that differ in the files (which value is right?):', conflicts.map((item) => `- ${item.subject}: ${item.values.map((value) => value.value).join(' vs ')}`));
+
+  const questions = unique(contents.flatMap((content) => content.questions), (item) => item).slice(0, DRAFT_MAX_QUESTIONS);
+  section('Questions for the team:', questions.map((item) => `- ${item}`));
+
+  return sections.length === 0 ? '' : [`Checkpoint ${summary.checkpointNumber} feedback`, ...sections].join('\n\n');
+}
+
+const BRIEF_MAX_KEY_POINTS = 4;
+const BRIEF_MAX_OPEN_ITEMS = 3;
+const BRIEF_MAX_TITLES = 8;
+
+/**
+ * Plain text of the brief for a comment or a message: what each summarised file is, how much of the checklist the files
+ * mention, and what to check. Everything in it is already on the card; nothing is added, and it says it came from an AI.
+ */
+export function buildReviewBrief(summary: CheckpointSummary): string {
+  const files = summary.files;
+  const ready = files.filter((file) => file.status === 'Ready' && file.content !== null);
+  const lines = [
+    `AI review brief · Checkpoint ${summary.checkpointNumber}`,
+    'Written by an AI from the submitted files. It can be wrong; check the files and do not use it for grading.',
+    `${ready.length} of ${files.length} ${plural(files.length, 'file')} summarised.`,
+  ];
+
+  for (const file of ready) {
+    const content = file.content;
+    if (!content) continue;
+    lines.push('', `${file.name} (v${file.versionNumber})`, content.overview.trim());
+    content.keyPoints.slice(0, BRIEF_MAX_KEY_POINTS).forEach((point) => lines.push(`- ${point}`));
+    const open = (content.statusItems ?? []).filter((item) => item.status !== 'Done').slice(0, BRIEF_MAX_OPEN_ITEMS);
+    if (open.length > 0) {
+      lines.push('Still open in the file:');
+      open.forEach((item) => lines.push(`- ${statusItemView[item.status].label}: ${item.request ? `${item.request} – ` : ''}${item.text}`));
+    }
+  }
+
+  const coverage = requirementCoverage(summary.requirements);
+  if (coverage.searchable > 0) {
+    lines.push('', `Requirements and rubric: related content found for ${coverage.found} of ${coverage.searchable} items a file can show.`);
+    const titles = (finding: RequirementFinding) => sortByWeight(summary.requirements.filter((item) => item.finding === finding))
+      .map((item) => item.title).slice(0, BRIEF_MAX_TITLES);
+    const missing = titles('NotFound');
+    if (missing.length > 0) lines.push(`Not found in the files: ${missing.join('; ')}`);
+  }
+
+  const attention = summaryAttentionItems(summary);
+  if (attention.length > 0) {
+    lines.push('', 'Worth checking:');
+    attention.forEach((item) => lines.push(`- ${item.text}`));
+  }
+  return lines.join('\n');
+}
+
+// ---- Progress across checkpoints: what each checkpoint's files mention of the things the rubrics ask for. ----
+
+/** How a thing moved since the nearest earlier checkpoint that could tell. Wording says what the files show, not how well the team did. */
+export const progressChangeView: Record<ProgressChange, { label: string; tone: Tone } | null> = {
+  Gained: { label: 'Newly mentioned', tone: 'success' },
+  Dropped: { label: 'No longer mentioned', tone: 'warning' },
+  Held: { label: 'Still mentioned', tone: 'neutral' },
+  Missing: { label: 'Still not mentioned', tone: 'neutral' },
+  None: null,
+};
+
+export const progressStateText: Record<ProgressState, string> = {
+  Found: 'Mentioned',
+  NotMentioned: 'Not mentioned',
+  NotAsked: 'Not in the rubric',
+  NotRead: 'Files not read',
+};
+
+/** True when there is something to show: at least two checkpoints with files and a thing the rubrics asked for. */
+export const hasProgress = (progress: CheckpointProgress | null): progress is CheckpointProgress =>
+  progress !== null && progress.checkpoints.length >= 2 && progress.concepts.length > 0;
+
+/** "CP1: 1 of 2 files read": checkpoints where "not mentioned" only speaks for part of what the team submitted. */
+export const partiallyReadCheckpoints = (progress: CheckpointProgress): string[] =>
+  progress.checkpoints
+    .filter((item) => item.readFileCount < item.fileCount)
+    .map((item) => `CP${item.number}: ${item.readFileCount} of ${item.fileCount} ${plural(item.fileCount, 'file')} read`);

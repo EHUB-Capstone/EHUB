@@ -12,44 +12,44 @@ namespace EHub.Application.Features.Workspaces.CheckpointSummaries;
 /// </summary>
 internal static class CheckpointGapQuestions
 {
-    // How the things a rubric asks for are named in Vietnamese. Every concept of CheckpointCriterionCues needs an entry.
+    // How the things a rubric asks for are named in a question ("Does the team have {name} yet?"). Every concept of CheckpointCriterionCues needs an entry.
     private static readonly Dictionary<string, string> Names = new(StringComparer.Ordinal)
     {
-        ["Roadmap"] = "lộ trình phát triển",
-        ["Core features"] = "tính năng cốt lõi",
-        ["Prioritization"] = "thứ tự ưu tiên tính năng",
-        ["User needs"] = "nhu cầu của người dùng",
-        ["Persona"] = "chân dung khách hàng (persona)",
-        ["Target customer"] = "khách hàng mục tiêu",
-        ["Customer journey (CJM)"] = "hành trình khách hàng (CJM)",
-        ["Marketing plan"] = "kế hoạch marketing",
-        ["Product / demo"] = "sản phẩm mẫu hoặc bản demo",
-        ["UI/UX"] = "giao diện và trải nghiệm người dùng",
-        ["Stability"] = "độ ổn định của sản phẩm",
-        ["Problem"] = "vấn đề của khách hàng",
-        ["Solution / value"] = "giải pháp và giá trị mang lại",
-        ["Case requirements"] = "yêu cầu của đề bài",
-        ["Launch"] = "kế hoạch ra mắt",
-        ["Feedback"] = "phản hồi từ người dùng",
-        ["Real users"] = "người dùng thật",
-        ["Sales"] = "doanh thu hoặc đơn hàng",
-        ["Proof (bills, screenshots)"] = "bằng chứng (hóa đơn, ảnh chụp màn hình)",
-        ["Usage data"] = "số liệu sử dụng",
-        ["Insights / lessons"] = "bài học rút ra",
-        ["Business model"] = "mô hình kinh doanh",
-        ["Canvas (BMC)"] = "Business Model Canvas",
-        ["Market size"] = "quy mô thị trường",
-        ["Competitors"] = "đối thủ cạnh tranh",
-        ["Research"] = "kết quả nghiên cứu hoặc khảo sát",
-        ["Financials"] = "số liệu tài chính",
-        ["Team roles"] = "phân công vai trò",
-        ["Innovation"] = "điểm khác biệt",
-        ["Team name"] = "tên nhóm",
-        ["Startup idea"] = "ý tưởng khởi nghiệp",
-        ["Startup field"] = "lĩnh vực khởi nghiệp"
+        ["Roadmap"] = "a development roadmap",
+        ["Core features"] = "a list of core features",
+        ["Prioritization"] = "a priority order for the features",
+        ["User needs"] = "a description of user needs",
+        ["Persona"] = "a customer persona",
+        ["Target customer"] = "a defined target customer",
+        ["Customer journey (CJM)"] = "a customer journey map (CJM)",
+        ["Marketing plan"] = "a marketing plan",
+        ["Product / demo"] = "a prototype or demo",
+        ["UI/UX"] = "a UI/UX design",
+        ["Stability"] = "evidence that the product is stable",
+        ["Problem"] = "a clearly stated customer problem",
+        ["Solution / value"] = "a solution and the value it delivers",
+        ["Case requirements"] = "a response to the case requirements",
+        ["Launch"] = "a launch plan",
+        ["Feedback"] = "user feedback",
+        ["Real users"] = "real users",
+        ["Sales"] = "sales or orders",
+        ["Proof (bills, screenshots)"] = "proof of sales (bills, screenshots)",
+        ["Usage data"] = "usage data",
+        ["Insights / lessons"] = "lessons learned",
+        ["Business model"] = "a business model",
+        ["Canvas (BMC)"] = "a Business Model Canvas",
+        ["Market size"] = "a market size estimate",
+        ["Competitors"] = "a competitor analysis",
+        ["Research"] = "research or survey results",
+        ["Financials"] = "financial figures",
+        ["Team roles"] = "a division of team roles",
+        ["Innovation"] = "a point of difference",
+        ["Team name"] = "a team name",
+        ["Startup idea"] = "a statement of the startup idea",
+        ["Startup field"] = "the startup field"
     };
 
-    /// <summary>Concepts that have no Vietnamese name here yet; empty while the two lists agree (a test keeps them so).</summary>
+    /// <summary>Concepts that have no name here yet; empty while the two lists agree (a test keeps them so).</summary>
     public static IReadOnlyList<string> UnnamedConcepts() =>
         CheckpointCriterionCues.Labels.Where(label => !Names.ContainsKey(label)).ToArray();
 
@@ -73,7 +73,7 @@ internal static class CheckpointGapQuestions
             var missing = finding.Cues.FirstOrDefault(cue => !cue.Found && Names.ContainsKey(cue.Label) && !asked.Contains(cue.Label));
             if (missing is null) continue;
             asked.Add(missing.Label);
-            questions.Add($"Nhóm đã có {Names[missing.Label]} chưa? File này chưa nhắc tới, trong khi tiêu chí \"{finding.Title}\" cần phần này.");
+            questions.Add($"Does the team have {Names[missing.Label]} yet? This file does not mention it, while the criterion \"{finding.Title}\" asks for it.");
             if (questions.Count == CheckpointSummaryLimits.MaxQuestions) break;
         }
         return questions;

@@ -45,7 +45,7 @@ internal static class CheckpointSummaryOutput
                     overviewText = IdeaSentence(preview, grounding) ?? preview.Highlights.FirstOrDefault(grounding.Supports) ?? "";
                     overviewFromSource = overviewText.Length > 0;
                     if (!overviewFromSource)
-                        overviewText = "Chưa đủ bằng chứng để tạo tổng quan. Hãy kiểm tra các trích dẫn trong tài liệu.";
+                        overviewText = "Not enough evidence to write an overview. Check the quotes taken from the file.";
                     keptSentences = [];
                 }
             }

@@ -32,7 +32,7 @@ public sealed class CheckpointGapQuestionsTests
         var questions = CheckpointGapQuestions.From(findings, littleText: false);
 
         questions.Should().ContainSingle().Which.Should().Be(
-            "Nhóm đã có hành trình khách hàng (CJM) chưa? File này chưa nhắc tới, trong khi tiêu chí \"Persona & CJM\" cần phần này.");
+            "Does the team have a customer journey map (CJM) yet? This file does not mention it, while the criterion \"Persona & CJM\" asks for it.");
     }
 
     [Fact]
@@ -74,9 +74,9 @@ public sealed class CheckpointGapQuestionsTests
         var questions = CheckpointGapQuestions.From(findings, littleText: false);
 
         questions.Should().HaveCount(2);
-        questions[0].Should().Contain("thứ tự ưu tiên tính năng").And.Contain("\"Heavy\"");
+        questions[0].Should().Contain("a priority order for the features").And.Contain("\"Heavy\"");
         // Prioritization was already asked, so the next criterion contributes its next missing thing.
-        questions[1].Should().Contain("doanh thu hoặc đơn hàng").And.Contain("\"Medium\"");
+        questions[1].Should().Contain("sales or orders").And.Contain("\"Medium\"");
     }
 
     [Fact]
@@ -107,6 +107,6 @@ public sealed class CheckpointGapQuestionsTests
         var content = CheckpointSummaryOutput.TryBuild(answer, preview);
 
         content!.Questions.Should().HaveCount(2);
-        content.Questions.First().Should().Contain("hành trình khách hàng (CJM)");
+        content.Questions.First().Should().Contain("a customer journey map (CJM)");
     }
 }

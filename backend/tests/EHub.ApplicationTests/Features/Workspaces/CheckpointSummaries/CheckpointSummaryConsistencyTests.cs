@@ -94,7 +94,7 @@ public sealed class CheckpointSummaryConsistencyTests
         points.Should().HaveCount(2);
         points.Should().NotContain(point => point.Contains("Đã xác nhận"));
         points[0].Should().Contain("Kho lưu trữ");
-        points[1].Should().Be("Tỷ lệ chuyển đổi sang Premium là 30% trong năm đầu (tài liệu cũng ghi 15%).");
+        points[1].Should().Be("Tỷ lệ chuyển đổi sang Premium là 30% trong năm đầu (the file also says 15%).");
     }
 
     [Fact]

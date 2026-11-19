@@ -4,14 +4,13 @@ import type {
   MentorAllocationConflict,
   MentorAllocationEdit,
   MentorAllocationPreview,
-  MentorFitCriterionKey,
   MentorType,
 } from '../../types/mentorAdmin';
 import {
   ALL_CLASSES,
   buildTeamGrid,
   filterTeamGrid,
-  formatAllocationReason,
+  formatAllocationPreviewReasons,
   getAiReviewAssignments,
   getAvailableFitAlternatives,
   getMentorLoadImpact,
@@ -23,6 +22,7 @@ import {
   skipReasonLabel,
   summarizePreview,
   summarizeAllocationQuality,
+  visibleFitCriteria,
   type SlotState,
   type SlotView,
   type TeamGridRow,
@@ -71,9 +71,9 @@ const stateStyle: Record<SlotState, { label: string; tone: BadgeTone }> = {
   unfilled: { label: 'Missing', tone: 'danger' },
 };
 const replacedTone: BadgeTone = 'warning';
-const criterionLabels: Record<MentorFitCriterionKey, string> = {
+const criterionLabels: Record<typeof visibleFitCriteria[number], string> = {
   experience: 'Experience', expertise: 'Expertise / tags', startupDomain: 'Startup domain',
-  technology: 'Technology', bio: 'Background / education',
+  bio: 'Background / education',
 };
 
 export default function MentorAllocationPreviewModal({
@@ -369,6 +369,7 @@ function TeamRow({
 function SlotCell({ slot }: { slot: SlotView }) {
   const style = stateStyle[slot.state];
   const missingFields = getMissingProfileFields(slot.fitDetails);
+  const criterionCount = visibleFitCriteria.length;
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -382,7 +383,7 @@ function SlotCell({ slot }: { slot: SlotView }) {
         <div className="mt-2 space-y-1 text-caption text-slate-600">
           {slot.fitScore != null && <p className="font-semibold">Điểm phù hợp: {slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100</p>}
           {missingFields && <p className={missingFields.length ? 'text-warning-dark' : 'text-slate-500'}>
-            Profile data: {5 - missingFields.length}/5 criteria available{missingFields.length > 0 ? ` · Missing: ${missingFields.map(key => criterionLabels[key]).join(', ')}` : ''}
+            Profile data: {criterionCount - missingFields.length}/{criterionCount} criteria available{missingFields.length > 0 ? ` · Missing: ${missingFields.map(key => criterionLabels[key]).join(', ')}` : ''}
           </p>}
           {slot.history && <div role="group" aria-label={`Mentoring history for ${slot.mentorName ?? 'mentor'}`} className="space-y-1">
             <p>{slot.history.mentoredTeamCount || slot.history.achievementCount
@@ -406,7 +407,8 @@ function SlotCell({ slot }: { slot: SlotView }) {
 function AssignmentDetails({ mentorName, reasons, fitDetails }: { mentorName: string | null; reasons?: string[]; fitDetails?: SlotView['fitDetails'] }) {
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
-  if (!reasons?.length && !fitDetails) return null;
+  const previewReasons = fitDetails ? [] : formatAllocationPreviewReasons(reasons);
+  if (!previewReasons.length && !fitDetails) return null;
   return (
     <div>
       <Button
@@ -427,7 +429,7 @@ function AssignmentDetails({ mentorName, reasons, fitDetails }: { mentorName: st
               <ul className="mt-1 list-disc space-y-1 pl-4">{fitDetails.projectNeeds.map((need, index) => <li key={`${index}-${need}`}>{need}</li>)}</ul>
             </div>}
             <dl className="space-y-2" aria-label="Profile criteria and supporting passages">
-              {(Object.keys(criterionLabels) as MentorFitCriterionKey[]).map(key => {
+              {visibleFitCriteria.map(key => {
                 const criterion = fitDetails.criteria.find(item => item.key === key);
                 const available = fitDetails.availableProfileFields.includes(key);
                 return <div key={key} className="border-l-2 border-slate-200 pl-2">
@@ -440,8 +442,8 @@ function AssignmentDetails({ mentorName, reasons, fitDetails }: { mentorName: st
               })}
             </dl>
           </>}
-          {!fitDetails && (reasons?.length ?? 0) > 0 && <ul className="list-disc space-y-1 pl-4">
-            {reasons?.map((reason, index) => <li key={`${index}-${reason}`}>{formatAllocationReason(reason)}</li>)}
+          {previewReasons.length > 0 && <ul className="list-disc space-y-1 pl-4">
+            {previewReasons.map((reason, index) => <li key={`${index}-${reason}`}>{reason}</li>)}
           </ul>}
         </div>
       )}

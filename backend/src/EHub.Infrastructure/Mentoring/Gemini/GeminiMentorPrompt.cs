@@ -71,12 +71,14 @@ internal sealed class GeminiMentorPrompt
             mentors.Count < 1 || projects.Select(x => x.Id).Distinct().Count() != projects.Count ||
             mentors.Select(x => x.Id).Distinct().Count() != mentors.Count || mentors.Select(x => x.Type).Distinct().Count() != 1)
             throw new MentorFitRankerUnavailableException(MentorFitFailure.InvalidInput);
-        Projects = projects.OrderBy(x => x.Id).Select((project, index) =>
+        var preparedProjects = projects.OrderBy(x => x.Id).Select(project =>
         {
             var text = ProfessionalText(project.Text, [], 2400);
-            return new GeminiProject($"P{index + 1:000}", text, project.Id, EvidenceOptions(text, text, [text], "N"));
+            return (project.Id, Text: text, Terms: GeminiProfileContext.Terms(text));
         }).ToArray();
-        var projectTexts = Projects.Select(project => project.Text).ToArray();
+        Projects = preparedProjects.Select((project, index) => new GeminiProject($"P{index + 1:000}", project.Text, project.Id,
+            EvidenceOptions(project.Text, project.Text, [project.Terms], "N"))).ToArray();
+        var projectTerms = preparedProjects.Select(project => project.Terms).ToArray();
         Mentors = mentors.OrderBy(x => x.Id).Select((mentor, index) =>
         {
             var identities = new[] { mentor.User?.FullName, mentor.User?.Email, mentor.FptEmail, mentor.Organization,
@@ -94,8 +96,8 @@ internal sealed class GeminiMentorPrompt
             };
             var budgets = new[] { 1200, 450, 250, 350, 250 };
             var fields = ProfileFieldKeys.Select((key, index) => (key, index)).ToDictionary(item => item.key,
-                item => GeminiProfileContext.Select(sources[item.key], projectTexts, budgets[item.index]));
-            var evidence = fields.ToDictionary(field => field.Key, field => EvidenceOptions(field.Value, sources[field.Key], projectTexts));
+                item => GeminiProfileContext.Select(sources[item.key], projectTerms, budgets[item.index]));
+            var evidence = fields.ToDictionary(field => field.Key, field => EvidenceOptions(field.Value, sources[field.Key], projectTerms));
             return new GeminiMentor($"M{index + 1:000}", mentor.MentorType, fields, evidence, mentor.Id, sources);
         }).ToArray();
         if (Projects.Any(project => string.IsNullOrWhiteSpace(project.Text)))
@@ -137,7 +139,8 @@ internal sealed class GeminiMentorPrompt
             mentors = Mentors.Select(x => new { id = x.Id, role = x.Role, profile = x.Fields, evidenceOptions = x.EvidenceOptions })
         }, PromptJsonOptions);
 
-    private static IReadOnlyDictionary<string, string> EvidenceOptions(string source, string fullSource, string[] projects, string prefix = "E")
+    private static IReadOnlyDictionary<string, string> EvidenceOptions(string source, string fullSource,
+        IReadOnlyList<IReadOnlySet<string>> projectTerms, string prefix = "E")
     {
         var quotes = new List<string>();
         // Retrieval must not manufacture positive evidence by omitting an earlier denial.
@@ -163,7 +166,7 @@ internal sealed class GeminiMentorPrompt
                 remaining = remaining[length..].TrimStart();
             }
         }
-        return GeminiProfileContext.Prioritize(quotes.Distinct(StringComparer.Ordinal).ToArray(), projects).Take(32)
+        return GeminiProfileContext.Prioritize(quotes.Distinct(StringComparer.Ordinal).ToArray(), projectTerms).Take(32)
             .Select((quote, index) => (Id: $"{prefix}{index + 1:00}", Quote: quote))
             .ToDictionary(item => item.Id, item => item.Quote);
     }

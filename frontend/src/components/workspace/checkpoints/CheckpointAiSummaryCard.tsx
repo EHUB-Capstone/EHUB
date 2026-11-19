@@ -10,11 +10,13 @@ import Button from '../../ui/Button';
 import Card from '../../ui/Card';
 import LoadingSkeleton from '../../ui/LoadingSkeleton';
 import { checkpointSummaryApi } from '../../../api/checkpointSummaryApi';
+import CheckpointProgressBlock from './CheckpointProgressBlock';
 import CheckpointVersionChangesBlock from './CheckpointVersionChanges';
 import { FigureConflicts } from './ai-summary/FigureNotes';
 import { useFigureHistory } from './ai-summary/useFigureHistory';
 import { FileRow } from './ai-summary/FileSummaryRow';
 import { RequirementEvidence } from './ai-summary/RequirementEvidence';
+import { ReviewBrief } from './ai-summary/ReviewBrief';
 import { SummaryActionsContext } from './ai-summary/summaryContext';
 import { SectionLabel } from './ai-summary/SummaryParts';
 import { parseApiError } from '../../../utils/apiError';
@@ -207,7 +209,11 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
   const comparedWithoutDifferences = Boolean(history && history.comparedCheckpoints.length > 0 && history.conflicts.length === 0);
   const overviewRequirements = singleFile ? [] : (summary?.requirements ?? []);
   const overviewParts = summary ? overviewHeadline({ ...summary, requirements: overviewRequirements }, replacedFiles) : [];
-  const hasOverview = Boolean(summary && (overviewRequirements.length > 0 || summary.links.length > 0 || replacedFiles || comparedWithoutDifferences));
+  // The brief (coverage, what to check, copy/draft) and the progress across checkpoints sit in the overview too; the progress
+  // block draws nothing for checkpoint 1 or when there is nothing to compare, so the overview is offered from checkpoint 2.
+  const hasReadySummary = files.some((file) => file.status === 'Ready' && file.content !== null);
+  const hasOverview = Boolean(summary && (overviewRequirements.length > 0 || summary.links.length > 0 || replacedFiles || comparedWithoutDifferences
+    || hasReadySummary || checkpointNumber > 1));
 
   // The server decides per environment whether AI summaries exist. Until it has answered, and whenever the feature is
   // switched off, nothing is drawn, so the screen looks as if the feature was never there. A failed load still shows
@@ -336,6 +342,8 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
                   </button>
                   {overviewOpen && (
                     <div id={overviewId} className="space-y-4 border-t border-slate-200 px-4 py-4">
+                      <ReviewBrief summary={summary} onQuote={onQuote} />
+
                       {overviewRequirements.length > 0 && (
                         <div className="space-y-3">
                           <SectionLabel icon={ListChecks}>{text.requirementsTitle}</SectionLabel>
@@ -351,6 +359,8 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
                       {history && comparedWithoutDifferences && (
                         <p className="text-caption text-slate-500">{text.comparedNote(comparedCheckpointsText(history.comparedCheckpoints))}</p>
                       )}
+
+                      <CheckpointProgressBlock teamId={teamId} checkpointNumber={checkpointNumber} />
 
                       {summary.links.length > 0 && (
                         <div className="space-y-2">

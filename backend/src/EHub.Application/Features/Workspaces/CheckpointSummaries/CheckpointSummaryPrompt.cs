@@ -27,7 +27,10 @@ internal static class CheckpointSummaryPrompt
     // summaries made with v10 are redone when a reviewer asks again.
     // v12: verify every overview sentence, expose safe extractive fallback and invalidate changed checklist snapshots.
     // v13: require a percentage with its sign and unit in the passage supporting a generated claim.
-    // v14: overview and key points are written in the language of the document (a summary in Vietnamese of an English deck shares
+    // v14: same prompt wording. The notes the system adds to a summary (the question about a missing rubric item, "the file also
+    // says 15%", the fallback overview) are now English to match the screens, so summaries made with v13 are redone when a
+    // reviewer asks again. The model itself still writes in Vietnamese (see System).
+    // v15: overview and key points are written in the language of the document (a summary in Vietnamese of an English deck shares
     // no words with it, so it could never be checked and was always replaced by a quotation); questions stay in Vietnamese.
     // v20: overviewVi is a list with one Vietnamese sentence per sentence of the English overview, so that a sentence the file does not
     // back can be dropped together with its translation.
@@ -36,7 +39,7 @@ internal static class CheckpointSummaryPrompt
     // v17: for an English document the model also returns the overview translated into Vietnamese (overviewVi); the English text is
     // checked against the document and the translation is shown when it keeps the same figures.
     // v16: the language instruction for an English document is itself written in English, which a small model follows better.
-    // v15: the language of overview and key points is stated next to the document, not only in the system message: a small model
+    // v15 (cont.): the language of overview and key points is stated next to the document, not only in the system message: a small model
     // kept writing Vietnamese about an English deck, which cannot be checked word by word.
     public const string Version = "v20";
 
