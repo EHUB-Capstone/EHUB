@@ -40,7 +40,7 @@ function DiscoverySearch({ keyword }: { keyword: string }) {
 }
 
 function requestFor(kind: DiscoverKind, base: Omit<GetShowcasesRequest, 'page' | 'pageSize' | 'featured' | 'sort' | 'period'>, pageSize: number, page = 1): GetShowcasesRequest {
-  // "Earlier projects" is the archive of everything older than last week, so quiet periods never hide old work; it is the only paged rail.
+  // "Earlier products" is the archive of everything older than last week, so quiet periods never hide old work; it is the only paged rail.
   if (kind === 'earlier') return { ...base, sort: 'newest', period: 'earlier', page, pageSize };
   // Choosing a semester switches to its own archive: every published project of that semester, newest first, paged.
   if (kind === 'semester') return { ...base, sort: 'newest', page, pageSize };
@@ -103,11 +103,11 @@ export default function ShowcaseGallery(): React.ReactElement {
   const withoutTrending = (projects: ShowcaseCardDto[]) => projects.filter(project => !trendingIds.has(project.id));
   const totalWithoutTrending = (page: typeof thisWeek.data) => Math.max(0, (page?.totalItems ?? 0) - (page?.items.filter(project => trendingIds.has(project.id)).length ?? 0));
   const sections = [
-    { kind: 'featured' as const, title: 'Featured products', query: featured, projects: featured.data?.items ?? [], total: featured.data?.totalItems ?? 0 },
     { kind: 'trending' as const, title: 'Trending now', query: trending, projects: trendingProjects, total: trending.data?.totalItems ?? 0 },
+    { kind: 'featured' as const, title: 'Featured products', query: featured, projects: featured.data?.items ?? [], total: featured.data?.totalItems ?? 0 },
     { kind: 'thisWeek' as const, title: "This week's products", query: thisWeek, projects: withoutTrending(thisWeek.data?.items ?? []), total: totalWithoutTrending(thisWeek.data) },
     { kind: 'lastWeek' as const, title: "Last week's products", query: lastWeek, projects: withoutTrending(lastWeek.data?.items ?? []), total: totalWithoutTrending(lastWeek.data) },
-    { kind: 'earlier' as const, title: 'Earlier projects', query: earlierProjects, projects: earlierProjects.data?.items ?? [], total: earlierProjects.data?.totalItems ?? 0 },
+    { kind: 'earlier' as const, title: 'Earlier products', query: earlierProjects, projects: earlierProjects.data?.items ?? [], total: earlierProjects.data?.totalItems ?? 0 },
     { kind: 'semester' as const, title: `Projects in ${semesterLabel}`, query: semesterProjects, projects: semesterProjects.data?.items ?? [], total: semesterProjects.data?.totalItems ?? 0 },
   ].filter(section => semesterMode ? section.kind === 'featured' || section.kind === 'semester' : section.kind !== 'semester');
   const availableSections = sections.filter(section => section.query.isPending || section.projects.length > 0);
