@@ -62,21 +62,21 @@ test('outdated ready summaries can be refreshed while current ready summaries st
   const current = file('current', 'Ready', { needsRefresh: false });
   assert.deepEqual(selectableFileIds(summary(stale, current)), ['stale']);
   assert.deepEqual(keepSelectable(['stale', 'current'], summary(stale, current)), ['stale']);
-  assert.equal(fileStatusView(stale).label, 'Cần cập nhật');
+  assert.equal(fileStatusView(stale).label, 'Needs update');
   assert.equal(fileStatusView(stale).tone, 'warning');
-  assert.ok(summaryStatusBadges(summary(stale, current), false).some((badge) => badge.label === '1 cần cập nhật'));
+  assert.ok(summaryStatusBadges(summary(stale, current), false).some((badge) => badge.label === '1 need updating'));
 });
 
 test('the collapsed header counts files by state, worst news first', () => {
   const files = [file('a', 'Processing'), file('b', 'Pending'), file('c', 'Pending'), file('d', 'Failed'), file('e', 'Ready'), file('f', 'None'), file('g', 'Cancelled')];
   assert.deepEqual(summaryStatusCounts(files), { total: 7, ready: 1, summarising: 1, queued: 2, failed: 1, notSummarised: 2 });
   assert.deepEqual(summaryStatusBadges(summary(...files), false).map((badge) => badge.label),
-    ['1 đang tóm tắt', '2 đang chờ', '1 lỗi', '1/7 đã tóm tắt', '2 chưa tóm tắt']);
+    ['1 summarising', '2 queued', '1 failed', '1/7 summarised', '2 not summarised']);
   assert.deepEqual(summaryStatusBadges(summary(file('a', 'Ready'), file('b', 'Ready')), false).map((badge) => [badge.label, badge.tone]),
-    [['Cả 2 file đã tóm tắt', 'success']]);
-  assert.equal(summaryStatusBadges(summary(file('a', 'Ready')), false)[0].label, '1 file đã tóm tắt');
-  assert.equal(summaryStatusBadges(summary(), false)[0].label, 'Chưa có file');
-  assert.equal(summaryStatusBadges(null, false)[0].label, 'Đang kiểm tra…');
+    [['All 2 files summarised', 'success']]);
+  assert.equal(summaryStatusBadges(summary(file('a', 'Ready')), false)[0].label, '1 file summarised');
+  assert.equal(summaryStatusBadges(summary(), false)[0].label, 'No files');
+  assert.equal(summaryStatusBadges(null, false)[0].label, 'Checking…');
   assert.equal(summaryStatusBadges(null, true)[0].tone, 'danger');
 });
 
@@ -89,8 +89,8 @@ test('the card starts closed and never ticks files for the reviewer', () => {
 test('a file with sentences addressed to the AI says so, and only then', () => {
   assert.equal(ignoredInstructionsMessage(0), null);
   assert.equal(ignoredInstructionsMessage(undefined), null);
-  assert.match(ignoredInstructionsMessage(1) ?? '', /1 câu gửi tới AI/);
-  assert.match(ignoredInstructionsMessage(3) ?? '', /3 câu gửi tới AI/);
+  assert.match(ignoredInstructionsMessage(1) ?? '', /1 sentence addressed to the AI/);
+  assert.match(ignoredInstructionsMessage(3) ?? '', /3 sentences addressed to the AI/);
   const card = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx', import.meta.url), 'utf8');
   // Both the quick view and the finished summary show it.
   assert.match(card, /<IgnoredInstructionsNote count=\{file\.preview\.ignoredInstructions\}/);
@@ -99,13 +99,13 @@ test('a file with sentences addressed to the AI says so, and only then', () => {
 
 test('a quote says where it is, can be pasted into a comment, and the time left is a rough guide', () => {
   assert.equal(pageLabel('Deck.pptx', 7), 'Slide 7');
-  assert.equal(pageLabel('Report.pdf', 12), 'Trang 12');
-  assert.equal(quoteForFeedback('Doanh thu 1,4 tỷ đồng.', 'Report.pdf', 12), '“Doanh thu 1,4 tỷ đồng.” — Report.pdf, Trang 12');
+  assert.equal(pageLabel('Report.pdf', 12), 'Page 12');
+  assert.equal(quoteForFeedback('Doanh thu 1,4 tỷ đồng.', 'Report.pdf', 12), '“Doanh thu 1,4 tỷ đồng.” — Report.pdf, Page 12');
   assert.equal(quoteForFeedback('Doanh thu 1,4 tỷ đồng.', 'Report.docx'), '“Doanh thu 1,4 tỷ đồng.” — Report.docx');
   assert.equal(quoteForFeedback('Câu trích.'), '“Câu trích.”');
   assert.equal(summaryEtaText(summary(file('a', 'Ready'))), null);
-  assert.equal(summaryEtaText(summary(file('a', 'Processing'))), 'Sắp xong');
-  assert.equal(summaryEtaText(summary(file('a', 'Processing'), file('b', 'Pending'), file('c', 'Pending'))), 'Còn khoảng 3 phút');
+  assert.equal(summaryEtaText(summary(file('a', 'Processing'))), 'Almost done');
+  assert.equal(summaryEtaText(summary(file('a', 'Processing'), file('b', 'Pending'), file('c', 'Pending'))), 'About 3 min left');
   const card = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx', import.meta.url), 'utf8');
   // The quote actions are wired from the checkpoint screen: open at the page, and put a quote into the comment box.
   const panel = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointPanel.tsx', import.meta.url), 'utf8');
@@ -123,18 +123,18 @@ test('polls only while a file is queued or being summarised', () => {
 });
 
 test('file status labels show the queue and findings never read as pass or fail', () => {
-  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 2 })).label, 'Đang chờ · còn 2 file trước');
-  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 0 })).label, 'Đang chờ');
-  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 1, isAutomatic: true })).label, 'Tự xếp hàng · còn 1 file trước');
+  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 2 })).label, 'Queued · 2 ahead');
+  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 0 })).label, 'Queued');
+  assert.equal(fileStatusView(file('a', 'Pending', { queueAhead: 1, isAutomatic: true })).label, 'Auto-queued · 1 ahead');
   assert.equal(fileStatusView(file('a', 'Ready')).tone, 'success');
   for (const view of Object.values(summaryFindingView)) assert.doesNotMatch(view.label, /pass|fail|đạt/i);
-  assert.match(summaryErrorMessage('WORKSPACE_SUMMARY_QUEUE_FULL'), /sau vài phút/);
-  assert.match(summaryErrorMessage('AUTH_RATE_LIMITED'), /một giờ qua/);
+  assert.match(summaryErrorMessage('WORKSPACE_SUMMARY_QUEUE_FULL'), /few minutes/);
+  assert.match(summaryErrorMessage('AUTH_RATE_LIMITED'), /past hour/);
   // Each cause of a failed file has its own message, and the temporary ones point to Retry.
   for (const code of ['WORKSPACE_SUMMARY_MODEL_UNREACHABLE', 'WORKSPACE_SUMMARY_MODEL_TIMEOUT', 'WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE'])
-    assert.match(summaryErrorMessage(code), /Thử lại/);
+    assert.match(summaryErrorMessage(code), /Retry/);
   assert.notEqual(summaryErrorMessage('WORKSPACE_SUMMARY_MODEL_BAD_ANSWER'), summaryErrorMessage('WORKSPACE_SUMMARY_UNAVAILABLE'));
-  assert.equal(summaryErrorMessage('SOMETHING_NEW'), 'Không tải được bản AI tóm tắt. Vui lòng thử lại.');
+  assert.equal(summaryErrorMessage('SOMETHING_NEW'), 'Could not load the AI summary. Please try again.');
 });
 
 test('the summary API uses the checkpoint ai-summary route', () => {
@@ -223,13 +223,13 @@ test('live criteria are not searched, so "nothing found" refers only to what a d
   assert.equal(isNothingFound(rows), true, 'the live and product rows do not count as missing');
   assert.equal(isNothingFound(rows.slice(1, 3)), false, 'nothing was searched');
   assert.deepEqual(rows.filter(isSearchable).map((row) => row.index), [0, 3]);
-  assert.equal(summaryFindingView.Live.label, 'Chấm trực tiếp');
-  assert.match(summaryFindingView.Live.hint, /trực tiếp/);
+  assert.equal(summaryFindingView.Live.label, 'Assessed live');
+  assert.match(summaryFindingView.Live.hint, /assessed live/);
   // A whole-file criterion ("Startup Idea Clarity") is never reported as missing, and is listed with the other judged-elsewhere rows.
   const withOverall = [...rows, { index: 4, finding: 'Overall' as const, weight: 30 }];
   assert.equal(isSearchable(withOverall[4]), false);
   assert.equal(isNothingFound(withOverall), true);
-  assert.equal(summaryFindingView.Overall.label, 'Đánh giá trên cả file');
+  assert.equal(summaryFindingView.Overall.label, 'Judged on the whole file');
 });
 
 test('numbers follow the order the lists show, not the position in the checklist', () => {
@@ -326,14 +326,14 @@ import { hasReplacedFiles, versionChangeCounts, versionChangeHeadline } from '..
 test('version changes: only files uploaded more than once can be compared, and the headline says what a reviewer should know', () => {
   assert.equal(hasReplacedFiles([{ name: 'Plan.pdf' }, { name: 'Slides.pptx' }]), false);
   assert.equal(hasReplacedFiles([{ name: 'Plan.pdf' }, { name: ' plan.PDF' }]), true);
-  assert.equal(versionChangeCounts({ changedCount: 2, addedCount: 1, removedCount: 0 }), '2 câu sửa · 1 câu thêm');
+  assert.equal(versionChangeCounts({ changedCount: 2, addedCount: 1, removedCount: 0 }), '2 changed · 1 added');
   assert.equal(versionChangeCounts({ changedCount: 0, addedCount: 0, removedCount: 0 }), '');
   const base = { fromVersion: 1, toVersion: 2, unchangedPercent: 80 };
-  assert.match(versionChangeHeadline({ ...base, status: 'Compared', items: [{ figuresChanged: true }, { figuresChanged: false }] }), /giữ nguyên 80%.*1 câu đổi số liệu/);
-  assert.doesNotMatch(versionChangeHeadline({ ...base, status: 'Compared', items: [] }), /số liệu/);
-  assert.match(versionChangeHeadline({ ...base, status: 'Unchanged', items: [] }), /v2 giống v1/);
-  assert.match(versionChangeHeadline({ ...base, status: 'Unreadable', items: [] }), /Không đọc được/);
-  assert.match(versionChangeHeadline({ ...base, status: 'NewFile', items: [] }), /File mới/);
+  assert.match(versionChangeHeadline({ ...base, status: 'Compared', items: [{ figuresChanged: true }, { figuresChanged: false }] }), /80% of the content is unchanged.*1 sentence changes a figure/);
+  assert.doesNotMatch(versionChangeHeadline({ ...base, status: 'Compared', items: [] }), /figure/);
+  assert.match(versionChangeHeadline({ ...base, status: 'Unchanged', items: [] }), /v2 is identical to v1/);
+  assert.match(versionChangeHeadline({ ...base, status: 'Unreadable', items: [] }), /could not be read/);
+  assert.match(versionChangeHeadline({ ...base, status: 'NewFile', items: [] }), /New file/);
 });
 
 test('mock: a file uploaded again is compared with its previous version, and nothing exists when AI summaries are off', async () => {
@@ -508,4 +508,190 @@ test('feedback: the card saves before it shows the verdict, locks double clicks 
   assert.match(card, /aria-pressed=\{current\?\.rating === 'Helpful'\}/);
   assert.match(card, /className=\{buttonClass\(/);
   assert.doesNotMatch(card, /dangerouslySetInnerHTML/);
+});
+
+import { buildFeedbackDraft, buildReviewBrief, requirementCoverage, summaryAttentionItems } from '../src/utils/checkpointSummary.ts';
+import type { FileSummaryContent } from '../src/types/checkpointSummary.ts';
+
+const content = (overrides: Partial<FileSummaryContent> = {}): FileSummaryContent => ({
+  overview: 'A platform that connects students with campus services.', keyPoints: ['Interviewed 18 students.', 'Charges an 8% commission.'],
+  highlights: [], requirements: [], questions: [], conflicts: [], statusItems: [], littleText: false, ...overrides,
+});
+
+const item = (index: number, finding: CheckpointSummary['requirements'][number]['finding'], title = `Item ${index}`): CheckpointSummary['requirements'][number] =>
+  ({ index, kind: 'Criterion', title, finding, evidence: null, source: null });
+
+test('review brief: coverage counts what a file can show and keeps live criteria apart', () => {
+  const coverage = requirementCoverage([item(0, 'Related'), item(1, 'Related'), item(2, 'NotFound'), item(3, 'NotChecked'), item(4, 'Live'), item(5, 'Overall')]);
+  assert.deepEqual(coverage, { total: 6, searchable: 4, found: 2, notFound: 1, notChecked: 1, elsewhere: 2 });
+  assert.deepEqual(requirementCoverage([]), { total: 0, searchable: 0, found: 0, notFound: 0, notChecked: 0, elsewhere: 0 });
+});
+
+test('review brief: flags are counts of what the files showed, worst first, and a clean summary has none', () => {
+  assert.deepEqual(summaryAttentionItems(null), []);
+  assert.deepEqual(summaryAttentionItems(summary(file('a', 'Ready', { content: content() }))), []);
+
+  const flagged = summary(
+    file('a', 'Ready', { content: content({
+      conflicts: [{ subject: 'Conversion rate', values: [{ value: '15%', quote: 'q1' }, { value: '30%', quote: 'q2' }] }],
+      statusItems: [{ status: 'Done', text: 'x' }, { status: 'Pending', text: 'y' }, { status: 'InProgress', text: 'z' }],
+      ignoredInstructions: 2, littleText: true }) }),
+    file('b', 'Ready', { needsRefresh: true, content: content() }),
+    file('c', 'Failed'),
+    file('d', 'None'),
+  );
+  flagged.conflicts = [{ subject: 'Sample size', values: [{ value: '51', quote: 'q', source: 'a.pdf' }, { value: '52', quote: 'q', source: 'b.pdf' }] }];
+  const items = summaryAttentionItems(flagged);
+  assert.deepEqual(items.map((entry) => entry.key), ['failed', 'stale', 'figures', 'instructions', 'open', 'images', 'partial']);
+  assert.equal(items[0].tone, 'danger');
+  assert.match(items.find((entry) => entry.key === 'figures')?.text ?? '', /^2 figures are stated with different values/);
+  assert.match(items.find((entry) => entry.key === 'open')?.text ?? '', /^2 items are reported as pending or in progress/);
+  assert.match(items.find((entry) => entry.key === 'partial')?.text ?? '', /^1 file is not summarised yet/);
+  // A file still being written is read through its quick view, so its flags show before the AI is done.
+  const preview = { highlights: [], requirements: [], conflicts: [], statusItems: [], ignoredInstructions: 1, littleText: false };
+  assert.deepEqual(summaryAttentionItems(summary(file('p', 'Processing', { preview }))).map((entry) => entry.key), ['instructions']);
+});
+
+test('review brief: the text names each summarised file, the coverage and what to check, and says it came from an AI', () => {
+  const ready = summary(
+    file('a', 'Ready', { name: 'Plan.pdf', versionNumber: 2, content: content({ statusItems: [{ status: 'Pending', text: 'Add chat.', request: '1. Add chat' }, { status: 'Done', text: 'Archive built.' }] }) }),
+    file('b', 'None'),
+  );
+  ready.requirements = [item(0, 'Related'), item(1, 'NotFound', 'Competitors'), item(2, 'NotFound', 'Market size')];
+  const brief = buildReviewBrief(ready);
+  assert.match(brief, /^AI review brief · Checkpoint 1\n/);
+  assert.match(brief, /do not use it for grading/);
+  assert.match(brief, /1 of 2 files summarised\./);
+  assert.match(brief, /Plan\.pdf \(v2\)\nA platform that connects students with campus services\.\n- Interviewed 18 students\./);
+  assert.match(brief, /Still open in the file:\n- Pending: 1\. Add chat – Add chat\./);
+  assert.doesNotMatch(brief, /Archive built/, 'finished work is not listed as open');
+  assert.match(brief, /related content found for 1 of 3 items/);
+  assert.match(brief, /Not found in the files: Competitors; Market size/);
+  assert.match(brief, /Worth checking:\n- 1 item is reported as pending[^\n]*\n- 1 file is not summarised yet/);
+  // A summary the AI has not written yet has no file section, and no claim about coverage it does not have.
+  const empty = buildReviewBrief(summary(file('a', 'None')));
+  assert.match(empty, /0 of 1 file summarised\./);
+  assert.doesNotMatch(empty, /Requirements and rubric/);
+});
+
+test('review brief: the card shows it only when there is something to say, and puts it into the feedback box on request', () => {
+  const card = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx', import.meta.url), 'utf8');
+  assert.match(card, /\{summary && <ReviewBrief summary=\{summary\} onQuote=\{onQuote\} \/>\}/);
+  assert.match(card, /if \(!hasSummary && attention\.length === 0\) return null;/);
+  // What reaches the feedback box is the draft for the team, never the internal brief.
+  assert.match(card, /onQuote\?\.\(feedbackDraft\)/);
+  assert.doesNotMatch(card, /onQuote\?\.\(buildReviewBrief/);
+  // The coverage bar does not claim "found" for items nobody has looked for.
+  assert.match(card, /\{checked > 0 && \(/);
+});
+
+test('the AI summary screens are written in English', () => {
+  const vietnamese = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+  for (const path of [
+    '../src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx',
+    '../src/components/workspace/checkpoints/CheckpointVersionChanges.tsx',
+    '../src/components/workspace/checkpoints/CheckpointProgressBlock.tsx',
+    '../src/utils/checkpointSummary.ts',
+  ]) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, vietnamese, `${path} still has Vietnamese text`);
+  }
+});
+
+test('feedback draft: covers, gaps, open work, figures and questions for the team, without internal notes or a grade', () => {
+  const ready = summary(
+    file('a', 'Ready', { name: 'Plan.pdf', content: content({
+      questions: ['Which suppliers confirmed the 8% fee?', 'which suppliers confirmed the 8% fee?'],
+      statusItems: [{ status: 'Pending', text: 'Add chat.', request: '1. Add chat' }, { status: 'Done', text: 'Archive built.' }],
+      conflicts: [{ subject: 'Conversion rate', values: [{ value: '15%', quote: 'q1' }, { value: '30%', quote: 'q2' }] }],
+      ignoredInstructions: 3, littleText: true }) }),
+    file('b', 'None'),
+  );
+  ready.requirements = [
+    { ...item(0, 'Related', 'Persona'), evidence: 'Primary segment: first-year students.', source: 'Plan.pdf', evidencePage: 4, weight: 20 },
+    { ...item(1, 'Related', 'Roadmap'), weight: 40 },
+    item(2, 'NotFound', 'Competitors'),
+    item(3, 'Live', 'Presentation'),
+  ];
+  const draft = buildFeedbackDraft(ready);
+  assert.match(draft, /^Checkpoint 1 feedback\n\nWhat the files cover:\n- Persona: “Primary segment: first-year students\.” \(Plan\.pdf, Page 4\)/);
+  assert.doesNotMatch(draft, /Roadmap/, 'a related item without a quote has nothing to show the team');
+  assert.match(draft, /Could not find in the submitted files[^\n]*\n- Competitors/);
+  assert.doesNotMatch(draft, /Presentation/, 'items judged live are not reported as missing');
+  assert.match(draft, /Still open according to the files:\n- Pending: 1\. Add chat – Add chat\./);
+  assert.doesNotMatch(draft, /Archive built/);
+  assert.match(draft, /Conversion rate: 15% vs 30%/);
+  assert.equal(draft.match(/suppliers confirmed/gi)?.length, 1, 'the same question is asked once');
+  // The team reads this box: nothing about the AI, the file's quality or instructions hidden in it.
+  assert.doesNotMatch(draft, /\bAI\b|ignored|addressed|images|grading|grade/i);
+  assert.equal(buildFeedbackDraft(summary(file('a', 'None'))), '');
+});
+
+import { hasProgress, partiallyReadCheckpoints, progressChangeView, progressStateText } from '../src/utils/checkpointSummary.ts';
+import type { CheckpointProgress, ProgressChange, ProgressState } from '../src/types/checkpointSummary.ts';
+
+const progress = (overrides: Partial<CheckpointProgress> = {}): CheckpointProgress => ({
+  checkpointNumber: 2,
+  checkpoints: [{ number: 1, fileCount: 2, readFileCount: 1 }, { number: 2, fileCount: 1, readFileCount: 1 }],
+  concepts: [{ label: 'Persona', change: 'Gained', cells: [{ checkpointNumber: 1, state: 'NotMentioned' }, { checkpointNumber: 2, state: 'Found' }] }],
+  ...overrides,
+});
+
+test('progress: wording says what the files show and never reads as a grade', () => {
+  const changes: ProgressChange[] = ['Gained', 'Dropped', 'Held', 'Missing', 'None'];
+  assert.deepEqual(changes.map((change) => progressChangeView[change]?.label ?? null),
+    ['Newly mentioned', 'No longer mentioned', 'Still mentioned', 'Still not mentioned', null]);
+  // A thing that is no longer mentioned is worth a look, a thing that appeared is good news; neither is called a failure or a pass.
+  assert.equal(progressChangeView.Dropped?.tone, 'warning');
+  assert.equal(progressChangeView.Gained?.tone, 'success');
+  for (const view of Object.values(progressChangeView)) if (view) assert.doesNotMatch(view.label, /pass|fail|good|bad|improv|worse/i);
+  const states: ProgressState[] = ['Found', 'NotMentioned', 'NotAsked', 'NotRead'];
+  assert.deepEqual(states.map((state) => progressStateText[state]), ['Mentioned', 'Not mentioned', 'Not in the rubric', 'Files not read']);
+});
+
+test('progress: shown only with two checkpoints and a thing to compare, and says when only part of the files were read', () => {
+  assert.equal(hasProgress(null), false);
+  assert.equal(hasProgress(progress({ checkpoints: [], concepts: [] })), false);
+  assert.equal(hasProgress(progress({ concepts: [] })), false);
+  assert.equal(hasProgress(progress({ checkpoints: [{ number: 2, fileCount: 1, readFileCount: 1 }] })), false);
+  assert.equal(hasProgress(progress()), true);
+  assert.deepEqual(partiallyReadCheckpoints(progress()), ['CP1: 1 of 2 files read']);
+  assert.deepEqual(partiallyReadCheckpoints(progress({ checkpoints: [{ number: 1, fileCount: 1, readFileCount: 1 }] })), []);
+});
+
+test('mock: progress compares checkpoints for reviewers only, and is absent when summaries are off', async () => {
+  resetMockState();
+  await login('giang.lecturer@ehub.local');
+  const upload = (id: string) => ({
+    _id: id, versionNumber: 1, originalName: `${id}.pdf`, fileType: 'pdf', fileSize: 10,
+    uploadedAt: new Date().toISOString(), uploadedBy: { _id: '', name: 'Team leader' },
+  });
+  getMockState().checkpointFiles[`${TEAM_ID}:1`] = [upload('a')] as never;
+  getMockState().checkpointFiles[`${TEAM_ID}:2`] = [upload('b')] as never;
+
+  const first = (await checkpointSummaryApi.progress(TEAM_ID, 1)).data;
+  assert.deepEqual([first.checkpoints.length, first.concepts.length], [0, 0], 'nothing earlier to compare with');
+  const second = (await checkpointSummaryApi.progress(TEAM_ID, 2)).data;
+  assert.deepEqual(second.checkpoints.map((item) => item.number), [1, 2]);
+  assert.equal(hasProgress(second), true);
+  assert.ok(second.concepts.every((concept) => concept.cells.length === 2));
+
+  getMockState().checkpointSummaryDisabled = true;
+  await assert.rejects(checkpointSummaryApi.progress(TEAM_ID, 2), (error: { response?: { status: number } }) => error.response?.status === 503);
+  getMockState().checkpointSummaryDisabled = false;
+  await login('se200001@fpt.edu.vn');
+  await assert.rejects(checkpointSummaryApi.progress(TEAM_ID, 2), (error: { response?: { status: number } }) => error.response?.status === 403);
+});
+
+test('progress: the block loads by itself from the second checkpoint, handles loading, error and retry, and cleans up', () => {
+  const block = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointProgressBlock.tsx', import.meta.url), 'utf8');
+  assert.match(block, /if \(checkpointNumber <= 1\) return undefined;/);
+  assert.match(block, /checkpointSummaryApi\.progress\(teamId, checkpointNumber, signal\)/);
+  assert.match(block, /return \(\) => controller\.abort\(\);/);
+  assert.match(block, /role="alert"/);
+  assert.match(block, /setAttempt\(\(value\) => value \+ 1\)/);
+  const card = readFileSync(new URL('../src/components/workspace/checkpoints/CheckpointAiSummaryCard.tsx', import.meta.url), 'utf8');
+  assert.match(card, /summary\.enabled && <CheckpointProgressBlock /);
+  assert.doesNotMatch(block, /dangerouslySetInnerHTML/);
+  assert.doesNotMatch(block, /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i, 'written in English like the rest of the card');
 });

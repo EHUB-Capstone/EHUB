@@ -24,7 +24,9 @@ public sealed class GeminiShowcaseAssistantModelTests
         }
     }
 
-    private static ShowcaseAssistantOptions Valid() => new() { Enabled = true, ApiKey = "test-key" };
+    private const string UserKey = "AIzaSyTestKeyForUnitTests0123456789";
+
+    private static ShowcaseAssistantOptions Valid() => new() { Enabled = true };
 
     private static GeminiShowcaseAssistantModel Model(StubHandler handler, ShowcaseAssistantOptions? options = null) =>
         new(new HttpClient(handler), Options.Create(options ?? Valid()), NullLogger<GeminiShowcaseAssistantModel>.Instance);
@@ -45,18 +47,19 @@ public sealed class GeminiShowcaseAssistantModelTests
     private static HttpResponseMessage Status(HttpStatusCode code) => new(code) { Content = new StringContent("{}") };
 
     [Fact]
-    public async Task ParsesStructuredAnswer_AndSendsCatalogWithServerSideKey()
+    public async Task ParsesStructuredAnswer_AndSendsCatalogWithTheCallersOwnKeyInAHeader()
     {
         var handler = new StubHandler(_ => Ok("""{"answer":"Có EduBot","projects":[{"ref":"P1","reason":"Gia sư AI"}],"suggestions":["Còn gì nữa?"]}"""));
 
-        var reply = await Model(handler).AskAsync(Input(), CancellationToken.None);
+        var reply = await Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
         reply.Answer.Should().Be("Có EduBot");
         reply.Picks.Should().ContainSingle().Which.Should().Be(new ShowcaseAssistantPick("P1", "Gia sư AI"));
         reply.Suggestions.Should().Equal("Còn gì nữa?");
         var request = handler.Requests.Single();
-        request.ApiKey.Should().Be("test-key");
-        request.Uri.AbsoluteUri.Should().NotContain("test-key").And.Contain("gemini-3.5-flash-lite:generateContent");
+        request.ApiKey.Should().Be(UserKey);
+        request.Uri.AbsoluteUri.Should().NotContain(UserKey).And.Contain("gemini-3.5-flash-lite:generateContent");
+        request.Body.Should().NotContain(UserKey, "the key travels in a header only, never in the prompt");
         using var body = JsonDocument.Parse(request.Body);
         var contents = body.RootElement.GetProperty("contents");
         contents.GetArrayLength().Should().Be(3);
@@ -71,7 +74,7 @@ public sealed class GeminiShowcaseAssistantModelTests
     {
         var handler = new StubHandler(_ => Status(HttpStatusCode.TooManyRequests), _ => Ok("""{"answer":"ok","projects":[],"suggestions":[]}"""));
 
-        var reply = await Model(handler).AskAsync(Input(), CancellationToken.None);
+        var reply = await Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
         reply.Answer.Should().Be("ok");
         handler.Requests.Select(request => request.Uri.AbsolutePath).Should().Equal(
@@ -79,35 +82,64 @@ public sealed class GeminiShowcaseAssistantModelTests
     }
 
     [Fact]
-    public async Task EveryModelRateLimited_ReportsBusy()
+    public async Task EveryModelRateLimited_TellsTheUserTheirKeyIsOutOfQuota()
     {
         var handler = new StubHandler(_ => Status(HttpStatusCode.TooManyRequests));
 
-        var act = () => Model(handler).AskAsync(Input(), CancellationToken.None);
+        var act = () => Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<ShowcaseAssistantUnavailableException>()).Which.UserMessage.Should().Contain("quá nhiều yêu cầu");
+        (await act.Should().ThrowAsync<ShowcaseAssistantKeyRejectedException>()).Which.UserMessage.Should().Contain("hết hạn mức").And.NotContain(UserKey);
         handler.Requests.Should().HaveCount(2);
     }
 
     [Fact]
-    public async Task RejectedApiKey_StopsWithoutTryingFallbackModels()
+    public async Task RejectedApiKey_StopsWithoutTryingFallbackModels_AndNeverEchoesTheKey()
     {
-        var handler = new StubHandler(_ => Status(HttpStatusCode.Forbidden));
+        foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden })
+        {
+            var handler = new StubHandler(_ => Status(status));
 
-        var act = () => Model(handler).AskAsync(Input(), CancellationToken.None);
+            var act = () => Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<ShowcaseAssistantUnavailableException>()).Which.UserMessage.Should().Contain("cấu hình");
+            (await act.Should().ThrowAsync<ShowcaseAssistantKeyRejectedException>()).Which.UserMessage.Should().Contain("API key").And.NotContain(UserKey);
+            handler.Requests.Should().ContainSingle();
+        }
+    }
+
+    [Fact]
+    public async Task GoogleReportingAnInvalidKeyWithHttp400_IsTheUsersKeyProblem()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}""")
+        });
+
+        var act = () => Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ShowcaseAssistantKeyRejectedException>();
         handler.Requests.Should().ContainSingle();
     }
 
     [Fact]
-    public async Task DisabledOrKeylessConfiguration_NeverCallsGoogle()
+    public async Task AnyOtherHttp400_IsNotBlamedOnTheKey()
     {
-        foreach (var options in new[] { new ShowcaseAssistantOptions { ApiKey = "key" }, new ShowcaseAssistantOptions { Enabled = true },
-                     new ShowcaseAssistantOptions { Enabled = true, ApiKey = "key", Model = "not-approved" } })
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""{"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT"}}""")
+        });
+
+        var act = () => Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ShowcaseAssistantUnavailableException>();
+    }
+
+    [Fact]
+    public async Task DisabledOrMisconfiguredModels_NeverCallGoogle()
+    {
+        foreach (var options in new[] { new ShowcaseAssistantOptions(), new ShowcaseAssistantOptions { Enabled = true, Model = "not-approved" } })
         {
             var handler = new StubHandler(_ => Ok("{}"));
-            var act = () => Model(handler, options).AskAsync(Input(), CancellationToken.None);
+            var act = () => Model(handler, options).AskAsync(Input(), UserKey, CancellationToken.None);
             await act.Should().ThrowAsync<ShowcaseAssistantUnavailableException>();
             handler.Requests.Should().BeEmpty();
         }
@@ -118,7 +150,7 @@ public sealed class GeminiShowcaseAssistantModelTests
     {
         var handler = new StubHandler(_ => Ok("not json"));
 
-        var act = () => Model(handler).AskAsync(Input(), CancellationToken.None);
+        var act = () => Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
         await act.Should().ThrowAsync<ShowcaseAssistantUnavailableException>();
         handler.Requests.Should().HaveCount(2);
@@ -132,7 +164,7 @@ public sealed class GeminiShowcaseAssistantModelTests
             Content = new StringContent("""{"promptFeedback":{"blockReason":"SAFETY"}}""", Encoding.UTF8, "application/json")
         });
 
-        var reply = await Model(handler).AskAsync(Input(), CancellationToken.None);
+        var reply = await Model(handler).AskAsync(Input(), UserKey, CancellationToken.None);
 
         reply.Answer.Should().NotBeNullOrWhiteSpace();
         reply.Picks.Should().BeEmpty();
@@ -145,7 +177,7 @@ public sealed class GeminiShowcaseAssistantModelTests
         await cancellation.CancelAsync();
         var handler = new StubHandler(_ => Ok("{}"));
 
-        var act = () => Model(handler).AskAsync(Input(), cancellation.Token);
+        var act = () => Model(handler).AskAsync(Input(), UserKey, cancellation.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }

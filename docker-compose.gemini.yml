@@ -8,9 +8,8 @@ services:
       Mentoring__Gemini__DataTransferEnabled: ${GEMINI_DATA_TRANSFER_ENABLED:-false}
       Mentoring__Gemini__MinimumRequestIntervalSeconds: ${GEMINI_MINIMUM_REQUEST_INTERVAL_SECONDS:-12}
       Mentoring__Gemini__MaxConcurrentRequests: ${GEMINI_MAX_CONCURRENT_REQUESTS:-1}
-      # Showcase chat is opt-in. An empty key uses the server-side mentor Gemini key.
+      # Showcase chat is opt-in and has no server-side key: every user pastes their own Gemini key in the chat.
       Showcase__Assistant__Enabled: ${SHOWCASE_ASSISTANT_ENABLED:-false}
-      Showcase__Assistant__ApiKey: ${SHOWCASE_ASSISTANT_API_KEY:-}
       Showcase__Assistant__Model: ${SHOWCASE_ASSISTANT_MODEL:-gemini-3.5-flash-lite}
       Showcase__Assistant__FallbackModels: ${SHOWCASE_ASSISTANT_FALLBACK_MODELS:-gemini-3.1-flash-lite}
       ShowcaseAssistantRateLimiting__RequestsPerUserPerMinute: ${SHOWCASE_ASSISTANT_REQUESTS_PER_USER_PER_MINUTE:-8}

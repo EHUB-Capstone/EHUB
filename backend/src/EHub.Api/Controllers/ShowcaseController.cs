@@ -63,9 +63,11 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> AssistantChat(
         [FromBody] ShowcaseAssistantChatRequest request,
+        // The caller's own Gemini key. The server holds none; it is used for this call only and never stored or logged.
+        [FromHeader(Name = ShowcaseAssistantApiKey.HeaderName)] string? apiKey,
         [FromServices] IShowcaseAssistantHandler handler,
         CancellationToken cancellationToken) =>
-        ToResponse(await handler.AskAsync(request, UserId, cancellationToken), "Showcase assistant replied.");
+        ToResponse(await handler.AskAsync(request, apiKey, UserId, cancellationToken), "Showcase assistant replied.");
 
     [HttpPost("{id:guid}/feature")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]

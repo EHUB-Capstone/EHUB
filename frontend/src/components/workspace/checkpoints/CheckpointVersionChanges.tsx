@@ -19,9 +19,9 @@ interface Props {
 }
 
 const KIND: Record<VersionChangeItem['kind'], { label: string; tone: 'info' | 'success' | 'neutral' }> = {
-  Changed: { label: 'Sửa', tone: 'info' },
-  Added: { label: 'Thêm', tone: 'success' },
-  Removed: { label: 'Bỏ', tone: 'neutral' },
+  Changed: { label: 'Changed', tone: 'info' },
+  Added: { label: 'Added', tone: 'success' },
+  Removed: { label: 'Removed', tone: 'neutral' },
 };
 
 function ChangeItem({ item, file, onOpenFile }: { item: VersionChangeItem; file: FileVersionChange; onOpenFile?: Props['onOpenFile'] }) {
@@ -32,7 +32,7 @@ function ChangeItem({ item, file, onOpenFile }: { item: VersionChangeItem; file:
     <li className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={kind.tone}>{kind.label}</Badge>
-        {item.figuresChanged && <Badge variant="warning">Đổi số liệu</Badge>}
+        {item.figuresChanged && <Badge variant="warning">Figure changed</Badge>}
         {canOpen && (
           <button
             type="button"
@@ -40,7 +40,7 @@ function ChangeItem({ item, file, onOpenFile }: { item: VersionChangeItem; file:
             className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-caption font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
           >
             <FileSearch className="h-3 w-3" aria-hidden="true" />
-            {item.page ? `Mở ${pageLabel(file.fileName, item.page)}` : 'Mở file'}
+            {item.page ? `Open ${pageLabel(file.fileName, item.page)}` : 'Open file'}
           </button>
         )}
       </div>
@@ -93,7 +93,7 @@ export default function CheckpointVersionChangesBlock({ teamId, checkpointNumber
       setChanges(response.data);
     } catch (caught) {
       if (axios.isCancel(caught)) return;
-      setError(parseApiError(caught, 'Không so sánh được các phiên bản. Vui lòng thử lại.').message);
+      setError(parseApiError(caught, 'Could not compare the versions. Please try again.').message);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -104,25 +104,25 @@ export default function CheckpointVersionChangesBlock({ teamId, checkpointNumber
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-1.5 text-overline font-bold uppercase text-slate-500">
           <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
-          Thay đổi so với bản trước
+          Changes since the previous version
         </h4>
         {!changes && (
           <Button variant="outline" size="sm" icon={loading ? Loader2 : GitCompare} disabled={loading} onClick={load}>
-            {loading ? 'Đang so sánh…' : 'So sánh'}
+            {loading ? 'Comparing…' : 'Compare'}
           </Button>
         )}
       </div>
       <p className="text-caption text-slate-500">
-        Nhóm đã nộp lại một số file. So sánh từng câu giữa hai bản, không dùng AI nên không có chuyện bịa; chỉ hiện những thay đổi đáng chú ý nhất.
+        The team uploaded some files again. The two versions are compared sentence by sentence without the AI, so nothing is made up; only the most notable changes are shown.
       </p>
       {error && (
         <div className="flex flex-wrap items-center gap-3" role="alert">
           <p className="text-body-sm text-danger-dark">{error}</p>
-          <Button variant="outline" size="sm" icon={RefreshCw} onClick={load}>Thử lại</Button>
+          <Button variant="outline" size="sm" icon={RefreshCw} onClick={load}>Retry</Button>
         </div>
       )}
       {changes && (changes.files.length === 0
-        ? <p className="text-body-sm text-slate-600">Chưa có file nào được nộp lại.</p>
+        ? <p className="text-body-sm text-slate-600">No file has been uploaded again.</p>
         : <ul className="space-y-5">{changes.files.map((file) => <FileChange key={file.fileId} file={file} onOpenFile={onOpenFile} />)}</ul>)}
     </Card>
   );

@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient.ts';
+import { ASSISTANT_KEY_HEADER } from '../utils/showcaseAssistant.ts';
 import type { ApiEnvelope } from '../types/workspaceTools.ts';
 import type {
   GetShowcasesRequest,
@@ -43,8 +44,11 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
-  askAssistant: (body: ShowcaseAssistantChatRequest, signal?: AbortSignal) =>
-    unwrap<ShowcaseAssistantReplyDto>(axiosClient.post('/showcase/assistant/chat', body, { signal, timeout: assistantRequestTimeout })),
+  // The key is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is not kept.
+  askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string, signal?: AbortSignal) =>
+    unwrap<ShowcaseAssistantReplyDto>(axiosClient.post('/showcase/assistant/chat', body, {
+      signal, timeout: assistantRequestTimeout, headers: { [ASSISTANT_KEY_HEADER]: apiKey },
+    })),
   recordView: (id: string, signal?: AbortSignal) =>
     unwrap<ShowcaseViewDto>(axiosClient.post(`/showcase/${id}/view`, undefined, { signal })),
   getInsights: (id: string, signal?: AbortSignal) =>

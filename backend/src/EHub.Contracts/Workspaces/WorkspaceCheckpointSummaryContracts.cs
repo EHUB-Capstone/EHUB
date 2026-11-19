@@ -313,3 +313,50 @@ public sealed class WorkspaceCheckpointFigureHistoryResponse
     /// <summary>Files of earlier checkpoints with no figures yet (not read), named so a missing warning is not taken as "nothing wrong".</summary>
     public IReadOnlyCollection<string> UncheckedFiles { get; init; } = Array.Empty<string>();
 }
+
+/// <summary>
+/// How the things a rubric asks for (roadmap, persona, market size...) are mentioned in each checkpoint's files, so a reviewer
+/// sees whether a team moves forward. Found without the model from what each file's quick view or summary already stored.
+/// </summary>
+public sealed class WorkspaceCheckpointProgressResponse
+{
+    public int CheckpointNumber { get; init; }
+
+    /// <summary>Checkpoints up to this one that have files, oldest first; empty when fewer than two do (there is nothing to compare).</summary>
+    public IReadOnlyCollection<WorkspaceProgressCheckpoint> Checkpoints { get; init; } = Array.Empty<WorkspaceProgressCheckpoint>();
+
+    /// <summary>The things the rubrics asked for, those that changed since the earlier checkpoint first.</summary>
+    public IReadOnlyCollection<WorkspaceProgressConcept> Concepts { get; init; } = Array.Empty<WorkspaceProgressConcept>();
+}
+
+public sealed class WorkspaceProgressCheckpoint
+{
+    public int Number { get; init; }
+
+    public int FileCount { get; init; }
+
+    /// <summary>Files whose text has been read (quick view or summary); a thing can only be called "not mentioned" in what was read.</summary>
+    public int ReadFileCount { get; init; }
+}
+
+/// <summary>One thing a rubric asks for and where each checkpoint stands on it.</summary>
+public sealed class WorkspaceProgressConcept
+{
+    public string Label { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Compared with the nearest earlier checkpoint that could tell: Gained (now mentioned, was not), Dropped (was mentioned, is
+    /// not now), Held (mentioned in both), Missing (mentioned in neither) or None (nothing to compare). Never a grade.
+    /// </summary>
+    public string Change { get; init; } = "None";
+
+    public IReadOnlyCollection<WorkspaceProgressCell> Cells { get; init; } = Array.Empty<WorkspaceProgressCell>();
+}
+
+public sealed class WorkspaceProgressCell
+{
+    public int CheckpointNumber { get; init; }
+
+    /// <summary>Found (a file mentions it), NotMentioned (asked, files read, none mentions it), NotAsked (not in that checkpoint's rubric) or NotRead (no file read yet).</summary>
+    public string State { get; init; } = string.Empty;
+}

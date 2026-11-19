@@ -89,7 +89,7 @@ internal static partial class CheckpointFigureConflicts
             var present = values.Where(item => stated.Contains(item.Number)).ToArray();
             if (present.Length != 1) continue;
             var others = values.Where(item => item.Number != present[0].Number).Select(item => item.Text);
-            return $"{sentence.TrimEnd('.', ' ')} (tài liệu cũng ghi {string.Join(" / ", others)}).";
+            return $"{sentence.TrimEnd('.', ' ')} (the file also says {string.Join(" / ", others)}).";
         }
         return sentence;
     }

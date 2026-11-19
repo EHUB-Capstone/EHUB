@@ -3,11 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { AlertTriangle, ArrowLeftRight, Check, CheckCircle2, ChevronDown, Copy, FileSearch, FileText, HelpCircle, Link2, ListChecks, Loader2, MessageSquarePlus, Minus, Quote, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Check, CheckCircle2, ChevronDown, ClipboardList, Copy, FileSearch, FileText, HelpCircle, Info, Link2, ListChecks, Loader2, MessageSquarePlus, Minus, Quote, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
 import Card from '../../ui/Card';
 import { checkpointSummaryApi } from '../../../api/checkpointSummaryApi';
+import CheckpointProgressBlock from './CheckpointProgressBlock';
 import CheckpointVersionChangesBlock from './CheckpointVersionChanges';
 import { parseApiError } from '../../../utils/apiError';
 import {
@@ -16,6 +17,7 @@ import {
   summaryStatusBadges, summaryStatusCounts, nextSummaryPollDelay, summaryErrorMessage, summaryFindingView,
   pageLabel, quoteForFeedback, summaryEtaText, hasReplacedFiles, comparedCheckpointsText, figureHistoryHasNews,
   canRateSummary, nextFeedback, withFeedback, SUMMARY_FEEDBACK_REASONS,
+  buildFeedbackDraft, buildReviewBrief, requirementCoverage, summaryAttentionItems,
 } from '../../../utils/checkpointSummary';
 import type { CheckpointFigureHistory, CheckpointSummary, CriterionCue, FigureConflict, FileRequirementFinding, FileSummary, RequirementFinding, StatusItem, SummaryFeedback, SummaryFeedbackRating, SummaryFeedbackReason } from '../../../types/checkpointSummary';
 
@@ -75,9 +77,9 @@ const Quoted = ({ text, source, fileId, fileName, page }: QuotedProps) => {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(quoteForFeedback(text, name, page));
-      toast.success('Đã sao chép trích dẫn.');
+      toast.success('Quote copied.');
     } catch {
-      toast.error('Không sao chép được. Hãy bôi đen đoạn trích và sao chép thủ công.');
+      toast.error('Could not copy. Select the quote and copy it manually.');
     }
   };
   return (
@@ -86,29 +88,29 @@ const Quoted = ({ text, source, fileId, fileName, page }: QuotedProps) => {
       <span className="mt-1 flex flex-wrap items-center gap-1.5 not-italic">
         {onOpenFile && fileId && name && (
           <ActionChip icon={FileSearch} onClick={() => onOpenFile({ id: fileId, name }, page ?? undefined)}>
-            {page ? `Mở ${pageLabel(name, page)}` : 'Mở file'}
+            {page ? `Open ${pageLabel(name, page)}` : 'Open file'}
           </ActionChip>
         )}
-        <ActionChip icon={Copy} onClick={copy}>Sao chép</ActionChip>
-        {onQuote && <ActionChip icon={MessageSquarePlus} onClick={() => onQuote(quoteForFeedback(text, name, page))}>Chèn vào góp ý</ActionChip>}
+        <ActionChip icon={Copy} onClick={copy}>Copy</ActionChip>
+        {onQuote && <ActionChip icon={MessageSquarePlus} onClick={() => onQuote(quoteForFeedback(text, name, page))}>Insert into feedback</ActionChip>}
       </span>
     </blockquote>
   );
 };
 
-const KIND_LABEL: Record<string, string> = { Requirement: 'Yêu cầu', Criterion: 'Tiêu chí rubric' };
+const KIND_LABEL: Record<string, string> = { Requirement: 'Requirement', Criterion: 'Rubric criterion' };
 
 /** What the Excellent level expects, and which of it the file mentions: presence of evidence, not a grade. */
 function Cues({ cues }: { cues: CriterionCue[] }) {
   if (cues.length === 0) return null;
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="Nội dung cần có">
+    <ul className="flex flex-wrap gap-1.5" aria-label="What the Excellent level expects">
       {cues.map((cue) => (
-        <li key={cue.label} title={cue.evidence ?? (cue.found ? 'File có nhắc tới nhưng không có đoạn để trích' : 'File không nhắc tới')}
+        <li key={cue.label} title={cue.evidence ?? (cue.found ? 'The file mentions it, but has no passage to quote' : 'The file does not mention it')}
           className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-caption ${cue.found
             ? 'border-success-light bg-success-50 text-success-dark' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
           {cue.found ? <Check className="h-3 w-3" aria-hidden="true" /> : <Minus className="h-3 w-3" aria-hidden="true" />}
-          <span className="sr-only">{cue.found ? 'Đã nhắc tới: ' : 'Chưa nhắc tới: '}</span>
+          <span className="sr-only">{cue.found ? 'Mentioned: ' : 'Not mentioned: '}</span>
           {cue.label}
         </li>
       ))}
@@ -164,7 +166,7 @@ function OtherCriteria({ findings, numbers }: { findings: { index: number; title
 /** One line instead of a row of "Not found" badges, e.g. a software review checked against a business rubric. */
 const NothingFound = ({ titles, subject }: { titles: string[]; subject: string }) => (
   <p className="text-body-sm text-slate-600">
-    {subject} không nhắc tới mục nào trong {titles.length} yêu cầu và tiêu chí rubric ({titles.join(', ')}).
+    None of the {titles.length} requirements and rubric criteria ({titles.join(', ')}) is mentioned in {subject}.
   </p>
 );
 
@@ -183,8 +185,8 @@ const IgnoredInstructionsNote = ({ count }: { count?: number }) => {
 const LittleTextNote = () => (
   <p className="flex items-start gap-2 rounded-lg border border-warning-light bg-warning-50 px-3 py-2 text-caption text-warning-dark">
     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-    File này chủ yếu là hình ảnh hoặc sơ đồ. Chỉ đọc được tiêu đề và vài dòng chữ, nên bản tóm tắt bị giới hạn ở đó; hãy mở
-    file để xem các sơ đồ.
+    This file is mostly images or diagrams. Only titles and a few lines of text could be read, so the summary is limited to
+    that; open the file to see the diagrams.
   </p>
 );
 
@@ -193,13 +195,13 @@ function FigureConflicts({ conflicts, acrossFiles = false, earlier = false }: { 
   if (conflicts.length === 0) return null;
   return (
     <div className="space-y-2">
-      <SectionLabel icon={ArrowLeftRight}>{earlier ? 'Số liệu khác với các checkpoint trước' : acrossFiles ? 'Số liệu khác nhau giữa các file' : 'Số liệu mâu thuẫn'}</SectionLabel>
+      <SectionLabel icon={ArrowLeftRight}>{earlier ? 'Figures that differ from earlier checkpoints' : acrossFiles ? 'Figures that differ between files' : 'Figures that disagree'}</SectionLabel>
       <p className="text-caption text-slate-500">
         {earlier
-          ? 'Checkpoint này ghi một con số khác với những gì nhóm đã nộp trước đó. Số liệu có thể đổi hợp lý (khảo sát thêm người), nên hãy hỏi nhóm lý do trước khi kết luận.'
+          ? 'This checkpoint states a figure differently from what the team submitted earlier. A figure can change for good reason (more people surveyed), so ask the team why before drawing a conclusion.'
           : acrossFiles
-          ? 'Hai file ghi giá trị khác nhau cho một con số có vẻ giống nhau. Có thể chúng mô tả hai việc khác nhau, nên hãy hỏi nhóm trước khi cho rằng file nào sai.'
-          : 'File ghi các số liệu này với giá trị khác nhau. Hãy hỏi nhóm giá trị nào đúng.'}
+          ? 'Two files give different values for what looks like the same figure. They may describe two different things, so ask the team before deciding that one file is wrong.'
+          : 'The file states these figures with different values. Ask the team which value is right.'}
       </p>
       <ul className="space-y-2">
         {conflicts.map((conflict, position) => (
@@ -239,12 +241,12 @@ function FigureHistory({ teamId, checkpointNumber }: { teamId: string; checkpoin
       {history.conflicts.length === 0 && (
         <p className="flex items-start gap-1.5 text-caption text-slate-500">
           <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Đã đối chiếu số liệu với {compared}: không thấy chỗ nào lệch.
+          Figures were compared with {compared}: nothing differs.
         </p>
       )}
       {figureHistoryHasNews(history) && history.uncheckedFiles.length > 0 && (
         <p className="text-caption text-slate-500">
-          Chưa đối chiếu được {history.uncheckedFiles.length} file vì chưa đọc số liệu: {history.uncheckedFiles.join(', ')}.
+          Could not compare {history.uncheckedFiles.length} {history.uncheckedFiles.length === 1 ? 'file' : 'files'} because no figures were read: {history.uncheckedFiles.join(', ')}.
         </p>
       )}
     </div>
@@ -256,7 +258,7 @@ function StatusLines({ items }: { items: StatusItem[] }) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-2">
-      <SectionLabel icon={CheckCircle2}>Trạng thái ghi trong file</SectionLabel>
+      <SectionLabel icon={CheckCircle2}>Status reported in the file</SectionLabel>
       <ul className="space-y-1.5">
         {items.map((item) => {
           const view = statusItemView[item.status];
@@ -290,16 +292,16 @@ function QuickView({ highlights, highlightPages, requirements, conflicts, status
       <FigureConflicts conflicts={conflicts} />
       {requirements.length > 0 && (
         <div className="space-y-2">
-          <SectionLabel icon={ListChecks}>Yêu cầu và tiêu chí rubric trong file này</SectionLabel>
+          <SectionLabel icon={ListChecks}>Requirements and rubric criteria in this file</SectionLabel>
           {isNothingFound(requirements)
-            ? <NothingFound titles={requirements.filter(isSearchable).map((item) => item.title)} subject="File này" />
+            ? <NothingFound titles={requirements.filter(isSearchable).map((item) => item.title)} subject="this file" />
             : <FindingList findings={requirements.filter(isSearchable)} numbers={displayNumbers(requirements)} fileId={fileId} fileName={fileName} />}
           <OtherCriteria findings={requirements} numbers={displayNumbers(requirements)} />
         </div>
       )}
       {highlights.length > 0 && (
         <div className="space-y-2">
-          <SectionLabel icon={Quote}>Câu then chốt</SectionLabel>
+          <SectionLabel icon={Quote}>Key sentences</SectionLabel>
           {highlights.map((sentence, position) => (
             <Quoted key={sentence} text={sentence} fileId={fileId} fileName={fileName} page={highlightPages?.[position] || null} />
           ))}
@@ -321,23 +323,23 @@ function FeedbackBar({ file }: { file: FileSummary }) {
     `inline-flex h-9 w-9 items-center justify-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 disabled:cursor-wait disabled:opacity-60 ${
       active ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`;
   return (
-    <div className="space-y-2 border-t border-slate-200 pt-3" role="group" aria-label="Đánh giá bản tóm tắt">
+    <div className="space-y-2 border-t border-slate-200 pt-3" role="group" aria-label="Rate this summary">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-body-sm text-slate-600">Bản tóm tắt này có hữu ích không?</span>
+        <span className="text-body-sm text-slate-600">Was this summary useful?</span>
         <button type="button" className={buttonClass(current?.rating === 'Helpful')} aria-pressed={current?.rating === 'Helpful'}
-          aria-label="Hữu ích" title="Hữu ích" disabled={saving} onClick={() => press('Helpful')}>
+          aria-label="Useful" title="Useful" disabled={saving} onClick={() => press('Helpful')}>
           <ThumbsUp className="h-4 w-4" aria-hidden="true" />
         </button>
         <button type="button" className={buttonClass(current?.rating === 'NotHelpful')} aria-pressed={current?.rating === 'NotHelpful'}
-          aria-label="Chưa hữu ích" title="Chưa hữu ích" disabled={saving} onClick={() => press('NotHelpful')}>
+          aria-label="Not useful" title="Not useful" disabled={saving} onClick={() => press('NotHelpful')}>
           <ThumbsDown className="h-4 w-4" aria-hidden="true" />
         </button>
         {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
-        {current && !saving && <span className="text-caption text-slate-500" role="status">Đã ghi nhận ý kiến của bạn.</span>}
+        {current && !saving && <span className="text-caption text-slate-500" role="status">Your feedback was saved.</span>}
       </div>
       {current?.rating === 'NotHelpful' && (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lý do chưa hữu ích">
-          <span className="text-caption text-slate-500">Vì sao (không bắt buộc):</span>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Why it was not useful">
+          <span className="text-caption text-slate-500">Why (optional):</span>
           {SUMMARY_FEEDBACK_REASONS.map((reason) => (
             <button key={reason.value} type="button" aria-pressed={current.reason === reason.value} disabled={saving}
               onClick={() => press('NotHelpful', reason.value)}
@@ -362,7 +364,7 @@ function FileSummaryDetails({ file, maxCharacters }: { file: FileSummary; maxCha
       <div className="space-y-3">
         <p className="flex items-center gap-2 text-caption text-slate-500" role="status">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
-          Đang hiển thị bản xem nhanh từ chữ trong file. AI vẫn đang viết phần tổng quan.
+          Showing a quick view built from the text of the file. The AI is still writing the overview.
         </p>
         <IgnoredInstructionsNote count={file.preview.ignoredInstructions} />
         {file.preview.littleText && <LittleTextNote />}
@@ -374,11 +376,11 @@ function FileSummaryDetails({ file, maxCharacters }: { file: FileSummary; maxCha
     <div className="space-y-3">
       <IgnoredInstructionsNote count={content.ignoredInstructions} />
       {content.littleText && <LittleTextNote />}
-      {content.overviewFromSource && <p className="text-caption text-slate-500">Tổng quan trích từ tài liệu; phần diễn giải tự động chưa đủ căn cứ.</p>}
+      {content.overviewFromSource && <p className="text-caption text-slate-500">Overview taken from the document; the generated wording was not supported well enough.</p>}
       <p className="whitespace-pre-line text-body text-slate-700">{content.overview}</p>
       {(content.overviewEvidence?.length ?? 0) > 0 && (
         <details className="text-body-sm text-slate-600">
-          <summary className="cursor-pointer py-2 font-medium">Nguồn của tổng quan</summary>
+          <summary className="cursor-pointer py-2 font-medium">Source of the overview</summary>
           <div className="space-y-2">{content.overviewEvidence?.map((evidence) => (
             <Quoted key={evidence.text} text={evidence.quote} fileId={file.fileId} fileName={file.name} page={evidence.page} />
           ))}</div>
@@ -391,7 +393,7 @@ function FileSummaryDetails({ file, maxCharacters }: { file: FileSummary; maxCha
             return <li key={point}>
               {point}
               {evidence && <details className="mt-1 text-caption text-slate-600">
-                <summary className="cursor-pointer py-1 font-medium">Xem bằng chứng</summary>
+                <summary className="cursor-pointer py-1 font-medium">Show evidence</summary>
                 <Quoted text={evidence.quote} fileId={file.fileId} fileName={file.name} page={evidence.page} />
               </details>}
             </li>;
@@ -401,15 +403,15 @@ function FileSummaryDetails({ file, maxCharacters }: { file: FileSummary; maxCha
       <QuickView highlights={content.highlights} highlightPages={content.highlightPages} requirements={content.requirements} conflicts={content.conflicts ?? []} statusItems={content.statusItems ?? []} fileId={file.fileId} fileName={file.name} />
       {content.questions.length > 0 && (
         <div className="space-y-2">
-          <SectionLabel icon={HelpCircle}>Câu hỏi gợi ý cho nhóm</SectionLabel>
+          <SectionLabel icon={HelpCircle}>Suggested questions for the team</SectionLabel>
           <ul className="list-disc space-y-1 pl-5 text-body-sm text-slate-700">
             {content.questions.map((question) => <li key={question}>{question}</li>)}
           </ul>
         </div>
       )}
       <p className="text-caption text-slate-500">
-        {file.inputTruncated && `File dài: AI chỉ đọc các câu quan trọng nhất (khoảng ${maxCharacters.toLocaleString('vi-VN')} ký tự). `}
-        {file.generatedAt && `Tóm tắt lúc ${formatSummaryTime(file.generatedAt)}.`}
+        {file.inputTruncated && `Long file: the AI read only the most important sentences (about ${maxCharacters.toLocaleString('en-GB')} characters). `}
+        {file.generatedAt && `Summarised ${formatSummaryTime(file.generatedAt)}.`}
       </p>
       <FeedbackBar file={file} />
     </div>
@@ -438,7 +440,7 @@ function FileRow({ file, selected, onToggleSelected, onRetry, maxCharacters, dis
           checked={selected}
           disabled={!selectable || disabled}
           onChange={onToggleSelected}
-          aria-label={selectable ? `Tóm tắt ${file.name}` : `${file.name}: ${status.label}`}
+          aria-label={selectable ? `Summarise ${file.name}` : `${file.name}: ${status.label}`}
         />
         <button
           type="button"
@@ -455,18 +457,105 @@ function FileRow({ file, selected, onToggleSelected, onRetry, maxCharacters, dis
           {canOpen && <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />}
         </button>
         {(file.status === 'Failed' || (file.status === 'Ready' && file.needsRefresh)) && (
-          <Button variant="outline" size="sm" icon={RefreshCw} disabled={disabled} onClick={onRetry} aria-label={`${file.needsRefresh ? 'Tạo lại' : 'Thử lại'} tóm tắt ${file.name}`}>
-            {file.needsRefresh ? 'Tạo lại' : 'Thử lại'}
+          <Button variant="outline" size="sm" icon={RefreshCw} disabled={disabled} onClick={onRetry} aria-label={`${file.needsRefresh ? 'Regenerate summary of' : 'Retry summary of'} ${file.name}`}>
+            {file.needsRefresh ? 'Regenerate' : 'Retry'}
           </Button>
         )}
       </div>
       {canOpen && open && (
         <div id={regionId} className="border-t border-slate-200 px-4 py-3">
-          {file.needsRefresh && <p className="mb-3 text-body-sm text-slate-600">Tiêu chí hoặc cách phân tích đã được cập nhật. Tạo lại để xem kết quả mới nhất.</p>}
+          {file.needsRefresh && <p className="mb-3 text-body-sm text-slate-600">The criteria or the analysis were updated. Regenerate to see the latest result.</p>}
           <FileSummaryDetails file={file} maxCharacters={maxCharacters} />
         </div>
       )}
     </li>
+  );
+}
+
+const ATTENTION_ICON = { danger: AlertTriangle, warning: AlertTriangle, info: Info } as const;
+const ATTENTION_COLOR = { danger: 'text-danger-dark', warning: 'text-warning-dark', info: 'text-slate-500' } as const;
+
+/**
+ * The state of the checkpoint at a glance: how much of the checklist the files mention and what to look at first, with the
+ * whole brief as text to copy or drop into the feedback box. Counts come from what the card already holds; nothing is graded.
+ */
+function ReviewBrief({ summary, onQuote }: { summary: CheckpointSummary; onQuote?: (text: string) => void }) {
+  const hasSummary = summary.files.some((file) => file.status === 'Ready' && file.content !== null);
+  const coverage = requirementCoverage(summary.requirements);
+  const attention = summaryAttentionItems(summary);
+  if (!hasSummary && attention.length === 0) return null;
+  const checked = coverage.found + coverage.notFound;
+  const share = (count: number) => (checked > 0 ? `${(count / checked) * 100}%` : '0%');
+
+  const copyBrief = async () => {
+    try {
+      await navigator.clipboard.writeText(buildReviewBrief(summary));
+      toast.success('Brief copied.');
+    } catch {
+      toast.error('Could not copy the brief. Please try again.');
+    }
+  };
+  // The feedback box is read by the team, so what goes there is a draft for the reviewer to edit, not the internal brief.
+  const feedbackDraft = buildFeedbackDraft(summary);
+  const insertDraft = () => {
+    onQuote?.(feedbackDraft);
+    toast.success('Draft added to the feedback box. Edit it before posting.');
+  };
+
+  return (
+    <Card tone="inset" padding="p-4" hover={false} className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SectionLabel icon={ClipboardList}>Review brief</SectionLabel>
+        {hasSummary && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" icon={Copy} onClick={copyBrief}>Copy brief</Button>
+            {onQuote && feedbackDraft && <Button variant="outline" size="sm" icon={MessageSquarePlus} onClick={insertDraft}>Draft feedback</Button>}
+          </div>
+        )}
+      </div>
+
+      {checked > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-body-sm text-slate-700">
+            Related content found for <span className="font-semibold text-slate-900">{coverage.found} of {coverage.searchable}</span> requirements
+            and rubric criteria a file can show.
+          </p>
+          <div
+            className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100"
+            role="img"
+            aria-label={`${coverage.found} found, ${coverage.notFound} not found, ${coverage.notChecked} not checked`}
+          >
+            <span className="h-full bg-success" style={{ width: share(coverage.found) }} />
+            <span className="h-full bg-slate-400" style={{ width: share(coverage.notFound) }} />
+          </div>
+          <p className="text-caption text-slate-500">
+            {coverage.found} found · {coverage.notFound} not found
+            {coverage.notChecked > 0 && ` · ${coverage.notChecked} not checked`}
+            {coverage.elsewhere > 0 && ` · ${coverage.elsewhere} judged live, on the product or on the whole file`}.
+            “Found” means a file mentions the item, not that the team met it.
+          </p>
+        </div>
+      )}
+
+      {attention.length > 0 ? (
+        <ul className="space-y-1.5" aria-label="Worth checking">
+          {attention.map((item) => {
+            const Icon = ATTENTION_ICON[item.tone];
+            return (
+              <li key={item.key} className="flex items-start gap-2 text-body-sm text-slate-700">
+                <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${ATTENTION_COLOR[item.tone]}`} aria-hidden="true" />
+                {item.text}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="flex items-start gap-2 text-body-sm text-slate-600">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success-dark" aria-hidden="true" />
+          Nothing flagged in the summarised files. The AI does not judge whether the work is good or complete.
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -600,18 +689,18 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
     return runAction(
       async (signal) => (await checkpointSummaryApi.request(teamId, checkpointNumber, selected, signal)).data,
       setRequesting,
-      `Đã xếp hàng ${count} file. Bản tóm tắt hiện ở từng dòng khi xong.`);
+      `${count} ${count === 1 ? 'file' : 'files'} queued. Each summary appears on its row when done.`);
   };
 
   const retryFile = (fileId: string) => runAction(
     async (signal) => (await checkpointSummaryApi.request(teamId, checkpointNumber, [fileId], signal)).data,
     setRequesting,
-    'Đã xếp hàng lại file. Bản tóm tắt hiện ở dòng của file khi xong.');
+    'File queued again. Its summary appears on its row when done.');
 
   const cancelAll = () => runAction(
     async (signal) => (await checkpointSummaryApi.cancel(teamId, checkpointNumber, signal)).data,
     setCancelling,
-    'Đã hủy AI tóm tắt. File đã xong vẫn giữ bản tóm tắt.');
+    'AI summarising cancelled. Files that were finished keep their summary.');
 
   const toggleFile = (fileId: string) => {
     setSelected((current) => (current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]));
@@ -635,7 +724,7 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
 
   return (
     <SummaryActionsContext.Provider value={actions}>
-    <section className="rounded-2xl border border-slate-200/60 bg-white shadow-sm" aria-label="AI tóm tắt">
+    <section className="rounded-2xl border border-slate-200/60 bg-white shadow-sm" aria-label="AI summary">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -647,8 +736,8 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
           <Sparkles className="h-[18px] w-[18px] text-primary-700" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-subheading text-secondary">AI tóm tắt</span>
-          <span className="block text-caption text-slate-500">Chỉ mentor, giảng viên và admin nhìn thấy</span>
+          <span className="block text-subheading text-secondary">AI summary</span>
+          <span className="block text-caption text-slate-500">Visible to mentors, lecturers and admins only</span>
         </span>
         {/* On a narrow screen the status drops under the title instead of squeezing it. */}
         <span className="order-last flex basis-full flex-wrap items-center gap-1.5 pl-12 sm:order-none sm:basis-auto sm:justify-end sm:pl-0">
@@ -656,7 +745,7 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
           {statusBadges.map((badge) => <Badge key={badge.key} variant={badge.tone}>{badge.label}</Badge>)}
           {eta && <span className="text-caption text-slate-500">{eta}</span>}
           <span className="sr-only" role="status" aria-live="polite">
-            {loadError ? 'Không tải được AI tóm tắt.' : `${counts.ready}/${counts.total} file đã tóm tắt, ${counts.summarising + counts.queued} đang xử lý.`}
+            {loadError ? 'Could not load the AI summary.' : `${counts.ready}/${counts.total} files summarised, ${counts.summarising + counts.queued} in progress.`}
           </span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -666,25 +755,27 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
         <div id={regionId} className="space-y-4 px-5 pb-5">
           {loading ? (
             <div className="flex items-center gap-2 py-4 text-body-sm text-slate-500" role="status">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" /> Đang tải AI tóm tắt…
+              <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" /> Loading AI summary…
             </div>
           ) : loadError ? (
             <div className="flex flex-wrap items-center gap-3 py-2" role="alert">
               <p className="text-body-sm text-danger-dark">{loadError}</p>
-              <Button variant="outline" size="sm" icon={RefreshCw} onClick={retryLoad}>Thử lại</Button>
+              <Button variant="outline" size="sm" icon={RefreshCw} onClick={retryLoad}>Retry</Button>
             </div>
           ) : files.length === 0 ? (
-            <p className="text-body-sm text-slate-500">Nhóm chưa nộp file nào cho checkpoint này.</p>
+            <p className="text-body-sm text-slate-500">The team has not submitted any files for this checkpoint.</p>
           ) : (
             <>
               <div className="flex items-start gap-2 text-caption text-slate-500">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <p>Do AI tạo, có thể chưa chính xác. Hãy kiểm tra file trước khi dựa vào; không dùng để chấm điểm.</p>
+                <p>Written by AI and may be inaccurate. Check the files before relying on it; do not use it for grading.</p>
               </div>
+
+              {summary && <ReviewBrief summary={summary} onQuote={onQuote} />}
 
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <SectionLabel icon={FileText}>Các file</SectionLabel>
+                  <SectionLabel icon={FileText}>Files</SectionLabel>
                   {selectableIds.length > 1 && summary.enabled && (
                     <button
                       type="button"
@@ -692,12 +783,12 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
                       onClick={() => setSelected(allSelected ? [] : selectableIds)}
                       className="rounded-md px-1.5 py-0.5 text-caption font-semibold text-primary-700 transition hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 disabled:opacity-50"
                     >
-                      {allSelected ? 'Bỏ chọn' : `Chọn tất cả (${selectableIds.length})`}
+                      {allSelected ? 'Deselect all' : `Select all (${selectableIds.length})`}
                     </button>
                   )}
                 </div>
                 <p className="text-caption text-slate-500">
-                  File mới nộp được tự xếp hàng tóm tắt. Đánh dấu file để tóm tắt trước; mở một file để đọc bản tóm tắt.
+                  New files are queued for summarising automatically. Tick files to summarise them first; open a file to read its summary.
                 </p>
                 <ul className="space-y-2">
                   {files.map((file) => (
@@ -720,17 +811,17 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
                   {files.some(isFileSelectable) ? (
                     <Button variant="primary" size="sm" icon={Sparkles} isLoading={requesting}
                       disabled={selected.length === 0 || cancelling} onClick={requestSelected}>
-                      {selected.length > 0 ? `Tóm tắt ${selected.length} file` : 'Chọn file để tóm tắt'}
+                      {selected.length > 0 ? `Summarise ${selected.length} ${selected.length === 1 ? 'file' : 'files'}` : 'Select files to summarise'}
                     </Button>
                   ) : !inProgress && (
-                    <span className="text-body-sm text-slate-600">Mọi file đã được tóm tắt. File mới nộp sẽ hiện ở đây.</span>
+                    <span className="text-body-sm text-slate-600">All files are summarised. New uploads will appear here.</span>
                   )}
                   {inProgress && (
                     <Button variant="danger-outline" size="sm" icon={X} isLoading={cancelling} disabled={requesting} onClick={cancelAll}>
-                      Hủy
+                      Cancel
                     </Button>
                   )}
-                  {inProgress && <span className="text-caption text-slate-500">{eta ? `${eta}. ` : ''}Hệ thống tóm tắt lần lượt từng file; trang tự cập nhật.</span>}
+                  {inProgress && <span className="text-caption text-slate-500">{eta ? `${eta}. ` : ''}Files are summarised one at a time; this page updates by itself.</span>}
                 </div>
               )}
 
@@ -742,12 +833,14 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
 
               {summary.enabled && <FigureHistory teamId={teamId} checkpointNumber={checkpointNumber} />}
 
+              {summary.enabled && <CheckpointProgressBlock teamId={teamId} checkpointNumber={checkpointNumber} />}
+
               {summary.requirements.length > 0 && (
                 <Card tone="inset" padding="p-4" hover={false} className="space-y-3">
-                  <SectionLabel icon={ListChecks}>Yêu cầu và tiêu chí rubric</SectionLabel>
-                  <p className="text-caption text-slate-500">Tổng hợp từ các file đã đọc. Các trích dẫn được sao chép từ file, không phải do AI viết.</p>
+                  <SectionLabel icon={ListChecks}>Requirements and rubric criteria</SectionLabel>
+                  <p className="text-caption text-slate-500">Combined from the files read. Quotes are copied from the files, not written by the AI.</p>
                   {isNothingFound(summary.requirements) ? (
-                    <NothingFound titles={summary.requirements.filter(isSearchable).map((item) => item.title)} subject="Các file đã đọc" />
+                    <NothingFound titles={summary.requirements.filter(isSearchable).map((item) => item.title)} subject="the files read" />
                   ) : (
                     <ul className="space-y-3">
                       {sortByWeight(summary.requirements.filter(isSearchable)).map((requirement) => {
@@ -775,8 +868,8 @@ export default function CheckpointAiSummaryCard({ teamId, checkpointNumber, onOp
 
               {summary.links.length > 0 && (
                 <div className="space-y-2">
-                  <SectionLabel icon={Link2}>Liên kết</SectionLabel>
-                  <p className="text-caption text-slate-500">AI không mở liên kết; chỉ liệt kê tên và tên miền.</p>
+                  <SectionLabel icon={Link2}>Links</SectionLabel>
+                  <p className="text-caption text-slate-500">The AI does not open links; it only lists the name and domain.</p>
                   <ul className="space-y-1 text-body-sm text-slate-700">
                     {summary.links.map((link) => <li key={`${link.name}-${link.domain}`}>{link.name} <span className="text-slate-500">({link.domain})</span></li>)}
                   </ul>

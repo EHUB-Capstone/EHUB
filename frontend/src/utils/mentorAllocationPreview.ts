@@ -4,6 +4,7 @@ import type {
   MentorAllocationPreview,
   MentorAllocationRowPreview,
   MentorAllocationSkipReason,
+  MentorFitCriterionKey,
   MentorType,
 } from '../types/mentorAdmin';
 
@@ -61,6 +62,10 @@ export function formatAllocationReason(reason: string): string {
     .replace(/\bgemini(?:-[a-z0-9.]+)*\b/gi, 'AI')
     .replace(/^AI (experience|expertise|startupDomain|technology|bio):/i,
       (_, field: string) => `${labels[field.toLowerCase()]}:`);
+}
+
+export function formatAllocationPreviewReasons(reasons: readonly string[] = []): string[] {
+  return reasons.filter(reason => !/^(?:Gemini|AI) technology:/i.test(reason)).map(formatAllocationReason);
 }
 
 const emptySlot = (): SlotView => ({
@@ -190,10 +195,10 @@ export interface MentorAllocationQualitySummary {
   averageFit: number | null;
 }
 
-const criterionKeys = ['experience', 'expertise', 'startupDomain', 'technology', 'bio'] as const;
+export const visibleFitCriteria = ['experience', 'expertise', 'startupDomain', 'bio'] as const satisfies readonly MentorFitCriterionKey[];
 
-export function getMissingProfileFields(details: SlotView['fitDetails']): typeof criterionKeys[number][] | null {
-  return details ? criterionKeys.filter(key => !details.availableProfileFields.includes(key)) : null;
+export function getMissingProfileFields(details: SlotView['fitDetails']): typeof visibleFitCriteria[number][] | null {
+  return details ? visibleFitCriteria.filter(key => !details.availableProfileFields.includes(key)) : null;
 }
 
 /** Describes evidence/data coverage of new AI suggestions, never an accuracy estimate. */

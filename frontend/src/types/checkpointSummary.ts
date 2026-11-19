@@ -210,6 +210,31 @@ export interface CheckpointFigureHistory {
   uncheckedFiles: string[];
 }
 
+/** Mirrors WorkspaceCheckpointProgressResponse: what each of the team's checkpoints mentions of the things the rubrics ask for. */
+export type ProgressState = 'Found' | 'NotMentioned' | 'NotAsked' | 'NotRead';
+/** Against the nearest earlier checkpoint that could tell; never a grade. */
+export type ProgressChange = 'Gained' | 'Dropped' | 'Held' | 'Missing' | 'None';
+
+export interface ProgressCheckpoint {
+  number: number;
+  fileCount: number;
+  /** Files whose text was read; "not mentioned" only speaks for these. */
+  readFileCount: number;
+}
+
+export interface ProgressConcept {
+  label: string;
+  change: ProgressChange;
+  cells: { checkpointNumber: number; state: ProgressState }[];
+}
+
+export interface CheckpointProgress {
+  checkpointNumber: number;
+  /** Empty when fewer than two checkpoints have files, so there is nothing to compare. */
+  checkpoints: ProgressCheckpoint[];
+  concepts: ProgressConcept[];
+}
+
 export type SummaryCircuitState = 'Closed' | 'Open' | 'HalfOpen';
 
 export interface SummaryFailureCount {
