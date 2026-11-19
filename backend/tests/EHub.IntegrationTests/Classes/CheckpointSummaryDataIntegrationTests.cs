@@ -103,7 +103,7 @@ public sealed partial class TeamWorkflowIntegrationTests
         // The administrators' diagnostics count the verdicts by prompt version.
         var diagnostics = await new CheckpointSummaryDiagnosticsHandler(fixture.Context, fixture.Clock, EnabledSummaries,
             new ScriptedSummarizer(_ => Result.Success(Answer()))).GetAsync(SystemRoles.Admin);
-        diagnostics.Value.FeedbackByPromptVersion.Should().Contain(item => item.PromptVersion == "v13" && item.Helpful >= 2);
+        diagnostics.Value.FeedbackByPromptVersion.Should().Contain(item => item.PromptVersion == "v20" && item.Helpful >= 2);
     }
 
     [Fact]
