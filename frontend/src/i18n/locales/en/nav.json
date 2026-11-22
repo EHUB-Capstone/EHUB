@@ -1,0 +1,67 @@
+{
+  "brand": {
+    "subtitle": "Startup Portal",
+    "logoAlt": "EHub"
+  },
+  "sidebar": {
+    "navigation": "Navigation",
+    "open": "Open sidebar menu",
+    "close": "Close sidebar",
+    "newIdea": "New Idea"
+  },
+  "items": {
+    "overview": "Overview",
+    "dashboard": "Dashboard",
+    "subjectManagement": "Subject Management",
+    "users": "Users",
+    "accountApprovals": "Account Approvals",
+    "classes": "Classes",
+    "myClasses": "My Classes",
+    "myTeam": "My Team",
+    "mentorDirectory": "Mentor Directory",
+    "mentorOverview": "Mentor Overview",
+    "mentoringSessions": "Mentoring Sessions",
+    "startupWorkspace": "Startup Workspace",
+    "projectData": "Project Data",
+    "projectShowcase": "Project Showcase",
+    "showcaseModeration": "Showcase Moderation",
+    "myShowcase": "My Showcase",
+    "feedbackInbox": "Feedback Inbox",
+    "sendFeedback": "Send feedback",
+    "executionBoard": "Execution Board",
+    "evaluationGrading": "Evaluation & Grading"
+  },
+  "header": {
+    "settings": "Settings",
+    "profile": "Profile",
+    "user": "User",
+    "avatarAlt": "Avatar",
+    "classCodeAlert": {
+      "title": "Please verify your class code",
+      "dismiss": "Dismiss",
+      "checkClasses": "Check classes"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "titleUnread": "Notifications, {{count}} unread",
+    "newCount": "{{count}} new",
+    "markAllRead": "Mark all read",
+    "markedAllRead": "Marked all as read",
+    "markAllReadFailed": "Failed to mark all as read",
+    "empty": "No notifications yet",
+    "at": "{{date}} at {{time}}"
+  },
+  "errorPages": {
+    "notFound": {
+      "title": "Page not found",
+      "description": "The page you are looking for doesn't exist or has been moved.",
+      "dashboard": "Dashboard"
+    },
+    "forbidden": {
+      "title": "Access Denied",
+      "description": "You do not have permission to view this page. If you believe this is an error, please contact your administrator.",
+      "backToDashboard": "Go back to dashboard"
+    }
+  }
+}

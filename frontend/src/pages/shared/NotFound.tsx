@@ -3,8 +3,10 @@ import { SearchX, ArrowLeft, Home } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const NotFound = () => {
+  const { t } = useTranslation('nav');
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -26,16 +28,16 @@ const NotFound = () => {
             <SearchX className="w-10 h-10 text-slate-400" />
           </div>
           <h1 className="text-5xl font-black text-secondary tracking-tight mb-2">404</h1>
-          <h2 className="text-xl font-bold text-slate-800 mb-3">Page not found</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-3">{t('errorPages.notFound.title')}</h2>
           <p className="text-body text-slate-500 leading-relaxed mb-8">
-            The page you are looking for doesn't exist or has been moved.
+            {t('errorPages.notFound.description')}
           </p>
           <div className="flex gap-3">
             <Button variant="outline" size="lg" className="flex-1" icon={ArrowLeft} onClick={() => navigate(-1)}>
-              Go Back
+              {t('common:actions.goBack')}
             </Button>
             <Button variant="primary" size="lg" className="flex-1" icon={Home} onClick={handleBack}>
-              Dashboard
+              {t('errorPages.notFound.dashboard')}
             </Button>
           </div>
         </div>

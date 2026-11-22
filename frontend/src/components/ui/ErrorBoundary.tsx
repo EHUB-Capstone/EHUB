@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import i18n from '../../i18n';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -32,9 +33,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <div className="w-20 h-20 bg-danger-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-10 h-10 text-danger" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">Something went wrong</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">{i18n.t('states.somethingWrong')}</h1>
             <p className="text-slate-500 mb-8 leading-relaxed">
-              An unexpected error occurred. Please try refreshing the page or go back to the homepage.
+              {i18n.t('states.unexpectedError')}
             </p>
             <div className="flex gap-3 justify-center">
               <button
@@ -42,14 +43,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-medium hover:bg-primary-dark transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
-                Refresh Page
+                {i18n.t('actions.refreshPage')}
               </button>
               <button
                 onClick={() => { window.location.href = '/'; }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors"
               >
                 <Home className="w-4 h-4" />
-                Go Home
+                {i18n.t('actions.goHome')}
               </button>
             </div>
           </div>

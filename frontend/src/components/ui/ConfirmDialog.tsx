@@ -2,6 +2,7 @@ import Modal from './Modal';
 import Button, { type ButtonVariant } from './Button';
 import { AlertTriangle } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -30,18 +31,19 @@ const ConfirmDialog = ({
   title,
   description,
   isSubmitting,
-  confirmText = 'Delete',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   confirmVariant = 'danger',
   reason,
   onReasonChange,
-  reasonLabel = 'Reason',
+  reasonLabel,
   reasonRequired = false,
   confirmDisabled = false,
   size = 'md',
   actionLayout = 'equal',
   details,
 }: ConfirmDialogProps) => {
+  const { t } = useTranslation();
   const reasonInvalid = reasonRequired && (reason?.trim().length ?? 0) < 3;
   const actionLayoutClass = actionLayout === 'confirmWide'
     ? 'flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(7rem,0.65fr)_minmax(15rem,1.35fr)]'
@@ -61,22 +63,22 @@ const ConfirmDialog = ({
         {details}
         {onReasonChange && (
           <label className="w-full text-left">
-            <span className="mb-1.5 block text-body-sm font-semibold text-secondary">{reasonLabel}</span>
+            <span className="mb-1.5 block text-body-sm font-semibold text-secondary">{reasonLabel ?? t('dialog.reason')}</span>
             <textarea
               value={reason ?? ''}
               onChange={(event) => onReasonChange(event.target.value)}
               rows={3}
               maxLength={500}
-              placeholder="Enter a clear reason for the audit trail"
+              placeholder={t('dialog.reasonPlaceholder')}
               className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-body outline-none transition hover:border-slate-400 focus:border-primary-600 focus:ring-2 focus:ring-primary/30"
             />
-            {reasonInvalid && <span className="mt-1 block text-xs text-amber-600">Reason must contain at least 3 characters.</span>}
+            {reasonInvalid && <span className="mt-1 block text-xs text-amber-600">{t('dialog.reasonMinLength')}</span>}
           </label>
         )}
         
         <div className={`${actionLayoutClass} w-full pt-4`}>
           <Button variant="outline" className={actionButtonClass} onClick={onClose} disabled={isSubmitting}>
-            {cancelText}
+            {cancelText ?? t('actions.cancel')}
           </Button>
           <Button
             variant={confirmVariant}
@@ -85,7 +87,7 @@ const ConfirmDialog = ({
             isLoading={isSubmitting}
             disabled={isSubmitting || reasonInvalid || confirmDisabled}
           >
-            {confirmText}
+            {confirmText ?? t('actions.delete')}
           </Button>
         </div>
       </div>

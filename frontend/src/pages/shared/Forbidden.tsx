@@ -3,8 +3,10 @@ import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const Forbidden = () => {
+  const { t } = useTranslation('nav');
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -26,12 +28,12 @@ const Forbidden = () => {
             <ShieldAlert className="w-10 h-10 text-danger" />
           </div>
           <h1 className="text-5xl font-black text-secondary tracking-tight mb-2">403</h1>
-          <h2 className="text-xl font-bold text-slate-800 mb-3">Access Denied</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-3">{t('errorPages.forbidden.title')}</h2>
           <p className="text-body text-slate-500 leading-relaxed mb-8">
-            You do not have permission to view this page. If you believe this is an error, please contact your administrator.
+            {t('errorPages.forbidden.description')}
           </p>
           <Button variant="primary" size="lg" className="w-full" icon={ArrowLeft} onClick={handleBack}>
-            Go back to dashboard
+            {t('errorPages.forbidden.backToDashboard')}
           </Button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../utils/cn';
 import logo from '../../assets/logo.png';
 import {
@@ -39,12 +40,13 @@ interface SidebarProps {
 interface NavItem {
   path: string;
   icon: string;
-  label: string;
+  labelKey: string;
 }
 
 type NavigationRole = 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
 
 const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
+  const { t } = useTranslation('nav');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -60,73 +62,73 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
   const navItems: Record<NavigationRole, NavItem[]> = {
     ADMIN: [
-      { path: '/admin', icon: 'dashboard', label: 'Overview' },
-      { path: '/admin/subjects', icon: 'book_open', label: 'Subject Management' },
-      { path: '/admin/users', icon: 'group', label: 'Users' },
-      { path: '/admin/account-approvals', icon: 'account_approval', label: 'Account Approvals' },
-      { path: '/admin/classes', icon: 'school', label: 'Classes' },
-      { path: '/mentors', icon: 'group', label: 'Mentor Directory' },
-      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
-      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/project-data', icon: 'database', label: 'Project Data' },
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', label: 'Showcase Moderation' }] : []),
-      { path: '/admin/feedback', icon: 'chat', label: 'Feedback Inbox' },
+      { path: '/admin', icon: 'dashboard', labelKey: 'overview' },
+      { path: '/admin/subjects', icon: 'book_open', labelKey: 'subjectManagement' },
+      { path: '/admin/users', icon: 'group', labelKey: 'users' },
+      { path: '/admin/account-approvals', icon: 'account_approval', labelKey: 'accountApprovals' },
+      { path: '/admin/classes', icon: 'school', labelKey: 'classes' },
+      { path: '/mentors', icon: 'group', labelKey: 'mentorDirectory' },
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', labelKey: 'mentoringSessions' }] : []),
+      { path: '/workspace', icon: 'view_kanban', labelKey: 'startupWorkspace' },
+      { path: '/project-data', icon: 'database', labelKey: 'projectData' },
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', labelKey: 'projectShowcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', labelKey: 'showcaseModeration' }] : []),
+      { path: '/admin/feedback', icon: 'chat', labelKey: 'feedbackInbox' },
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Schedules' }] : []),
-      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+      { path: '/evaluation-grading', icon: 'grading', labelKey: 'evaluationGrading' },
     ],
     LECTURER: [
-      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', label: 'Dashboard' }] : []),
-      { path: '/lecturer/classes', icon: 'school', label: 'My Classes' },
-      { path: '/mentors', icon: 'group', label: 'Mentor Directory' },
-      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
-      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      { path: '/project-data', icon: 'database', label: 'Project Data' },
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', label: 'Showcase Moderation' }] : []),
-      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/lecturer', icon: 'dashboard', labelKey: 'dashboard' }] : []),
+      { path: '/lecturer/classes', icon: 'school', labelKey: 'myClasses' },
+      { path: '/mentors', icon: 'group', labelKey: 'mentorDirectory' },
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', labelKey: 'mentoringSessions' }] : []),
+      { path: '/workspace', icon: 'view_kanban', labelKey: 'startupWorkspace' },
+      { path: '/project-data', icon: 'database', labelKey: 'projectData' },
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', labelKey: 'projectShowcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/moderation', icon: 'showcase', labelKey: 'showcaseModeration' }] : []),
+      { path: '/feedback', icon: 'chat', labelKey: 'sendFeedback' },
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.dataBank ? [{ path: '/lecturer/data-bank', icon: 'database', label: 'Data Bank' }] : []),
-      // { path: '/executionboard', icon: 'view_kanban', label: 'Execution Board' },
+      // { path: '/executionboard', icon: 'view_kanban', labelKey: 'executionBoard' },
       // ...(releaseFeatureFlags.evaluations ? [{ path: '/evaluations', icon: 'analytics', label: 'Evaluation Reports' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+      { path: '/evaluation-grading', icon: 'grading', labelKey: 'evaluationGrading' },
     ],
     MENTOR: [
-      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Mentor Overview' }] : []),
-      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
-      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', label: 'Dashboard' }] : []),
-      { path: '/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
-      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
+      ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', labelKey: 'mentorOverview' }] : []),
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', labelKey: 'mentoringSessions' }] : []),
+      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/mentor', icon: 'dashboard', labelKey: 'dashboard' }] : []),
+      { path: '/workspace', icon: 'view_kanban', labelKey: 'startupWorkspace' },
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', labelKey: 'projectShowcase' }] : []),
+      { path: '/feedback', icon: 'chat', labelKey: 'sendFeedback' },
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'event', label: 'Sessions' }] : []),
-      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+      { path: '/evaluation-grading', icon: 'grading', labelKey: 'evaluationGrading' },
     ],
     STUDENT: [
       ...(classFeatureFlags.studentSelfService
         ? [
-            { path: '/student/classes', icon: 'school', label: 'My Classes' },
-            { path: '/student/team', icon: 'group', label: 'My Team' },
+            { path: '/student/classes', icon: 'school', labelKey: 'myClasses' },
+            { path: '/student/team', icon: 'group', labelKey: 'myTeam' },
           ]
         : []),
-      { path: '/student/workspace', icon: 'view_kanban', label: 'Startup Workspace' },
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', label: 'Project Showcase' }] : []),
-      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/manage', icon: 'showcase', label: 'My Showcase' }] : []),
-      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', label: 'Mentoring Sessions' }] : []),
-      { path: '/feedback', icon: 'chat', label: 'Send feedback' },
-      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', label: 'Dashboard' }] : []),
+      { path: '/student/workspace', icon: 'view_kanban', labelKey: 'startupWorkspace' },
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase', icon: 'rocket_launch', labelKey: 'projectShowcase' }] : []),
+      ...(releaseFeatureFlags.showcase ? [{ path: '/showcase/manage', icon: 'showcase', labelKey: 'myShowcase' }] : []),
+      ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'calendar_month', labelKey: 'mentoringSessions' }] : []),
+      { path: '/feedback', icon: 'chat', labelKey: 'sendFeedback' },
+      // ...(releaseFeatureFlags.roleDashboards ? [{ path: '/student', icon: 'dashboard', labelKey: 'dashboard' }] : []),
       // ...(releaseFeatureFlags.workshops ? [{ path: '/workshops', icon: 'calendar_month', label: 'Workshops' }] : []),
       // ...(releaseFeatureFlags.chat ? [{ path: '/chat', icon: 'chat', label: 'Group Chat' }] : []),
       // ...(releaseFeatureFlags.startupIdeas ? [{ path: '/student/idea/new', icon: 'rocket_launch', label: 'My Idea' }] : []),
-      { path: '/executionboard', icon: 'task_alt', label: 'Execution Board' },
+      { path: '/executionboard', icon: 'task_alt', labelKey: 'executionBoard' },
       // ...(releaseFeatureFlags.mentoring ? [{ path: '/sessions', icon: 'video_chat', label: 'Mentoring' }] : []),
-      { path: '/evaluation-grading', icon: 'grading', label: 'Evaluation & Grading' },
+      { path: '/evaluation-grading', icon: 'grading', labelKey: 'evaluationGrading' },
     ],
   };
 
@@ -159,7 +161,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
             )}
             <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary-400' : 'text-white/50 group-hover:text-white/80')} />
-            <span className="text-[13px] truncate">{item.label}</span>
+            <span className="text-[13px] truncate">{t(`items.${item.labelKey}`)}</span>
           </>
         )}
       </NavLink>
@@ -180,17 +182,17 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
           {/* logo.png is 1800px square with the mark filling ~43% of it, so the image is
               scaled up inside the clipped tile to show the mark at roughly 30x34px. */}
           <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-[11px] bg-secondary-50 ring-2 ring-white/25 dark:bg-secondary-100">
-            <img src={logo} alt="EHub" className="h-[71px] w-[71px] max-w-none object-contain" />
+            <img src={logo} alt={t('brand.logoAlt')} className="h-[71px] w-[71px] max-w-none object-contain" />
           </div>
           <div className="min-w-0">
             <h1 className="text-[21px] font-semibold leading-none"><span className="text-primary-400">E</span><span className="text-white">HUB</span></h1>
-            <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.16em] text-secondary-200">Startup Portal</p>
+            <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.16em] text-secondary-200">{t('brand.subtitle')}</p>
           </div>
         </div>
         <button
           onClick={onMobileClose}
           className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors lg:hidden"
-          aria-label="Close sidebar"
+          aria-label={t('sidebar.close')}
         >
           <X className="w-4 h-4" />
         </button>
@@ -198,7 +200,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-thin">
-        <p className="text-overline text-white/50 uppercase px-3 mb-3 mt-1">Navigation</p>
+        <p className="text-overline text-white/50 uppercase px-3 mb-3 mt-1">{t('sidebar.navigation')}</p>
         {navigationItems.map(renderNavItem)}
       </nav>
 
@@ -210,7 +212,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
             className="w-full bg-primary hover:bg-primary-600 text-white font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-colors text-[13px]"
           >
             <Plus className="w-4 h-4" />
-            New Idea
+            {t('sidebar.newIdea')}
           </button>
         )}
 
@@ -221,7 +223,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
           className="w-full flex items-center gap-3 rounded-lg text-primary hover:text-primary-300 hover:bg-white/10 transition-colors text-[13px] font-medium px-3 py-2.5"
         >
           <LogOut className="w-[18px] h-[18px]" />
-          <span>Sign Out</span>
+          <span>{t('common:actions.signOut')}</span>
         </button>
       </div>
     </aside>

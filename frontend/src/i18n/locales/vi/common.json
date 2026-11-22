@@ -14,5 +14,70 @@
     "switchToDark": "Chuyển sang giao diện tối",
     "light": "Giao diện sáng",
     "dark": "Giao diện tối"
+  },
+  "actions": {
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "confirm": "Xác nhận",
+    "close": "Đóng",
+    "dismiss": "Bỏ qua",
+    "edit": "Chỉnh sửa",
+    "create": "Tạo mới",
+    "add": "Thêm",
+    "remove": "Gỡ bỏ",
+    "search": "Tìm kiếm",
+    "retry": "Thử lại",
+    "refresh": "Làm mới",
+    "refreshPage": "Tải lại trang",
+    "back": "Quay lại",
+    "goBack": "Quay lại",
+    "goHome": "Về trang chủ",
+    "next": "Tiếp",
+    "previous": "Trước",
+    "submit": "Gửi",
+    "upload": "Tải lên",
+    "download": "Tải xuống",
+    "export": "Xuất",
+    "import": "Nhập",
+    "view": "Xem",
+    "viewAll": "Xem tất cả",
+    "apply": "Áp dụng",
+    "reset": "Đặt lại",
+    "clear": "Xóa bộ lọc",
+    "signIn": "Đăng nhập",
+    "signUp": "Đăng ký",
+    "signOut": "Đăng xuất"
+  },
+  "states": {
+    "loading": "Đang tải…",
+    "loadingPage": "Đang tải trang",
+    "noData": "Không có dữ liệu",
+    "noDataDescription": "Hiện chưa có nội dung nào để hiển thị.",
+    "somethingWrong": "Đã xảy ra lỗi",
+    "loadFailed": "Không thể tải dữ liệu. Vui lòng thử lại.",
+    "unexpectedError": "Đã xảy ra lỗi không mong muốn. Vui lòng tải lại trang hoặc quay về trang chủ."
+  },
+  "dialog": {
+    "closeModal": "Đóng hộp thoại",
+    "reason": "Lý do",
+    "reasonPlaceholder": "Nhập lý do rõ ràng để lưu vết kiểm toán",
+    "reasonMinLength": "Lý do phải có ít nhất 3 ký tự."
+  },
+  "pagination": {
+    "page": "Trang {{page}} / {{total}}",
+    "showing": "Hiển thị {{from}}–{{to}} trên {{total}}",
+    "rowsPerPage": "Số dòng mỗi trang"
+  },
+  "misc": {
+    "progress": "Tiến độ",
+    "breadcrumb": "Đường dẫn",
+    "charactersCount": "{{length}} / {{max}} ký tự"
+  },
+  "roles": {
+    "ADMIN": "Quản trị viên",
+    "LECTURER": "Giảng viên",
+    "MENTOR": "Mentor",
+    "STUDENT": "Sinh viên"
   }
 }

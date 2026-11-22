@@ -13,8 +13,11 @@ import {
 } from '../../utils/notificationNavigation';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import TruncatedText from '../ui/TruncatedText';
+import { useTranslation } from 'react-i18next';
+import { formatDate, formatTime } from '../../i18n/format';
 
 const NotificationDropdown = () => {
+  const { t } = useTranslation('nav');
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -66,9 +69,9 @@ const NotificationDropdown = () => {
       await notificationApi.markAllRead();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
-      toast.success('Marked all as read');
+      toast.success(t('notifications.markedAllRead'));
     } catch {
-      toast.error('Failed to mark all as read');
+      toast.error(t('notifications.markAllReadFailed'));
     }
   };
 
@@ -159,7 +162,7 @@ const NotificationDropdown = () => {
           if (!isOpen) fetchNotifications();
         }}
         className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-primary-600"
-        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-label={unreadCount > 0 ? t('notifications.titleUnread', { count: unreadCount }) : t('notifications.title')}
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
@@ -176,10 +179,10 @@ const NotificationDropdown = () => {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
             <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
-              <span>Notifications</span>
+              <span>{t('notifications.title')}</span>
               {unreadCount > 0 && (
                 <span className="bg-primary-50 text-primary-800 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
-                  {unreadCount} new
+                  {t('notifications.newCount', { count: unreadCount })}
                 </span>
               )}
             </h3>
@@ -188,7 +191,7 @@ const NotificationDropdown = () => {
                 onClick={handleMarkAllRead}
                 className="text-xs font-semibold text-primary-700 hover:text-primary-800 flex items-center gap-1 transition-colors"
               >
-                <Check className="w-3.5 h-3.5" /> Mark all read
+                <Check className="w-3.5 h-3.5" /> {t('notifications.markAllRead')}
               </button>
             )}
           </div>
@@ -198,7 +201,7 @@ const NotificationDropdown = () => {
             {notifications.length === 0 ? (
               <div className="py-8 px-4 text-center text-slate-400 text-sm">
                 <Bell className="w-8 h-8 mx-auto mb-2 text-slate-200" />
-                No notifications yet
+                {t('notifications.empty')}
               </div>
             ) : (
               notifications.map((n) => (
@@ -221,7 +224,7 @@ const NotificationDropdown = () => {
                       className="mt-1 text-[12px] leading-relaxed text-slate-500"
                     />
                     <span className="text-[10px] text-slate-400 font-semibold block mt-1.5">
-                      {new Date(n.createdAt).toLocaleDateString()} at {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {t('notifications.at', { date: formatDate(n.createdAt), time: formatTime(n.createdAt) })}
                     </span>
                   </div>
                   {!n.isRead && (

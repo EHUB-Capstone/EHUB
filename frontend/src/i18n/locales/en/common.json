@@ -14,5 +14,70 @@
     "switchToDark": "Switch to dark theme",
     "light": "Light theme",
     "dark": "Dark theme"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "edit": "Edit",
+    "create": "Create",
+    "add": "Add",
+    "remove": "Remove",
+    "search": "Search",
+    "retry": "Try Again",
+    "refresh": "Refresh",
+    "refreshPage": "Refresh Page",
+    "back": "Back",
+    "goBack": "Go Back",
+    "goHome": "Go Home",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "upload": "Upload",
+    "download": "Download",
+    "export": "Export",
+    "import": "Import",
+    "view": "View",
+    "viewAll": "View all",
+    "apply": "Apply",
+    "reset": "Reset",
+    "clear": "Clear",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out"
+  },
+  "states": {
+    "loading": "Loading…",
+    "loadingPage": "Loading page",
+    "noData": "No data found",
+    "noDataDescription": "There is nothing to display at the moment.",
+    "somethingWrong": "Something went wrong",
+    "loadFailed": "Failed to load data. Please try again.",
+    "unexpectedError": "An unexpected error occurred. Please try refreshing the page or go back to the homepage."
+  },
+  "dialog": {
+    "closeModal": "Close modal",
+    "reason": "Reason",
+    "reasonPlaceholder": "Enter a clear reason for the audit trail",
+    "reasonMinLength": "Reason must contain at least 3 characters."
+  },
+  "pagination": {
+    "page": "Page {{page}} of {{total}}",
+    "showing": "Showing {{from}}–{{to}} of {{total}}",
+    "rowsPerPage": "Rows per page"
+  },
+  "misc": {
+    "progress": "Progress",
+    "breadcrumb": "Breadcrumb",
+    "charactersCount": "{{length}} of {{max}} characters"
+  },
+  "roles": {
+    "ADMIN": "Administrator",
+    "LECTURER": "Lecturer",
+    "MENTOR": "Mentor",
+    "STUDENT": "Student"
   }
 }
