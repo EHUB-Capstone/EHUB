@@ -29,6 +29,7 @@ import { CLASS_LIST_PAGE_SIZE, getClassLifecyclePresentation } from '../../utils
 import type { ClassListResponse, ClassStatus, ClassViewModel } from '../../types/classes';
 import { canCreateClasses, canManageClass, hasClassRole } from '../../utils/classPermissions';
 import { executeBulkClassAction, type BulkClassActionResult } from '../../utils/bulkClassActions';
+import { useTranslation } from 'react-i18next';
 
 const SEMESTERS = ['SP', 'SU', 'FA'];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -54,6 +55,7 @@ const groupClassesBySubject = (list: ClassViewModel[]) => list.reduce<Array<{ su
 }, []);
 
 export default function ClassManagement() {
+  const { t } = useTranslation('admin');
   const { user } = useContext(AuthContext);
   const navigate  = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -228,7 +230,7 @@ export default function ClassManagement() {
   const handleBulkCreated = (options: { keepOpen?: boolean; suppressToast?: boolean } = {}) => {
     if (!options.keepOpen) setShowBulk(false);
     void fetchAll();
-    if (!options.suppressToast) toast.success('Classes created successfully!');
+    if (!options.suppressToast) toast.success(t('classManagement.classesCreatedSuccessfully'));
   };
 
   const handleImported = () => {
@@ -243,7 +245,7 @@ export default function ClassManagement() {
         rowVersion: restoreTarget.rowVersion,
         reason: restoreReason.trim(),
       });
-      toast.success(`${restoreTarget.classCode} restored successfully.`);
+      toast.success(t('classManagement.restoredSuccessfully', { classCode: restoreTarget.classCode }));
       setRestoreTarget(null);
       setRestoreReason('');
       await fetchAll();
@@ -298,16 +300,16 @@ export default function ClassManagement() {
   const finishBulkAction = async (title: string, result: BulkClassActionResult) => {
     setBulkResult({ title, result });
     setSelectedClassIds(new Set());
-    if (result.failed.length === 0) toast.success(`${result.succeeded.length} classes updated successfully.`);
-    else if (result.succeeded.length > 0) toast.success(`${result.succeeded.length} succeeded; ${result.failed.length} failed.`);
-    else toast.error(`All ${result.failed.length} selected classes failed.`);
+    if (result.failed.length === 0) toast.success(t('classManagement.classesUpdatedSuccessfully', { length: result.succeeded.length }));
+    else if (result.succeeded.length > 0) toast.success(t('classManagement.succeededFailed', { length: result.succeeded.length, length2: result.failed.length }));
+    else toast.error(t('classManagement.allSelectedClassesFailed', { length: result.failed.length }));
     await fetchAll();
   };
 
   const handleBulkExport = async () => {
     if (!isAdmin || selectedClasses.length === 0) return;
     if (!SEMESTERS.includes(effectiveFilterSem) || !effectiveFilterYear) {
-      toast.error('Select a semester and year before exporting class data.');
+      toast.error(t('classManagement.selectASemesterAndYearBefore'));
       return;
     }
 
@@ -327,7 +329,7 @@ export default function ClassManagement() {
       link.download = `${effectiveFilterSem}${effectiveFilterYear}_class_data.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success(`Exported data for ${selectedClasses.length} class(es).`);
+      toast.success(t('classManagement.exportedDataForClassEs', { length: selectedClasses.length }));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to export class data.').message);
     } finally {
@@ -413,15 +415,15 @@ export default function ClassManagement() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? 'My Classes' : 'Class Management'}</h1>
-          <p className="text-slate-500 mt-1">{totalCount} class{totalCount !== 1 ? 'es' : ''} found</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? t('classManagement.myClasses') : t('classManagement.classManagement')}</h1>
+          <p className="text-slate-500 mt-1">{t('classManagement.classesFound', { count: totalCount })}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => void fetchAll()}
             className="flex items-center gap-2 px-3 py-2 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all"
           >
-            <RefreshCw className="w-4 h-4" /> Refresh
+            <RefreshCw className="w-4 h-4" /> {t('common:actions.refresh')}
           </button>
           {canCreate && (
             <button
@@ -429,7 +431,7 @@ export default function ClassManagement() {
               onClick={() => setShowBulk(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-white rounded-xl hover:bg-primary-700 transition-all shadow-sm hover:shadow-md"
             >
-              <Plus className="w-4 h-4" /> Create Classes
+              <Plus className="w-4 h-4" /> {t('classManagement.createClasses')}
             </button>
           )}
         </div>
@@ -448,7 +450,7 @@ export default function ClassManagement() {
             }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'classes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <LayoutGrid className="h-4 w-4" /> Classes
+            <LayoutGrid className="h-4 w-4" /> {t('classManagement.classes')}
           </button>
           {classFeatureFlags.projectDirection && <button
             type="button"
@@ -461,7 +463,7 @@ export default function ClassManagement() {
             }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <ClipboardCheck className="h-4 w-4" /> Overview
+            <ClipboardCheck className="h-4 w-4" /> {t('classManagement.overview')}
           </button>}
           <button
             type="button"
@@ -473,7 +475,7 @@ export default function ClassManagement() {
             }}
             className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${viewMode === 'checkpoint' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <CalendarClock className="h-4 w-4" /> Checkpoint
+            <CalendarClock className="h-4 w-4" /> {t('classManagement.checkpoint')}
           </button>
         </div>
       )}
@@ -485,7 +487,7 @@ export default function ClassManagement() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by class code..."
+              placeholder={t('classManagement.searchByClassCode')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -502,7 +504,7 @@ export default function ClassManagement() {
             }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
-            <option value="">All Subjects</option>
+            <option value="">{t('classManagement.allSubjects')}</option>
             {subjects.map(s => <option key={s}>{s}</option>)}
           </select>
           <select
@@ -517,7 +519,7 @@ export default function ClassManagement() {
             }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
-            <option value="">All Semesters</option>
+            <option value="">{t('classManagement.allSemesters')}</option>
             {SEMESTERS.map(s => <option key={s}>{s}</option>)}
           </select>
           <select
@@ -532,7 +534,7 @@ export default function ClassManagement() {
             }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
-            <option value="">All Years</option>
+            <option value="">{t('classManagement.allYears')}</option>
             {YEARS.map(y => <option key={y}>{y}</option>)}
           </select>
           <select
@@ -546,40 +548,40 @@ export default function ClassManagement() {
             }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
-            <option value="">Active &amp; Draft</option>
-            <option value="Draft">Draft</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Completed">Completed</option>
-            {(isAdmin || isLecturer) && <option value="Archived">Archived</option>}
+            <option value="">{t('classManagement.activeDraft')}</option>
+            <option value="Draft">{t('classManagement.draft')}</option>
+            <option value="Active">{t('classManagement.active')}</option>
+            <option value="Inactive">{t('classManagement.inactive')}</option>
+            <option value="Completed">{t('classManagement.completed')}</option>
+            {(isAdmin || isLecturer) && <option value="Archived">{t('classManagement.archived')}</option>}
           </select>
           {isAdmin && (
             <select
               value={filterAssignment}
               onChange={(event) => { setFilterAssignment(event.target.value as 'Assigned' | 'Unassigned' | ''); setPage(1); }}
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              aria-label="Filter by lecturer assignment"
+              aria-label={t('classManagement.filterByLecturerAssignment')}
             >
-              <option value="">All</option>
-              <option value="Assigned">Assigned</option>
-              <option value="Unassigned">Unassigned</option>
+              <option value="">{t('classManagement.all')}</option>
+              <option value="Assigned">{t('classManagement.assigned')}</option>
+              <option value="Unassigned">{t('classManagement.unassigned')}</option>
             </select>
           )}
           <select
             value={sort}
             onChange={(e) => { setSort(e.target.value); setPage(1); }}
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            aria-label="Sort classes"
+            aria-label={t('classManagement.sortClasses')}
           >
-            <option value="code">Code A–Z</option>
-            <option value="-code">Code Z–A</option>
-            <option value="classIndex">Class index ↑</option>
-            <option value="-classIndex">Class index ↓</option>
-            <option value="-createdAt">Newest</option>
-            <option value="createdAt">Oldest</option>
+            <option value="code">{t('classManagement.codeAZ')}</option>
+            <option value="-code">{t('classManagement.codeZA')}</option>
+            <option value="classIndex">{t('classManagement.classIndex')}</option>
+            <option value="-classIndex">{t('classManagement.classIndex2')}</option>
+            <option value="-createdAt">{t('classManagement.newest')}</option>
+            <option value="createdAt">{t('classManagement.oldest')}</option>
           </select>
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
-            <Filter className="w-4 h-4" /> Filter
+            <Filter className="w-4 h-4" /> {t('classManagement.filter')}
           </button>
           <button type="button" onClick={() => {
             setSearch(''); setFilterSem(''); setFilterYear(''); setFilterSubj(''); setFilterStatus(''); setFilterAssignment(''); setSort('code'); setPage(1);
@@ -587,7 +589,7 @@ export default function ClassManagement() {
             if (viewMode !== 'classes') next.set('tab', viewMode);
             setSearchParams(next, { replace: true });
           }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
-            Reset
+            {t('common:actions.reset')}
           </button>
         </form>
       </div>
@@ -598,9 +600,9 @@ export default function ClassManagement() {
       ) : error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
           <AlertCircle className="mx-auto h-7 w-7 text-red-500" />
-          <p className="mt-2 text-sm font-semibold text-red-800">Unable to load classes</p>
+          <p className="mt-2 text-sm font-semibold text-red-800">{t('classManagement.unableToLoadClasses')}</p>
           <p className="mt-1 text-sm text-red-600">{error}</p>
-          <button type="button" onClick={() => void fetchAll()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Retry</button>
+          <button type="button" onClick={() => void fetchAll()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">{t('classManagement.retry')}</button>
         </div>
       ) : isLecturer && classFeatureFlags.projectDirection && viewMode === 'overview' ? (
         <ClassDirectionOverview
@@ -638,9 +640,9 @@ export default function ClassManagement() {
       ) : classes.length === 0 ? (
         <EmptyState
           icon={GraduationCap}
-          title="No classes found"
-          description={isAdmin ? 'Use Create Classes to generate classes by subject and index' : 'No classes assigned to you yet'}
-          action={canCreate ? { label: 'Create Classes', onClick: () => setShowBulk(true) } : undefined}
+          title={t('classManagement.noClassesFound')}
+          description={isAdmin ? t('classManagement.useCreateClassesToGenerateClasses') : t('classManagement.noClassesAssignedToYouYet')}
+          action={canCreate ? { label: t('classManagement.createClasses'), onClick: () => setShowBulk(true) } : undefined}
         />
       ) : (
         <>
@@ -654,10 +656,10 @@ export default function ClassManagement() {
                 disabled={selectableClasses.length === 0}
                 className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary"
               />
-              Select All
+              {t('classManagement.selectAll')}
             </label>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-              {selectedClasses.length} selected
+              {t('classManagement.selected', { length: selectedClasses.length })}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -669,7 +671,7 @@ export default function ClassManagement() {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-xs font-semibold text-secondary transition hover:bg-secondary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bulkExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Export Class Data ({selectedClasses.length})
+                {t('classManagement.exportClassData')}{selectedClasses.length})
               </button>
             )}
             {isAdmin && (
@@ -678,9 +680,9 @@ export default function ClassManagement() {
                 disabled={assignableSelectedClasses.length === 0 || bulkBusy}
                 onClick={() => setBulkAssignOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40"
-                title={selectedClasses.length > assignableSelectedClasses.length ? 'Completed classes are excluded from lecturer assignment.' : undefined}
+                title={selectedClasses.length > assignableSelectedClasses.length ? t('classManagement.completedClassesAreExcludedFromLecturer') : undefined}
               >
-                <UserRoundCheck className="h-4 w-4" /> Assign Lecturer ({assignableSelectedClasses.length})
+                <UserRoundCheck className="h-4 w-4" /> {t('classManagement.assignLecturer')}{assignableSelectedClasses.length})
               </button>
             )}
             <button
@@ -689,7 +691,7 @@ export default function ClassManagement() {
               onClick={() => setBulkCompleteOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <CircleCheck className="h-4 w-4" /> Complete ({completableSelectedClasses.length})
+              <CircleCheck className="h-4 w-4" /> {t('classManagement.complete')}{completableSelectedClasses.length})
             </button>
             <button
               type="button"
@@ -697,7 +699,7 @@ export default function ClassManagement() {
               onClick={() => setBulkArchiveOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Archive className="h-4 w-4" /> Archive ({archivableSelectedClasses.length})
+              <Archive className="h-4 w-4" /> {t('classManagement.archive')}{archivableSelectedClasses.length})
             </button>
             <button
               type="button"
@@ -705,11 +707,11 @@ export default function ClassManagement() {
               onClick={() => setBulkRestoreOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <RotateCcw className="h-4 w-4" /> Restore ({restorableSelectedClasses.length})
+              <RotateCcw className="h-4 w-4" /> {t('classManagement.restore')}{restorableSelectedClasses.length})
             </button>
             {selectedClasses.length > 0 && (
               <button type="button" onClick={() => setSelectedClassIds(new Set())} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100">
-                <X className="h-4 w-4" /> Clear
+                <X className="h-4 w-4" /> {t('common:actions.clear')}
               </button>
             )}
           </div>
@@ -720,7 +722,7 @@ export default function ClassManagement() {
               <div key={cls._id} className="contents">
                 {showSubjectGroups && (i === 0 || displayedClasses[i - 1]?.subjectCode !== cls.subjectCode) && (
                   <div className="col-span-full flex items-center gap-3 pt-2 first:pt-0">
-                    <h2 className="text-lg font-bold text-slate-900">{cls.subjectCode || 'Unknown Subject'}</h2>
+                    <h2 className="text-lg font-bold text-slate-900">{cls.subjectCode || t('classManagement.unknownSubject')}</h2>
                     <span className="h-px flex-1 bg-slate-200" />
                     <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                       {subjectGroups.find(group => group.subjectCode === (cls.subjectCode || 'Unknown Subject'))?.classes.length || 0} classes
@@ -735,7 +737,7 @@ export default function ClassManagement() {
                 onClick={() => navigate(`/classes/${cls.slug || cls._id || cls.id}`)}
                 role="link"
                 tabIndex={0}
-                aria-label={`Open class ${cls.classCode}`}
+                aria-label={t('classManagement.openClass', { classCode: cls.classCode })}
                 onKeyDown={(event) => {
                   // Only react when the card itself has focus, so Enter on the checkbox or buttons inside keeps its own meaning.
                   if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
@@ -766,7 +768,7 @@ export default function ClassManagement() {
                             type="checkbox"
                             checked={selectedClassIds.has(cls._id)}
                             onChange={() => toggleClassSelection(cls._id)}
-                            aria-label={`Select ${cls.classCode}`}
+                            aria-label={t('classManagement.select', { classCode: cls.classCode })}
                             className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary"
                           />
                         </label>
@@ -782,18 +784,18 @@ export default function ClassManagement() {
                         <GraduationCap className="w-4 h-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">Lecturer</p>
-                        <p className="text-sm font-medium text-slate-800 truncate">{cls.lectureId?.name || 'Unknown'}</p>
+                        <p className="text-xs text-slate-400">{t('classManagement.lecturer')}</p>
+                        <p className="text-sm font-medium text-slate-800 truncate">{cls.lectureId?.name || t('classManagement.unknown')}</p>
                       </div>
                       {isAdmin && cls.status !== 'Completed' && cls.status !== 'Archived' && (
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-caption font-semibold text-primary-700 hover:bg-primary-50">Change</button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg px-2 py-1 text-caption font-semibold text-primary-700 hover:bg-primary-50">{t('classManagement.change')}</button>
                       )}
                     </div>
                   ) : (
                     <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
-                      <p className="text-xs font-medium text-amber-700">⚠ Unassigned Draft</p>
+                      <p className="text-xs font-medium text-amber-700">{t('classManagement.unassignedDraft')}</p>
                       {isAdmin && cls.status === 'Draft' && (
-                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-caption font-semibold text-amber-700 shadow-xs hover:bg-amber-100">Assign Lecturer</button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); setAssignTarget(cls); }} className="rounded-lg bg-white px-2 py-1 text-caption font-semibold text-amber-700 shadow-xs hover:bg-amber-100">{t('classManagement.assignLecturer2')}</button>
                       )}
                     </div>
                   )}
@@ -805,7 +807,7 @@ export default function ClassManagement() {
                         <Users className="w-4 h-4 text-amber-500" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">Mentors ({cls.mentors.length})</p>
+                        <p className="text-xs text-slate-400">{t('classManagement.mentors', { length: cls.mentors.length })}</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
                           {cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}
                         </p>
@@ -813,7 +815,7 @@ export default function ClassManagement() {
                     </div>
                   ) : (
                     <div className="mb-2 p-2 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                      <p className="text-xs text-slate-400">No mentors assigned</p>
+                      <p className="text-xs text-slate-400">{t('classManagement.noMentorsAssigned')}</p>
                     </div>
                   )}
 
@@ -824,7 +826,7 @@ export default function ClassManagement() {
                         <Calendar className="w-4 h-4 text-secondary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-slate-400">{cls.schedules.length} weekly session{cls.schedules.length === 1 ? '' : 's'}</p>
+                        <p className="text-xs text-slate-400">{t('classManagement.weeklySessions', { count: cls.schedules.length })}</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
                           {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][cls.schedules[0].dayOfWeek]}, Slot {cls.schedules[0].slotNumber} · Room {cls.schedules[0].room || cls.room || 'TBD'}
                           {cls.schedules.length > 1 ? ` · +${cls.schedules.length - 1} more` : ''}
@@ -833,7 +835,7 @@ export default function ClassManagement() {
                     </div>
                   ) : (
                     <div className="mb-4 p-2 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                      <p className="text-xs text-slate-400">Schedule TBD</p>
+                      <p className="text-xs text-slate-400">{t('classManagement.scheduleTbd')}</p>
                     </div>
                   )}
 
@@ -842,14 +844,14 @@ export default function ClassManagement() {
                     <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-2.5">
                       <Users className="w-4 h-4 text-secondary" />
                       <div>
-                        <p className="text-xs text-slate-400">Students</p>
+                        <p className="text-xs text-slate-400">{t('classManagement.students')}</p>
                         <p className="text-base font-bold text-slate-900">{cls.studentCount ?? 0}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-2.5">
                       <BookOpen className="w-4 h-4 text-fpt-green" />
                       <div>
-                        <p className="text-xs text-slate-400">Teams</p>
+                        <p className="text-xs text-slate-400">{t('classManagement.teams')}</p>
                         <p className="text-base font-bold text-slate-900">{cls.teamCount ?? 0}</p>
                       </div>
                     </div>
@@ -862,21 +864,21 @@ export default function ClassManagement() {
                     onClick={(e) => { e.stopPropagation(); navigate(`/classes/${cls.slug || cls._id || cls.id}`); }}
                     className="flex-1 flex items-center justify-center gap-1.5 text-xs text-secondary hover:text-secondary-dark font-medium transition-colors"
                   >
-                    <Eye className="w-3.5 h-3.5" /> View Detail
+                    <Eye className="w-3.5 h-3.5" /> {t('classManagement.viewDetail')}
                   </button>
                   {canManageClassRecord(cls) && getClassLifecyclePresentation(cls.status).action === 'restore' ? (
                     <button
                       onClick={(event) => { event.stopPropagation(); setRestoreTarget(cls); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-green-700 hover:text-green-800 font-medium transition-colors border-l border-slate-100"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" /> Restore
+                      <RotateCcw className="w-3.5 h-3.5" /> {t('classManagement.restore2')}
                     </button>
                   ) : cls.status !== 'Completed' && canManageClassRecord(cls) && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setImportTarget(cls._id); }}
                       className="flex-1 flex items-center justify-center gap-1.5 text-xs text-primary-700 hover:text-primary-dark font-medium transition-colors border-l border-slate-100"
                     >
-                      <Upload className="w-3.5 h-3.5" /> Import Students
+                      <Upload className="w-3.5 h-3.5" /> {t('classManagement.importStudents')}
                     </button>
                   )}
                 </div>
@@ -891,14 +893,14 @@ export default function ClassManagement() {
       {!loading && !error && viewMode === 'classes' && totalPages > 1 && (
         <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row">
           <p className="text-sm text-slate-500">
-            Page <span className="font-semibold text-slate-900">{page}</span> of <span className="font-semibold text-slate-900">{totalPages}</span> · {totalCount} classes
+            {t('classManagement.page')} <span className="font-semibold text-slate-900">{page}</span> {t('classManagement.of')} <span className="font-semibold text-slate-900">{totalPages}</span> · {totalCount} {t('classManagement.classes2')}
           </p>
           <div className="flex gap-2">
             <button type="button" disabled={page <= 1} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-              <ChevronLeft className="h-4 w-4" /> Previous
+              <ChevronLeft className="h-4 w-4" /> {t('common:actions.previous')}
             </button>
             <button type="button" disabled={page >= totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-              Next <ChevronRight className="h-4 w-4" />
+              {t('common:actions.next')} <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -948,9 +950,9 @@ export default function ClassManagement() {
         onClose={() => { setRestoreTarget(null); setRestoreReason(''); }}
         onConfirm={handleRestore}
         isSubmitting={restoring}
-        title="Restore this class?"
-        description={restoreTarget ? `${restoreTarget.classCode} will be revalidated for lecturer, schedule, subject, semester and conflicts before activation.` : ''}
-        confirmText="Restore class"
+        title={t('classManagement.restoreThisClass')}
+        description={restoreTarget ? t('classManagement.willBeRevalidatedForLecturerSchedule', { classCode: restoreTarget.classCode }) : ''}
+        confirmText={t('classManagement.restoreClass')}
         confirmVariant="primary"
         reason={restoreReason}
         onReasonChange={setRestoreReason}
@@ -961,9 +963,9 @@ export default function ClassManagement() {
         onClose={() => { if (!bulkBusy) { setBulkArchiveOpen(false); setBulkReason(''); } }}
         onConfirm={handleBulkArchive}
         isSubmitting={bulkBusy}
-        title={`Archive ${archivableSelectedClasses.length} selected classes?`}
-        description="Selected classes will become read-only. Their roster, teams, schedules, history, and audit data are preserved. Each class is validated independently."
-        confirmText={`Archive ${archivableSelectedClasses.length} classes`}
+        title={t('classManagement.archiveSelectedClasses', { length: archivableSelectedClasses.length })}
+        description={t('classManagement.selectedClassesWillBecomeReadOnly')}
+        confirmText={t('classManagement.archiveClasses', { length: archivableSelectedClasses.length })}
         confirmVariant="danger"
         reason={bulkReason}
         onReasonChange={setBulkReason}
@@ -974,9 +976,9 @@ export default function ClassManagement() {
         onClose={() => { if (!bulkBusy) { setBulkCompleteOpen(false); setBulkReason(''); } }}
         onConfirm={handleBulkComplete}
         isSubmitting={bulkBusy}
-        title={`Complete ${completableSelectedClasses.length} active classes?`}
-        description="Active enrollments become Completed, class chats become read-only, active mentor assignments end, and open team proposals are cancelled. Classes with an active import or scheduled mentoring session will fail safely and be listed in the result."
-        confirmText={`Complete ${completableSelectedClasses.length} classes`}
+        title={t('classManagement.completeActiveClasses', { length: completableSelectedClasses.length })}
+        description={t('classManagement.activeEnrollmentsBecomeCompletedClassChats')}
+        confirmText={t('classManagement.completeClasses', { length: completableSelectedClasses.length })}
         confirmVariant="primary"
         reason={bulkReason}
         onReasonChange={setBulkReason}
@@ -987,28 +989,28 @@ export default function ClassManagement() {
         onClose={() => { if (!bulkBusy) { setBulkRestoreOpen(false); setBulkReason(''); } }}
         onConfirm={handleBulkRestore}
         isSubmitting={bulkBusy}
-        title={`Restore ${restorableSelectedClasses.length} archived classes?`}
-        description="Each class is revalidated independently for semester, subject, lecturer, schedule, room conflicts, and required relationships before it is restored."
-        confirmText={`Restore ${restorableSelectedClasses.length} classes`}
+        title={t('classManagement.restoreArchivedClasses', { length: restorableSelectedClasses.length })}
+        description={t('classManagement.eachClassIsRevalidatedIndependentlyFor')}
+        confirmText={t('classManagement.restoreClasses', { length: restorableSelectedClasses.length })}
         confirmVariant="primary"
         reason={bulkReason}
         onReasonChange={setBulkReason}
         reasonRequired
       />
-      <Modal isOpen={Boolean(bulkResult)} onClose={() => setBulkResult(null)} title={bulkResult?.title || 'Bulk Action Result'} size="lg">
+      <Modal isOpen={Boolean(bulkResult)} onClose={() => setBulkResult(null)} title={bulkResult?.title || t('classManagement.bulkActionResult')} size="lg">
         {bulkResult && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-green-50 p-4 text-center"><p className="text-2xl font-bold text-green-700">{bulkResult.result.succeeded.length}</p><p className="text-xs font-semibold text-green-600">Succeeded</p></div>
-              <div className="rounded-xl bg-red-50 p-4 text-center"><p className="text-2xl font-bold text-red-700">{bulkResult.result.failed.length}</p><p className="text-xs font-semibold text-red-600">Failed</p></div>
+              <div className="rounded-xl bg-green-50 p-4 text-center"><p className="text-2xl font-bold text-green-700">{bulkResult.result.succeeded.length}</p><p className="text-xs font-semibold text-green-600">{t('classManagement.succeeded')}</p></div>
+              <div className="rounded-xl bg-red-50 p-4 text-center"><p className="text-2xl font-bold text-red-700">{bulkResult.result.failed.length}</p><p className="text-xs font-semibold text-red-600">{t('classManagement.failed')}</p></div>
             </div>
             {bulkResult.result.succeeded.length > 0 && (
-              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Updated classes</p><div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">{bulkResult.result.succeeded.map((code) => <span key={code} className="rounded-md bg-green-50 px-2 py-1 font-mono text-xs font-semibold text-green-700">{code}</span>)}</div></div>
+              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('classManagement.updatedClasses')}</p><div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">{bulkResult.result.succeeded.map((code) => <span key={code} className="rounded-md bg-green-50 px-2 py-1 font-mono text-xs font-semibold text-green-700">{code}</span>)}</div></div>
             )}
             {bulkResult.result.failed.length > 0 && (
-              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Classes requiring attention</p><div className="max-h-56 space-y-2 overflow-y-auto">{bulkResult.result.failed.map((failure) => <div key={failure.classId} className="rounded-xl border border-red-100 bg-red-50 p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-bold text-red-800">{failure.classCode}</span>{failure.code && <span className="rounded bg-white px-1.5 py-0.5 text-overline font-semibold text-red-600">{failure.code}</span>}</div><p className="mt-1 text-xs leading-5 text-red-700">{failure.message}</p></div>)}</div></div>
+              <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('classManagement.classesRequiringAttention')}</p><div className="max-h-56 space-y-2 overflow-y-auto">{bulkResult.result.failed.map((failure) => <div key={failure.classId} className="rounded-xl border border-red-100 bg-red-50 p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-bold text-red-800">{failure.classCode}</span>{failure.code && <span className="rounded bg-white px-1.5 py-0.5 text-overline font-semibold text-red-600">{failure.code}</span>}</div><p className="mt-1 text-xs leading-5 text-red-700">{failure.message}</p></div>)}</div></div>
             )}
-            <div className="flex justify-end border-t border-slate-100 pt-4"><Button onClick={() => setBulkResult(null)}>Close</Button></div>
+            <div className="flex justify-end border-t border-slate-100 pt-4"><Button onClick={() => setBulkResult(null)}>{t('common:actions.close')}</Button></div>
           </div>
         )}
       </Modal>

@@ -32,7 +32,9 @@
     "refreshOnlineUsers": "Refresh online users",
     "currentlyOnline": "Currently Online",
     "recentlyActive": "Recently Active",
-    "noUserActivityDetectedYet": "No user activity detected yet"
+    "noUserActivityDetectedYet": "No user activity detected yet",
+    "liveUpdates": "live updates",
+    "refreshesEvery30s": "refreshes every 30s"
   },
   "lecturerDashboard": {
     "assignedAcademicScope": "Assigned academic scope",

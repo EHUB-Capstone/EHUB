@@ -32,7 +32,9 @@
     "refreshOnlineUsers": "Làm mới danh sách người dùng trực tuyến",
     "currentlyOnline": "Đang trực tuyến",
     "recentlyActive": "Hoạt động gần đây",
-    "noUserActivityDetectedYet": "Chưa ghi nhận hoạt động của người dùng"
+    "noUserActivityDetectedYet": "Chưa ghi nhận hoạt động của người dùng",
+    "liveUpdates": "cập nhật trực tiếp",
+    "refreshesEvery30s": "làm mới mỗi 30 giây"
   },
   "lecturerDashboard": {
     "assignedAcademicScope": "Phạm vi học thuật được phân công",
