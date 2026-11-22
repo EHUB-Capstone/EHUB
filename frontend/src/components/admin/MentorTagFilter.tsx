@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Tags, X } from 'lucide-react';
 import { TAG_CATEGORIES, type TagOption } from '../../utils/mentorTags';
+import { useTranslation } from 'react-i18next';
 
 interface MentorTagFilterProps {
   options: TagOption[];
@@ -12,6 +13,7 @@ interface MentorTagFilterProps {
 
 /** "Filter by tag" button with a grouped checklist (expertise, startup domain, technology, tag) and the chosen tags as chips. */
 export default function MentorTagFilter({ options, selected, onChange, disabled = false }: MentorTagFilterProps) {
+  const { t } = useTranslation('admin');
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
 
@@ -49,22 +51,22 @@ export default function MentorTagFilter({ options, selected, onChange, disabled 
           onClick={() => setOpen(current => !current)}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
         >
-          <Tags className="h-3.5 w-3.5" /> Filter by tag
+          <Tags className="h-3.5 w-3.5" /> {t('mentorTagFilter.filterByTag')}
           {chosen.length > 0 && <span className="rounded-full bg-primary px-1.5 text-overline text-white">{chosen.length}</span>}
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
         {chosen.map(option => (
           <span key={option.key} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-700">
             {option.label}
-            <button type="button" onClick={() => toggle(option.key)} aria-label={`Remove tag filter ${option.label}`} className="rounded-full p-0.5 hover:bg-primary-100"><X className="h-3 w-3" /></button>
+            <button type="button" onClick={() => toggle(option.key)} aria-label={t('mentorTagFilter.removeTagFilter', { label: option.label })} className="rounded-full p-0.5 hover:bg-primary-100"><X className="h-3 w-3" /></button>
           </span>
         ))}
-        {chosen.length > 1 && <button type="button" onClick={() => onChange([])} className="text-caption font-semibold text-primary-700 hover:underline">Clear</button>}
+        {chosen.length > 1 && <button type="button" onClick={() => onChange([])} className="text-caption font-semibold text-primary-700 hover:underline">{t('common:actions.clear')}</button>}
       </div>
 
       {open && (
-        <div role="listbox" aria-multiselectable="true" aria-label="Mentor tags" className="absolute left-0 z-30 mt-1.5 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-          <p className="px-2 pb-1 text-caption text-slate-400">Shows mentors with any of the selected tags.</p>
+        <div role="listbox" aria-multiselectable="true" aria-label={t('mentorProfileDetail.mentorTags')} className="absolute left-0 z-30 mt-1.5 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+          <p className="px-2 pb-1 text-caption text-slate-400">{t('mentorTagFilter.showsMentorsWithAnyOfThe')}</p>
           {TAG_CATEGORIES.map(category => {
             const items = options.filter(option => option.category === category.key);
             if (items.length === 0) return null;

@@ -25,7 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 
-const statusBadge: Record<MentorProfileStatus, string> = { get Active() { return i18n.t('admin:classManagement.active'); }, get Inactive() { return i18n.t('admin:classManagement.inactive'); }, get Unavailable() { return i18n.t('admin:mentorProfileDetail.atRisk'); } };
+const statusBadge: Record<MentorProfileStatus, string> = { Active: 'Active', Inactive: 'Inactive', Unavailable: 'At Risk' };
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-50';
 
 export default function MentorProfileDetail() {
@@ -158,7 +158,7 @@ export default function MentorProfileDetail() {
             <p className="truncate text-sm text-slate-500">{profile.email}{profile.phone ? ` · ${profile.phone}` : ''}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <MentorKindTag type={profile.mentorType} />
-              <Badge variant={statusBadge[profile.status]} size="sm">{profile.status}</Badge>
+              <Badge variant={statusBadge[profile.status]} size="sm">{t(`mentorProfileDetail.profileStatus.${profile.status}`, { defaultValue: profile.status })}</Badge>
               <span className="text-xs text-slate-500">{t('mentorProfileDetail.activeTeams', { count: profile.activeTeamCount })}</span>
             </div>
           </div>
@@ -271,7 +271,7 @@ export default function MentorProfileDetail() {
             <ReadRow label={t('mentorProfileDetail.background')}>{profile.bio ? <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{profile.bio}</p> : <Empty />}</ReadRow>
           </Section>
           <Section title={t('mentorProfileDetail.availability')}>
-            <ReadRow label={t('mentorProfileDetail.status')}><Badge variant={statusBadge[profile.status]} size="sm">{profile.status}</Badge></ReadRow>
+            <ReadRow label={t('mentorProfileDetail.status')}><Badge variant={statusBadge[profile.status]} size="sm">{t(`mentorProfileDetail.profileStatus.${profile.status}`, { defaultValue: profile.status })}</Badge></ReadRow>
             <ReadRow label={t('mentorProfileDetail.availabilityNote')}>{profile.availabilityNote ? <p className="whitespace-pre-wrap text-sm text-slate-700">{profile.availabilityNote}</p> : <Empty />}</ReadRow>
           </Section>
           <Section title={t('mentorProfileDetail.professionalDetails')}>

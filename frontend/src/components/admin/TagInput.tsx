@@ -1,5 +1,6 @@
 import { useId, useState, type KeyboardEvent } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface TagInputProps {
   label: string;
@@ -16,6 +17,7 @@ interface TagInputProps {
 
 /** A field that turns typed words into removable chips. Enter or comma adds, Backspace on an empty box removes the last chip. */
 export default function TagInput({ label, value, onChange, addTag, placeholder, hint, suggestions = [], disabled = false }: TagInputProps) {
+  const { t } = useTranslation('admin');
   const id = useId();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export default function TagInput({ label, value, onChange, addTag, placeholder, 
           <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700">
             {tag}
             {!disabled && (
-              <button type="button" onClick={() => onChange(value.filter(item => item !== tag))} aria-label={`Remove ${tag}`} className="rounded-full p-0.5 hover:bg-primary-100">
+              <button type="button" onClick={() => onChange(value.filter(item => item !== tag))} aria-label={t('tagInput.remove', { tag })} className="rounded-full p-0.5 hover:bg-primary-100">
                 <X className="h-3 w-3" />
               </button>
             )}
@@ -73,7 +75,7 @@ export default function TagInput({ label, value, onChange, addTag, placeholder, 
         </datalist>
       )}
       <p id={`${id}-help`} role={error ? 'alert' : undefined} className={`mt-1 text-caption ${error ? 'text-red-600' : 'text-slate-400'}`}>
-        {error ?? hint ?? 'Press Enter or comma to add.'}
+        {error ?? hint ?? t('tagInput.pressEnterOrCommaToAdd')}
       </p>
     </div>
   );

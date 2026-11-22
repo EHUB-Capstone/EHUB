@@ -18,6 +18,7 @@ import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import MentorAllocationPreviewModal from './MentorAllocationPreviewModal';
 import SemesterMentorManager from './SemesterMentorManager';
+import { useTranslation } from 'react-i18next';
 
 interface MentorAdministrationCardProps {
   semesterId?: string;
@@ -62,6 +63,7 @@ function allocationError(error: unknown, fallback: string): string {
 }
 
 export default function MentorAdministrationCard({ semesterId, semesterLabel, temporaryMentorCount = 0, onImportCommitted }: MentorAdministrationCardProps) {
+  const { t } = useTranslation('admin');
   const [allocationPreview, setAllocationPreview] = useState<MentorAllocationPreview | null>(null);
   const [strategy, setStrategy] = useState<MentorAllocationStrategy>('Ai');
   const [previewScope, setPreviewScope] = useState<AllocationScope | null>(null);
@@ -251,7 +253,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
     try {
       const response = await mentorAdminApi.commitAllocation(allocationPreview.sessionId);
       const ended = response.data.endedCount ?? 0;
-      toast.success(`Assigned ${response.data.createdCount} mentor slot${response.data.createdCount === 1 ? '' : 's'}${ended ? ` and ended ${ended} replaced assignment${ended === 1 ? '' : 's'}` : ''}.`);
+      toast.success(t(ended ? 'mentorAdministrationCard.assignedMentorSlotsAndEnded' : 'mentorAdministrationCard.assignedMentorSlots', { count: response.data.createdCount, ended }));
       closePreview();
       await onImportCommitted();
     } catch (error) {
@@ -278,16 +280,16 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-bold text-slate-900">Mentor assignment</h2>
+              <h2 className="font-bold text-slate-900">{t('mentorAdministrationCard.mentorAssignment')}</h2>
               <span className="rounded-full bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-700">{semesterLabel}</span>
             </div>
-            <p className="text-xs text-slate-500">Continuing teams keep their mentors; only empty slots are filled. Nothing is saved until you confirm.</p>
+            <p className="text-xs text-slate-500">{t('mentorAdministrationCard.continuingTeamsKeepTheirMentorsOnly')}</p>
           </div>
         </div>
 
         {semesterId && (
           <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Assignment method" title={strategyHint} className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+            <div role="group" aria-label={t('mentorAdministrationCard.assignmentMethod')} title={strategyHint} className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
               {(['Ai', 'Balanced', 'Random'] as const).map(option => (
                 <button
                   key={option}
@@ -301,15 +303,15 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
                 </button>
               ))}
             </div>
-            <Button size="sm" className="whitespace-nowrap" icon={strategy === 'Ai' ? Sparkles : Shuffle} disabled={busy !== null || previewOpen} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>{strategy === 'Ai' ? 'AI preview · all classes' : 'Preview assignment'}</Button>
-            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} disabled={busy !== null || previewOpen} onClick={() => setManagerOpen(true)}>Manage by class</Button>
-            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} disabled={busy !== null || previewOpen} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>Export</Button>
+            <Button size="sm" className="whitespace-nowrap" icon={strategy === 'Ai' ? Sparkles : Shuffle} disabled={busy !== null || previewOpen} onClick={() => void previewAllocation()} isLoading={busy === 'preview-allocation'}>{strategy === 'Ai' ? t('mentorAdministrationCard.aiPreviewAllClasses') : t('mentorAdministrationCard.previewAssignment')}</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={UserCog} disabled={busy !== null || previewOpen} onClick={() => setManagerOpen(true)}>{t('mentorAdministrationCard.manageByClass')}</Button>
+            <Button size="sm" variant="outline" className="whitespace-nowrap" icon={FileSpreadsheet} disabled={busy !== null || previewOpen} onClick={() => void exportAssignments()} isLoading={busy === 'export'}>{t('common:actions.export')}</Button>
           </div>
         )}
       </div>
 
       {!semesterId ? (
-        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">This semester has not been planned in the system yet.</p>
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{t('mentorAdministrationCard.thisSemesterHasNotBeenPlanned')}</p>
       ) : (
         <>
           {temporaryMentorCount > 0 && (
@@ -321,24 +323,24 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
                 onChange={event => setIncludeTemporary(event.target.checked)}
                 className="h-3.5 w-3.5 rounded border-slate-300 accent-primary"
               />
-              Include {temporaryMentorCount} mentor{temporaryMentorCount === 1 ? '' : 's'} without an account yet
+              {t('mentorAdministrationCard.include')} {temporaryMentorCount} {t('mentorAdministrationCard.mentor')}{temporaryMentorCount === 1 ? '' : 's'} {t('mentorAdministrationCard.withoutAnAccountYet')}
             </label>
           )}
-          <p className="mt-2 text-caption text-slate-400">{strategyHint} Import new mentors in User Management, then use Add mentors.</p>
+          <p className="mt-2 text-caption text-slate-400">{t('mentorAdministrationCard.importNewMentorsInUserManagement', { strategyHint })}</p>
           {(busy === 'preview-allocation' || busy === 'refresh-allocation') && (
             <div role="status" aria-live="polite" className="mt-2 text-body-sm text-slate-600">
-              {jobProgress?.status === 'Queued' ? 'AI allocation is queued…' : jobProgress?.totalBatches
-                ? `AI has completed ${jobProgress.completedBatches} of ${jobProgress.totalBatches} batches. Preparing the proposal…`
-                : 'Preparing the proposed assignments…'}
+              {jobProgress?.status === 'Queued' ? t('mentorAdministrationCard.aiAllocationIsQueued') : jobProgress?.totalBatches
+                ? t('mentorAdministrationCard.aiHasCompletedOfBatchesPreparing', { completedBatches: jobProgress.completedBatches, totalBatches: jobProgress.totalBatches })
+                : t('mentorAdministrationCard.preparingTheProposedAssignments')}
               {jobProgress?.totalBatches ? <progress className="mt-1 block w-full accent-primary"
-                aria-label="AI allocation progress" max={jobProgress.totalBatches} value={jobProgress.completedBatches} /> : null}
-              {jobProgress && <p>You can return to this page while AI continues processing.</p>}
+                aria-label={t('mentorAdministrationCard.aiAllocationProgress')} max={jobProgress.totalBatches} value={jobProgress.completedBatches} /> : null}
+              {jobProgress && <p>{t('mentorAdministrationCard.youCanReturnToThisPage')}</p>}
             </div>
           )}
           {previewFailure && (
             <div role="alert" className="mt-3 rounded-xl bg-danger-50 px-3 py-2 text-body-sm text-danger-dark">
               <p>{previewFailure.scope.label}: {previewFailure.message}</p>
-              <Button size="sm" variant="outline" className="mt-2" disabled={busy !== null} onClick={() => void previewAllocation(previewFailure.scope)}>Try again</Button>
+              <Button size="sm" variant="outline" className="mt-2" disabled={busy !== null} onClick={() => void previewAllocation(previewFailure.scope)}>{t('addSemesterStaffModal.tryAgain')}</Button>
             </div>
           )}
 
@@ -370,9 +372,9 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
             isOpen={confirmReplacement}
             onClose={() => setConfirmReplacement(false)}
             onConfirm={() => void commitAllocation()}
-            title="Replace current mentors?"
-            description={`${allocationPreview?.replacementCount ?? 0} current mentor assignment(s) will end and the chosen mentors take over. The history of the ended assignments is kept.`}
-            confirmText="Replace and save"
+            title={t('mentorAdministrationCard.replaceCurrentMentors')}
+            description={t('mentorAdministrationCard.currentMentorAssignmentSWillEnd', { v1: allocationPreview?.replacementCount ?? 0 })}
+            confirmText={t('mentorAdministrationCard.replaceAndSave')}
             isSubmitting={busy === 'commit-allocation'}
           />
         </>

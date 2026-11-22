@@ -7,9 +7,11 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Badge from '../ui/Badge';
+import { useTranslation } from 'react-i18next';
 
 interface Row { semester: SemesterDto; staff?: TeachingStaffDto }
 export default function MentorSemesterAvailability({ profile, onClose }: { profile: MentorProfile; onClose: () => void }) {
+  const { t } = useTranslation('admin');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,23 +50,23 @@ export default function MentorSemesterAvailability({ profile, onClose }: { profi
         status: row.staff.status === 'Active' ? 'Inactive' : 'Active', rowVersion: row.staff.rowVersion,
       }, controller.signal);
       else await subjectApi.addTeachingStaff({ semester: row.semester.semester, year: row.semester.year, userId: profile.userId, role: 'MENTOR' }, controller.signal);
-      if (!controller.signal.aborted) { setNotice('Semester availability saved.'); setReload(x => x + 1); }
+      if (!controller.signal.aborted) { setNotice(t('mentorSemesterAvailability.semesterAvailabilitySaved')); setReload(x => x + 1); }
     } catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not update availability. Reload and try again.').message); }
     finally { busy.current = false; if (!controller.signal.aborted) { setSaving(false); setConfirm(null); } }
   };
-  return <Modal isOpen onClose={() => { if (!busy.current) onClose(); }} title={`Semester availability · ${profile.fullName}`} size="lg">
-    <p className="mb-4 text-body text-slate-600">Available mentors can be assigned and recommended for that semester. Availability cannot be removed while the mentor has active assignments.</p>
-    {error && <p role="alert" className="mb-3 rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error} <Button variant="ghost" disabled={saving} onClick={() => { setError(''); setReload(x => x + 1); }}>Retry</Button></p>}
+  return <Modal isOpen onClose={() => { if (!busy.current) onClose(); }} title={t('mentorSemesterAvailability.semesterAvailability', { fullName: profile.fullName })} size="lg">
+    <p className="mb-4 text-body text-slate-600">{t('mentorSemesterAvailability.availableMentorsCanBeAssignedAnd')}</p>
+    {error && <p role="alert" className="mb-3 rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error} <Button variant="ghost" disabled={saving} onClick={() => { setError(''); setReload(x => x + 1); }}>{t('classManagement.retry')}</Button></p>}
     {notice && <p role="status" className="mb-3 text-body text-success-dark">{notice}</p>}
-    {loading ? <p role="status">Loading semesters…</p> : rows.length === 0 ? <p>No semesters have been created.</p> :
+    {loading ? <p role="status">{t('mentorSemesterAvailability.loadingSemesters')}</p> : rows.length === 0 ? <p>{t('mentorSemesterAvailability.noSemestersHaveBeenCreated')}</p> :
       <ul className="divide-y divide-slate-200">{rows.map(row => <li key={row.semester.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-        <div><p className="text-subheading text-secondary">{row.semester.semester} {row.semester.year}</p><div className="mt-1 flex items-center gap-2 text-body text-slate-500"><span>{row.semester.status}</span><Badge variant={row.staff?.status === 'Active' ? 'success' : 'neutral'}>{row.staff?.status === 'Active' ? 'Available' : 'Unavailable'}</Badge></div></div>
+        <div><p className="text-subheading text-secondary">{row.semester.semester} {row.semester.year}</p><div className="mt-1 flex items-center gap-2 text-body text-slate-500"><span>{row.semester.status}</span><Badge variant={row.staff?.status === 'Active' ? 'success' : 'neutral'}>{row.staff?.status === 'Active' ? t('mentorSemesterAvailability.available') : t('mentorSemesterAvailability.unavailable')}</Badge></div></div>
         <Button variant="outline" size="sm" disabled={saving || !['Planned', 'Active'].includes(row.semester.status)} onClick={() => {
           if (row.staff?.status === 'Active') setConfirm(row); else void change(row);
-        }}>{row.staff?.status === 'Active' ? 'Make unavailable' : 'Make available'}</Button>
+        }}>{row.staff?.status === 'Active' ? t('mentorSemesterAvailability.makeUnavailable') : t('mentorSemesterAvailability.makeAvailable')}</Button>
       </li>)}</ul>}
     <ConfirmDialog isOpen={confirm !== null} onClose={() => { if (!busy.current) setConfirm(null); }} onConfirm={() => { if (confirm) return change(confirm); }}
-      title="Make mentor unavailable?" description={`Remove availability for ${confirm?.semester.semester ?? ''} ${confirm?.semester.year ?? ''}. Existing assignments must be reassigned first.`}
-      confirmText="Make unavailable" isSubmitting={saving} />
+      title={t('mentorSemesterAvailability.makeMentorUnavailable')} description={t('mentorSemesterAvailability.removeAvailabilityForExistingAssignmentsMust', { v1: confirm?.semester.semester ?? '', v2: confirm?.semester.year ?? '' })}
+      confirmText={t('mentorSemesterAvailability.makeUnavailable')} isSubmitting={saving} />
   </Modal>;
 }

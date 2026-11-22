@@ -5,6 +5,7 @@ import { teamLineageApi } from '../../api/teamLineageApi';
 import type { SemesterDto } from '../../types/subjects';
 import type { TeamContinuityReport } from '../../types/teamLineage';
 import { parseApiError } from '../../utils/apiError';
+import { useTranslation } from 'react-i18next';
 
 const SEMESTER_ORDER: Record<string, number> = { SP: 1, SU: 2, FA: 3 };
 
@@ -14,6 +15,7 @@ function sortNewestFirst(semesters: SemesterDto[]): SemesterDto[] {
 }
 
 export default function TeamContinuityReportCard() {
+  const { t } = useTranslation('admin');
   const [semesters, setSemesters] = useState<SemesterDto[]>([]);
   const [semesterId, setSemesterId] = useState('');
   const [report, setReport] = useState<TeamContinuityReport | null>(null);
@@ -65,12 +67,12 @@ export default function TeamContinuityReportCard() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
         <div>
           <h2 id="team-continuity-heading" className="flex items-center gap-2 text-lg font-bold text-slate-900">
-            <History className="h-5 w-5 text-primary-700" aria-hidden="true" />Team Continuity
+            <History className="h-5 w-5 text-primary-700" aria-hidden="true" />{t('teamContinuityReportCard.teamContinuity')}
           </h2>
-          <p className="text-sm text-slate-500">Teams and projects continued from the previous semester</p>
+          <p className="text-sm text-slate-500">{t('teamContinuityReportCard.teamsAndProjectsContinuedFromThe')}</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
-          Semester
+          {t('subjectManagement.semester')}
           <select
             value={semesterId}
             onChange={(event) => setSemesterId(event.target.value)}
@@ -86,17 +88,17 @@ export default function TeamContinuityReportCard() {
 
       <div className="p-5">
         {loading && (
-          <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading report…</p>
+          <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('teamContinuityReportCard.loadingReport')}</p>
         )}
         {!loading && error && (
           <div className="text-sm text-red-700" role="alert">
             <p>{error}</p>
             <button type="button" onClick={() => void (semesters.length ? loadReport() : loadSemesters())} className="mt-2 flex items-center gap-1 font-semibold underline">
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Retry
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> {t('classManagement.retry')}
             </button>
           </div>
         )}
-        {!loading && !error && semesters.length === 0 && <p className="text-sm text-slate-500">No semesters yet.</p>}
+        {!loading && !error && semesters.length === 0 && <p className="text-sm text-slate-500">{t('teamContinuityReportCard.noSemestersYet')}</p>}
         {!loading && !error && report && (
           <div className="space-y-4">
             <dl className="grid grid-cols-3 gap-3 text-center">
@@ -112,12 +114,12 @@ export default function TeamContinuityReportCard() {
               ))}
             </dl>
             {report.classes.length === 0 ? (
-              <p className="text-sm text-slate-500">No team was continued into {report.semesterCode}.</p>
+              <p className="text-sm text-slate-500">{t('teamContinuityReportCard.noTeamWasContinuedInto', { semesterCode: report.semesterCode })}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-sm">
                   <thead className="text-left text-xs uppercase text-slate-600">
-                    <tr><th className="py-2 pr-4">Class</th><th className="py-2 pr-4">Continued</th><th className="py-2">Dissolved</th></tr>
+                    <tr><th className="py-2 pr-4">{t('userManagement.class')}</th><th className="py-2 pr-4">{t('teamContinuityReportCard.continued')}</th><th className="py-2">{t('teamContinuityReportCard.dissolved')}</th></tr>
                   </thead>
                   <tbody>
                     {report.classes.map((item) => (

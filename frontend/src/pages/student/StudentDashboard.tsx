@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 
 
-const statusColor = { get DRAFT() { return i18n.t('dashboard:studentDashboard.draft'); }, get SUBMITTED() { return i18n.t('dashboard:lecturerDashboard.submitted'); }, get REVIEWED() { return i18n.t('dashboard:studentDashboard.reviewed'); }, get APPROVED() { return i18n.t('dashboard:studentDashboard.approved'); }, get NEEDSREVISION() { return i18n.t('dashboard:studentDashboard.improving'); }, get NEEDS_REVISION() { return i18n.t('dashboard:studentDashboard.improving'); } };
+const statusColor = { DRAFT: 'Draft', SUBMITTED: 'Submitted', REVIEWED: 'Reviewed', APPROVED: 'Approved', NEEDSREVISION: 'Improving', NEEDS_REVISION: 'Improving' };
 const statusLabel = { get NEEDSREVISION() { return i18n.t('dashboard:studentDashboard.needsRevision'); }, get NEEDS_REVISION() { return i18n.t('dashboard:studentDashboard.needsRevision'); } };
 const milestoneStatus = { TODO: 'bg-slate-100 text-slate-500', IN_PROGRESS: 'bg-blue-100 text-blue-600', DONE: 'bg-green-100 text-green-600', OVERDUE: 'bg-red-100 text-red-600' };
 

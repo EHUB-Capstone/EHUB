@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { filterSearchOptions, moveActiveIndex, type SearchSelectOption } from '../../utils/mentorSearchSelect';
+import { useTranslation } from 'react-i18next';
 
 interface MentorSearchSelectProps {
   id: string;
@@ -16,6 +17,7 @@ interface MentorSearchSelectProps {
 
 /** A select that can also be typed into: type part of a name to narrow the list, then pick with the mouse or Enter. */
 export default function MentorSearchSelect({ id, options, value, onChange, emptyLabel, placeholder = 'Search or choose a mentor...', disabled = false }: MentorSearchSelectProps) {
+  const { t } = useTranslation('admin');
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -77,7 +79,7 @@ export default function MentorSearchSelect({ id, options, value, onChange, empty
       {open && (
         <ul id={listId} role="listbox" className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
           {items.length === 0 || (items.length === 1 && emptyLabel && query.trim()) ? (
-            <li role="presentation" className="px-3 py-2 text-xs text-slate-400">No mentor matches "{query.trim()}".</li>
+            <li role="presentation" className="px-3 py-2 text-xs text-slate-400">{t('mentorSearchSelect.noMentorMatches', { v1: query.trim() })}</li>
           ) : null}
           {items.map((option, index) => {
             const isSelected = option.id === value;

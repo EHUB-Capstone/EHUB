@@ -23,10 +23,10 @@ import { MENTOR_KIND_OPTIONS, mentorTypeError, toManagedUserPayload } from '../.
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 
-const roleBadge = { get ADMIN() { return i18n.t('admin:userManagement.approved'); }, get LECTURER() { return i18n.t('admin:userManagement.submitted'); }, get MENTOR() { return i18n.t('admin:userManagement.review'); }, get STUDENT() { return i18n.t('admin:userManagement.reviewed'); } };
+const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { get ADMIN() { return i18n.t('admin:userManagement.admin'); }, get LECTURER() { return i18n.t('admin:classManagement.lecturer'); }, get MENTOR() { return i18n.t('admin:subjectManagement.mentor'); }, get STUDENT() { return i18n.t('admin:userManagement.student'); } };
 
-const statusBadge = { get PENDING() { return i18n.t('admin:userManagement.review'); }, get APPROVED() { return i18n.t('admin:userManagement.approved'); }, get REJECTED() { return i18n.t('admin:userManagement.overdue'); } };
+const statusBadge = { PENDING: 'Review', APPROVED: 'Approved', REJECTED: 'Overdue' };
 const statusLabel = { get PENDING() { return i18n.t('admin:userManagement.pendingApproval'); }, get APPROVED() { return i18n.t('admin:userManagement.approved'); }, get REJECTED() { return i18n.t('admin:userManagement.rejected'); } };
 
 export default function UserManagement() {

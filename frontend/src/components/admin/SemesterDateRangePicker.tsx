@@ -3,6 +3,8 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import type { SemesterCode } from '../../types/subjects';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 type ActiveField = 'start' | 'end';
 
@@ -68,6 +70,7 @@ export default function SemesterDateRangePicker({
   error,
   onChange,
 }: SemesterDateRangePickerProps) {
+  const { t } = useTranslation('admin');
   const helpId = useId();
   const endButtonRef = useRef<HTMLButtonElement>(null);
   const [activeField, setActiveField] = useState<ActiveField | null>(null);
@@ -159,7 +162,7 @@ export default function SemesterDateRangePicker({
     <div className="space-y-2">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block text-sm font-medium text-slate-700">
-          Start date *
+          {t('semesterDateRangePicker.startDate')}
           <button
             type="button"
             onClick={() => openPicker('start')}
@@ -172,7 +175,7 @@ export default function SemesterDateRangePicker({
           </button>
         </label>
         <label className="block text-sm font-medium text-slate-700">
-          End date *
+          {t('semesterDateRangePicker.endDate')}
           <button
             ref={endButtonRef}
             type="button"
@@ -196,9 +199,9 @@ export default function SemesterDateRangePicker({
         <div className="mx-auto w-full max-w-sm animate-scale-in rounded-2xl border border-slate-200 bg-slate-50/70 px-3 pb-3 pt-2 shadow-card">
           <div className="relative flex min-h-8 items-center justify-center px-9">
             <p className="text-center text-xs font-semibold uppercase tracking-wide text-slate-600">
-              {activeField === 'start' ? 'Select start date' : 'Select end date'}
+              {activeField === 'start' ? t('semesterDateRangePicker.selectStartDate') : t('semesterDateRangePicker.selectEndDate')}
             </p>
-            <button type="button" onClick={() => setActiveField(null)} className="absolute right-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700" aria-label="Close calendar">
+            <button type="button" onClick={() => setActiveField(null)} className="absolute right-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700" aria-label={t('semesterDateRangePicker.closeCalendar')}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -210,7 +213,7 @@ export default function SemesterDateRangePicker({
                   disabled={!canGoPrevious}
                   onClick={() => canGoPrevious && setDisplayedMonth(previousMonth)}
                   className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
-                  aria-label="Go to the previous month"
+                  aria-label={t('semesterDateRangePicker.goToThePreviousMonth')}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -219,7 +222,7 @@ export default function SemesterDateRangePicker({
                   onClick={() => setMonthSelectionOpen(current => !current)}
                   className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
                   aria-expanded={monthSelectionOpen}
-                  aria-label="Choose calendar month and year"
+                  aria-label={t('semesterDateRangePicker.chooseCalendarMonthAndYear')}
                 >
                   {new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(displayedMonth)}
                   <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${monthSelectionOpen ? 'rotate-180' : ''}`} />
@@ -229,14 +232,14 @@ export default function SemesterDateRangePicker({
                   disabled={!canGoNext}
                   onClick={() => canGoNext && setDisplayedMonth(nextMonth)}
                   className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-30"
-                  aria-label="Go to the next month"
+                  aria-label={t('semesterDateRangePicker.goToTheNextMonth')}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
 
               {monthSelectionOpen ? (
-                <div className="min-h-64 py-2" aria-label="Calendar month and year selection">
+                <div className="min-h-64 py-2" aria-label={t('semesterDateRangePicker.calendarMonthAndYearSelection')}>
                   <div className="mb-3 flex justify-center gap-2">
                     {calendarYears.map(calendarYear => (
                       <button
@@ -286,7 +289,7 @@ export default function SemesterDateRangePicker({
                   hideNavigation
                   components={{ MonthCaption: HiddenMonthCaption }}
                   fixedWeeks
-                  aria-label={activeField === 'start' ? 'Choose semester start date' : 'Choose semester end date'}
+                  aria-label={activeField === 'start' ? t('semesterDateRangePicker.chooseSemesterStartDate') : t('semesterDateRangePicker.chooseSemesterEndDate')}
                   className="m-0 text-sm"
                   style={pickerStyle}
                 />

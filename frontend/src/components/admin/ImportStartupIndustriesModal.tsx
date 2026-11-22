@@ -24,6 +24,8 @@ import {
   validateStartupIndustryImportFile,
 } from '../../utils/startupIndustryImport.ts';
 import Button from '../ui/Button.tsx';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface ImportStartupIndustriesModalProps {
   onClose: () => void;
@@ -33,9 +35,9 @@ interface ImportStartupIndustriesModalProps {
 type ImportPhase = 'upload' | 'review' | 'result';
 
 const IMPORT_STEPS = [
-  { key: 'upload', label: 'Select file' },
-  { key: 'review', label: 'Review data' },
-  { key: 'result', label: 'Import result' },
+  { key: 'upload', get label() { return i18n.t('admin:importLecturersModal.selectFile'); } },
+  { key: 'review', get label() { return i18n.t('admin:importLecturersModal.reviewData'); } },
+  { key: 'result', get label() { return i18n.t('admin:importLecturersModal.importResult'); } },
 ] as const;
 
 const phaseIndex = (phase: ImportPhase) => IMPORT_STEPS.findIndex((step) => step.key === phase);
@@ -50,6 +52,7 @@ export default function ImportStartupIndustriesModal({
   onClose,
   onImported,
 }: ImportStartupIndustriesModalProps): React.ReactElement {
+  const { t } = useTranslation('admin');
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<ImportPhase>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -139,7 +142,7 @@ export default function ImportStartupIndustriesModal({
       setConfirmingSkip(false);
       setPhase('result');
       onImported();
-      toast.success(`${importResult.importedCount} ${importResult.importedCount === 1 ? 'industry' : 'industries'} imported successfully.`);
+      toast.success(t('importStartupIndustriesModal.importedSuccessfully', { count: importResult.importedCount }));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to import startup industries. Preview the file again and retry.').message);
     } finally {
@@ -156,7 +159,7 @@ export default function ImportStartupIndustriesModal({
         type="button"
         className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
         onClick={() => { if (!isBusy) onClose(); }}
-        aria-label="Close import dialog"
+        aria-label={t('importLecturersModal.closeImportDialog')}
       />
 
       <div className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[90vh] sm:rounded-2xl">
@@ -167,8 +170,8 @@ export default function ImportStartupIndustriesModal({
                 <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <h2 id="import-industries-title" className="text-lg font-bold text-slate-900">Import Industry</h2>
-                <p className="truncate text-sm text-slate-500">Preview and validate the Excel file before any industry is added</p>
+                <h2 id="import-industries-title" className="text-lg font-bold text-slate-900">{t('startupIndustryManagement.importIndustry')}</h2>
+                <p className="truncate text-sm text-slate-500">{t('importStartupIndustriesModal.previewAndValidateTheExcelFile')}</p>
               </div>
             </div>
             <button
@@ -176,13 +179,13 @@ export default function ImportStartupIndustriesModal({
               onClick={onClose}
               disabled={isBusy}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
-              aria-label="Close"
+              aria-label={t('common:actions.close')}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Import progress">
+          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label={t('importLecturersModal.importProgress')}>
             {IMPORT_STEPS.map((step, index) => {
               const complete = index < currentStep;
               const active = index === currentStep;
@@ -207,9 +210,9 @@ export default function ImportStartupIndustriesModal({
               <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
                 <div className="text-xs leading-5 text-slate-600">
-                  <p><strong className="text-slate-700">Required columns:</strong> Industry name (or Industry) and Description on the first sheet.</p>
-                  <p><strong className="text-slate-700">Default status:</strong> Every imported industry is active.</p>
-                  <p><strong className="text-slate-700">Limits:</strong> Excel .xlsx/.xls · maximum 5 MB · maximum 500 rows · names already in the system are skipped.</p>
+                  <p><strong className="text-slate-700">{t('importStartupIndustriesModal.requiredColumns')}</strong> {t('importStartupIndustriesModal.industryNameOrIndustryAndDescription')}</p>
+                  <p><strong className="text-slate-700">{t('importStartupIndustriesModal.defaultStatus')}</strong> {t('importStartupIndustriesModal.everyImportedIndustryIsActive')}</p>
+                  <p><strong className="text-slate-700">{t('importStartupIndustriesModal.limits')}</strong> {t('importStartupIndustriesModal.excelXlsxXlsMaximum5Mb')}</p>
                 </div>
               </div>
 
@@ -231,7 +234,7 @@ export default function ImportStartupIndustriesModal({
                   type="file"
                   accept={STARTUP_INDUSTRY_IMPORT_ACCEPT}
                   className="hidden"
-                  aria-label="Startup industry Excel file"
+                  aria-label={t('importStartupIndustriesModal.startupIndustryExcelFile')}
                   onChange={(event) => {
                     void inspectFile(event.target.files?.[0]);
                     event.target.value = '';
@@ -247,19 +250,19 @@ export default function ImportStartupIndustriesModal({
 
                 {analyzing ? (
                   <>
-                    <p className="mt-4 text-sm font-semibold text-slate-800">Analyzing {file?.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">Validating rows and checking existing industries…</p>
+                    <p className="mt-4 text-sm font-semibold text-slate-800">{t('importLecturersModal.analyzing', { name: file?.name })}</p>
+                    <p className="mt-1 text-xs text-slate-500">{t('importStartupIndustriesModal.validatingRowsAndCheckingExistingIndustries')}</p>
                   </>
                 ) : (
                   <>
                     <p className="mt-4 text-sm font-semibold text-slate-800">
-                      {fileError ? 'This file cannot be used' : 'Drop your industry list here'}
+                      {fileError ? t('importLecturersModal.thisFileCannotBeUsed') : t('importStartupIndustriesModal.dropYourIndustryListHere')}
                     </p>
                     <p role={fileError ? 'alert' : undefined} className={`mx-auto mt-1 max-w-lg text-xs ${fileError ? 'text-red-600' : 'text-slate-500'}`}>
-                      {fileError || 'Choose an Excel (.xlsx or .xls) file'}
+                      {fileError || t('importStartupIndustriesModal.chooseAnExcelXlsxOrXls')}
                     </p>
                     <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
-                      {fileError ? 'Choose another file' : 'Browse files'}
+                      {fileError ? t('importLecturersModal.chooseAnotherFile') : t('importLecturersModal.browseFiles')}
                     </Button>
                   </>
                 )}
@@ -276,50 +279,49 @@ export default function ImportStartupIndustriesModal({
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p>
-                    <p className="text-xs text-slate-500">{file ? formatFileSize(file.size) : ''} · {preview.totalRows} data rows</p>
+                    <p className="text-xs text-slate-500">{t('importStartupIndustriesModal.dataRows', { v1: file ? formatFileSize(file.size) : '', totalRows: preview.totalRows })}</p>
                   </div>
                 </div>
                 <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700 hover:text-primary-dark">
-                  <RotateCcw className="h-3.5 w-3.5" /> Choose another file
+                  <RotateCcw className="h-3.5 w-3.5" /> {t('importLecturersModal.chooseAnotherFile')}
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                <SummaryCard label="Total rows" value={preview.totalRows} tone="neutral" />
-                <SummaryCard label="Valid & Ready" value={preview.validRowsCount} tone="success" />
-                <SummaryCard label="Already exist" value={preview.existingRowsCount} tone="neutral" />
-                <SummaryCard label="Errors" value={preview.errorRowsCount} tone={preview.errorRowsCount > 0 ? 'danger' : 'success'} />
+                <SummaryCard label={t('importStartupIndustriesModal.totalRows')} value={preview.totalRows} tone="neutral" />
+                <SummaryCard label={t('importStartupIndustriesModal.validReady')} value={preview.validRowsCount} tone="success" />
+                <SummaryCard label={t('importStartupIndustriesModal.alreadyExist')} value={preview.existingRowsCount} tone="neutral" />
+                <SummaryCard label={t('importLecturersModal.errors')} value={preview.errorRowsCount} tone={preview.errorRowsCount > 0 ? 'danger' : 'success'} />
               </div>
 
               {preview.existingRowsCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-700">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
-                  <p><strong>{preview.existingRowsCount} industr{preview.existingRowsCount > 1 ? 'ies' : 'y'} already exist{preview.existingRowsCount > 1 ? '' : 's'}</strong> and will be skipped. They are not counted as errors.</p>
+                  <p><strong>{t('importStartupIndustriesModal.existingIndustries', { count: preview.existingRowsCount })}</strong> {t('importStartupIndustriesModal.andWillBeSkippedTheyAre')}</p>
                 </div>
               )}
 
               {preview.errorRowsCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>{preview.errorRowsCount} row{preview.errorRowsCount > 1 ? 's contain' : ' contains'} errors.</strong> {preview.validRowsCount > 0 ? 'You can fix the file and preview it again, or import only the valid rows (you will be asked to confirm).' : 'Fix the errors and preview the file again.'}</p>
+                  <p><strong>{t('importStartupIndustriesModal.rowsContainErrors', { count: preview.errorRowsCount })}</strong> {preview.validRowsCount > 0 ? t('importStartupIndustriesModal.youCanFixTheFileAnd') : t('importStartupIndustriesModal.fixTheErrorsAndPreviewThe')}</p>
                 </div>
               )}
 
               {preview.validRowsCount === 0 && preview.errorRowsCount === 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>Nothing to import.</strong> Every industry in this file already exists.</p>
+                  <p><strong>{t('importStartupIndustriesModal.nothingToImport')}</strong> {t('importStartupIndustriesModal.everyIndustryInThisFileAlready')}</p>
                 </div>
               )}
 
               {confirmingSkip && (
                 <div role="alertdialog" aria-labelledby="confirm-skip-title" className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <p id="confirm-skip-title" className="font-semibold">
-                    Import {preview.validRowsCount} valid {preview.validRowsCount === 1 ? 'industry' : 'industries'} and skip the rest?
+                    {t('importStartupIndustriesModal.importValidAndSkipRest', { count: preview.validRowsCount })}
                   </p>
                   <p className="mt-1">
-                    {preview.errorRowsCount} row{preview.errorRowsCount > 1 ? 's' : ''} with errors
-                    {preview.existingRowsCount > 0 ? ` and ${preview.existingRowsCount} existing` : ''} will not be imported.
+                    {t(preview.existingRowsCount > 0 ? 'importStartupIndustriesModal.rowsWillNotBeImportedWithExisting' : 'importStartupIndustriesModal.rowsWillNotBeImported', { errorCount: preview.errorRowsCount, existingCount: preview.existingRowsCount })}
                   </p>
                 </div>
               )}
@@ -334,13 +336,13 @@ export default function ImportStartupIndustriesModal({
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
-                <h3 className="mt-3 text-lg font-bold text-slate-900">Import committed successfully</h3>
+                <h3 className="mt-3 text-lg font-bold text-slate-900">{t('importStartupIndustriesModal.importCommittedSuccessfully')}</h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  {result.importedCount} {result.importedCount === 1 ? 'industry was' : 'industries were'} added as active.
+                  {t('importStartupIndustriesModal.industriesAddedAsActive', { count: result.importedCount })}
                 </p>
                 {(result.skippedExistingCount > 0 || result.skippedErrorCount > 0) && (
                   <p className="mt-1 text-xs text-slate-500">
-                    Skipped: {result.skippedExistingCount} already existing, {result.skippedErrorCount} with errors.
+                    {t('importStartupIndustriesModal.skippedAlreadyExistingWithErrors', { skippedExistingCount: result.skippedExistingCount, skippedErrorCount: result.skippedErrorCount })}
                   </p>
                 )}
               </div>
@@ -349,13 +351,13 @@ export default function ImportStartupIndustriesModal({
         </main>
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-          {phase === 'upload' && <Button variant="outline" onClick={onClose} disabled={analyzing}>Cancel</Button>}
+          {phase === 'upload' && <Button variant="outline" onClick={onClose} disabled={analyzing}>{t('common:actions.cancel')}</Button>}
           {phase === 'review' && preview && (
             <>
               {confirmingSkip ? (
-                <Button variant="outline" onClick={() => setConfirmingSkip(false)} disabled={importing}>Cancel</Button>
+                <Button variant="outline" onClick={() => setConfirmingSkip(false)} disabled={importing}>{t('common:actions.cancel')}</Button>
               ) : (
-                <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
+                <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>{t('common:actions.back')}</Button>
               )}
               <Button
                 variant="primary"
@@ -365,14 +367,14 @@ export default function ImportStartupIndustriesModal({
                 onClick={confirmingSkip ? () => void commitImport() : requestImport}
               >
                 {preview.validRowsCount === 0
-                  ? 'Nothing to import'
+                  ? t('importStartupIndustriesModal.nothingToImport2')
                   : confirmingSkip
-                    ? `Confirm import of ${preview.validRowsCount} valid ${preview.validRowsCount === 1 ? 'industry' : 'industries'}`
-                    : `Import ${preview.validRowsCount} ${preview.validRowsCount === 1 ? 'industry' : 'industries'}`}
+                    ? t('importStartupIndustriesModal.confirmImportOfValid', { count: preview.validRowsCount })
+                    : t('importStartupIndustriesModal.importCount', { count: preview.validRowsCount })}
               </Button>
             </>
           )}
-          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>}
+          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>{t('importLecturersModal.done')}</Button>}
         </footer>
       </div>
     </div>
@@ -403,16 +405,17 @@ function SummaryCard({
 }
 
 function IndustryRowsTable({ rows }: { rows: StartupIndustryImportRowPreview[] }): React.ReactElement {
+  const { t } = useTranslation('admin');
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className="max-h-80 overflow-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
             <tr>
-              <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
-              <th className="w-56 px-3 py-2.5 font-semibold">Industry name</th>
-              <th className="px-3 py-2.5 font-semibold">Description</th>
-              <th className="w-64 px-3 py-2.5 font-semibold">Validation</th>
+              <th className="w-16 px-3 py-2.5 font-semibold">{t('importLecturersModal.row')}</th>
+              <th className="w-56 px-3 py-2.5 font-semibold">{t('startupIndustryManagement.industryName')}</th>
+              <th className="px-3 py-2.5 font-semibold">{t('startupIndustryManagement.description')}</th>
+              <th className="w-64 px-3 py-2.5 font-semibold">{t('importStartupIndustriesModal.validation')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -424,7 +427,7 @@ function IndustryRowsTable({ rows }: { rows: StartupIndustryImportRowPreview[] }
                 <td className="px-3 py-3">
                   {row.status === 'Ready' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
-                      <CheckCircle2 className="h-3 w-3" /> Ready
+                      <CheckCircle2 className="h-3 w-3" /> {t('aiSummaryDiagnosticsCard.ready')}
                     </span>
                   ) : row.status === 'Exists' ? (
                     <span className="inline-flex items-start gap-1 font-medium text-slate-500">

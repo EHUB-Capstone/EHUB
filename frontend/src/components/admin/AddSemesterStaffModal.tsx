@@ -30,6 +30,8 @@ import MentorTagChips from './MentorTagChips';
 import MentorTagFilter from './MentorTagFilter';
 import TemporaryMentorBadge from './TemporaryMentorBadge';
 import { collectTagOptions, keepKnownTags } from '../../utils/mentorTags';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface AddSemesterStaffModalProps {
   isOpen: boolean;
@@ -44,9 +46,9 @@ interface AddSemesterStaffModalProps {
 }
 
 const kindFilters: { value: MentorKindFilter; label: string }[] = [
-  { value: 'ALL', label: 'All mentors' },
-  { value: 'Enterprise', label: 'Enterprise mentors' },
-  { value: 'Academic', label: 'Lecturer mentors' },
+  { value: 'ALL', get label() { return i18n.t('admin:userManagement.allMentors'); } },
+  { value: 'Enterprise', get label() { return i18n.t('admin:userManagement.enterpriseMentors'); } },
+  { value: 'Academic', get label() { return i18n.t('admin:userManagement.lecturerMentors'); } },
 ];
 
 export default function AddSemesterStaffModal({
@@ -58,6 +60,7 @@ export default function AddSemesterStaffModal({
   onClose,
   onChanged,
 }: AddSemesterStaffModalProps) {
+  const { t } = useTranslation('admin');
   const [candidates, setCandidates] = useState<TeachingStaffCandidateDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -70,6 +73,7 @@ export default function AddSemesterStaffModal({
   const mounted = useRef(true);
 
   const roleNoun = role === 'MENTOR' ? 'mentor' : 'lecturer';
+  const roleName = t(`addSemesterStaffModal.roleNoun.${role === 'MENTOR' ? 'MENTOR' : 'LECTURER'}`);
   const semesterLabel = `${semester} ${year}`;
 
   useEffect(() => {
@@ -145,22 +149,22 @@ export default function AddSemesterStaffModal({
       setSelected([]);
       if (merged.addedCount > 0) await onChanged();
     } catch (error) {
-      toast.error(parseApiError(error, `Failed to add ${roleNoun}s to the semester`).message);
+      toast.error(parseApiError(error, t('addSemesterStaffModal.failedToAdd', { roleNoun: roleName })).message);
     } finally {
       if (mounted.current) setSubmitting(false);
     }
   };
 
   const submitLabel = chosen.length === 0
-    ? `Add to ${semesterLabel}`
-    : `Add ${chosen.length} ${roleNoun}${chosen.length === 1 ? '' : 's'}`;
+    ? t('addSemesterStaffModal.addToSemester', { semesterLabel })
+    : t('addSemesterStaffModal.addCount', { count: chosen.length, roleNoun: roleName });
   const hasFilters = Boolean(search.trim()) || (role === 'MENTOR' && (mentorType !== 'ALL' || activeTagFilter.length > 0));
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={submitting ? () => undefined : onClose}
-      title={`Add ${role === 'MENTOR' ? 'mentors' : 'lecturers'} to ${semesterLabel}`}
+      title={t('addSemesterStaffModal.addRoleToSemester', { roleNoun: roleName, semesterLabel })}
       size="xl"
       submitText={submitLabel}
       isSubmitting={submitting}
@@ -169,10 +173,9 @@ export default function AddSemesterStaffModal({
     >
       <div className="space-y-4">
         <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
-          This does not create new accounts. Tick the existing active {roleNoun}s who take part in {semesterLabel}.
-          Need a new account?{' '}
-          <Link to="/admin/users" className="font-semibold underline">Go to User Management</Link> first.
-          {role === 'MENTOR' && <> Mentors marked <TemporaryMentorBadge /> have no account yet: they can be used in teams (also by Balanced and Random assignment) but cannot log in until their email is added.</>}
+          {t('addSemesterStaffModal.thisDoesNotCreateNewAccounts')} {roleName}{t('addSemesterStaffModal.sWhoTakePartIn')} {semesterLabel}{t('addSemesterStaffModal.needANewAccount')}{' '}
+          <Link to="/admin/users" className="font-semibold underline">{t('addSemesterStaffModal.goToUserManagement')}</Link> {t('addSemesterStaffModal.first')}
+          {role === 'MENTOR' && <> {t('addSemesterStaffModal.mentorsMarked')} <TemporaryMentorBadge /> {t('addSemesterStaffModal.haveNoAccountYetTheyCan')}</>}
         </p>
 
         {summary && (
@@ -199,13 +202,13 @@ export default function AddSemesterStaffModal({
               type="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder={`Search ${roleNoun}s by name, email${role === 'MENTOR' ? ', contract or tag' : ''}...`}
-              aria-label={`Search ${roleNoun}s`}
+              placeholder={t(role === 'MENTOR' ? 'addSemesterStaffModal.searchMentorsPlaceholder' : 'addSemesterStaffModal.searchLecturersPlaceholder')}
+              aria-label={t('addSemesterStaffModal.searchS', { roleNoun: roleName })}
               className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
           {role === 'MENTOR' && (
-            <div role="group" aria-label="Mentor kind" className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-0.5">
+            <div role="group" aria-label={t('addSemesterStaffModal.mentorKind')} className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-0.5">
               {kindFilters.map(option => (
                 <button
                   key={option.value}
@@ -229,16 +232,16 @@ export default function AddSemesterStaffModal({
           <LoadingSkeleton variant="text" lines={5} />
         ) : loadFailed ? (
           <div className="rounded-xl bg-red-50 px-3 py-4 text-center text-sm text-red-700">
-            <p>Could not load the accounts.</p>
-            <Button size="sm" variant="outline" className="mt-2" onClick={() => void loadCandidates()}>Try again</Button>
+            <p>{t('addSemesterStaffModal.couldNotLoadTheAccounts')}</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => void loadCandidates()}>{t('addSemesterStaffModal.tryAgain')}</Button>
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500" aria-live="polite">
               <span>
-                <strong className="text-slate-700">{groups.available.length}</strong> available
-                {groups.inSemester.length > 0 && <> · {groups.inSemester.length} already in {semesterLabel}</>}
-                {chosen.length > 0 && <> · <strong className="text-primary-700">{chosen.length} selected</strong></>}
+                <strong className="text-slate-700">{groups.available.length}</strong> {t('addSemesterStaffModal.available')}
+                {groups.inSemester.length > 0 && <> {t('addSemesterStaffModal.alreadyIn', { length: groups.inSemester.length, semesterLabel })}</>}
+                {chosen.length > 0 && <> · <strong className="text-primary-700">{t('classManagement.selected', { length: chosen.length })}</strong></>}
               </span>
               {groups.available.length > 0 && (
                 <button
@@ -253,7 +256,7 @@ export default function AddSemesterStaffModal({
                     {selectionState === 'all' && <Check className="h-3 w-3 text-white" />}
                     {selectionState === 'some' && <Minus className="h-3 w-3 text-white" />}
                   </span>
-                  {selectionState === 'all' ? 'Clear selection' : `Select all${hasFilters ? ' shown' : ''} (${groups.available.length})`}
+                  {selectionState === 'all' ? t('addSemesterStaffModal.clearSelection') : t('addSemesterStaffModal.selectAll', { v1: hasFilters ? ' shown' : '', length: groups.available.length })}
                 </button>
               )}
             </div>
@@ -261,13 +264,13 @@ export default function AddSemesterStaffModal({
             <div className="max-h-[42vh] space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/50 p-2">
               {groups.available.length === 0 && groups.inSemester.length === 0 ? (
                 <p className="py-8 text-center text-xs text-slate-500">
-                  {hasFilters ? `No ${roleNoun} matches the current search.` : `No active ${roleNoun} accounts exist yet.`}
+                  {hasFilters ? t('addSemesterStaffModal.noMatchesTheCurrentSearch', { roleNoun: roleName }) : t('addSemesterStaffModal.noActiveAccountsExistYet', { roleNoun: roleName })}
                 </p>
               ) : (
                 <>
                   {groups.available.length === 0 && (
                     <p className="py-6 text-center text-xs text-slate-500">
-                      {hasFilters ? `No more ${roleNoun}s match the current search.` : `Every active ${roleNoun} is already in ${semesterLabel}.`}
+                      {hasFilters ? t('addSemesterStaffModal.noMoreSMatchTheCurrent', { roleNoun: roleName }) : t('addSemesterStaffModal.everyActiveIsAlreadyIn', { roleNoun: roleName, semesterLabel })}
                     </p>
                   )}
                   {groups.available.map(candidate => {
@@ -291,11 +294,11 @@ export default function AddSemesterStaffModal({
                   })}
                   {groups.inSemester.length > 0 && (
                     <>
-                      <p className="px-1 pt-2 text-caption font-semibold uppercase tracking-wide text-slate-400">Already in {semesterLabel}</p>
+                      <p className="px-1 pt-2 text-caption font-semibold uppercase tracking-wide text-slate-400">{t('addSemesterStaffModal.alreadyIn2', { semesterLabel })}</p>
                       {groups.inSemester.map(candidate => (
                         <div key={candidate.userId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/60 bg-white p-2.5 opacity-60">
                           <CandidateInfo candidate={candidate} />
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-overline font-semibold text-slate-600">In semester</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-overline font-semibold text-slate-600">{t('addSemesterStaffModal.inSemester')}</span>
                         </div>
                       ))}
                     </>
@@ -311,6 +314,7 @@ export default function AddSemesterStaffModal({
 }
 
 function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) {
+  const { t } = useTranslation('admin');
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
@@ -318,7 +322,7 @@ function CandidateInfo({ candidate }: { candidate: TeachingStaffCandidateDto }) 
       </span>
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800"><span className="truncate">{candidate.name}</span>{candidate.isTemporary && <TemporaryMentorBadge />}</p>
-        <p className="truncate text-overline text-slate-400">{candidate.isTemporary ? (candidate.email || 'No email yet') : candidate.email}</p>
+        <p className="truncate text-overline text-slate-400">{candidate.isTemporary ? (candidate.email || t('addSemesterStaffModal.noEmailYet')) : candidate.email}</p>
         <MentorTagChips tags={candidate.tags} />
       </div>
       {candidate.mentorType && (
