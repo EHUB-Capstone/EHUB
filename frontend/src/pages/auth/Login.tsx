@@ -10,6 +10,7 @@ import {
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import { useTheme } from '../../context/ThemeContext';
+import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
@@ -276,6 +277,8 @@ const Login: React.FC = () => {
 
       {/* ── RIGHT PANEL (form) ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-[40px_24px] relative">
+
+        <LanguageSwitcher variant="outline" size="lg" className="absolute top-6 right-20" />
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}

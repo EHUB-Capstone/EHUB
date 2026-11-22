@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "EHUB | Entrepreneurship Hub",
+    "description": "EHUB – Entrepreneurship Hub Management and Startup Incubation platform."
+  },
+  "language": {
+    "label": "Language",
+    "switch": "Change language",
+    "current": "Current language: {{language}}"
+  },
+  "theme": {
+    "toggle": "Toggle theme",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme",
+    "light": "Light theme",
+    "dark": "Dark theme"
+  }
+}

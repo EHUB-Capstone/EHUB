@@ -4,12 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import NotificationDropdown from './NotificationDropdown';
+import LanguageSwitcher from '../ui/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 
 const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [classConflictAlert, setClassConflictAlert] = useState(null);
@@ -101,12 +104,14 @@ const Navbar = ({ onMenuClick }) => {
 
       {/* Right Section */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <LanguageSwitcher />
+
         <button
           type="button"
           onClick={toggleTheme}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
-          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-          title={isDark ? 'Light theme' : 'Dark theme'}
+          aria-label={isDark ? t('theme.switchToLight') : t('theme.switchToDark')}
+          title={isDark ? t('theme.light') : t('theme.dark')}
         >
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>

@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "EHUB | Trung tâm Khởi nghiệp",
+    "description": "EHUB – Nền tảng quản lý Trung tâm Khởi nghiệp và ươm tạo dự án khởi nghiệp."
+  },
+  "language": {
+    "label": "Ngôn ngữ",
+    "switch": "Đổi ngôn ngữ",
+    "current": "Ngôn ngữ hiện tại: {{language}}"
+  },
+  "theme": {
+    "toggle": "Đổi giao diện sáng/tối",
+    "switchToLight": "Chuyển sang giao diện sáng",
+    "switchToDark": "Chuyển sang giao diện tối",
+    "light": "Giao diện sáng",
+    "dark": "Giao diện tối"
+  }
+}

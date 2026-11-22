@@ -9,6 +9,7 @@ import {
 import { useState } from 'react';
 import logo from '../assets/logo.png';
 import { useTheme } from '../context/ThemeContext';
+import LanguageSwitcher from '../components/ui/LanguageSwitcher';
 
 /* ─── Animation variants ─────────────────────────────── */
 const smoothEase: Easing = [0.22, 1, 0.36, 1] as const;
@@ -99,6 +100,8 @@ const Home: React.FC = () => {
             >
               Sign Up <ArrowRight size={14} />
             </Link>
+
+            <LanguageSwitcher variant="outline" />
 
             {/* Theme Toggle */}
             <button onClick={toggleTheme} aria-label="Toggle theme"

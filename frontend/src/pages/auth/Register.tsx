@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import { resendRegistrationOtp } from '../../api/authApi';
 import { useTheme } from '../../context/ThemeContext';
+import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
@@ -361,6 +362,8 @@ const Register: React.FC = () => {
 
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-[32px_24px] overflow-y-auto relative">
+
+        <LanguageSwitcher variant="outline" size="lg" className="absolute top-6 right-20" />
 
         {/* Theme toggle */}
         <button onClick={toggleTheme}
