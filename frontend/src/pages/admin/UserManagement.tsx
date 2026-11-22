@@ -874,7 +874,7 @@ function ImportMenu({ onImportLecturers, onImportMentors }: { onImportLecturers:
         aria-expanded={open}
         onClick={() => setOpen(current => !current)}
       >
-        Import
+        Import Users
       </Button>
       {open && (
         <div role="menu" className="absolute left-0 z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg sm:left-auto sm:right-0">
