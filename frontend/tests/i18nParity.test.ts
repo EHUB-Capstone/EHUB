@@ -30,6 +30,10 @@ function flatten(node: Json, prefix = ''): Map<string, string> {
 const placeholders = (value: string): string[] =>
   [...value.matchAll(/\{\{\s*([\w.]+)\s*(?:,[^}]*)?\}\}/g)].map((match) => match[1]).sort();
 
+// i18next plural forms differ per language (en: _one/_other, vi: _other), so compare base keys.
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+const baseKeys = (map: Map<string, string>): string[] => [...new Set([...map.keys()].map((key) => key.replace(PLURAL_SUFFIX, '')))].sort();
+
 const languages = readdirSync(localesDir).filter((name) => name !== REFERENCE);
 const namespaces = readdirSync(join(localesDir, REFERENCE)).filter((name) => name.endsWith('.json'));
 
@@ -49,16 +53,18 @@ for (const language of languages) {
       const reference = flatten(readNamespace(REFERENCE, file));
       const target = flatten(readNamespace(language, file));
 
-      const missing = [...reference.keys()].filter((key) => !target.has(key));
-      const extra = [...target.keys()].filter((key) => !reference.has(key));
-      assert.deepEqual(missing, [], `Missing in ${language}/${file}`);
-      assert.deepEqual(extra, [], `Unknown in ${language}/${file}`);
+      const referenceBase = baseKeys(reference);
+      const targetBase = baseKeys(target);
+      assert.deepEqual(referenceBase.filter((key) => !targetBase.includes(key)), [], `Missing in ${language}/${file}`);
+      assert.deepEqual(targetBase.filter((key) => !referenceBase.includes(key)), [], `Unknown in ${language}/${file}`);
 
       for (const [key, value] of target) {
         assert.notEqual(value.trim(), '', `${language}/${file}: "${key}" is empty`);
+        const counterpart = reference.get(key);
+        if (counterpart === undefined) continue; // plural form that only this language has
         assert.deepEqual(
           placeholders(value),
-          placeholders(reference.get(key) ?? ''),
+          placeholders(counterpart),
           `${language}/${file}: "${key}" placeholders differ from ${REFERENCE}`,
         );
       }

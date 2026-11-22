@@ -27,6 +27,8 @@ import {
 } from '../../utils/authValidation';
 import type { AuthFieldErrors, LoginField } from '../../utils/authValidation';
 import logo from '../../assets/logo.png';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 /* ─── Google icon ─────────────────────────────────── */
 const GoogleIcon: React.FC = () => (
@@ -40,10 +42,10 @@ const GoogleIcon: React.FC = () => (
 
 /* ─── Left panel features ─────────────────────────── */
 const sideFeatures = [
-  { icon: GraduationCap, text: 'Manage startup projects across semesters' },
-  { icon: Users,         text: 'Connect with expert mentors' },
-  { icon: Shield,        text: 'Secure evaluation & data storage' },
-  { icon: TrendingUp,    text: 'Track long-term startup growth' },
+  { icon: GraduationCap, get text() { return i18n.t('auth:login.manageStartupProjectsAcrossSemesters'); } },
+  { icon: Users,         get text() { return i18n.t('auth:login.connectWithExpertMentors'); } },
+  { icon: Shield,        get text() { return i18n.t('auth:login.secureEvaluationDataStorage'); } },
+  { icon: TrendingUp,    get text() { return i18n.t('auth:login.trackLongTermStartupGrowth'); } },
 ];
 
 /* ─── Types ───────────────────────────────────────── */
@@ -59,6 +61,7 @@ function normalizeRole(role: string): string {
 }
 
 const Login: React.FC = () => {
+  const { t } = useTranslation('auth');
   const { isDark, toggleTheme } = useTheme();
   const { loginWithEmail, loginWithGoogle } = useAuth();
 
@@ -170,7 +173,7 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       const user = await loginWithEmail(normalizedPayload);
-      toast.success('Login successful!');
+      toast.success(t('login.loginSuccessful'));
       await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
       const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
@@ -180,7 +183,7 @@ const Login: React.FC = () => {
       if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) setPendingApproval(true);
       else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED)    setRejectedStatus(true);
       else if (code === AUTH_ERROR_CODES.USER_BLOCKED)        setBlockedStatus(true);
-      else if (code === AUTH_ERROR_CODES.USER_INACTIVE)       setFormError('Your account is inactive. Contact support.');
+      else if (code === AUTH_ERROR_CODES.USER_INACTIVE)       setFormError(t('login.yourAccountIsInactiveContactSupport'));
       else if (Object.keys(mappedFieldErrors).length === 0)    setFormError(message);
     } finally { setLoading(false); }
   };
@@ -188,7 +191,7 @@ const Login: React.FC = () => {
   /* ── Google login ───────────────────────────────── */
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) {
-      toast.error('Google did not return an ID token. Please try again.');
+      toast.error(t('login.googleDidNotReturnAnId'));
       return;
     }
 
@@ -205,7 +208,7 @@ const Login: React.FC = () => {
     } catch (err: unknown) {
       const { code, message } = parseApiError(err, 'Google sign-in failed.');
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
-        toast.error('No account found for this Google email. Please register first.');
+        toast.error(t('login.noAccountFoundForThisGoogle'));
       } else if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) {
         setPendingApproval(true);
       } else if (code === AUTH_ERROR_CODES.ACCOUNT_REJECTED) {
@@ -213,9 +216,9 @@ const Login: React.FC = () => {
       } else if (code === AUTH_ERROR_CODES.USER_BLOCKED) {
         setBlockedStatus(true);
       } else if (code === AUTH_ERROR_CODES.USER_INACTIVE) {
-        toast.error('Your account is inactive. Contact support.');
+        toast.error(t('login.yourAccountIsInactiveContactSupport'));
       } else {
-        toast.error(message || 'Google sign-in failed.');
+        toast.error(message || t('login.googleSignInFailed'));
       }
     } finally {
       setGoogleLoading(false);
@@ -225,7 +228,7 @@ const Login: React.FC = () => {
   const handleGoogleLogin = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
     if (!clientId) {
-      toast('Google sign-in is not configured yet.', { icon: '🔜' });
+      toast(t('login.googleSignInIsNotConfigured'), { icon: '🔜' });
       return;
     }
   };
@@ -241,10 +244,10 @@ const Login: React.FC = () => {
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
-            <img src={logo} alt="EHub" className="w-[42px] h-[42px] object-contain" />
+            <img src={logo} alt={t('login.ehub')} className="w-[42px] h-[42px] object-contain" />
             <span className="text-[22px] font-extrabold tracking-tight">
-              <span className="text-primary-300">E</span>
-              <span className="text-secondary-300">HUB</span>
+              <span className="text-primary-300">{t('login.e')}</span>
+              <span className="text-secondary-300">{t('login.hub')}</span>
             </span>
           </Link>
         </div>
@@ -252,11 +255,11 @@ const Login: React.FC = () => {
         <div className="relative z-10">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
             <h2 className="text-4xl font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
-              Build tomorrow's startups,{' '}
-              <span className="text-primary-600">today.</span>
+              {t('login.buildTomorrowSStartups')}{' '}
+              <span className="text-primary-600">{t('login.today')}</span>
             </h2>
             <p className="text-white/60 text-[15px] leading-[1.7] mb-9">
-              EHub is the all-in-one platform for managing, evaluating, and growing student startup projects from idea to reality.
+              {t('login.ehubIsTheAllInOne')}
             </p>
             <div className="flex flex-col gap-4">
               {sideFeatures.map((f, i) => (
@@ -283,7 +286,7 @@ const Login: React.FC = () => {
         {/* Theme toggle */}
         <button onClick={toggleTheme}
           className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
-          aria-label="Toggle theme"
+          aria-label={t('login.toggleTheme')}
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -294,24 +297,24 @@ const Login: React.FC = () => {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
-              <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
+              <img src={logo} alt={t('login.ehub')} className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-primary-400">E</span>
-                <span className="text-secondary dark:text-secondary-300">HUB</span>
+                <span className="text-primary-400">{t('login.e')}</span>
+                <span className="text-secondary dark:text-secondary-300">{t('login.hub')}</span>
               </span>
             </Link>
           </div>
 
-          <h1 className="text-[28px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">Welcome back</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-7">Sign in with your Google account</p>
+          <h1 className="text-[28px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">{t('login.welcomeBack')}</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-7">{t('login.signInWithYourGoogleAccount')}</p>
 
           {/* Alert banners */}
           {pendingApproval && (
             <div role="alert" aria-live="assertive" className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-blue-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-[13px] font-semibold text-blue-400 mb-1">Pending Approval</p>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400">An admin must approve your Mentor/Lecturer account before you can sign in.</p>
+                <p className="text-[13px] font-semibold text-blue-400 mb-1">{t('login.pendingApproval')}</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">{t('login.anAdminMustApproveYourMentor')}</p>
               </div>
             </div>
           )}
@@ -319,8 +322,8 @@ const Login: React.FC = () => {
             <div role="alert" aria-live="assertive" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-[13px] font-semibold text-red-400 mb-1">Account Rejected</p>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400">Your registration was declined. Contact support for assistance.</p>
+                <p className="text-[13px] font-semibold text-red-400 mb-1">{t('login.accountRejected')}</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">{t('login.yourRegistrationWasDeclinedContactSupport')}</p>
               </div>
             </div>
           )}
@@ -337,13 +340,13 @@ const Login: React.FC = () => {
                 <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-slate-50 ring-1 ring-slate-200/80 transition-transform group-hover:scale-105 dark:bg-white dark:ring-white">
                   <GoogleIcon />
                 </span>
-                <span>Continue with Google</span>
+                <span>{t('login.continueWithGoogle')}</span>
               </div>
               <div className="absolute inset-0 z-10 flex items-center justify-center opacity-[0.001]">
                 <GoogleLogin
                   key={`${isDark ? 'dark' : 'light'}-${googleButtonWidth}`}
                   onSuccess={handleGoogleSuccess}
-                  onError={() => { toast.error('Google sign-in failed.'); setGoogleLoading(false); }}
+                  onError={() => { toast.error(t('login.googleSignInFailed')); setGoogleLoading(false); }}
                   theme={isDark ? 'filled_black' : 'outline'}
                   size="large"
                   text="continue_with"
@@ -355,7 +358,7 @@ const Login: React.FC = () => {
               {googleLoading && (
                 <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2.5 rounded-[14px] bg-white text-sm font-semibold text-slate-900 dark:bg-dark-surface dark:text-slate-100">
                   <div className="w-[18px] h-[18px] rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  Connecting to Google…
+                  {t('login.connectingToGoogle')}
                 </div>
               )}
             </div>
@@ -367,14 +370,14 @@ const Login: React.FC = () => {
                 ? <div className="w-[18px] h-[18px] rounded-full border-2 border-primary border-t-transparent animate-spin" />
                 : <GoogleIcon />
               }
-              {googleLoading ? 'Connecting...' : 'Continue with Google'}
+              {googleLoading ? t('login.connecting') : t('login.continueWithGoogle')}
             </button>
           )}
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
             <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">or sign in with email</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">{t('login.orSignInWithEmail')}</span>
             <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
           </div>
 
@@ -389,8 +392,8 @@ const Login: React.FC = () => {
             <div role="alert" aria-live="assertive" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-5">
               <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-[13px] font-semibold text-red-400 mb-1">Account Blocked</p>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400">Your account has been blocked. Contact support for assistance.</p>
+                <p className="text-[13px] font-semibold text-red-400 mb-1">{t('login.accountBlocked')}</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">{t('login.yourAccountHasBeenBlockedContact')}</p>
               </div>
             </div>
           )}
@@ -399,13 +402,13 @@ const Login: React.FC = () => {
           <form onSubmit={handleLogin} className="flex flex-col gap-4" noValidate aria-describedby={formError ? 'login-form-error' : undefined}>
             {/* Email */}
             <div>
-              <label htmlFor="login-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
+              <label htmlFor="login-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{t('login.email')}</label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="login-email" type="email" value={email}
                   onChange={e => { setEmail(e.target.value); clearFieldError('email'); }}
                   onBlur={() => validateField('email')}
-                  placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
+                  placeholder={t('login.youExampleCom')} autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
                   aria-invalid={Boolean(fieldErrors.email)}
                   aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
                   className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
@@ -416,7 +419,7 @@ const Login: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label htmlFor="login-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
+              <label htmlFor="login-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{t('login.password')}</label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="login-password" type={showPass ? 'text' : 'password'} value={password}
@@ -429,7 +432,7 @@ const Login: React.FC = () => {
                   className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)}
-                  aria-label={showPass ? 'Hide password' : 'Show password'}
+                  aria-label={showPass ? t('login.hidePassword') : t('login.showPassword')}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -437,7 +440,7 @@ const Login: React.FC = () => {
               {fieldErrors.password && <p id="login-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>}
               <div className="mt-2 text-right">
                 <Link to="/forgot-password" className="text-[12px] text-primary-600 no-underline font-semibold hover:underline">
-                  Forgot password?
+                  {t('login.forgotPassword')}
                 </Link>
               </div>
             </div>
@@ -448,14 +451,14 @@ const Login: React.FC = () => {
             >
               {loading
                 ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
-                : <><span>Sign In</span><ArrowRight size={17} /></>
+                : <><span>{t('common:actions.signIn')}</span><ArrowRight size={17} /></>
               }
             </button>
           </form>
 
           <p className="text-center mt-6 text-[14px] text-slate-500 dark:text-slate-400">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary-600 font-bold no-underline">Create one</Link>
+            {t('login.donTHaveAnAccount')}{' '}
+            <Link to="/register" className="text-primary-600 font-bold no-underline">{t('login.createOne')}</Link>
           </p>
         </motion.div>
       </div>
