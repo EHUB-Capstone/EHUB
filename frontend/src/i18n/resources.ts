@@ -6,7 +6,9 @@ import enCommon from './locales/en/common.json' with { type: 'json' };
 import enDashboard from './locales/en/dashboard.json' with { type: 'json' };
 import enEvaluation from './locales/en/evaluation.json' with { type: 'json' };
 import enHome from './locales/en/home.json' with { type: 'json' };
+import enMentoring from './locales/en/mentoring.json' with { type: 'json' };
 import enNav from './locales/en/nav.json' with { type: 'json' };
+import enShowcase from './locales/en/showcase.json' with { type: 'json' };
 import enWorkspace from './locales/en/workspace.json' with { type: 'json' };
 import viAdmin from './locales/vi/admin.json' with { type: 'json' };
 import viAuth from './locales/vi/auth.json' with { type: 'json' };
@@ -16,7 +18,9 @@ import viCommon from './locales/vi/common.json' with { type: 'json' };
 import viDashboard from './locales/vi/dashboard.json' with { type: 'json' };
 import viEvaluation from './locales/vi/evaluation.json' with { type: 'json' };
 import viHome from './locales/vi/home.json' with { type: 'json' };
+import viMentoring from './locales/vi/mentoring.json' with { type: 'json' };
 import viNav from './locales/vi/nav.json' with { type: 'json' };
+import viShowcase from './locales/vi/showcase.json' with { type: 'json' };
 import viWorkspace from './locales/vi/workspace.json' with { type: 'json' };
 
 // One entry per namespace; `en` is the reference shape that `vi` must match
@@ -31,7 +35,9 @@ export const resources = {
     dashboard: enDashboard,
     evaluation: enEvaluation,
     home: enHome,
+    mentoring: enMentoring,
     nav: enNav,
+    showcase: enShowcase,
     workspace: enWorkspace,
   },
   vi: {
@@ -43,7 +49,9 @@ export const resources = {
     dashboard: viDashboard,
     evaluation: viEvaluation,
     home: viHome,
+    mentoring: viMentoring,
     nav: viNav,
+    showcase: viShowcase,
     workspace: viWorkspace,
   },
 } as const;

@@ -6,16 +6,19 @@ import Modal from '../ui/Modal';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import type { ShowcaseReportReason } from '../../types/showcase';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const REASONS: Array<{ value: ShowcaseReportReason; label: string }> = [
-  { value: 'Spam', label: 'Spam or scam' },
-  { value: 'Harassment', label: 'Harassment or hate' },
-  { value: 'InappropriateContent', label: 'Inappropriate content' },
-  { value: 'CopyrightViolation', label: 'Copyright violation' },
-  { value: 'Other', label: 'Other' },
+  { value: 'Spam', get label() { return i18n.t('showcase:showcaseReportButton.spamOrScam'); } },
+  { value: 'Harassment', get label() { return i18n.t('showcase:showcaseReportButton.harassmentOrHate'); } },
+  { value: 'InappropriateContent', get label() { return i18n.t('showcase:showcaseReportButton.inappropriateContent'); } },
+  { value: 'CopyrightViolation', get label() { return i18n.t('showcase:showcaseReportButton.copyrightViolation'); } },
+  { value: 'Other', get label() { return i18n.t('showcase:showcaseReportButton.other'); } },
 ];
 
 export default function ShowcaseReportButton({ showcaseId, commentId }: { showcaseId: string; commentId?: string }) {
+  const { t } = useTranslation('showcase');
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ShowcaseReportReason>('InappropriateContent');
   const [note, setNote] = useState('');
@@ -27,7 +30,7 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
     setSubmitting(true);
     try {
       await showcaseApi.createReport(showcaseId, { commentId: commentId ?? null, reason, note: note.trim() || null });
-      toast.success('Report submitted. Thank you for helping keep the community safe.');
+      toast.success(t('showcaseReportButton.reportSubmittedThankYouForHelping'));
       setSubmitted(true);
       setOpen(false);
       setNote('');
@@ -40,20 +43,20 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
 
   return (
     <>
-      <Button size="sm" variant="outline" icon={Flag} disabled={submitted} onClick={() => setOpen(true)}>{submitted ? 'Reported' : 'Report'}</Button>
-      <Modal isOpen={open} onClose={() => { if (!submitting) setOpen(false); }} title={commentId ? 'Report comment' : 'Report showcase'}
-        submitText="Submit report" isSubmitting={submitting} onSubmit={submit}>
+      <Button size="sm" variant="outline" icon={Flag} disabled={submitted} onClick={() => setOpen(true)}>{submitted ? t('showcaseReportButton.reported') : t('showcaseReportButton.report')}</Button>
+      <Modal isOpen={open} onClose={() => { if (!submitting) setOpen(false); }} title={commentId ? t('showcaseReportButton.reportComment') : t('showcaseReportButton.reportShowcase')}
+        submitText={t('showcaseReportButton.submitReport')} isSubmitting={submitting} onSubmit={submit}>
         <div className="space-y-4">
-          <p className="text-body-sm text-slate-600">Reports are reviewed by authorised staff. Your identity is not shown to the project team.</p>
-          <label className="block text-body-sm font-semibold text-secondary">Reason
+          <p className="text-body-sm text-slate-600">{t('showcaseReportButton.reportsAreReviewedByAuthorisedStaff')}</p>
+          <label className="block text-body-sm font-semibold text-secondary">{t('common:dialog.reason')}
             <select value={reason} onChange={(event) => setReason(event.target.value as ShowcaseReportReason)}
               className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-body">
               {REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
-          <label className="block text-body-sm font-semibold text-secondary">Note <span className="font-normal text-slate-500">(optional)</span>
+          <label className="block text-body-sm font-semibold text-secondary">{t('showcaseReportButton.note')} <span className="font-normal text-slate-500">{t('showcaseReportButton.optional')}</span>
             <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} rows={4}
-              className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-body" placeholder="Add context for the reviewer" />
+              className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-body" placeholder={t('showcaseReportButton.addContextForTheReviewer')} />
           </label>
         </div>
       </Modal>

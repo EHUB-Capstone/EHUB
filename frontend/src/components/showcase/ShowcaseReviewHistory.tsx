@@ -5,6 +5,8 @@ import { SHOWCASE_ROW_ACTION } from './rowActionStyles';
 import { cn } from '../../utils/cn';
 import type { ShowcaseHistoryDto, ShowcaseStatus } from '../../types/showcase';
 import type { ShowcaseTone } from '../../utils/showcase';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface EventMeta {
   label: string;
@@ -22,12 +24,12 @@ const SYSTEM_NOTES = new Set([
 ]);
 
 function describeEvent(from: ShowcaseStatus, to: ShowcaseStatus): EventMeta {
-  if (to === 'PendingReview') return { label: 'Submitted for review', tone: 'info' };
-  if (from === 'PendingReview' && to === 'Published') return { label: 'Approved', tone: 'success' };
-  if (from === 'PendingReview' && to === 'Draft') return { label: 'Rejected, returned to draft', tone: 'danger' };
-  if (to === 'Hidden') return { label: 'Hidden', tone: 'neutral' };
-  if (from === 'Hidden' && to === 'Published') return { label: 'Restored', tone: 'success' };
-  return { label: 'Updated', tone: 'neutral' };
+  if (to === 'PendingReview') return { label: i18n.t('showcase:showcaseReviewHistory.submittedForReview'), tone: 'info' };
+  if (from === 'PendingReview' && to === 'Published') return { label: i18n.t('showcase:showcaseReviewHistory.approved'), tone: 'success' };
+  if (from === 'PendingReview' && to === 'Draft') return { label: i18n.t('showcase:showcaseReviewHistory.rejectedReturnedToDraft'), tone: 'danger' };
+  if (to === 'Hidden') return { label: i18n.t('showcase:showcaseReviewHistory.hidden'), tone: 'neutral' };
+  if (from === 'Hidden' && to === 'Published') return { label: i18n.t('showcase:showcaseReviewHistory.restored'), tone: 'success' };
+  return { label: i18n.t('showcase:showcaseReviewHistory.updated'), tone: 'neutral' };
 }
 
 const DOT_TONE: Record<ShowcaseTone, string> = {
@@ -59,6 +61,7 @@ function Stamp({ iso }: { iso: string }) {
  * team sees who said what and when without opening the editor.
  */
 export function ShowcaseLatestFeedback({ history, status }: { history: ShowcaseHistoryDto[]; status: ShowcaseStatus }) {
+  const { t } = useTranslation('showcase');
   const latest = history[0];
   if (!latest || latest.toStatus !== status) return null;
   const negative = (latest.fromStatus === 'PendingReview' && latest.toStatus === 'Draft') || latest.toStatus === 'Hidden';
@@ -70,7 +73,7 @@ export function ShowcaseLatestFeedback({ history, status }: { history: ShowcaseH
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <p className="inline-flex items-center gap-1.5 text-body-sm font-semibold">
           <GraduationCap className="h-4 w-4" aria-hidden="true" />
-          Feedback from {latest.actorName}
+          {t('showcaseReviewHistory.feedbackFrom')} {latest.actorName}
         </p>
         <time dateTime={latest.createdAt} className="text-caption">
           {formatDate(latest.createdAt)} · {formatTime(latest.createdAt)}
@@ -86,6 +89,7 @@ export function ShowcaseLatestFeedback({ history, status }: { history: ShowcaseH
  * newest-first timeline of status changes, their time and the reviewer feedback opening underneath.
  */
 export default function ShowcaseReviewHistory({ history, children }: { history: ShowcaseHistoryDto[]; children?: ReactNode }) {
+  const { t } = useTranslation('showcase');
   const [open, setOpen] = useState(false);
   const panelId = useId();
   if (history.length === 0 && !children) return null;
@@ -102,7 +106,7 @@ export default function ShowcaseReviewHistory({ history, children }: { history: 
             className={cn(SHOWCASE_ROW_ACTION.navy, open && 'bg-secondary-100')}
           >
             <History className="h-4 w-4" aria-hidden="true" />
-            Review history
+            {t('showcaseReviewHistory.reviewHistory')}
             <span className="rounded-full bg-secondary px-1.5 text-caption font-semibold text-white">{history.length}</span>
             <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
           </button>
@@ -121,7 +125,7 @@ export default function ShowcaseReviewHistory({ history, children }: { history: 
                 <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={event.tone} size="md">{event.label}</Badge>
-                    <span className="text-body-sm text-slate-600">by <span className="font-medium text-secondary">{entry.actorName}</span></span>
+                    <span className="text-body-sm text-slate-600">{t('showcaseReviewHistory.by')} <span className="font-medium text-secondary">{entry.actorName}</span></span>
                   </div>
                   <Stamp iso={entry.createdAt} />
                 </div>
@@ -129,7 +133,7 @@ export default function ShowcaseReviewHistory({ history, children }: { history: 
                   <div className="mt-2 flex gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
                     <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
                     <div className="min-w-0">
-                      <p className="text-overline uppercase text-slate-500">Feedback</p>
+                      <p className="text-overline uppercase text-slate-500">{t('showcaseReviewHistory.feedback')}</p>
                       <p className="mt-0.5 whitespace-pre-line break-words text-body text-slate-700">{feedback}</p>
                     </div>
                   </div>

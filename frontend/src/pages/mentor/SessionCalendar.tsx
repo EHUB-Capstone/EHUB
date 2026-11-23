@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { getSessionsByTeam, cancelSession } from '../../api/mentoringApi';
 import ScheduleSessionModal from './ScheduleSessionModal';
 import SessionNoteForm from './SessionNoteForm';
+import { useTranslation } from 'react-i18next';
 
 const SessionCalendar = ({ teamId }) => {
+  const { t } = useTranslation('mentoring');
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,13 +40,13 @@ const SessionCalendar = ({ teamId }) => {
   };
 
   const handleCancelSession = async (sessionId) => {
-    if (!window.confirm('Are you sure you want to cancel this session?')) return;
+    if (!window.confirm(t('sessionCalendar.areYouSureYouWantTo'))) return;
 
     try {
       await cancelSession(sessionId);
       loadSessions();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to cancel session');
+      setError(err.response?.data?.message || t('sessionCalendar.failedToCancelSession'));
     }
   };
 
@@ -115,29 +117,29 @@ const SessionCalendar = ({ teamId }) => {
           onClick={() => handleScheduleClick()}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
-          Schedule Session
+          {t('mentoringSessions.scheduleSession')}
         </button>
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
           <button onClick={previousMonth} className="px-3 py-1 hover:bg-gray-200 rounded">
-            ← Prev
+            {t('sessionCalendar.prev')}
           </button>
           <span className="font-semibold">{monthName}</span>
           <button onClick={nextMonth} className="px-3 py-1 hover:bg-gray-200 rounded">
-            Next →
+            {t('sessionCalendar.next')}
           </button>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-sm mb-2">
-          <div className="font-semibold text-gray-600">Sun</div>
-          <div className="font-semibold text-gray-600">Mon</div>
-          <div className="font-semibold text-gray-600">Tue</div>
-          <div className="font-semibold text-gray-600">Wed</div>
-          <div className="font-semibold text-gray-600">Thu</div>
-          <div className="font-semibold text-gray-600">Fri</div>
-          <div className="font-semibold text-gray-600">Sat</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.sun')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.mon')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.tue')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.wed')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.thu')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.fri')}</div>
+          <div className="font-semibold text-gray-600">{t('sessionCalendar.sat')}</div>
         </div>
 
         <div className="grid grid-cols-7 gap-1">
@@ -167,11 +169,11 @@ const SessionCalendar = ({ teamId }) => {
       </div>
 
       <div className="space-y-3">
-        <h4 className="font-semibold text-lg">Upcoming Sessions</h4>
+        <h4 className="font-semibold text-lg">{t('sessionCalendar.upcomingSessions')}</h4>
         {loading ? (
-          <div className="text-center py-8 text-gray-500">Loading sessions...</div>
+          <div className="text-center py-8 text-gray-500">{t('pastSessionList.loadingSessions')}</div>
         ) : sessions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">No sessions scheduled</div>
+          <div className="text-center py-8 text-gray-500">{t('sessionCalendar.noSessionsScheduled')}</div>
         ) : (
           <div className="space-y-2">
             {sessions
@@ -198,7 +200,7 @@ const SessionCalendar = ({ teamId }) => {
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline"
                             >
-                              Join Meeting
+                              {t('sessionCalendar.joinMeeting')}
                             </a>
                           </div>
                         )}
@@ -221,13 +223,13 @@ const SessionCalendar = ({ teamId }) => {
                           onClick={() => handleScheduleClick(session)}
                           className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
                         >
-                          Edit
+                          {t('common:actions.edit')}
                         </button>
                         <button
                           onClick={() => handleCancelSession(session._id)}
                           className="text-xs px-3 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100"
                         >
-                          Cancel
+                          {t('common:actions.cancel')}
                         </button>
                       </>
                     )}
@@ -235,7 +237,7 @@ const SessionCalendar = ({ teamId }) => {
                       onClick={() => handleNoteClick(session)}
                       className="text-xs px-3 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100"
                     >
-                      {session.notes ? 'Edit Notes' : 'Add Notes'}
+                      {session.notes ? t('pastSessionList.editNotes') : t('pastSessionList.addNotes')}
                     </button>
                   </div>
                 </div>
@@ -258,7 +260,7 @@ const SessionCalendar = ({ teamId }) => {
       {showNoteForm && selectedSession && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full">
-            <h3 className="text-lg font-bold mb-4">Session Notes</h3>
+            <h3 className="text-lg font-bold mb-4">{t('pastSessionList.sessionNotes')}</h3>
             <SessionNoteForm
               sessionId={selectedSession._id}
               initialNotes={selectedSession.notes || ''}

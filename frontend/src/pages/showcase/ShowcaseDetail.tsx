@@ -21,6 +21,7 @@ import type { ShowcaseDetailDto } from '../../types/showcase';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 import { parseShowcaseVideo, showcaseVideoEmbedUrl, VIDEO_IFRAME_SANDBOX, type ShowcaseVideo } from '../../utils/showcaseVideo';
+import { useTranslation } from 'react-i18next';
 
 function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
   if (typeof children === 'string' ? !children.trim() : !children) return null;
@@ -51,6 +52,7 @@ type ShowcaseSlide =
   | { kind: 'video'; id: string; label: string; video: ShowcaseVideo };
 
 function ScreenshotCarousel({ slides, projectName }: { slides: ShowcaseSlide[]; projectName: string }) {
+  const { t } = useTranslation('showcase');
   const rail = useRef<HTMLUListElement>(null);
   const [active, setActive] = useState(0);
   const select = (index: number) => {
@@ -61,22 +63,23 @@ function ScreenshotCarousel({ slides, projectName }: { slides: ShowcaseSlide[]; 
     }
     setActive(next);
   };
-  return <section aria-label="Screenshots" className="space-y-4">
+  return <section aria-label={t('showcaseDetail.screenshots')} className="space-y-4">
     <div className="relative">
       <ul ref={rail} className="flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {slides.map((item, index) => <li key={item.id} data-slide={index} className={slides.length === 1 ? 'w-full shrink-0 snap-start' : 'w-[calc(100%-2.5rem)] shrink-0 snap-start sm:w-[calc(50%-0.75rem)]'}>
-          {item.kind === 'image' ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"><img src={item.url} alt={item.caption ?? `${projectName} screenshot ${index + 1}`} loading={index > 1 ? 'lazy' : undefined} className="aspect-video w-full bg-slate-50 object-contain" /><span className="sr-only">(opens full size in a new tab)</span></a>
+          {item.kind === 'image' ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card transition-shadow hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"><img src={item.url} alt={item.caption ?? `${projectName} screenshot ${index + 1}`} loading={index > 1 ? 'lazy' : undefined} className="aspect-video w-full bg-slate-50 object-contain" /><span className="sr-only">{t('showcaseDetail.opensFullSizeInANew')}</span></a>
             : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-card"><iframe src={showcaseVideoEmbedUrl(item.video, 'player')} title={item.label} sandbox={VIDEO_IFRAME_SANDBOX} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="aspect-video w-full" /></div>}
         </li>)}
       </ul>
-      {slides.length > 2 && <button type="button" aria-label="Previous screenshot" onClick={() => select(active - 1)} className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronLeft className="h-6 w-6" aria-hidden="true" /></button>}
-      {slides.length > 2 && <button type="button" aria-label="Next screenshot" onClick={() => select(active + 1)} className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronRight className="h-6 w-6" aria-hidden="true" /></button>}
+      {slides.length > 2 && <button type="button" aria-label={t('showcaseDetail.previousScreenshot')} onClick={() => select(active - 1)} className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronLeft className="h-6 w-6" aria-hidden="true" /></button>}
+      {slides.length > 2 && <button type="button" aria-label={t('showcaseDetail.nextScreenshot')} onClick={() => select(active + 1)} className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-secondary shadow-elevated transition-colors hover:bg-primary-50 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:bg-dark-surface dark:hover:bg-primary-900/30"><ChevronRight className="h-6 w-6" aria-hidden="true" /></button>}
     </div>
-    {slides.length > 1 && <div className="flex justify-center gap-3" role="tablist" aria-label="Screenshot navigation">{slides.map((item, index) => <button key={item.id} type="button" role="tab" aria-selected={active === index} aria-label={`Show item ${index + 1}`} onClick={() => select(index)} className={`h-2.5 w-2.5 rounded-full transition-colors ${active === index ? 'bg-primary' : 'bg-slate-300 hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-500'}`} />)}</div>}
+    {slides.length > 1 && <div className="flex justify-center gap-3" role="tablist" aria-label={t('showcaseDetail.screenshotNavigation')}>{slides.map((item, index) => <button key={item.id} type="button" role="tab" aria-selected={active === index} aria-label={t('showcaseDetail.showItem', { v1: index + 1 })} onClick={() => select(index)} className={`h-2.5 w-2.5 rounded-full transition-colors ${active === index ? 'bg-primary' : 'bg-slate-300 hover:bg-slate-400 dark:bg-slate-600 dark:hover:bg-slate-500'}`} />)}</div>}
   </section>;
 }
 
 export default function ShowcaseDetail() {
+  const { t } = useTranslation('showcase');
   const { id = '' } = useParams();
   const location = useLocation();
   const { user } = useAuthContext();
@@ -120,7 +123,7 @@ export default function ShowcaseDetail() {
 
   if (detail.isPending) {
     return (
-      <main className="mx-auto max-w-[88rem] space-y-4 px-4 py-6 sm:px-6 sm:py-8 lg:px-8" role="status" aria-label="Loading showcase page">
+      <main className="mx-auto max-w-[88rem] space-y-4 px-4 py-6 sm:px-6 sm:py-8 lg:px-8" role="status" aria-label={t('showcaseDetail.loadingShowcasePage')}>
         <LoadingSkeleton variant="card" />
         <LoadingSkeleton lines={6} />
       </main>
@@ -132,9 +135,9 @@ export default function ShowcaseDetail() {
     return (
       <main className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <ErrorState
-          title={notFound ? 'This page is not available' : 'Could not load this page'}
+          title={notFound ? t('showcaseDetail.thisPageIsNotAvailable') : t('showcaseDetail.couldNotLoadThisPage')}
           message={notFound
-            ? 'It may not exist, may not be published yet, or you may not have access to it.'
+            ? t('showcaseDetail.itMayNotExistMayNot')
             : parseApiError(detail.error, 'Failed to load this showcase page.').message}
           onRetry={notFound ? undefined : () => { void detail.refetch(); }}
         />
@@ -166,7 +169,7 @@ export default function ShowcaseDetail() {
   const teamCard = members.length > 0 && (
     <Card hover={false} padding="p-5">
       <Card.Header className="mb-3">
-        <Card.Title icon={Users}>Team</Card.Title>
+        <Card.Title icon={Users}>{t('showcaseComments.team')}</Card.Title>
       </Card.Header>
       <ul className="space-y-3">
         {members.map((member) => (
@@ -216,24 +219,24 @@ export default function ShowcaseDetail() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
               {privileged && <ShowcaseStatusBadge status={showcase.status} />}
-              {showcase.isFeatured && <Badge variant="brand" size="md">Featured</Badge>}
+              {showcase.isFeatured && <Badge variant="brand" size="md">{t('featureCurator.featured')}</Badge>}
             </div>
             <h1 className="mt-1.5 break-words text-display text-secondary">{profile.projectName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-body-sm text-slate-600">
               <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
-              {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />Published {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
+              {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />{t('showcaseDetail.published')} {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
             </div>
           </div>
           {isOwner && showcase.canEdit && (
             <Link to={`/showcase/manage/${showcase.projectLineageId}`} className="shrink-0">
-              <Button variant="outline" icon={Pencil}>Edit page</Button>
+              <Button variant="outline" icon={Pencil}>{t('showcaseDetail.editPage')}</Button>
             </Link>
           )}
         </div>
 
         {profile.description && <p className="max-w-3xl text-body-lg leading-relaxed text-slate-600">{profile.description}</p>}
         {industries.length > 0 && (
-          <ul aria-label="Startup industries" className="flex flex-wrap gap-2">
+          <ul aria-label={t('projectSummaryRow.startupIndustries')} className="flex flex-wrap gap-2">
             {industries.map((industry) => <li key={industry}><Badge variant="navy" size="md">{industry}</Badge></li>)}
           </ul>
         )}
@@ -241,7 +244,7 @@ export default function ShowcaseDetail() {
 
       {privileged && showcase.reviewNote && (
         <div role="note" className="rounded-xl border border-warning-light bg-warning-50 px-4 py-3 text-body text-warning-dark">
-          <p className="font-semibold">Reviewer note</p>
+          <p className="font-semibold">{t('showcaseDetail.reviewerNote')}</p>
           <p className="mt-1 whitespace-pre-line">{showcase.reviewNote}</p>
         </div>
       )}
@@ -249,10 +252,10 @@ export default function ShowcaseDetail() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
         <div className="min-w-0 space-y-6">
           {showcase.media.length === 1 && videoSlides.length === 0 && (
-            <section aria-label="Screenshots">
+            <section aria-label={t('showcaseDetail.screenshots')}>
               <a href={showcase.media[0].url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
                 <img src={showcase.media[0].url} alt={showcase.media[0].caption ?? `${profile.projectName} screenshot`} className="aspect-video w-full bg-slate-50 object-contain" />
-                <span className="sr-only">(opens full size in a new tab)</span>
+                <span className="sr-only">{t('showcaseDetail.opensFullSizeInANew')}</span>
               </a>
             </section>
           )}
@@ -265,7 +268,7 @@ export default function ShowcaseDetail() {
               <div className="space-y-7">
                 <StoryBlock icon={Lightbulb} title={PROJECT_PROFILE_LABELS.solution}>{profile.solution}</StoryBlock>
                 {remainingLinks.length > 0 && (
-                  <StoryBlock icon={ExternalLink} title="Links">
+                  <StoryBlock icon={ExternalLink} title={t('showcaseDetail.links')}>
                     <ul className="space-y-2">
                       {remainingLinks.map((link) => (
                         <li key={link.id}>
@@ -278,7 +281,7 @@ export default function ShowcaseDetail() {
                             <span className="min-w-0 flex-1 truncate">{link.label}</span>
                             <span className="shrink-0 border-l border-primary-200 pl-2 text-caption font-medium text-slate-600">{link.linkType}</span>
                             <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                            <span className="sr-only">(opens in a new tab)</span>
+                            <span className="sr-only">{t('showcaseDetail.opensInANewTab')}</span>
                           </a>
                         </li>
                       ))}
@@ -286,7 +289,7 @@ export default function ShowcaseDetail() {
                   </StoryBlock>
                 )}
               </div>
-              <StoryBlock icon={Sparkles} title="What makes it different">{showcase.highlights}</StoryBlock>
+              <StoryBlock icon={Sparkles} title={t('showcaseDetail.whatMakesItDifferent')}>{showcase.highlights}</StoryBlock>
             </Card>
           )}
 
@@ -296,7 +299,7 @@ export default function ShowcaseDetail() {
         <aside className="min-w-0 space-y-4 lg:sticky lg:top-6">
           <Card hover={false} padding="p-5">
             <div className="grid grid-cols-2 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 text-center">
-              <Stat icon={Eye} label="Views" value={showcase.viewCount} />
+              <Stat icon={Eye} label={t('showcaseInsights.views')} value={showcase.viewCount} />
               <ShowcaseUpvoteButton
                 key={`${showcase.id}:${user?.id}:${user?.role}`}
                 showcaseId={showcase.id}
@@ -310,8 +313,8 @@ export default function ShowcaseDetail() {
             </div>
             {showcase.status === 'Published' && !isOwner && viewerRole !== 'LECTURER' && viewerRole !== 'ADMIN' && <div className="mt-3"><ShowcaseReportButton showcaseId={showcase.id} /></div>}
             {canModerate && (
-              <div role="group" aria-label="Review this page" className="mt-4 border-t border-slate-200 pt-4">
-                <p className="mb-2 text-overline uppercase text-slate-600">Review this page</p>
+              <div role="group" aria-label={t('showcaseDetail.reviewThisPage')} className="mt-4 border-t border-slate-200 pt-4">
+                <p className="mb-2 text-overline uppercase text-slate-600">{t('showcaseDetail.reviewThisPage')}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <ShowcaseModerationActions
                     showcaseId={showcase.id}

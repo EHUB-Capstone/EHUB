@@ -8,21 +8,23 @@ import { showcaseApi } from '../../api/showcaseApi';
 import { moderationActionsFor } from '../../utils/showcase';
 import { parseApiError } from '../../utils/apiError';
 import type { ShowcaseDecision, ShowcaseDto, ShowcaseStatus } from '../../types/showcase';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 type DialogDecision = Extract<ShowcaseDecision, 'reject' | 'hide'>;
 
 const DIALOGS: Record<DialogDecision, { title: string; description: string; confirm: string; success: string }> = {
   reject: {
-    title: 'Reject this page',
-    description: 'The page returns to draft and stays private. Explain why it cannot be published.',
-    confirm: 'Reject page',
-    success: 'Showcase rejected.',
+    get title() { return i18n.t('showcase:showcaseModerationActions.rejectThisPage'); },
+    get description() { return i18n.t('showcase:showcaseModerationActions.thePageReturnsToDraftAnd'); },
+    get confirm() { return i18n.t('showcase:showcaseModerationActions.rejectPage'); },
+    get success() { return i18n.t('showcase:showcaseModerationActions.showcaseRejected'); },
   },
   hide: {
-    title: 'Hide this page',
-    description: 'The page is removed from the community. Explain why it is being hidden.',
-    confirm: 'Hide page',
-    success: 'Showcase hidden.',
+    get title() { return i18n.t('showcase:showcaseModerationActions.hideThisPage'); },
+    get description() { return i18n.t('showcase:showcaseModerationActions.thePageIsRemovedFromThe'); },
+    get confirm() { return i18n.t('showcase:showcaseModerationActions.hidePage'); },
+    get success() { return i18n.t('showcase:showcaseModerationActions.showcaseHidden'); },
   },
 };
 
@@ -36,6 +38,7 @@ interface ShowcaseModerationActionsProps {
 
 /** Decision buttons for a reviewer; only the actions the server would accept for the current status are shown. */
 export default function ShowcaseModerationActions({ showcaseId, title, status, wasEverPublished, onDecided }: ShowcaseModerationActionsProps) {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<ShowcaseDecision | null>(null);
   const [dialog, setDialog] = useState<DialogDecision | null>(null);
@@ -62,7 +65,7 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
   };
 
   const quick = async (decision: 'approve' | 'unhide') => {
-    if (await run(decision)) toast.success(decision === 'approve' ? 'Showcase approved.' : 'Showcase restored.');
+    if (await run(decision)) toast.success(decision === 'approve' ? t('showcaseModerationActions.showcaseApproved') : t('showcaseModerationActions.showcaseRestored'));
   };
 
   const confirmDialog = async () => {
@@ -78,16 +81,16 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
     <>
       <div className="flex flex-wrap gap-2">
         {actions.includes('approve') && (
-          <Button size="sm" variant="secondary" icon={Check} isLoading={busy === 'approve'} disabled={busy !== null} onClick={() => quick('approve')}>Approve</Button>
+          <Button size="sm" variant="secondary" icon={Check} isLoading={busy === 'approve'} disabled={busy !== null} onClick={() => quick('approve')}>{t('showcaseModerationActions.approve')}</Button>
         )}
         {actions.includes('unhide') && (
-          <Button size="sm" variant="secondary" icon={Eye} isLoading={busy === 'unhide'} disabled={busy !== null} onClick={() => quick('unhide')}>Show again</Button>
+          <Button size="sm" variant="secondary" icon={Eye} isLoading={busy === 'unhide'} disabled={busy !== null} onClick={() => quick('unhide')}>{t('showcaseModerationActions.showAgain')}</Button>
         )}
         {actions.includes('reject') && (
-          <Button size="sm" variant="danger-outline" icon={XCircle} disabled={busy !== null} onClick={() => setDialog('reject')}>Reject Project</Button>
+          <Button size="sm" variant="danger-outline" icon={XCircle} disabled={busy !== null} onClick={() => setDialog('reject')}>{t('showcaseModerationActions.rejectProject')}</Button>
         )}
         {actions.includes('hide') && (
-          <Button size="sm" variant="danger-outline" icon={EyeOff} disabled={busy !== null} onClick={() => setDialog('hide')}>Hide</Button>
+          <Button size="sm" variant="danger-outline" icon={EyeOff} disabled={busy !== null} onClick={() => setDialog('hide')}>{t('showcaseModerationActions.hide')}</Button>
         )}
       </div>
 
@@ -101,7 +104,7 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
         confirmVariant="danger"
         reason={note}
         onReasonChange={setNote}
-        reasonLabel="Note for the team"
+        reasonLabel={t('showcaseModerationActions.noteForTheTeam')}
         reasonRequired
         isSubmitting={busy !== null}
       />

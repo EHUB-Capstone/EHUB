@@ -9,6 +9,7 @@ import { stageLabel } from '../../../utils/showcase';
 import { cn } from '../../../utils/cn';
 import { parseShowcaseVideo } from '../../../utils/showcaseVideo';
 import ProjectMedia from './ProjectMedia';
+import { useTranslation } from 'react-i18next';
 
 interface ProjectSummaryCardProps {
   project: ShowcaseCardDto;
@@ -31,6 +32,7 @@ const stageTone = (stage: ShowcaseCardDto['developmentStage']) =>
  * community counters. Its main destination is the full card, not just the title.
  */
 export default function ProjectSummaryCard({ project, secondaryAction, backTo, backLabel, coverUrl, videoUrl }: ProjectSummaryCardProps): React.ReactElement {
+  const { t } = useTranslation('showcase');
   const initials = project.projectName.slice(0, 2).toUpperCase();
   const [active, setActive] = useState(false);
   const video = parseShowcaseVideo(videoUrl ?? project.videoUrl);
@@ -65,7 +67,7 @@ export default function ProjectSummaryCard({ project, secondaryAction, backTo, b
       </div>
 
       <div className="px-5 pb-1 pt-3">
-        {project.isFeatured && <Badge size="sm" variant="brand" className="mb-2"><Star className="h-3 w-3" aria-hidden="true" />Featured</Badge>}
+        {project.isFeatured && <Badge size="sm" variant="brand" className="mb-2"><Star className="h-3 w-3" aria-hidden="true" />{t('featureCurator.featured')}</Badge>}
         <p className="line-clamp-4 text-body leading-relaxed text-slate-700 dark:text-slate-200">{project.description}</p>
         {project.industries.length > 0 && (
           <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-body-sm font-medium text-primary-700 dark:text-primary-300">
@@ -84,8 +86,8 @@ export default function ProjectSummaryCard({ project, secondaryAction, backTo, b
           isOwner={project.isOwner}
           className="relative z-10 h-11 w-full rounded-none"
         />
-        <span className="flex min-h-11 items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300"><MessageSquare className="h-4 w-4 text-slate-400" aria-hidden="true" />{project.commentCount}<span className="sr-only"> comments</span></span>
-        <span className="flex min-h-11 items-center justify-center gap-1 font-semibold text-primary-700 dark:text-primary-300">View project <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" /></span>
+        <span className="flex min-h-11 items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300"><MessageSquare className="h-4 w-4 text-slate-400" aria-hidden="true" />{project.commentCount}<span className="sr-only"> {t('projectSummaryCard.comments')}</span></span>
+        <span className="flex min-h-11 items-center justify-center gap-1 font-semibold text-primary-700 dark:text-primary-300">{t('projectSummaryCard.viewProject')} <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" /></span>
       </div>
     </Card>
   );

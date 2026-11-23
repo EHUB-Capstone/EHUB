@@ -7,6 +7,7 @@ import { parseApiError } from '../../utils/apiError';
 import { cn } from '../../utils/cn';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useTranslation } from 'react-i18next';
 
 interface ShowcaseFeaturedToggleProps {
   showcaseId: string;
@@ -19,6 +20,7 @@ interface ShowcaseFeaturedToggleProps {
 
 /** Moderator-only control. Callers must render it only when the API says the viewer can moderate. */
 export default function ShowcaseFeaturedToggle({ showcaseId, title, isFeatured, compact = false, onChanged }: ShowcaseFeaturedToggleProps): React.ReactElement {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,7 +33,7 @@ export default function ShowcaseFeaturedToggle({ showcaseId, title, isFeatured, 
       else await showcaseApi.feature(showcaseId);
       await queryClient.invalidateQueries({ queryKey: ['showcase'] });
       onChanged?.();
-      toast.success(isFeatured ? 'Featured selection removed.' : 'Project marked as featured.');
+      toast.success(isFeatured ? t('showcaseFeaturedToggle.featuredSelectionRemoved') : t('showcaseFeaturedToggle.projectMarkedAsFeatured'));
       setIsOpen(false);
     } catch (error) {
       toast.error(parseApiError(error, 'Unable to update the featured selection. Try again.').message);
@@ -62,8 +64,8 @@ export default function ShowcaseFeaturedToggle({ showcaseId, title, isFeatured, 
       onConfirm={confirm}
       title={`${action} project: ${title}`}
       description={isFeatured
-        ? 'This project will no longer appear in the faculty-selected showcases. It will remain published.'
-        : 'This published project will appear in the faculty-selected showcases.'}
+        ? t('showcaseFeaturedToggle.thisProjectWillNoLongerAppear')
+        : t('showcaseFeaturedToggle.thisPublishedProjectWillAppearIn')}
       confirmText={action}
       confirmVariant={isFeatured ? 'danger' : 'primary'}
       isSubmitting={isSubmitting}

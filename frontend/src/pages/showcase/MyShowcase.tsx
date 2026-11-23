@@ -14,8 +14,10 @@ import ShowcaseInsights from '../../components/showcase/ShowcaseInsights';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_STATUS_META, stageLabel } from '../../utils/showcase';
+import { useTranslation } from 'react-i18next';
 
 export default function MyShowcase() {
+  const { t } = useTranslation('showcase');
   const mine = useQuery({
     queryKey: ['showcase', 'mine'],
     queryFn: ({ signal }) => showcaseApi.getMine(signal),
@@ -25,13 +27,13 @@ export default function MyShowcase() {
   return (
     <main className="mx-auto max-w-5xl p-4 sm:p-8">
       <PageHeader
-        title="My Showcase"
-        subtitle="Introduce your project to the E-HUB community. A lecturer or administrator reviews every page before it goes public."
-        breadcrumb={[{ label: 'Showcase', to: '/showcase' }, 'My Showcase']}
+        title={t('myShowcase.myShowcase')}
+        subtitle={t('myShowcase.introduceYourProjectToTheE')}
+        breadcrumb={[{ label: t('showcaseReports.showcase'), to: '/showcase' }, 'My Showcase']}
       />
 
       {mine.isPending && (
-        <div className="space-y-4" role="status" aria-label="Loading your showcase pages">
+        <div className="space-y-4" role="status" aria-label={t('myShowcase.loadingYourShowcasePages')}>
           <LoadingSkeleton variant="card" />
           <LoadingSkeleton variant="card" />
         </div>
@@ -39,7 +41,7 @@ export default function MyShowcase() {
 
       {mine.isError && (
         <ErrorState
-          title="Could not load your showcase pages"
+          title={t('myShowcase.couldNotLoadYourShowcasePages')}
           message={parseApiError(mine.error, 'Failed to load your showcase pages.').message}
           onRetry={() => { void mine.refetch(); }}
         />
@@ -49,8 +51,8 @@ export default function MyShowcase() {
         <Card hover={false}>
           <EmptyState
             icon={Rocket}
-            title="No project to showcase yet"
-            description="Showcase pages belong to a team's project. Join an active team with a project to create one."
+            title={t('myShowcase.noProjectToShowcaseYet')}
+            description={t('myShowcase.showcasePagesBelongToATeam')}
           />
         </Card>
       )}
@@ -75,7 +77,7 @@ export default function MyShowcase() {
                       </h2>
                       <p className="mt-1 text-body text-slate-600">{entry.profile.description}</p>
                       {!showcase && (
-                        <p className="mt-1 text-body-sm text-slate-600">No showcase page yet. Create one to introduce this project.</p>
+                        <p className="mt-1 text-body-sm text-slate-600">{t('myShowcase.noShowcasePageYetCreateOne')}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -85,17 +87,17 @@ export default function MyShowcase() {
                           <Badge variant="brand" size="md">{stageLabel(showcase.developmentStage)}</Badge>
                         </>
                       ) : (
-                        <Badge variant="neutral" size="md">Not created</Badge>
+                        <Badge variant="neutral" size="md">{t('myShowcase.notCreated')}</Badge>
                       )}
                     </div>
                   </div>
                   {showcase?.publishedAt && <ShowcaseInsights showcaseId={showcase.id} />}
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
                     <p className="text-body-sm text-slate-600">
-                      {showcase ? SHOWCASE_STATUS_META[showcase.status].description : 'Starts as a private draft.'}
+                      {showcase ? SHOWCASE_STATUS_META[showcase.status].description : t('myShowcase.startsAsAPrivateDraft')}
                     </p>
                     <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-700">
-                      {showcase ? 'Open editor' : 'Create page'}
+                      {showcase ? t('myShowcase.openEditor') : t('myShowcase.createPage')}
                       <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                     </span>
                   </div>
@@ -104,7 +106,7 @@ export default function MyShowcase() {
                     {showcase?.status === 'Published' && (
                       <Link to={`/showcase/${showcase.id}`} className={SHOWCASE_ROW_ACTION.brand}>
                         <Globe className="h-4 w-4" aria-hidden="true" />
-                        View public page
+                        {t('myShowcase.viewPublicPage')}
                       </Link>
                     )}
                   </ShowcaseReviewHistory>

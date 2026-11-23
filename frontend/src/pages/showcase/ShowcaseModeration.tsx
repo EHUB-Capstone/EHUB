@@ -18,19 +18,22 @@ import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_STATUS_META, stageLabel } from '../../utils/showcase';
 import { cn } from '../../utils/cn';
 import type { ShowcaseStatus } from '../../types/showcase';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const PAGE_SIZE = 20;
 type ModerationTab = ShowcaseStatus | 'Reports';
 const TABS: ModerationTab[] = ['PendingReview', 'Published', 'Hidden', 'Draft', 'Reports'];
 
 const EMPTY_COPY: Record<ShowcaseStatus, string> = {
-  PendingReview: 'No pages are waiting for review.',
-  Published: 'No pages are published yet.',
-  Hidden: 'No pages are hidden.',
-  Draft: 'No pages are in draft.',
+  get PendingReview() { return i18n.t('showcase:showcaseModeration.empty.PendingReview'); },
+  get Published() { return i18n.t('showcase:showcaseModeration.empty.Published'); },
+  get Hidden() { return i18n.t('showcase:showcaseModeration.empty.Hidden'); },
+  get Draft() { return i18n.t('showcase:showcaseModeration.empty.Draft'); },
 };
 
 export default function ShowcaseModeration() {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState<ModerationTab>(searchParams.get('tab') === 'reports' ? 'Reports' : 'PendingReview');
@@ -62,12 +65,12 @@ export default function ShowcaseModeration() {
   return (
     <main className="mx-auto max-w-5xl p-4 sm:p-8">
       <PageHeader
-        title="Showcase Moderation"
-        subtitle="Review the project pages teams want to publish. Lecturers see their own classes; administrators see every page."
-        breadcrumb={[{ label: 'Showcase', to: '/showcase' }, 'Moderation']}
+        title={t('showcaseModeration.showcaseModeration')}
+        subtitle={t('showcaseModeration.reviewTheProjectPagesTeamsWant')}
+        breadcrumb={[{ label: t('showcaseReports.showcase'), to: '/showcase' }, 'Moderation']}
       />
 
-      <div role="tablist" aria-label="Page status" className="mb-5 flex flex-wrap gap-2">
+      <div role="tablist" aria-label={t('showcaseModeration.pageStatus')} className="mb-5 flex flex-wrap gap-2">
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -82,7 +85,7 @@ export default function ShowcaseModeration() {
                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
             )}
           >
-            {tab === 'Reports' ? 'Reports' : SHOWCASE_STATUS_META[tab].label}
+            {tab === 'Reports' ? t('showcaseModeration.reports') : SHOWCASE_STATUS_META[tab].label}
           </button>
         ))}
       </div>
@@ -90,7 +93,7 @@ export default function ShowcaseModeration() {
       {status === 'Reports' && <ShowcaseReports />}
 
       {status !== 'Reports' && queue.isPending && (
-        <div className="space-y-4" role="status" aria-label="Loading showcase pages">
+        <div className="space-y-4" role="status" aria-label={t('showcaseModeration.loadingShowcasePages')}>
           <LoadingSkeleton variant="card" />
           <LoadingSkeleton variant="card" />
         </div>
@@ -98,7 +101,7 @@ export default function ShowcaseModeration() {
 
       {status !== 'Reports' && queue.isError && (
         <ErrorState
-          title="Could not load the review queue"
+          title={t('showcaseModeration.couldNotLoadTheReviewQueue')}
           message={parseApiError(queue.error, 'Failed to load showcase pages.').message}
           onRetry={() => { void queue.refetch(); }}
         />
@@ -106,7 +109,7 @@ export default function ShowcaseModeration() {
 
       {status !== 'Reports' && queue.isSuccess && queue.data.items.length === 0 && (
         <Card hover={false}>
-          <EmptyState icon={ClipboardCheck} title="Nothing here" description={EMPTY_COPY[status]} />
+          <EmptyState icon={ClipboardCheck} title={t('showcaseModeration.nothingHere')} description={EMPTY_COPY[status]} />
         </Card>
       )}
 
@@ -130,16 +133,16 @@ export default function ShowcaseModeration() {
                       </h2>
                       {item.description && <p className="mt-1 text-body text-slate-600">{item.description}</p>}
                       <p className="mt-2 text-caption text-slate-600">
-                        Updated {new Date(item.submittedOrUpdatedAt).toLocaleString()}
+                        {t('showcaseModeration.updated', { v1: new Date(item.submittedOrUpdatedAt).toLocaleString() })}
                       </p>
                       {item.reviewNote && (
-                        <p className="mt-2 text-body-sm text-slate-600">Last note: {item.reviewNote}</p>
+                        <p className="mt-2 text-body-sm text-slate-600">{t('showcaseModeration.lastNote', { reviewNote: item.reviewNote })}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <ShowcaseStatusBadge status={item.status} />
                       <Badge variant="brand" size="md">{stageLabel(item.developmentStage)}</Badge>
-                      {item.isFeatured && <Badge variant="brand" size="sm">Featured</Badge>}
+                      {item.isFeatured && <Badge variant="brand" size="sm">{t('featureCurator.featured')}</Badge>}
                       {item.status === 'Published' && <ShowcaseFeaturedToggle compact showcaseId={item.id} title={item.projectName} isFeatured={item.isFeatured} onChanged={afterDecision} />}
                     </div>
                   </div>
@@ -154,8 +157,8 @@ export default function ShowcaseModeration() {
                     {item.status === 'Draft' || (item.status === 'Hidden' && item.publishedAt === null) ? (
                       <p className="text-body-sm text-slate-600">
                         {item.status === 'Draft'
-                          ? 'The team is still editing this page.'
-                          : 'Never published. The team must submit it for review again.'}
+                          ? t('showcaseModeration.theTeamIsStillEditingThis')
+                          : t('showcaseModeration.neverPublishedTheTeamMustSubmit')}
                       </p>
                     ) : null}
                   </div>
@@ -164,16 +167,16 @@ export default function ShowcaseModeration() {
             ))}
           </ul>
 
-          <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+          <nav className="mt-6 flex items-center justify-between gap-3" aria-label={t('showcaseModeration.pagination')}>
             <p className="text-body-sm text-slate-600">
-              {queue.data.total} page{queue.data.total === 1 ? '' : 's'} · Page {queue.data.page} of {totalPages}
+              {t('showcaseModeration.queueSummary', { count: queue.data.total, page: queue.data.page, totalPages })}
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" icon={ChevronLeft} disabled={page <= 1 || queue.isPlaceholderData} onClick={() => setPage((current) => Math.max(1, current - 1))}>
-                Previous
+                {t('common:actions.previous')}
               </Button>
               <Button variant="outline" size="sm" iconRight={ChevronRight} disabled={page >= totalPages || queue.isPlaceholderData} onClick={() => setPage((current) => current + 1)}>
-                Next
+                {t('common:actions.next')}
               </Button>
             </div>
           </nav>

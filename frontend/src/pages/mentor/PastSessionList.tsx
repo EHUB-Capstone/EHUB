@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { getPastSessions } from '../../api/mentoringApi';
 import SessionNoteForm from './SessionNoteForm';
+import { useTranslation } from 'react-i18next';
 
 const PastSessionList = () => {
+  const { t } = useTranslation('mentoring');
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -88,7 +90,7 @@ const PastSessionList = () => {
       )}
 
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold">Past Mentoring Sessions</h3>
+        <h3 className="text-lg font-bold">{t('pastSessionList.pastMentoringSessions')}</h3>
         <div className="flex gap-2">
           <button
             onClick={() => setFilterStatus('all')}
@@ -98,7 +100,7 @@ const PastSessionList = () => {
                 : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
             }`}
           >
-            All
+            {t('pastSessionList.all')}
           </button>
           <button
             onClick={() => setFilterStatus('COMPLETED')}
@@ -108,7 +110,7 @@ const PastSessionList = () => {
                 : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
             }`}
           >
-            Completed
+            {t('pastSessionList.completed')}
           </button>
           <button
             onClick={() => setFilterStatus('CANCELLED')}
@@ -118,18 +120,18 @@ const PastSessionList = () => {
                 : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
             }`}
           >
-            Cancelled
+            {t('mentoringSessions.cancelled')}
           </button>
         </div>
       </div>
 
       {loading ? (
         <div className="text-center py-12 text-gray-500">
-          <div className="inline-block animate-spin">⚙️</div> Loading sessions...
+          <div className="inline-block animate-spin">⚙️</div> {t('pastSessionList.loadingSessions')}
         </div>
       ) : filteredSessions.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          No past sessions found
+          {t('pastSessionList.noPastSessionsFound')}
         </div>
       ) : (
         <div className="space-y-3">
@@ -153,9 +155,9 @@ const PastSessionList = () => {
                         </span>
                       </div>
                       <div className="text-sm text-gray-600 mt-2 space-y-1">
-                        <div>Team: <span className="font-medium">{getTeamName(session)}</span></div>
-                        <div>Mentor: <span className="font-medium">{getLecturerName(session)}</span></div>
-                        <div>Date: <span className="font-medium">{formatDateTime(session.meetingDate, session.startTime)}</span></div>
+                        <div>{t('pastSessionList.team')} <span className="font-medium">{getTeamName(session)}</span></div>
+                        <div>{t('pastSessionList.mentor')} <span className="font-medium">{getLecturerName(session)}</span></div>
+                        <div>{t('pastSessionList.date')} <span className="font-medium">{formatDateTime(session.meetingDate, session.startTime)}</span></div>
                       </div>
                     </div>
                     <div className="ml-4 text-2xl">
@@ -168,21 +170,21 @@ const PastSessionList = () => {
                   <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
                     {session.description && (
                       <div>
-                        <h6 className="font-semibold text-sm mb-2">Description</h6>
+                        <h6 className="font-semibold text-sm mb-2">{t('mentoringSessionsPage.description')}</h6>
                         <p className="text-sm text-gray-700">{session.description}</p>
                       </div>
                     )}
 
                     {session.location && (
                       <div>
-                        <h6 className="font-semibold text-sm mb-2">Location</h6>
+                        <h6 className="font-semibold text-sm mb-2">{t('mentoringSessions.location')}</h6>
                         <p className="text-sm text-gray-700">{session.location}</p>
                       </div>
                     )}
 
                     {session.meetingLink && (
                       <div>
-                        <h6 className="font-semibold text-sm mb-2">Meeting Link</h6>
+                        <h6 className="font-semibold text-sm mb-2">{t('mentoringSessions.meetingLink')}</h6>
                         <a
                           href={session.meetingLink}
                           target="_blank"
@@ -196,14 +198,14 @@ const PastSessionList = () => {
 
                     {session.notes && (
                       <div>
-                        <h6 className="font-semibold text-sm mb-2">Notes</h6>
+                        <h6 className="font-semibold text-sm mb-2">{t('mentoringSessions.notes')}</h6>
                         <p className="text-sm text-gray-700 whitespace-pre-wrap">{session.notes}</p>
                       </div>
                     )}
 
                     {session.actionItems && session.actionItems.length > 0 && (
                       <div>
-                        <h6 className="font-semibold text-sm mb-2">Action Items</h6>
+                        <h6 className="font-semibold text-sm mb-2">{t('mentoringSessions.actionItems')}</h6>
                         <ul className="space-y-2">
                           {session.actionItems.map((item, idx) => (
                             <li key={idx} className="text-sm flex items-start gap-2 text-gray-700">
@@ -227,7 +229,7 @@ const PastSessionList = () => {
                         onClick={() => handleNoteClick(session)}
                         className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
                       >
-                        {session.notes ? 'Edit Notes' : 'Add Notes'}
+                        {session.notes ? t('pastSessionList.editNotes') : t('pastSessionList.addNotes')}
                       </button>
                     </div>
                   </div>
@@ -240,7 +242,7 @@ const PastSessionList = () => {
       {showNoteForm && selectedSession && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full">
-            <h3 className="text-lg font-bold mb-4">Session Notes</h3>
+            <h3 className="text-lg font-bold mb-4">{t('pastSessionList.sessionNotes')}</h3>
             <SessionNoteForm
               sessionId={selectedSession._id}
               initialNotes={selectedSession.notes || ''}

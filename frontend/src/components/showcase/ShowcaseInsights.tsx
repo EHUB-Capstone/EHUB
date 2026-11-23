@@ -11,15 +11,17 @@ import { cn } from '../../utils/cn';
 import ErrorState from '../ui/ErrorState';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
 import { SHOWCASE_ROW_ACTION } from './rowActionStyles';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface ShowcaseInsightsProps {
   showcaseId: string;
 }
 
 const METRICS: ReadonlyArray<{ key: InsightsMetric; label: string; icon: LucideIcon; color: string }> = [
-  { key: 'views', label: 'Views', icon: Eye, color: CHART_COLORS.navy },
-  { key: 'upvotes', label: 'Interested', icon: Flame, color: CHART_COLORS.brand },
-  { key: 'comments', label: 'Comments', icon: MessageSquare, color: CHART_COLORS.success },
+  { key: 'views', get label() { return i18n.t('showcase:showcaseInsights.views'); }, icon: Eye, color: CHART_COLORS.navy },
+  { key: 'upvotes', get label() { return i18n.t('showcase:showcaseInsights.interested'); }, icon: Flame, color: CHART_COLORS.brand },
+  { key: 'comments', get label() { return i18n.t('showcase:showcaseComments.comments'); }, icon: MessageSquare, color: CHART_COLORS.success },
 ];
 
 const SPARK_WIDTH = 90;
@@ -45,6 +47,7 @@ const DELTA_TONE = {
 } as const;
 
 function Tile({ data, metric }: { data: ShowcaseInsightsDto; metric: (typeof METRICS)[number] }) {
+  const { t } = useTranslation('showcase');
   const total = insightsTotal(data.daily, metric.key);
   const delta = insightsDelta(total, data.previous[metric.key]);
   const Icon = metric.icon;
@@ -52,14 +55,14 @@ function Tile({ data, metric }: { data: ShowcaseInsightsDto; metric: (typeof MET
     <div className="rounded-xl border border-slate-200 bg-white p-3.5">
       <p className="flex items-center gap-1.5 text-caption font-semibold text-slate-600">
         <Icon className="h-4 w-4" aria-hidden="true" />
-        {metric.label} · 14d
+        {metric.label} {t('showcaseInsights.14d')}
       </p>
       <div className="mt-0.5 flex items-end justify-between gap-2">
         <p className="text-display text-secondary">{total.toLocaleString()}</p>
         <Sparkline daily={data.daily} metric={metric.key} color={metric.color} />
       </div>
       <p className={cn('text-caption font-semibold', DELTA_TONE[delta.direction])}>
-        {delta.label}<span className="font-normal text-slate-500"> vs previous 14 days</span>
+        {delta.label}<span className="font-normal text-slate-500"> {t('showcaseInsights.vsPrevious14Days')}</span>
       </p>
     </div>
   );
@@ -70,6 +73,7 @@ function Tile({ data, metric }: { data: ShowcaseInsightsDto; metric: (typeof MET
  * Always on top of the card's stretched link so the button and the chart stay usable.
  */
 export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) {
+  const { t } = useTranslation('showcase');
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const insights = useQuery({
@@ -78,11 +82,11 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
     staleTime: 30_000,
   });
 
-  if (insights.isPending) return <div className="relative z-10 mt-4" role="status" aria-label="Loading showcase insights"><LoadingSkeleton variant="card" /></div>;
+  if (insights.isPending) return <div className="relative z-10 mt-4" role="status" aria-label={t('showcaseInsights.loadingShowcaseInsights')}><LoadingSkeleton variant="card" /></div>;
   if (insights.isError) {
     return (
       <div className="relative z-10 mt-4">
-        <ErrorState title="Could not load insights" message={parseApiError(insights.error, 'Failed to load showcase insights.').message} onRetry={() => { void insights.refetch(); }} />
+        <ErrorState title={t('showcaseInsights.couldNotLoadInsights')} message={parseApiError(insights.error, 'Failed to load showcase insights.').message} onRetry={() => { void insights.refetch(); }} />
       </div>
     );
   }
@@ -90,7 +94,7 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
   const data = insights.data;
   const hasActivity = data.daily.some((day) => day.views > 0 || day.upvotes > 0 || day.comments > 0);
   return (
-    <section className="relative z-10 mt-4" aria-label="Showcase insights">
+    <section className="relative z-10 mt-4" aria-label={t('showcaseInsights.showcaseInsights')}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {METRICS.map((metric) => <Tile key={metric.key} data={data} metric={metric} />)}
       </div>
@@ -98,7 +102,7 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption text-slate-500"></p>
         <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)} className={cn(SHOWCASE_ROW_ACTION.navy, open && 'bg-secondary-100')}>
-          Details
+          {t('showcaseInsights.details')}
           <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
         </button>
       </div>
@@ -106,10 +110,10 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
       {open && (
         <div id={panelId} className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
           <p className="text-body-sm font-semibold text-secondary">
-            Last 14 days <span className="font-normal text-slate-500"></span>
+            {t('showcaseInsights.last14Days')} <span className="font-normal text-slate-500"></span>
           </p>
           {hasActivity ? (
-            <div className="mt-2 h-64" aria-label="Daily engagement over the last fourteen days">
+            <div className="mt-2 h-64" aria-label={t('showcaseInsights.dailyEngagementOverTheLastFourteen')}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.daily} margin={{ top: 12, right: 12, bottom: 4, left: -20 }}>
                   <CartesianGrid stroke={CHART_CHROME.grid} strokeDasharray="3 3" />
@@ -124,7 +128,7 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="mt-2 text-body-sm text-slate-600">No engagement in the last 14 days yet. Views, interest and comments will appear here.</p>
+            <p className="mt-2 text-body-sm text-slate-600">{t('showcaseInsights.noEngagementInTheLast14')}</p>
           )}
         </div>
       )}

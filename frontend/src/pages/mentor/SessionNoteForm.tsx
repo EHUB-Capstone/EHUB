@@ -1,8 +1,10 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { addSessionNote } from '../../api/mentoringApi';
+import { useTranslation } from 'react-i18next';
 
 const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) => {
+  const { t } = useTranslation('mentoring');
   const [notes, setNotes] = useState(initialNotes);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -16,7 +18,7 @@ const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) 
     e.preventDefault();
 
     if (!notes.trim()) {
-      setError('Notes content is required');
+      setError(t('sessionNoteForm.notesContentIsRequired'));
       return;
     }
 
@@ -27,7 +29,7 @@ const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) 
       await addSessionNote(sessionId, notes);
       onSuccess?.();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save notes');
+      setError(err.response?.data?.message || t('sessionNoteForm.failedToSaveNotes'));
     } finally {
       setLoading(false);
     }
@@ -42,13 +44,13 @@ const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) 
       )}
 
       <div>
-        <label className="block text-sm font-medium mb-2">Session Notes</label>
+        <label className="block text-sm font-medium mb-2">{t('pastSessionList.sessionNotes')}</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows="6"
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
-          placeholder="Document discussion points, feedback, decisions, and action items..."
+          placeholder={t('sessionNoteForm.documentDiscussionPointsFeedbackDecisionsAnd')}
         />
       </div>
 
@@ -60,7 +62,7 @@ const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) 
             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
             disabled={loading}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </button>
         )}
         <button
@@ -68,7 +70,7 @@ const SessionNoteForm = ({ sessionId, initialNotes = '', onSuccess, onCancel }) 
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
           disabled={loading}
         >
-          {loading ? 'Saving...' : 'Save Notes'}
+          {loading ? t('scheduleSessionModal.saving') : t('sessionNoteForm.saveNotes')}
         </button>
       </div>
     </form>
