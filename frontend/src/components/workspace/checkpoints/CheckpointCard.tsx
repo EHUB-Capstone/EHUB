@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Clock3,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime } from '../../../i18n/format';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -18,6 +20,7 @@ export default function CheckpointCard({
   onOpen,
   isLast = false,
 }) {
+  const { t } = useTranslation('checkpoint');
   const Icon = ICONS[checkpoint.icon] || FileText;
   const stat = submissionStats[checkpoint.number] || {};
   const fileCount = stat.count || 0;
@@ -33,7 +36,7 @@ export default function CheckpointCard({
     Closed: 'bg-red-100 text-red-700',
     NotScheduled: 'bg-slate-100 text-slate-600',
   }[checkpoint.scheduleStatus] || 'bg-slate-100 text-slate-600';
-  const formatDate = (value) => value ? new Date(value).toLocaleString() : 'Not scheduled';
+  const formatDate = (value) => value ? formatDateTime(value) : t('checkpointCard.notScheduled');
 
   return (
     <div className="relative pl-12 sm:pl-16">
@@ -82,7 +85,7 @@ export default function CheckpointCard({
 
           <div className="min-w-0 flex-1">
             <p className="text-overline font-bold uppercase text-slate-400">
-              Checkpoint {checkpoint.number}
+              {t('checkpointCard.checkpoint', { number: checkpoint.number })}
             </p>
             <h3 className="mt-0.5 text-sm font-bold text-slate-900 transition-colors group-hover:text-orange-600 sm:text-base">
               {checkpoint.title}
@@ -93,7 +96,7 @@ export default function CheckpointCard({
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${scheduleStyle}`}>
-                {checkpoint.scheduleStatus}
+                {t(`checkpointCard.scheduleStatus.${checkpoint.scheduleStatus}`, { defaultValue: checkpoint.scheduleStatus })}
               </span>
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
                 {fileCount} file{fileCount !== 1 ? 's' : ''}
@@ -103,12 +106,12 @@ export default function CheckpointCard({
               </span>
               {latestVersion > 0 && (
                 <span className="rounded-md bg-orange-100 px-2.5 py-1 text-overline font-bold text-orange-700">
-                  Latest: Version {latestVersion}
+                  {t('checkpointCard.latestVersion', { latestVersion })}
                 </span>
               )}
               {!hasSubmission && (
                 <span className="rounded-md bg-slate-100 px-2.5 py-1 text-overline font-medium text-slate-500">
-                  Not submitted
+                  {t('checkpointCard.notSubmitted')}
                 </span>
               )}
               {hasFiles && latest && (
@@ -122,12 +125,12 @@ export default function CheckpointCard({
               <Clock3 className="h-3 w-3" />
               {checkpoint.startDateUtc && checkpoint.endDateUtc
                 ? `${formatDate(checkpoint.startDateUtc)} → ${formatDate(checkpoint.endDateUtc)}`
-                : 'Your lecturer has not scheduled this checkpoint yet.'}
+                : t('checkpointCard.yourLecturerHasNotScheduledThis')}
             </p>
           </div>
 
           <span className="inline-flex shrink-0 items-center gap-1 self-end text-xs font-bold text-slate-500 group-hover:text-orange-600 sm:self-center">
-            View
+            {t('common:actions.view')}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
         </div>

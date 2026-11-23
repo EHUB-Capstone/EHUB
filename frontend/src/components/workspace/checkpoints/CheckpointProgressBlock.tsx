@@ -11,6 +11,7 @@ import { checkpointSummaryApi } from '../../../api/checkpointSummaryApi';
 import { parseApiError } from '../../../utils/apiError';
 import { hasProgress, partiallyReadCheckpoints, progressChangeView, progressStateText } from '../../../utils/checkpointSummary';
 import type { CheckpointProgress, ProgressConcept, ProgressState } from '../../../types/checkpointSummary';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   teamId: string;
@@ -25,11 +26,12 @@ const CELL_CLASS: Record<ProgressState, string> = {
 };
 
 function Cell({ number, state }: { number: number; state: ProgressState }) {
+  const { t } = useTranslation('checkpoint');
   return (
     <li title={progressStateText[state]} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-caption ${CELL_CLASS[state]}`}>
       {state === 'Found' && <Check className="h-3 w-3" aria-hidden="true" />}
       {state === 'NotMentioned' && <Minus className="h-3 w-3" aria-hidden="true" />}
-      CP{number}
+      {t('checkpointProgressBlock.cp')}{number}
       {(state === 'NotAsked' || state === 'NotRead') && <span aria-hidden="true">· {state === 'NotAsked' ? 'n/a' : 'unread'}</span>}
       <span className="sr-only">: {progressStateText[state]}</span>
     </li>
@@ -37,6 +39,7 @@ function Cell({ number, state }: { number: number; state: ProgressState }) {
 }
 
 function Concept({ concept }: { concept: ProgressConcept }) {
+  const { t } = useTranslation('checkpoint');
   const change = progressChangeView[concept.change];
   return (
     <li className="space-y-1">
@@ -44,7 +47,7 @@ function Concept({ concept }: { concept: ProgressConcept }) {
         <span className="text-body-sm font-medium text-slate-900">{concept.label}</span>
         {change && <Badge variant={change.tone}>{change.label}</Badge>}
       </div>
-      <ul className="flex flex-wrap gap-1.5" aria-label={`${concept.label} by checkpoint`}>
+      <ul className="flex flex-wrap gap-1.5" aria-label={t('checkpointProgressBlock.byCheckpoint', { label: concept.label })}>
         {concept.cells.map((cell) => <Cell key={cell.checkpointNumber} number={cell.checkpointNumber} state={cell.state} />)}
       </ul>
     </li>
@@ -52,6 +55,7 @@ function Concept({ concept }: { concept: ProgressConcept }) {
 }
 
 export default function CheckpointProgressBlock({ teamId, checkpointNumber }: Props) {
+  const { t } = useTranslation('checkpoint');
   const [progress, setProgress] = useState<CheckpointProgress | null>(null);
   const [loading, setLoading] = useState(checkpointNumber > 1);
   const [error, setError] = useState('');
@@ -85,7 +89,7 @@ export default function CheckpointProgressBlock({ teamId, checkpointNumber }: Pr
   if (loading) {
     return (
       <p className="flex items-center gap-2 text-caption text-slate-500" role="status">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" /> Loading progress across checkpoints…
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" /> {t('checkpointProgressBlock.loadingProgressAcrossCheckpoints')}
       </p>
     );
   }
@@ -93,7 +97,7 @@ export default function CheckpointProgressBlock({ teamId, checkpointNumber }: Pr
     return (
       <div className="flex flex-wrap items-center gap-3" role="alert">
         <p className="text-caption text-danger-dark">{error}</p>
-        <Button variant="outline" size="sm" icon={RefreshCw} onClick={() => setAttempt((value) => value + 1)}>Retry</Button>
+        <Button variant="outline" size="sm" icon={RefreshCw} onClick={() => setAttempt((value) => value + 1)}>{t('checkpointFilePreviewModal.retry')}</Button>
       </div>
     );
   }
@@ -105,17 +109,17 @@ export default function CheckpointProgressBlock({ teamId, checkpointNumber }: Pr
     <Card tone="inset" padding="p-4" hover={false} className="space-y-3">
       <h4 className="flex items-center gap-1.5 text-overline font-bold uppercase text-slate-500">
         <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
-        Progress across checkpoints
+        {t('checkpointProgressBlock.progressAcrossCheckpoints')}
       </h4>
       <p className="text-caption text-slate-500">
-        Whether the files of each checkpoint mention what the rubrics ask for. “Mentioned” means a file names it, not that it is done well.
+        {t('checkpointProgressBlock.whetherTheFilesOfEachCheckpoint')}
       </p>
       <ul className="space-y-3">
         {progress.concepts.map((concept) => <Concept key={concept.label} concept={concept} />)}
       </ul>
       {partial.length > 0 && (
         <p className="text-caption text-slate-500">
-          Only part of the files could be read ({partial.join('; ')}), so “not mentioned” may just mean a file was not read.
+          {t('checkpointProgressBlock.onlyPartOfTheFilesCould', { v1: partial.join('; ') })}
         </p>
       )}
     </Card>

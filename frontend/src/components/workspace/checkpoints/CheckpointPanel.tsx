@@ -21,6 +21,7 @@ import { useAiSummaryEnabled } from '../../../hooks/useAiSummaryEnabled';
 import { canViewCheckpointSummary } from '../../../utils/checkpointSummary';
 import EvaluationPanel from '../EvaluationPanel';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
+import { useTranslation } from 'react-i18next';
 
 const ICONS = { Users, BarChart2, Layers, TrendingUp };
 
@@ -56,6 +57,7 @@ export default function CheckpointPanel({
   onClose,
   onRequirementsSaved,
 }) {
+  const { t } = useTranslation('checkpoint');
   const { user } = useAuth();
   const aiSummaryEnabled = useAiSummaryEnabled();
   const [files, setFiles] = useState([]);
@@ -183,7 +185,7 @@ export default function CheckpointPanel({
         { canDirectDownload: file.canDirectDownload }
       );
     } catch (e) {
-      toast.error(e?.message || 'Failed to download file.');
+      toast.error(e?.message || t('checkpointPanel.failedToDownloadFile'));
     } finally {
       setDownloadingId(null);
     }
@@ -196,11 +198,11 @@ export default function CheckpointPanel({
       if (res.success) {
         setFiles((current) => current.filter((file) => file._id !== fileId));
         setDeleteTarget(null);
-        toast.success('File deleted.');
+        toast.success(t('checkpointPanel.fileDeleted'));
         onRequirementsSaved?.();
       }
     } catch (e) {
-      toast.error(e?.response?.data?.error || 'Failed to delete file.');
+      toast.error(e?.response?.data?.error || t('checkpointPanel.failedToDeleteFile'));
     } finally {
       setDeleting(false);
     }
@@ -214,11 +216,11 @@ export default function CheckpointPanel({
         setLinks((current) => current.filter((link) => link._id !== linkId));
         setDeleteLinkTarget(null);
         if (editingLink?._id === linkId) setEditingLink(null);
-        toast.success('Submitted link deleted.');
+        toast.success(t('checkpointPanel.submittedLinkDeleted'));
         onRequirementsSaved?.();
       }
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Unable to delete the submitted link.');
+      toast.error(error?.response?.data?.message || t('checkpointPanel.unableToDeleteTheSubmittedLink'));
     } finally {
       setDeletingLink(false);
     }
@@ -249,7 +251,7 @@ export default function CheckpointPanel({
                 className="mt-0.5 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-700 text-sm font-semibold shadow-sm transition-all shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back</span>
+                <span className="hidden sm:inline">{t('common:actions.back')}</span>
               </button>
 
               <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
@@ -258,7 +260,7 @@ export default function CheckpointPanel({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-overline sm:text-xs font-bold uppercase tracking-widest text-primary-700">
-                    Checkpoint {checkpoint.number} of {checkpointCount}
+                    {t('checkpointPanel.checkpointOf', { number: checkpoint.number, checkpointCount })}
                   </p>
                   <h1 className="text-lg sm:text-2xl font-bold mt-0.5 leading-tight">
                     {checkpoint.title}
@@ -267,7 +269,7 @@ export default function CheckpointPanel({
                     <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-900">
                       {workspaceClassName && (
                         <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <span>Class</span>
+                          <span>{t('checkpointControlPanel.class')}</span>
                           <span className="max-w-48 truncate" title={workspaceClassName}>{workspaceClassName}</span>
                         </span>
                       )}
@@ -276,7 +278,7 @@ export default function CheckpointPanel({
                       )}
                       {workspaceTeamName && (
                         <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <span>Team</span>
+                          <span>{t('checkpointPanel.team')}</span>
                           <span className="max-w-64 truncate" title={workspaceTeamName}>{workspaceTeamName}</span>
                         </span>
                       )}
@@ -309,7 +311,7 @@ export default function CheckpointPanel({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-100/70 px-3 py-1.5 text-xs font-bold text-primary-700 transition hover:bg-orange-100"
                 >
                   {showEvaluation ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-                  {showEvaluation ? 'Hide evaluation' : isLecturer ? 'Open grading' : 'Show evaluation'}
+                  {showEvaluation ? t('checkpointPanel.hideEvaluation') : isLecturer ? t('checkpointPanel.openGrading') : t('checkpointPanel.showEvaluation')}
                 </button>
               </div>
 
@@ -317,7 +319,7 @@ export default function CheckpointPanel({
                 type="button"
                 onClick={requestClose}
                 className="order-3 lg:order-4 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/80 hover:bg-orange-50 border border-orange-200/80 text-slate-600 hover:text-primary-700 shadow-sm flex items-center justify-center transition-all shrink-0"
-                aria-label="Close"
+                aria-label={t('common:actions.close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -332,7 +334,7 @@ export default function CheckpointPanel({
             <aside className={`lg:w-[340px] xl:w-[360px] shrink-0 flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 min-h-0 ${showEvaluation ? 'lg:hidden' : ''}`}>
               <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-3">
                 <section className="space-y-3">
-                  <SectionTitle icon={Award}>Evaluation rubric</SectionTitle>
+                  <SectionTitle icon={Award}>{t('checkpointPanel.evaluationRubric')}</SectionTitle>
                   <ul className="space-y-2">
                     {checkpoint.rubrics.map((r, i) => (
                       <li
@@ -395,9 +397,9 @@ export default function CheckpointPanel({
                 <SectionTitle
                   icon={MessageSquare}
                   count={feedbacks.length}
-                  subtitle="Comments from mentors and lecturers"
+                  subtitle={t('checkpointPanel.commentsFromMentorsAndLecturers')}
                 >
-                  Feedback
+                  {t('checkpointPanel.feedback')}
                 </SectionTitle>
                 <div className="rounded-xl border border-slate-100 bg-slate-50/30 p-4">
                   {loading ? (
@@ -425,7 +427,7 @@ export default function CheckpointPanel({
             <motion.button
               type="button"
               className="absolute inset-0 z-10 bg-slate-950/30 backdrop-blur-[1px] lg:hidden"
-              aria-label="Close evaluation panel"
+              aria-label={t('checkpointPanel.closeEvaluationPanel')}
               onClick={() => setShowEvaluation(false)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -448,15 +450,15 @@ export default function CheckpointPanel({
                   <ClipboardCheck className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-900">Evaluation & grading</p>
-                  <p className="truncate text-xs text-slate-500">Checkpoint {checkpoint.number} · {checkpoint.title}</p>
+                  <p className="truncate text-sm font-bold text-slate-900">{t('checkpointPanel.evaluationGrading')}</p>
+                  <p className="truncate text-xs text-slate-500">{t('checkpointControlPanel.checkpoint2', { number: checkpoint.number, title: checkpoint.title })}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowEvaluation(false)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-                aria-label="Hide evaluation panel"
+                aria-label={t('checkpointPanel.hideEvaluationPanel')}
               >
                 <PanelRightClose className="h-4 w-4" />
               </button>
@@ -480,27 +482,27 @@ export default function CheckpointPanel({
         isOpen={leaveConfirmOpen}
         onClose={() => setLeaveConfirmOpen(false)}
         onConfirm={() => { setLeaveConfirmOpen(false); onClose(); }}
-        title="Leave without submitting?"
-        description="You have files that haven't been submitted. If you leave now, the selected files will be discarded and any upload in progress will be cancelled."
-        confirmText="Discard and leave"
-        cancelText="Keep editing"
+        title={t('checkpointPanel.leaveWithoutSubmitting')}
+        description={t('checkpointPanel.youHaveFilesThatHavenT')}
+        confirmText={t('checkpointPanel.discardAndLeave')}
+        cancelText={t('checkpointPanel.keepEditing')}
       />
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
         onClose={() => { if (!deleting) setDeleteTarget(null); }}
         onConfirm={() => { if (deleteTarget) return handleDelete(deleteTarget._id); }}
-        title="Delete submitted file?"
-        description={`“${deleteTarget?.originalName || 'This file'}” will be permanently removed from this checkpoint.`}
-        confirmText="Delete file"
+        title={t('checkpointPanel.deleteSubmittedFile')}
+        description={t('checkpointPanel.deleteFileConfirm', { name: deleteTarget?.originalName || t('checkpointPanel.thisFile') })}
+        confirmText={t('checkpointPanel.deleteFile')}
         isSubmitting={deleting}
       />
       <ConfirmDialog
         isOpen={Boolean(deleteLinkTarget)}
         onClose={() => { if (!deletingLink) setDeleteLinkTarget(null); }}
         onConfirm={() => { if (deleteLinkTarget) return handleDeleteLink(deleteLinkTarget._id); }}
-        title="Delete submitted link?"
-        description={`“${deleteLinkTarget?.name || 'This link'}” will be removed from this checkpoint.`}
-        confirmText="Delete link"
+        title={t('checkpointPanel.deleteSubmittedLink')}
+        description={t('checkpointPanel.deleteLinkConfirm', { name: deleteLinkTarget?.name || t('checkpointPanel.thisLink') })}
+        confirmText={t('checkpointPanel.deleteLink')}
         isSubmitting={deletingLink}
       />
       <CheckpointFilePreviewModal

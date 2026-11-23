@@ -3,10 +3,12 @@ import { Archive, CalendarClock, Info, Settings2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { classApi } from '../../../api/classApi';
+import { useTranslation } from 'react-i18next';
 
 const toLocalDateTime = (value) => value ? new Date(value).toISOString().slice(0, 16) : '';
 
 export default function CheckpointControlPanel({ classId, checkpoints = [], submissionStatsByCheckpoint = {} }) {
+  const { t } = useTranslation('checkpoint');
   const [availableClasses, setAvailableClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState(classId || '');
   const [applyToAllClasses, setApplyToAllClasses] = useState(false);
@@ -46,7 +48,7 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
           ? current
           : String(classes[0]?.classId || ''));
       })
-      .catch(() => active && toast.error('Unable to load classes for checkpoint deadlines.'));
+      .catch(() => active && toast.error(t('checkpointControlPanel.unableToLoadClassesForCheckpoint')));
     return () => { active = false; };
   }, [classId]);
 
@@ -64,14 +66,14 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
           ? current
           : String(items[0]?.checkpointNumber || ''));
       })
-      .catch(() => active && toast.error('Unable to load checkpoint deadlines.'))
+      .catch(() => active && toast.error(t('checkpointControlPanel.unableToLoadCheckpointDeadlines')))
       .finally(() => active && setLoadingSchedules(false));
     return () => { active = false; };
   }, [selectedClassId]);
 
   const save = async () => {
     if (!selectedClassId || !checkpoint) return;
-    if (!deadline) return toast.error('Please choose a deadline.');
+    if (!deadline) return toast.error(t('checkpointControlPanel.pleaseChooseADeadline'));
     setSaving(true);
     try {
       const payload = {
@@ -87,9 +89,9 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         : await classApi.saveCheckpointDeadline(selectedClassId, checkpoint.number, payload);
       if (!response?.success) throw new Error(response?.message || 'Unable to save checkpoint deadline.');
       if (!applyToAllClasses) setSchedules((current) => ({ ...current, [checkpoint.number]: response.data }));
-      toast.success(applyToAllClasses ? `Checkpoint deadline saved for ${response.data?.updatedCount || 0} classes.` : 'Checkpoint deadline saved.');
+      toast.success(applyToAllClasses ? t('checkpointControlPanel.checkpointDeadlineSavedForClasses', { v1: response.data?.updatedCount || 0 }) : t('checkpointControlPanel.checkpointDeadlineSaved'));
     } catch (error) {
-      toast.error(error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to save checkpoint deadline.');
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || error?.message || t('checkpointControlPanel.unableToSaveCheckpointDeadline'));
     } finally {
       setSaving(false);
     }
@@ -100,10 +102,10 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
       <section className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 text-slate-700">
           <Settings2 className="h-4 w-4 text-primary" />
-          <h3 className="font-bold">Checkpoint control</h3>
+          <h3 className="font-bold">{t('checkpointControlPanel.checkpointControl')}</h3>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          Checkpoints will appear here when the workspace configuration is available.
+          {t('checkpointControlPanel.checkpointsWillAppearHereWhenThe')}
         </p>
       </section>
     );
@@ -117,33 +119,33 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-primary-700">
             <Settings2 className="h-4 w-4" />
-            <h3 className="font-bold text-slate-800">Checkpoint control</h3>
+            <h3 className="font-bold text-slate-800">{t('checkpointControlPanel.checkpointControl')}</h3>
           </div>
-          <p className="mt-1 text-xs text-slate-400">Class-wide configuration</p>
-          {loadingSchedules && <p className="mt-1 text-caption text-slate-400">Updating class data…</p>}
+          <p className="mt-1 text-xs text-slate-400">{t('checkpointControlPanel.classWideConfiguration')}</p>
+          {loadingSchedules && <p className="mt-1 text-caption text-slate-400">{t('checkpointControlPanel.updatingClassData')}</p>}
         </div>
         <span className="rounded-md bg-primary-50 px-2 py-1 text-overline font-bold uppercase tracking-wide text-primary-700">
-          CP {checkpoint.number}
+          {t('checkpointControlPanel.cp', { number: checkpoint.number })}
         </span>
       </div>
 
       <fieldset className="mt-4">
-        <legend className="text-xs font-bold text-slate-600">Apply to</legend>
+        <legend className="text-xs font-bold text-slate-600">{t('checkpointControlPanel.applyTo')}</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setApplyToAllClasses(false)} aria-pressed={!applyToAllClasses}
             className={`rounded-xl border px-3 py-2 text-xs font-semibold ${!applyToAllClasses ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-            One class
+            {t('checkpointControlPanel.oneClass')}
           </button>
           <button type="button" onClick={() => setApplyToAllClasses(true)} aria-pressed={applyToAllClasses}
             className={`rounded-xl border px-3 py-2 text-xs font-semibold ${applyToAllClasses ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-            All accessible classes
+            {t('checkpointControlPanel.allAccessibleClasses')}
           </button>
         </div>
       </fieldset>
 
       {!applyToAllClasses && (
         <label className="mt-4 block text-xs font-bold text-slate-600" htmlFor="checkpoint-class-selector">
-          Class
+          {t('checkpointControlPanel.class')}
           <select id="checkpoint-class-selector" value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
             {availableClasses.map((item) => (
@@ -154,12 +156,12 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
       )}
       {applyToAllClasses && (
         <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
-          The same deadline will be applied to all {availableClasses.length} classes you are allowed to manage. Every class must pass its semester and checkpoint-order validation.
+          {t('checkpointControlPanel.theSameDeadlineWillBeApplied', { length: availableClasses.length })}
         </p>
       )}
 
       <label className="mt-4 block text-xs font-bold text-slate-600" htmlFor="checkpoint-selector">
-        Checkpoint
+        {t('checkpointControlPanel.checkpoint')}
       </label>
       <select
         id="checkpoint-selector"
@@ -168,19 +170,19 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
       >
         {availableCheckpoints.map((item) => (
-          <option key={item.number} value={item.number}>Checkpoint {item.number} · {item.title}</option>
+          <option key={item.number} value={item.number}>{t('checkpointControlPanel.checkpoint2', { number: item.number, title: item.title })}</option>
         ))}
       </select>
 
       <div className="mt-4">
         <p className="text-sm font-semibold text-slate-800">{checkpoint.title}</p>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          These settings apply to every team in this class, not only the team currently open.
+          {t('checkpointControlPanel.theseSettingsApplyToEveryTeam')}
         </p>
       </div>
 
       <label className="mt-5 block text-xs font-bold text-slate-600" htmlFor="checkpoint-deadline">
-        Deadline
+        {t('checkpointControlPanel.deadline')}
       </label>
       <div className="relative mt-2">
         <CalendarClock className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
@@ -193,7 +195,7 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         />
       </div>
       <p className="mt-2 text-caption leading-5 text-slate-400">
-        A valid deadline enables this checkpoint automatically. Student access still follows checkpoint order and submission status.
+        {t('checkpointControlPanel.aValidDeadlineEnablesThisCheckpoint')}
       </p>
 
       <button
@@ -204,30 +206,30 @@ export default function CheckpointControlPanel({ classId, checkpoints = [], subm
         }`}
         aria-pressed={archived}
       >
-        <span className="flex items-center gap-2"><Archive className="h-4 w-4" /> Archive checkpoint</span>
-        <span>{archived ? 'Archived' : 'Active'}</span>
+        <span className="flex items-center gap-2"><Archive className="h-4 w-4" /> {t('checkpointControlPanel.archiveCheckpoint')}</span>
+        <span>{archived ? t('checkpointControlPanel.archived') : t('checkpointControlPanel.active')}</span>
       </button>
       <p className="mt-2 text-caption leading-5 text-slate-400">
-        Archive is the only manual override. Remove it and save to let the deadline rules apply again.
+        {t('checkpointControlPanel.archiveIsTheOnlyManualOverride')}
       </p>
 
       <div className="mt-5 rounded-xl bg-slate-50 p-3">
         <div className="flex items-center justify-between gap-3 text-xs">
-          <span className="text-slate-500">Submission progress</span>
-          <span className="font-bold text-slate-700">{submissionStats?.submittedTeams ?? '—'} / {submissionStats?.eligibleTeams ?? '—'} teams</span>
+          <span className="text-slate-500">{t('checkpointControlPanel.submissionProgress')}</span>
+          <span className="font-bold text-slate-700">{t('checkpointControlPanel.teams', { v1: submissionStats?.submittedTeams ?? '—', v2: submissionStats?.eligibleTeams ?? '—' })}</span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500">
-          <span>{submissionStats?.reqFilled || 0} / {totalRequirements} requirements in this team</span>
-          <span>{submissionStats?.count || 0} files</span>
+          <span>{t('checkpointControlPanel.requirementsInThisTeam', { v1: submissionStats?.reqFilled || 0, totalRequirements })}</span>
+          <span>{t('checkpointControlPanel.files', { v1: submissionStats?.count || 0 })}</span>
         </div>
       </div>
 
       <div className="mt-4 flex gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-700">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p>Open and Closed are calculated on the backend from deadline, checkpoint order, and the team’s previous submission.</p>
+        <p>{t('checkpointControlPanel.openAndClosedAreCalculatedOn')}</p>
       </div>
       <button type="button" onClick={save} disabled={saving || loadingSchedules} className="mt-4 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60">
-        {saving ? 'Saving…' : loadingSchedules ? 'Loading…' : 'Save deadline'}
+        {saving ? t('checkpointControlPanel.saving') : loadingSchedules ? t('common:states.loading') : t('checkpointControlPanel.saveDeadline')}
       </button>
     </section>
   );

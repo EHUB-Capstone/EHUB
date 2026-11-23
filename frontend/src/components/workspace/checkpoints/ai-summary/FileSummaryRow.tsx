@@ -16,6 +16,7 @@ import { FigureConflicts, StatusLines } from './FigureNotes';
 import { RequirementEvidence } from './RequirementEvidence';
 import { SummaryActionsContext } from './summaryContext';
 import { ActionChip, IgnoredInstructionsNote, LittleTextNote, Quoted, SectionLabel } from './SummaryParts';
+import { useTranslation } from 'react-i18next';
 
 interface QuickViewProps {
   highlights: string[];
@@ -196,6 +197,7 @@ interface FileRowProps {
 }
 
 export function FileRow({ file, selected, onToggleSelected, onRetry, maxCharacters, disabled, autoOpen, requirementsOpen }: FileRowProps) {
+  const { t } = useTranslation('checkpoint');
   // null until the reviewer opens or closes the row: then the automatic choice applies.
   const [chosen, setChosen] = useState<boolean | null>(null);
   const regionId = useId();
@@ -225,7 +227,7 @@ export function FileRow({ file, selected, onToggleSelected, onRetry, maxCharacte
           className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md px-1 py-1 text-left text-body-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 disabled:cursor-default disabled:hover:bg-transparent"
         >
           <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{file.name}</span>
-          <span className="text-caption text-slate-500">v{file.versionNumber}</span>
+          <span className="text-caption text-slate-500">{t('fileSummaryRow.v', { versionNumber: file.versionNumber })}</span>
           {isFileInProgress(file.status) && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
           <Badge variant={status.tone}>{status.label}</Badge>
           {canOpen && <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />}

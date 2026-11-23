@@ -20,6 +20,8 @@ import {
   needsNewUploadSession,
   validateCheckpointUploadFile,
 } from '../../../utils/checkpointUpload';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../../i18n';
 
 interface FileUploadZoneProps {
   teamId: string;
@@ -40,12 +42,12 @@ const isActive = (item: CheckpointUploadItem) =>
 const isCancelled = (error: unknown) => (error as { code?: string })?.code === 'ERR_CANCELED';
 
 const STATUS_LABEL: Record<CheckpointUploadItem['status'], string> = {
-  staged: 'Not submitted',
-  queued: 'Waiting',
-  uploading: 'Uploading',
-  completing: 'Finishing',
-  completed: 'Submitted',
-  failed: 'Failed',
+  get staged() { return i18n.t('checkpoint:fileUploadZone.status.staged'); },
+  get queued() { return i18n.t('checkpoint:fileUploadZone.status.queued'); },
+  get uploading() { return i18n.t('checkpoint:fileUploadZone.status.uploading'); },
+  get completing() { return i18n.t('checkpoint:fileUploadZone.status.completing'); },
+  get completed() { return i18n.t('checkpoint:fileUploadZone.status.completed'); },
+  get failed() { return i18n.t('checkpoint:fileUploadZone.status.failed'); },
 };
 
 export default function FileUploadZone({
@@ -56,6 +58,7 @@ export default function FileUploadZone({
   onUnsentChange,
   variant = 'default',
 }: FileUploadZoneProps) {
+  const { t } = useTranslation('checkpoint');
   const isLarge = variant === 'large';
   const [dragging, setDragging] = useState(false);
   const [items, setItems] = useState<CheckpointUploadItem[]>([]);
@@ -219,7 +222,7 @@ export default function FileUploadZone({
     }
 
     if (skippedForLimit > 0) {
-      toast.error(`A checkpoint can contain at most ${CHECKPOINT_UPLOAD_MAX_FILES} files. ${skippedForLimit} file${skippedForLimit !== 1 ? 's were' : ' was'} not added.`);
+      toast.error(t('fileUploadZone.limitReached', { max: CHECKPOINT_UPLOAD_MAX_FILES, count: skippedForLimit }));
     }
     if (fileRef.current) fileRef.current.value = '';
     if (!accepted.length) return;
@@ -273,13 +276,13 @@ export default function FileUploadZone({
       {limitReached ? (
         <p role="status" className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-          <span>You've reached the {CHECKPOINT_UPLOAD_MAX_FILES}-file limit for this checkpoint. Delete a file to add another.</span>
+          <span>{t('fileUploadZone.youVeReachedTheFileLimit', { CHECKPOINT_UPLOAD_MAX_FILES })}</span>
         </p>
       ) : (
         <div
           role="button"
           tabIndex={0}
-          aria-label={`Upload files. PDF, DOCX or PPTX, up to ${CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB each, ${CHECKPOINT_UPLOAD_MAX_FILES - usedSlots} more allowed.`}
+          aria-label={t('fileUploadZone.uploadFilesPdfDocxOrPptx', { CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB, v2: CHECKPOINT_UPLOAD_MAX_FILES - usedSlots })}
           onClick={() => fileRef.current?.click()}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -311,16 +314,16 @@ export default function FileUploadZone({
             <UploadCloud className={`transition-colors ${isLarge ? 'w-7 h-7' : 'w-8 h-8'} text-primary-700`} />
           </div>
           <p className={`font-semibold text-slate-700 ${isLarge ? 'text-sm' : 'text-xs'}`}>
-            {dragging ? 'Drop files here' : 'Drag & drop files here, or click to browse'}
+            {dragging ? t('fileUploadZone.dropFilesHere') : t('fileUploadZone.dragDropFilesHereOrClick')}
           </p>
           <p className={`text-slate-500 ${isLarge ? 'text-xs' : 'text-overline'}`}>
-            PDF · DOCX · PPTX · Max {CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB} MB per file · Up to {CHECKPOINT_UPLOAD_MAX_FILES} files per checkpoint ({CHECKPOINT_UPLOAD_MAX_FILES - usedSlots} more allowed)
+            {t('fileUploadZone.pdfDocxPptxMaxMbPer', { CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB, CHECKPOINT_UPLOAD_MAX_FILES, v3: CHECKPOINT_UPLOAD_MAX_FILES - usedSlots })}
           </p>
         </div>
       )}
 
       {items.length > 0 && (
-        <ul className="space-y-2" aria-live="polite" aria-label="Upload progress">
+        <ul className="space-y-2" aria-live="polite" aria-label={t('fileUploadZone.uploadProgress')}>
           {items.map(item => (
             <UploadRow
               key={item.id}
@@ -336,7 +339,7 @@ export default function FileUploadZone({
                 onClick={clearFinished}
                 className="text-caption font-semibold text-slate-500 hover:text-slate-700"
               >
-                Clear finished
+                {t('fileUploadZone.clearFinished')}
               </button>
             </li>
           )}
@@ -346,13 +349,13 @@ export default function FileUploadZone({
       {stagedItems.length > 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-warning-light bg-warning-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-800">
-            <span className="font-semibold">{stagedItems.length} file{stagedItems.length !== 1 ? 's' : ''} selected — not submitted yet.</span>{' '}
-            Review the list, then submit to send {stagedItems.length !== 1 ? 'them' : 'it'} to your lecturer.
+            <span className="font-semibold">{t('fileUploadZone.filesSelectedNotSubmitted', { count: stagedItems.length })}</span>{' '}
+            {t('fileUploadZone.reviewTheListThenSubmitTo', { count: stagedItems.length })}
           </p>
           <div className="flex shrink-0 gap-2">
-            <Button variant="ghost" onClick={clearStaged}>Remove all</Button>
+            <Button variant="ghost" onClick={clearStaged}>{t('fileUploadZone.removeAll')}</Button>
             <Button variant="primary" icon={Send} onClick={() => setConfirmOpen(true)}>
-              Submit {stagedItems.length} file{stagedItems.length !== 1 ? 's' : ''}
+              {t('fileUploadZone.submitFiles', { count: stagedItems.length })}
             </Button>
           </div>
         </div>
@@ -362,9 +365,9 @@ export default function FileUploadZone({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={submitStaged}
-        title={`Submit ${stagedItems.length} file${stagedItems.length !== 1 ? 's' : ''}?`}
-        description="The selected files will be uploaded and submitted to this checkpoint. Your lecturer and team will be able to see them."
-        confirmText="Submit"
+        title={t('fileUploadZone.submitFilesQuestion', { count: stagedItems.length })}
+        description={t('fileUploadZone.theSelectedFilesWillBeUploaded')}
+        confirmText={t('common:actions.submit')}
         confirmVariant="primary"
       />
     </div>
@@ -380,6 +383,7 @@ function UploadRow({
   onRetry: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation('checkpoint');
   const active = isActive(item);
   const sentBytes = Math.round((item.file.size * item.percent) / 100);
   const badge = {
@@ -410,7 +414,7 @@ function UploadRow({
           <button
             type="button"
             onClick={onRetry}
-            aria-label={`Retry uploading ${item.file.name}`}
+            aria-label={t('fileUploadZone.retryUploading', { name: item.file.name })}
             className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
           >
             <RotateCcw className="h-4 w-4" />
@@ -420,7 +424,7 @@ function UploadRow({
           <button
             type="button"
             onClick={onCancel}
-            aria-label={active ? `Cancel uploading ${item.file.name}` : item.status === 'staged' ? `Remove ${item.file.name}` : `Dismiss ${item.file.name}`}
+            aria-label={active ? t('fileUploadZone.cancelUploading', { name: item.file.name }) : item.status === 'staged' ? t('fileUploadZone.remove', { name: item.file.name }) : t('fileUploadZone.dismiss', { name: item.file.name })}
             className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="h-4 w-4" />
@@ -432,7 +436,7 @@ function UploadRow({
         <div
           className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200"
           role="progressbar"
-          aria-label={`Upload progress for ${item.file.name}`}
+          aria-label={t('fileUploadZone.uploadProgressFor', { name: item.file.name })}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={item.percent}
@@ -446,11 +450,11 @@ function UploadRow({
 
       <p className={`mt-1 text-overline ${item.status === 'failed' ? 'text-danger-dark' : 'text-slate-500'}`}>
         {item.status === 'failed' && item.error}
-        {item.status === 'staged' && `${formatFileSize(item.file.size)} · will be submitted when you confirm`}
-        {item.status === 'queued' && `${formatFileSize(item.file.size)} · waiting for an upload slot`}
-        {item.status === 'uploading' && `${item.percent}% · ${formatFileSize(sentBytes)} of ${formatFileSize(item.file.size)}`}
-        {item.status === 'completing' && 'Saving and validating file… not submitted until this finishes'}
-        {item.status === 'completed' && `Submitted · ${formatFileSize(item.file.size)}${item.versionNumber ? ` · Version ${item.versionNumber}` : ''}`}
+        {item.status === 'staged' && t('fileUploadZone.willBeSubmittedWhenYouConfirm', { v1: formatFileSize(item.file.size) })}
+        {item.status === 'queued' && t('fileUploadZone.waitingForAnUploadSlot', { v1: formatFileSize(item.file.size) })}
+        {item.status === 'uploading' && t('fileUploadZone.of', { percent: item.percent, v2: formatFileSize(sentBytes), v3: formatFileSize(item.file.size) })}
+        {item.status === 'completing' && t('fileUploadZone.savingAndValidatingFileNotSubmitted')}
+        {item.status === 'completed' && t('fileUploadZone.submitted', { v1: formatFileSize(item.file.size), v2: item.versionNumber ? ` · Version ${item.versionNumber}` : '' })}
       </p>
     </li>
   );

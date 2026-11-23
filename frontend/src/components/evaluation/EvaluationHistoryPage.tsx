@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import moment from 'moment';
 import PerformanceLevelBadge from './PerformanceLevelBadge';
+import { useTranslation } from 'react-i18next';
 
 /**
  * EvaluationHistoryPage Component
@@ -22,6 +23,7 @@ const EvaluationHistoryPage = ({
   loading = false,
   error = null
 }) => {
+  const { t } = useTranslation('evaluation');
   const isMentor = (currentUserRole || '').toUpperCase() === 'MENTOR' || (currentUserRole || '').toUpperCase() === 'STUDENT';
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -47,7 +49,7 @@ const EvaluationHistoryPage = ({
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="loading loading-lg text-primary-700 mb-4"></div>
-          <p>Loading evaluation history...</p>
+          <p>{t('evaluationHistoryPage.loadingEvaluationHistory')}</p>
         </div>
       </div>
     );
@@ -65,7 +67,7 @@ const EvaluationHistoryPage = ({
     return (
       <div className="bg-gray-50 rounded-lg p-12 text-center border border-gray-200">
         <div className="text-4xl mb-4">📋</div>
-        <p className="text-gray-600 font-semibold">No evaluation history available</p>
+        <p className="text-gray-600 font-semibold">{t('evaluationHistoryPage.noEvaluationHistoryAvailable')}</p>
       </div>
     );
   }
@@ -74,31 +76,31 @@ const EvaluationHistoryPage = ({
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="mb-2 text-heading sm:text-display text-secondary tracking-tight">Evaluation History</h1>
+        <h1 className="mb-2 text-heading sm:text-display text-secondary tracking-tight">{t('evaluationHistoryPage.evaluationHistory')}</h1>
         <p className="text-gray-600">
-          {history.length} {history.length === 1 ? 'event' : 'events'} recorded
+          {t('evaluationHistoryPage.eventsRecorded', { count: history.length })}
         </p>
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <div className="text-sm text-blue-600 font-semibold">Total Changes</div>
+          <div className="text-sm text-blue-600 font-semibold">{t('evaluationHistoryPage.totalChanges')}</div>
           <div className="text-2xl font-bold text-blue-900">{history.length}</div>
         </div>
         <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-          <div className="text-sm text-green-600 font-semibold">Submissions</div>
+          <div className="text-sm text-green-600 font-semibold">{t('evaluationHistoryPage.submissions')}</div>
           <div className="text-2xl font-bold text-green-900">
             {history.filter(h => h.action === 'SUBMITTED').length}
           </div>
         </div>
         <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-          <div className="text-sm text-yellow-600 font-semibold">Updates</div>
+          <div className="text-sm text-yellow-600 font-semibold">{t('evaluationHistoryPage.updates')}</div>
           <div className="text-2xl font-bold text-yellow-900">
             {history.filter(h => h.action === 'UPDATED').length}
           </div>
         </div>
         <div className="bg-secondary-50 rounded-lg p-4 border border-secondary-200">
-          <div className="text-sm text-secondary font-semibold">Last Modified</div>
+          <div className="text-sm text-secondary font-semibold">{t('evaluationHistoryPage.lastModified')}</div>
           <div className="text-sm font-bold text-secondary">
             {moment(history[0]?.createdAt).fromNow()}
           </div>
@@ -119,13 +121,13 @@ const EvaluationHistoryPage = ({
                 <div className="text-2xl">{actionIcons[item.action]}</div>
                 <div className="flex-1">
                   <div className="font-bold text-gray-900">
-                    {item.action === 'CREATED' && 'Evaluation Created'}
-                    {item.action === 'UPDATED' && 'Evaluation Updated'}
-                    {item.action === 'SUBMITTED' && 'Evaluation Submitted'}
-                    {item.action === 'PUBLISHED' && 'Evaluation Published'}
+                    {item.action === 'CREATED' && t('evaluationHistoryPage.evaluationCreated')}
+                    {item.action === 'UPDATED' && t('evaluationHistoryPage.evaluationUpdated')}
+                    {item.action === 'SUBMITTED' && t('evaluationHistoryPage.evaluationSubmitted')}
+                    {item.action === 'PUBLISHED' && t('evaluationHistoryPage.evaluationPublished')}
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
-                    by <span className="font-semibold">{item.changedBy?.name}</span>
+                    {t('evaluationHistoryPage.by')} <span className="font-semibold">{item.changedBy?.name}</span>
                     {' '} • {moment(item.createdAt).format('MMMM D, YYYY h:mm A')}
                   </div>
                   {item.note && (
@@ -146,7 +148,7 @@ const EvaluationHistoryPage = ({
                 {/* Rubric Scores Changes */}
                 {item.snapshot.rubricScores && (
                   <div>
-                    <h4 className="font-bold text-gray-900 mb-3">Scores</h4>
+                    <h4 className="font-bold text-gray-900 mb-3">{t('evaluationHistoryPage.scores')}</h4>
                     <div className="grid grid-cols-2 gap-3">
                       {item.snapshot.rubricScores.map((score) => (
                         <div key={score.criterionKey} className="bg-white bg-opacity-50 p-3 rounded">
@@ -155,7 +157,7 @@ const EvaluationHistoryPage = ({
                           </div>
                           <div className="flex items-center justify-between mt-1">
                             <span className="text-sm text-gray-600">
-                              Weight: {score.weight}%
+                              {t('evaluationHistoryPage.weight', { weight: score.weight })}
                             </span>
                             {/* Mentor sees level badge; others see numeric score */}
                             {isMentor ? (
@@ -173,7 +175,7 @@ const EvaluationHistoryPage = ({
                           </div>
                           {!isMentor && (
                             <div className="text-xs text-gray-600 mt-1">
-                              Weighted: {score.weightedScore}
+                              {t('evaluationHistoryPage.weighted', { weightedScore: score.weightedScore })}
                             </div>
                           )}
                           {score.comment && (
@@ -190,7 +192,7 @@ const EvaluationHistoryPage = ({
                 {/* Overall Feedback */}
                 {item.snapshot.overallFeedback && (
                   <div>
-                    <h4 className="font-bold text-gray-900 mb-2">Overall Feedback</h4>
+                    <h4 className="font-bold text-gray-900 mb-2">{t('evaluationHistoryPage.overallFeedback')}</h4>
                     <div className="bg-white bg-opacity-50 p-3 rounded text-sm text-gray-800 whitespace-pre-wrap">
                       {item.snapshot.overallFeedback}
                     </div>
@@ -204,15 +206,15 @@ const EvaluationHistoryPage = ({
                     {/* Checkpoint Total — hidden for Mentor */}
                     {!isMentor && (
                       <div>
-                        <div className="text-gray-600">Checkpoint Total</div>
+                        <div className="text-gray-600">{t('evaluationHistoryPage.checkpointTotal')}</div>
                         <div className="font-bold text-lg text-blue-700">
-                          {item.snapshot.checkpointTotal?.toFixed(2) || 'N/A'}
+                          {item.snapshot.checkpointTotal?.toFixed(2) || t('evaluationHistoryPage.nA')}
                         </div>
                       </div>
                     )}
                     {isMentor && (
                       <div>
-                        <div className="text-gray-600">Overall Performance</div>
+                        <div className="text-gray-600">{t('evaluationHistoryPage.overallPerformance')}</div>
                         <div className="mt-1">
                           <PerformanceLevelBadge
                             level={item.snapshot.overallLevel || 'Unscored'}
@@ -223,7 +225,7 @@ const EvaluationHistoryPage = ({
                       </div>
                     )}
                     <div>
-                      <div className="text-gray-600">Status</div>
+                      <div className="text-gray-600">{t('evaluationHistoryPage.status')}</div>
                       <div className="font-bold">
                         <span className={`px-2 py-1 rounded text-xs font-semibold ${
                           item.snapshot.status === 'SUBMITTED' ? 'bg-green-200 text-green-800' :
@@ -235,7 +237,7 @@ const EvaluationHistoryPage = ({
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-600">Modified By</div>
+                      <div className="text-gray-600">{t('evaluationHistoryPage.modifiedBy')}</div>
                       <div className="font-bold text-gray-900">
                         {item.changedBy?.name}
                       </div>
@@ -251,7 +253,7 @@ const EvaluationHistoryPage = ({
       {/* Timeline Footer */}
       <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
         <p className="text-sm text-gray-600">
-          First evaluation created on{' '}
+          {t('evaluationHistoryPage.firstEvaluationCreatedOn')}{' '}
           <span className="font-semibold">
             {moment(history[history.length - 1]?.createdAt).format('MMMM D, YYYY')}
           </span>

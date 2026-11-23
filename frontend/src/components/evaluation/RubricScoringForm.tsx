@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCheckpointConfig } from '../../api/evaluation.api';
 import PerformanceLevelBadge from './PerformanceLevelBadge';
+import { useTranslation } from 'react-i18next';
 
 /**
  * RubricScoringForm Component
@@ -21,6 +22,7 @@ const RubricScoringForm = ({
   readOnly = false,
   hideSensitiveScores = false,
 }) => {
+  const { t } = useTranslation('evaluation');
   const [checkpoint, setCheckpoint] = useState(null);
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +53,8 @@ const RubricScoringForm = ({
           number: checkpointNumber,
           rubrics: [
             // Mock data - will be replaced with actual API
-            { key: 'criterion1', label: 'Criterion 1', weight: 30, description: 'Description' },
-            { key: 'criterion2', label: 'Criterion 2', weight: 20, description: 'Description' },
+            { key: 'criterion1', label: t('rubricScoringForm.criterion1'), weight: 30, description: t('rubricScoringForm.description') },
+            { key: 'criterion2', label: t('rubricScoringForm.criterion2'), weight: 20, description: t('rubricScoringForm.description') },
           ]
         };
         setCheckpoint(config);
@@ -75,7 +77,7 @@ const RubricScoringForm = ({
         setScores(initialized);
         setLoading(false);
       } catch (err) {
-        setError('Failed to load checkpoint configuration');
+        setError(t('rubricScoringForm.failedToLoadCheckpointConfiguration'));
         setLoading(false);
       }
     };
@@ -164,7 +166,7 @@ const RubricScoringForm = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin">Loading rubric...</div>
+        <div className="animate-spin">{t('rubricScoringForm.loadingRubric')}</div>
       </div>
     );
   }
@@ -189,17 +191,17 @@ const RubricScoringForm = ({
           </colgroup>
           <thead className="bg-gray-100 sticky top-0">
             <tr>
-              <th className="px-4 py-3 text-left border text-sm font-semibold">Criterion</th>
-              <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">Weight</th>
-              <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">Level</th>
+              <th className="px-4 py-3 text-left border text-sm font-semibold">{t('rubricScoringForm.criterion')}</th>
+              <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">{t('rubricScoringForm.weight')}</th>
+              <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">{t('rubricScoringForm.level')}</th>
               {/* Score and Weighted columns hidden for Mentor */}
               {!hideSensitiveScores && (
                 <>
-                  <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">Score</th>
-                  <th className="px-4 py-3 text-right border text-sm font-semibold whitespace-nowrap">Weighted</th>
+                  <th className="px-4 py-3 text-center border text-sm font-semibold whitespace-nowrap">{t('rubricScoringForm.score')}</th>
+                  <th className="px-4 py-3 text-right border text-sm font-semibold whitespace-nowrap">{t('rubricScoringForm.weighted')}</th>
                 </>
               )}
-              <th className="px-4 py-3 text-left border text-sm font-semibold">Comment</th>
+              <th className="px-4 py-3 text-left border text-sm font-semibold">{t('performanceLevelBadge.comment')}</th>
             </tr>
           </thead>
           <tbody>
@@ -230,11 +232,11 @@ const RubricScoringForm = ({
                       disabled={readOnly}
                       className="w-full px-2 py-1 border rounded text-sm disabled:bg-gray-100"
                     >
-                      <option value="">-- Select --</option>
-                      <option value="EXCELLENT">Excellent (8.5-10)</option>
-                      <option value="GOOD">Good (7.0-8.4)</option>
-                      <option value="FAIR">Fair (5.0-6.9)</option>
-                      <option value="POOR">Poor (&lt;5.0)</option>
+                      <option value="">{t('rubricScoringForm.select')}</option>
+                      <option value="EXCELLENT">{t('rubricScoringForm.excellent8510')}</option>
+                      <option value="GOOD">{t('rubricScoringForm.good7084')}</option>
+                      <option value="FAIR">{t('rubricScoringForm.fair5069')}</option>
+                      <option value="POOR">{t('rubricScoringForm.poor50')}</option>
                     </select>
                   )}
                 </td>
@@ -266,7 +268,7 @@ const RubricScoringForm = ({
                   <textarea
                     value={score.comment}
                     onChange={(e) => handleCommentChange(index, e.target.value)}
-                    placeholder="Add comment..."
+                    placeholder={t('rubricScoringForm.addComment')}
                     disabled={readOnly || hideSensitiveScores}
                     rows={4}
                     className="w-full min-w-0 px-3 py-2 border rounded text-sm resize-y disabled:bg-gray-100"
@@ -280,7 +282,7 @@ const RubricScoringForm = ({
             <tfoot className="bg-blue-50 font-bold border-t-2 border-blue-300">
               <tr>
                 <td colSpan="4" className="px-4 py-3 border text-right">
-                  Checkpoint Total:
+                  {t('rubricScoringForm.checkpointTotal')}
                 </td>
                 <td className="px-4 py-3 border text-right">
                   <div className="text-lg text-blue-700">
@@ -299,17 +301,17 @@ const RubricScoringForm = ({
         <div className="p-4 bg-gray-50 border-t">
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-sm text-gray-600">Total Weight</div>
+              <div className="text-sm text-gray-600">{t('rubricScoringForm.totalWeight')}</div>
               <div className="text-lg font-bold text-gray-800">
                 {scores.reduce((sum, s) => sum + s.weight, 0)}%
               </div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-gray-600">Criteria Count</div>
+              <div className="text-sm text-gray-600">{t('rubricScoringForm.criteriaCount')}</div>
               <div className="text-lg font-bold text-gray-800">{scores.length}</div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-gray-600">Checkpoint Score</div>
+              <div className="text-sm text-gray-600">{t('rubricScoringForm.checkpointScore')}</div>
               <div className="text-lg font-bold text-blue-700">{totalScore.toFixed(2)}</div>
             </div>
           </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import RubricScoringForm from './RubricScoringForm';
 import CommentThread from './CommentThread';
 import PerformanceLevelBadge from './PerformanceLevelBadge';
+import { useTranslation } from 'react-i18next';
 
 /**
  * EvaluationSummary Component
@@ -24,6 +25,7 @@ const EvaluationSummary = ({
   onUpdate,
   onSubmit
 }) => {
+  const { t } = useTranslation('evaluation');
   const [editMode, setEditMode] = useState(false);
   const shouldHideSensitiveScores = isMentor || (currentUserRole || '').toUpperCase() === 'STUDENT' || (currentUserRole || '').toUpperCase() === 'USER';
   const [formData, setFormData] = useState({
@@ -48,7 +50,7 @@ const EvaluationSummary = ({
   };
 
   const handleSubmit = async () => {
-    if (window.confirm('Are you sure you want to submit this evaluation?')) {
+    if (window.confirm(t('evaluationSummary.areYouSureYouWantTo'))) {
       await onSubmit?.({
         ...formData,
         rubricScores: rubricScores,
@@ -63,9 +65,9 @@ const EvaluationSummary = ({
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Evaluation Summary</h2>
+            <h2 className="text-2xl font-bold text-gray-800">{t('evaluationSummary.evaluationSummary')}</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {checkpoint?.title || `Checkpoint ${evaluation?.checkpointNumber}`}
+              {checkpoint?.title || t('evaluationSummary.checkpoint', { checkpointNumber: evaluation?.checkpointNumber })}
             </p>
           </div>
           <div className="text-right">
@@ -100,17 +102,17 @@ const EvaluationSummary = ({
 
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div className="bg-blue-50 p-3 rounded">
-            <div className="text-gray-600">Evaluator</div>
+            <div className="text-gray-600">{t('evaluationSummary.evaluator')}</div>
             <div className="font-semibold">{evaluation?.lecturerId?.name}</div>
           </div>
           <div className="bg-blue-50 p-3 rounded">
-            <div className="text-gray-600">Role</div>
+            <div className="text-gray-600">{t('evaluationSummary.role')}</div>
             <div className="font-semibold">{evaluation?.evaluatorRole}</div>
           </div>
           <div className="bg-blue-50 p-3 rounded">
-            <div className="text-gray-600">Submitted</div>
+            <div className="text-gray-600">{t('evaluationSummary.submitted')}</div>
             <div className="font-semibold">
-              {evaluation?.submittedAt ? new Date(evaluation.submittedAt).toLocaleDateString() : 'Not submitted'}
+              {evaluation?.submittedAt ? new Date(evaluation.submittedAt).toLocaleDateString() : t('evaluationSummary.notSubmitted')}
             </div>
           </div>
         </div>
@@ -124,14 +126,14 @@ const EvaluationSummary = ({
                   onClick={() => setEditMode(true)}
                   className="btn btn-primary btn-sm"
                 >
-                  Edit Evaluation
+                  {t('evaluationSummary.editEvaluation')}
                 </button>
                 {canSubmit && (
                   <button
                     onClick={handleSubmit}
                     className="btn btn-success btn-sm"
                   >
-                    Submit Official Evaluation
+                    {t('evaluationSummary.submitOfficialEvaluation')}
                   </button>
                 )}
               </>
@@ -141,7 +143,7 @@ const EvaluationSummary = ({
                   onClick={handleSaveChanges}
                   className="btn btn-primary btn-sm"
                 >
-                  Save Changes
+                  {t('evaluationSummary.saveChanges')}
                 </button>
                 <button
                   onClick={() => {
@@ -152,7 +154,7 @@ const EvaluationSummary = ({
                   }}
                   className="btn btn-ghost btn-sm"
                 >
-                  Cancel
+                  {t('common:actions.cancel')}
                 </button>
               </>
             )}
@@ -162,7 +164,7 @@ const EvaluationSummary = ({
 
       {/* Rubric Scoring Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Rubric Scores</h3>
+        <h3 className="text-xl font-bold text-gray-800 mb-4">{t('evaluationSummary.rubricScores')}</h3>
         <RubricScoringForm
           checkpointNumber={evaluation?.checkpointNumber}
           initialScores={evaluation?.rubricScores || []}
@@ -175,25 +177,25 @@ const EvaluationSummary = ({
 
       {/* Feedback Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Detailed Feedback</h3>
+        <h3 className="text-xl font-bold text-gray-800 mb-4">{t('evaluationSummary.detailedFeedback')}</h3>
         
         <div className="space-y-4">
           {/* Overall Feedback */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Overall Feedback
+              {t('evaluationHistoryPage.overallFeedback')}
             </label>
             {editMode && canEdit ? (
               <textarea
                 value={formData.overallFeedback}
                 onChange={(e) => setFormData({...formData, overallFeedback: e.target.value})}
-                placeholder="Provide overall feedback and observations..."
+                placeholder={t('evaluationSummary.provideOverallFeedbackAndObservations')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 rows="5"
               />
             ) : (
               <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
-                {formData.overallFeedback || 'No overall feedback provided.'}
+                {formData.overallFeedback || t('evaluationSummary.noOverallFeedbackProvided')}
               </div>
             )}
           </div>
@@ -205,11 +207,11 @@ const EvaluationSummary = ({
       {!shouldHideSensitiveScores && (
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg p-4 border border-blue-200 bg-blue-50">
-            <div className="text-sm text-blue-700 font-semibold">Average Score</div>
+            <div className="text-sm text-blue-700 font-semibold">{t('evaluationSummary.averageScore')}</div>
             <div className="text-2xl font-bold text-blue-900 mt-1">{totalScore.toFixed(2)}</div>
           </div>
           <div className="rounded-lg p-4 border border-secondary-200 bg-secondary-50">
-            <div className="text-sm text-secondary font-semibold">Criteria Evaluated</div>
+            <div className="text-sm text-secondary font-semibold">{t('evaluationSummary.criteriaEvaluated')}</div>
             <div className="text-2xl font-bold text-secondary mt-1">{rubricScores.length}</div>
           </div>
         </div>

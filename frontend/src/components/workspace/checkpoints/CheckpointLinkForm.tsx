@@ -10,6 +10,7 @@ import {
   validateCheckpointLinkUrl,
 } from '../../../utils/checkpointLink';
 import Button from '../../ui/Button';
+import { useTranslation } from 'react-i18next';
 
 interface CheckpointLinkFormProps {
   teamId: string;
@@ -26,6 +27,7 @@ export default function CheckpointLinkForm({
   onCancelEdit,
   onSaved,
 }: CheckpointLinkFormProps) {
+  const { t } = useTranslation('checkpoint');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -55,7 +57,7 @@ export default function CheckpointLinkForm({
       } else {
         await checkpointApi.createLink(teamId, checkpointNumber, payload);
       }
-      toast.success(editingLink ? 'Submitted link updated.' : 'Link submitted.');
+      toast.success(editingLink ? t('checkpointLinkForm.submittedLinkUpdated') : t('checkpointLinkForm.linkSubmitted'));
       setName('');
       setUrl('');
       setUrlError('');
@@ -72,19 +74,19 @@ export default function CheckpointLinkForm({
     <form onSubmit={submit} className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <label htmlFor="checkpoint-link-name" className="space-y-1.5 text-sm font-semibold text-slate-700">
-          <span>Link name <span className="text-red-500">*</span></span>
+          <span>{t('checkpointLinkForm.linkName')} <span className="text-red-500">*</span></span>
           <input
             id="checkpoint-link-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus={Boolean(editingLink)}
             maxLength={CHECKPOINT_LINK_NAME_MAX_LENGTH}
-            placeholder="Prototype demo"
+            placeholder={t('checkpointLinkForm.prototypeDemo')}
             className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
         </label>
         <label htmlFor="checkpoint-link-url" className="space-y-1.5 text-sm font-semibold text-slate-700">
-          <span>Public HTTPS link <span className="text-red-500">*</span></span>
+          <span>{t('checkpointLinkForm.publicHttpsLink')} <span className="text-red-500">*</span></span>
           <input
             id="checkpoint-link-url"
             value={url}
@@ -97,16 +99,16 @@ export default function CheckpointLinkForm({
             className={`w-full rounded-xl border px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/15 ${urlError ? 'border-red-300 focus:border-red-400' : 'border-slate-300 focus:border-primary'}`}
           />
           <span id="checkpoint-link-url-hint" role={urlError ? 'alert' : undefined} className={`block text-xs font-normal ${urlError ? 'text-red-600' : 'text-slate-500'}`}>
-            {urlError || 'Google Drive, Figma, GitHub, YouTube… must be publicly viewable.'}
+            {urlError || t('checkpointLinkForm.googleDriveFigmaGithubYoutubeMust')}
           </span>
         </label>
       </div>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">Only public HTTPS links are accepted · Maximum 10 active links</p>
+        <p className="text-xs text-slate-500">{t('checkpointLinkForm.onlyPublicHttpsLinksAreAccepted')}</p>
         <div className="flex gap-2">
-          {editingLink && <Button type="button" variant="outline" onClick={onCancelEdit} disabled={saving}>Cancel</Button>}
+          {editingLink && <Button type="button" variant="outline" onClick={onCancelEdit} disabled={saving}>{t('common:actions.cancel')}</Button>}
           <Button type="submit" icon={Link2} isLoading={saving} disabled={!canSubmit}>
-            {editingLink ? 'Save link' : 'Submit link'}
+            {editingLink ? t('checkpointLinkForm.saveLink') : t('checkpointLinkForm.submitLink')}
           </Button>
         </div>
       </div>

@@ -902,5 +902,23 @@
     "teamTasks": "Công việc nhóm",
     "editTask": "Chỉnh sửa công việc",
     "newTask": "Công việc mới"
+  },
+  "addShortcutModal": {
+    "editShortcut": "Chỉnh sửa lối tắt",
+    "addShortcut": "Thêm lối tắt",
+    "webAddressUrl": "Địa chỉ web / URL",
+    "enterAValidHttpOrHttps": "Nhập URL HTTP hoặc HTTPS hợp lệ.",
+    "name": "Tên",
+    "githubRepository": "Kho GitHub"
+  },
+  "quickShortcuts": {
+    "shortcutActions": "Thao tác lối tắt",
+    "addShortcut": "Thêm lối tắt",
+    "loadingShortcuts": "Đang tải các lối tắt",
+    "unableToLoadShortcuts": "Không thể tải các lối tắt.",
+    "noShortcutsYet": "Chưa có lối tắt nào",
+    "addTheFirstSharedResourceFor": "Hãy thêm tài nguyên dùng chung đầu tiên cho không gian làm việc này.",
+    "deleteShortcut": "Xóa lối tắt?",
+    "deleteFromThisWorkspace": "Xóa “{{v1}}” khỏi không gian làm việc này?"
   }
 }

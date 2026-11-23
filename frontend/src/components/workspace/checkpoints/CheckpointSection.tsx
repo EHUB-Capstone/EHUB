@@ -9,6 +9,7 @@ import CheckpointPanel from './CheckpointPanel';
 import ErrorState from '../../ui/ErrorState';
 import { buildWorkspaceCheckpointOverview } from '../../../utils/workspaceCheckpointOverview';
 import { subscribeProjectDirectionRealtime } from '../../../api/projectDirectionRealtime';
+import { useTranslation } from 'react-i18next';
 
 export default function CheckpointSection({
   teamId,
@@ -19,6 +20,7 @@ export default function CheckpointSection({
   proposalId,
   pitchDeckId,
 }) {
+  const { t } = useTranslation('checkpoint');
   const [configs, setConfigs] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -48,8 +50,8 @@ export default function CheckpointSection({
     } catch (e) {
       if (!silent) {
         setError(e?.response?.status === 404 || e?.status === 404
-          ? 'Checkpoints are not available on this server yet. Submission and feedback are unavailable.'
-          : 'Unable to load checkpoints. Please try again.');
+          ? t('checkpointSection.checkpointsAreNotAvailableOnThis')
+          : t('checkpointSection.unableToLoadCheckpointsPleaseTry'));
       }
     } finally {
       if (!silent) setLoading(false);
@@ -99,7 +101,7 @@ export default function CheckpointSection({
     return (s?.count || 0) > 0 || (s?.linkCount || 0) > 0;
   }).length;
 
-  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">Startup Checkpoints</h2><ErrorState message={error} onRetry={() => void fetchStats()} /></section>;
+  if (error) return <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="mb-3 text-lg font-bold">{t('checkpointSection.startupCheckpoints')}</h2><ErrorState message={error} onRetry={() => void fetchStats()} /></section>;
 
   return (
     <>
@@ -112,9 +114,9 @@ export default function CheckpointSection({
                 <Flag className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Startup Checkpoints</h2>
+                <h2 className="text-lg font-bold text-slate-900">{t('checkpointSection.startupCheckpoints')}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {configs.length} milestone stage{configs.length === 1 ? '' : 's'} · submit documents, links & receive feedback
+                  {t('checkpointSection.milestoneStages', { count: configs.length })}
                 </p>
               </div>
             </div>
@@ -127,7 +129,7 @@ export default function CheckpointSection({
                   <Target className="w-4 h-4 text-primary" />
                   <span className="text-sm font-bold text-slate-700">
                     {completedCount}
-                    <span className="text-slate-400 font-medium"> / {configs.length} completed</span>
+                    <span className="text-slate-400 font-medium"> {t('checkpointSection.completed', { length: configs.length })}</span>
                   </span>
                 </div>
               )}
@@ -148,7 +150,7 @@ export default function CheckpointSection({
         {/* Vertical checkpoint list */}
         <div className="px-4 py-6 sm:px-6">
           {configs.length === 0 && !loading ? (
-            <p className="text-sm text-slate-400 text-center py-8">No checkpoints configured.</p>
+            <p className="text-sm text-slate-400 text-center py-8">{t('checkpointSection.noCheckpointsConfigured')}</p>
           ) : (
             <div className="space-y-4">
               {configs.map((cp, index) => (

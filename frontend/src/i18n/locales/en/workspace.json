@@ -904,5 +904,23 @@
     "teamTasks": "Team Tasks",
     "editTask": "Edit Task",
     "newTask": "New Task"
+  },
+  "addShortcutModal": {
+    "editShortcut": "Edit shortcut",
+    "addShortcut": "Add shortcut",
+    "webAddressUrl": "Web address / URL",
+    "enterAValidHttpOrHttps": "Enter a valid HTTP or HTTPS URL.",
+    "name": "Name",
+    "githubRepository": "GitHub Repository"
+  },
+  "quickShortcuts": {
+    "shortcutActions": "Shortcut actions",
+    "addShortcut": "Add Shortcut",
+    "loadingShortcuts": "Loading shortcuts",
+    "unableToLoadShortcuts": "Unable to load shortcuts.",
+    "noShortcutsYet": "No shortcuts yet",
+    "addTheFirstSharedResourceFor": "Add the first shared resource for this workspace.",
+    "deleteShortcut": "Delete shortcut?",
+    "deleteFromThisWorkspace": "Delete “{{v1}}” from this workspace?"
   }
 }

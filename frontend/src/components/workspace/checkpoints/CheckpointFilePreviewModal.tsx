@@ -49,6 +49,7 @@ import {
   PreviewUnavailableError,
   resolvePreviewSource,
 } from '../../../utils/previewSource';
+import { useTranslation } from 'react-i18next';
 
 // Small Range requests let the first page appear long before the whole PDF has been downloaded.
 const PDF_RANGE_CHUNK_SIZE = 256 * 1024;
@@ -92,6 +93,7 @@ function PdfPageCanvas({
   registerPage,
   onFirstRender,
 }: PdfPageCanvasProps) {
+  const { t } = useTranslation('checkpoint');
   const onFirstRenderRef = useRef(onFirstRender);
   useEffect(() => {
     onFirstRenderRef.current = onFirstRender;
@@ -182,7 +184,7 @@ function PdfPageCanvas({
     <article
       ref={setPageContainer}
       data-page-number={pageNumber}
-      aria-label={`Page ${pageNumber}`}
+      aria-label={t('checkpointFilePreviewModal.page', { pageNumber })}
       aria-busy={status === 'loading'}
       className="relative shrink-0 overflow-hidden bg-white shadow-[0_10px_28px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/10"
       style={{ width: pageSize.width, height: pageSize.height }}
@@ -190,7 +192,7 @@ function PdfPageCanvas({
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label={`Rendered document page ${pageNumber}`}
+        aria-label={t('checkpointFilePreviewModal.renderedDocumentPage', { pageNumber })}
         className={`block bg-white transition-opacity duration-150 ${status === 'ready' ? 'opacity-100' : 'opacity-0'}`}
       />
 
@@ -203,7 +205,7 @@ function PdfPageCanvas({
       {status === 'error' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
           <AlertCircle className="h-7 w-7 text-red-500" />
-          <p className="mt-2 text-sm font-semibold text-slate-700">Page {pageNumber} could not be rendered.</p>
+          <p className="mt-2 text-sm font-semibold text-slate-700">{t('checkpointFilePreviewModal.pageCouldNotBeRendered', { pageNumber })}</p>
         </div>
       )}
     </article>
@@ -217,6 +219,7 @@ export default function CheckpointFilePreviewModal({
   initialPage,
   onClose,
 }: CheckpointFilePreviewModalProps) {
+  const { t } = useTranslation('checkpoint');
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [firstPageSize, setFirstPageSize] = useState<{ width: number; height: number } | null>(null);
   const [viewerSize, setViewerSize] = useState({ width: 0, height: 0 });
@@ -434,7 +437,7 @@ export default function CheckpointFilePreviewModal({
         canDirectDownload: file.canDirectDownload,
       });
     } catch {
-      toast.error('Unable to download the original file.');
+      toast.error(t('checkpointFilePreviewModal.unableToDownloadTheOriginalFile'));
     } finally {
       setDownloading(false);
     }
@@ -476,7 +479,7 @@ export default function CheckpointFilePreviewModal({
         await viewerShellRef.current?.requestFullscreen();
       }
     } catch {
-      toast.error('Fullscreen view is not available in this browser.');
+      toast.error(t('checkpointFilePreviewModal.fullscreenViewIsNotAvailableIn'));
     }
   }, []);
 
@@ -597,7 +600,7 @@ export default function CheckpointFilePreviewModal({
               <FileText className="h-5 w-5" />
             </div>
             <h2 id="checkpoint-file-preview-title" className="min-w-0 truncate text-sm font-bold text-slate-900 sm:text-base" title={file.originalName}>
-              <span className="text-slate-500">Preview · </span>
+              <span className="text-slate-500">{t('checkpointFilePreviewModal.preview')} </span>
               {file.originalName}
             </h2>
           </div>
@@ -609,34 +612,34 @@ export default function CheckpointFilePreviewModal({
               icon={Download}
               isLoading={downloading}
               onClick={() => void downloadOriginal()}
-              aria-label="Download original file"
+              aria-label={t('checkpointFilePreviewModal.downloadOriginalFile')}
               className="px-2.5 sm:px-3"
             >
-              <span className="hidden sm:inline">Download original</span>
+              <span className="hidden sm:inline">{t('checkpointFilePreviewModal.downloadOriginal')}</span>
             </Button>
             <Button
               size="sm"
               variant="ghost"
               icon={X}
               onClick={closePreview}
-              aria-label="Close preview"
+              aria-label={t('checkpointFilePreviewModal.closePreview')}
               className="px-2.5 sm:px-3"
             >
-              <span className="hidden sm:inline">Close</span>
+              <span className="hidden sm:inline">{t('common:actions.close')}</span>
             </Button>
           </div>
         </header>
 
         {!loading && !error && pdfDocument && (
-          <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-2 py-2 sm:px-4" role="toolbar" aria-label="Document preview controls">
+          <div className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-2 py-2 sm:px-4" role="toolbar" aria-label={t('checkpointFilePreviewModal.documentPreviewControls')}>
             <div className="mx-auto flex min-w-max items-center justify-center gap-1 sm:gap-2">
               <button
                 type="button"
                 className={viewerControlClass}
                 onClick={() => changePage(-1)}
                 disabled={currentPage <= 1}
-                aria-label="Previous page"
-                title="Previous page (Left arrow)"
+                aria-label={t('checkpointFilePreviewModal.previousPage')}
+                title={t('checkpointFilePreviewModal.previousPageLeftArrow')}
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -648,8 +651,8 @@ export default function CheckpointFilePreviewModal({
                 className={viewerControlClass}
                 onClick={() => changePage(1)}
                 disabled={currentPage >= totalPages}
-                aria-label="Next page"
-                title="Next page (Right arrow)"
+                aria-label={t('checkpointFilePreviewModal.nextPage')}
+                title={t('checkpointFilePreviewModal.nextPageRightArrow')}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -660,8 +663,8 @@ export default function CheckpointFilePreviewModal({
                 type="button"
                 className={viewerControlClass}
                 onClick={() => changeZoom(-1)}
-                aria-label="Zoom out"
-                title="Zoom out (-)"
+                aria-label={t('checkpointFilePreviewModal.zoomOut')}
+                title={t('checkpointFilePreviewModal.zoomOut2')}
               >
                 <ZoomOut className="h-4 w-4" />
               </button>
@@ -672,8 +675,8 @@ export default function CheckpointFilePreviewModal({
                 type="button"
                 className={viewerControlClass}
                 onClick={() => changeZoom(1)}
-                aria-label="Zoom in"
-                title="Zoom in (+)"
+                aria-label={t('checkpointFilePreviewModal.zoomIn')}
+                title={t('checkpointFilePreviewModal.zoomIn2')}
               >
                 <ZoomIn className="h-4 w-4" />
               </button>
@@ -685,30 +688,30 @@ export default function CheckpointFilePreviewModal({
                 className={`${viewerControlClass} ${fitMode === 'width' ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 hover:text-primary-dark' : ''}`}
                 onClick={() => setFitMode('width')}
                 aria-pressed={fitMode === 'width'}
-                title="Fit width"
+                title={t('checkpointFilePreviewModal.fitWidth')}
               >
                 <MoveHorizontal className="h-4 w-4" />
-                <span className="hidden md:inline">Fit width</span>
+                <span className="hidden md:inline">{t('checkpointFilePreviewModal.fitWidth')}</span>
               </button>
               <button
                 type="button"
                 className={`${viewerControlClass} ${fitMode === 'page' ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 hover:text-primary-dark' : ''}`}
                 onClick={() => setFitMode('page')}
                 aria-pressed={fitMode === 'page'}
-                title="Fit page"
+                title={t('checkpointFilePreviewModal.fitPage')}
               >
                 <Scan className="h-4 w-4" />
-                <span className="hidden md:inline">Fit page</span>
+                <span className="hidden md:inline">{t('checkpointFilePreviewModal.fitPage')}</span>
               </button>
               <button
                 type="button"
                 className={viewerControlClass}
                 onClick={() => void toggleFullscreen()}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                aria-label={isFullscreen ? t('checkpointFilePreviewModal.exitFullscreen') : t('checkpointFilePreviewModal.enterFullscreen')}
+                title={isFullscreen ? t('checkpointFilePreviewModal.exitFullscreen') : t('checkpointFilePreviewModal.fullscreen')}
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                <span className="hidden lg:inline">{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
+                <span className="hidden lg:inline">{isFullscreen ? t('checkpointFilePreviewModal.exitFullscreen') : t('checkpointFilePreviewModal.fullscreen')}</span>
               </button>
             </div>
           </div>
@@ -722,23 +725,23 @@ export default function CheckpointFilePreviewModal({
               </div>
               <p className="mt-4 text-sm font-bold text-slate-800">
                 {phase === 'preparing'
-                  ? 'Preparing preview...'
+                  ? t('checkpointFilePreviewModal.preparingPreview')
                   : phase === 'downloading'
-                    ? `Loading document${loadPercent === null ? '...' : `... ${loadPercent}%`}`
-                    : 'Opening preview...'}
+                    ? t('checkpointFilePreviewModal.loadingDocument', { v1: loadPercent === null ? '...' : `... ${loadPercent}%` })
+                    : t('checkpointFilePreviewModal.openingPreview')}
               </p>
               <p className="mt-1 max-w-xs px-4 text-xs text-slate-500">
                 {phase === 'preparing'
-                  ? `Converting this document to PDF the first time it is opened. This can take up to 30 seconds${preparingSeconds >= 3 ? ` (${preparingSeconds}s)` : ''}.`
+                  ? t('checkpointFilePreviewModal.convertingThisDocumentToPdfThe', { v1: preparingSeconds >= 3 ? ` (${preparingSeconds}s)` : '' })
                   : phase === 'downloading'
-                    ? 'The first page appears as soon as enough of the file has arrived.'
-                    : 'Checking access to the document'}
+                    ? t('checkpointFilePreviewModal.theFirstPageAppearsAsSoon')
+                    : t('checkpointFilePreviewModal.checkingAccessToTheDocument')}
               </p>
               {phase === 'downloading' && loadPercent !== null && (
                 <div
                   className="mt-3 h-1.5 w-48 overflow-hidden rounded-full bg-slate-200"
                   role="progressbar"
-                  aria-label="Document download progress"
+                  aria-label={t('checkpointFilePreviewModal.documentDownloadProgress')}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={loadPercent}
@@ -755,14 +758,14 @@ export default function CheckpointFilePreviewModal({
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500">
                   <AlertCircle className="h-7 w-7" />
                 </div>
-                <p className="mt-4 font-bold text-slate-900">Preview unavailable</p>
+                <p className="mt-4 font-bold text-slate-900">{t('checkpointFilePreviewModal.previewUnavailable')}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{error}</p>
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   <Button variant="outline" icon={RefreshCw} onClick={() => setRetryKey(current => current + 1)}>
-                    Retry
+                    {t('checkpointFilePreviewModal.retry')}
                   </Button>
                   <Button icon={Download} isLoading={downloading} onClick={() => void downloadOriginal()}>
-                    Download original
+                    {t('checkpointFilePreviewModal.downloadOriginal')}
                   </Button>
                 </div>
               </div>
@@ -775,7 +778,7 @@ export default function CheckpointFilePreviewModal({
               className="absolute inset-0 overflow-auto overscroll-contain bg-slate-200/80"
               onScroll={handleDocumentScroll}
               tabIndex={0}
-              aria-label={`${previewTitle}. ${totalPages} pages.`}
+              aria-label={t('checkpointFilePreviewModal.pages', { previewTitle, totalPages })}
             >
               <div className="flex min-h-full min-w-full w-max flex-col items-center gap-5 p-3 sm:gap-7 sm:p-8">
                 {Array.from({ length: pdfDocument.numPages }, (_, index) => {
