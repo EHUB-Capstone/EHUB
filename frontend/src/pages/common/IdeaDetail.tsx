@@ -12,13 +12,15 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { Star, MessageSquare, ClipboardCheck, Award, ChevronDown, ChevronUp } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const CRITERIA = [
-  { key: 'innovationScore', label: 'Innovation', desc: 'Originality and creativity of the idea' },
-  { key: 'feasibilityScore', label: 'Feasibility', desc: 'Technical and business feasibility' },
-  { key: 'marketScore', label: 'Market Potential', desc: 'Market size and opportunity' },
-  { key: 'technicalScore', label: 'Technical', desc: 'Technology approach and architecture' },
-  { key: 'presentationScore', label: 'Presentation', desc: 'Clarity and completeness of proposal' },
+  { key: 'innovationScore', get label() { return i18n.t('community:ideaDetail.innovation'); }, get desc() { return i18n.t('community:ideaDetail.originalityAndCreativityOfTheIdea'); } },
+  { key: 'feasibilityScore', get label() { return i18n.t('community:ideaDetail.feasibility'); }, get desc() { return i18n.t('community:ideaDetail.technicalAndBusinessFeasibility'); } },
+  { key: 'marketScore', get label() { return i18n.t('community:ideaDetail.marketPotential'); }, get desc() { return i18n.t('community:ideaDetail.marketSizeAndOpportunity'); } },
+  { key: 'technicalScore', get label() { return i18n.t('community:ideaDetail.technical'); }, get desc() { return i18n.t('community:ideaDetail.technologyApproachAndArchitecture'); } },
+  { key: 'presentationScore', get label() { return i18n.t('community:ideaDetail.presentation'); }, get desc() { return i18n.t('community:ideaDetail.clarityAndCompletenessOfProposal'); } },
 ];
 
 const ScoreSlider = ({ label, desc, value, onChange, readonly = false }) => (
@@ -48,6 +50,7 @@ const ScoreSlider = ({ label, desc, value, onChange, readonly = false }) => (
 );
 
 const EvaluationPage = () => {
+  const { t } = useTranslation('community');
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const ideaId = searchParams.get('ideaId');
@@ -96,7 +99,7 @@ const EvaluationPage = () => {
         }
       }
     } catch {
-      toast.error('Failed to load data');
+      toast.error(t('ideaDetail.failedToLoadData'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +118,7 @@ const EvaluationPage = () => {
   useEffect(() => { void fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
-    if (!selectedIdea) { toast.error('Select an idea to evaluate'); return; }
+    if (!selectedIdea) { toast.error(t('ideaDetail.selectAnIdeaToEvaluate')); return; }
     setSaving(true);
     try {
       await evaluationApi.create({
@@ -123,12 +126,12 @@ const EvaluationPage = () => {
         ...scores,
         comment,
       });
-      toast.success('Evaluation submitted!');
+      toast.success(t('ideaDetail.evaluationSubmitted'));
       setComment('');
       // Refresh
       await selectIdea(selectedIdea);
     } catch (err) {
-      toast.error(err.message || 'Failed to submit');
+      toast.error(err.message || t('ideaDetail.failedToSubmit'));
     } finally {
       setSaving(false);
     }
@@ -141,8 +144,8 @@ const EvaluationPage = () => {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? 'Evaluate Startup Ideas' : 'Feedback & Evaluation'}</h1>
-        <p className="text-slate-500 mt-1">{isLecturer ? `${pendingIdeas.length} ideas pending review` : 'View your lecturer feedback'}</p>
+        <h1 className="text-heading sm:text-display text-secondary tracking-tight">{isLecturer ? t('ideaDetail.evaluateStartupIdeas') : t('ideaDetail.feedbackEvaluation')}</h1>
+        <p className="text-slate-500 mt-1">{isLecturer ? t('ideaDetail.ideasPendingReview', { length: pendingIdeas.length }) : t('ideaDetail.viewYourLecturerFeedback')}</p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -151,10 +154,10 @@ const EvaluationPage = () => {
           <div className="lg:col-span-4">
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 bg-slate-50/60">
-                <h3 className="font-semibold text-slate-900">Pending Review</h3>
+                <h3 className="font-semibold text-slate-900">{t('ideaDetail.pendingReview')}</h3>
               </div>
               {pendingIdeas.length === 0 ? (
-                <div className="p-6"><EmptyState icon={ClipboardCheck} title="All caught up!" size="sm" /></div>
+                <div className="p-6"><EmptyState icon={ClipboardCheck} title={t('ideaDetail.allCaughtUp')} size="sm" /></div>
               ) : (
                 <div className="divide-y divide-slate-50">
                   {pendingIdeas.map(idea => (
@@ -165,7 +168,7 @@ const EvaluationPage = () => {
                     >
                       <h4 className="font-semibold text-sm text-slate-900">{idea.startupName}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">{idea.teamId?.name} • {idea.teamId?.classId?.name}</p>
-                      <Badge variant="Submitted" size="xs" className="mt-1">Submitted</Badge>
+                      <Badge variant="Submitted" size="xs" className="mt-1">{t('ideaDetail.submitted')}</Badge>
                     </div>
                   ))}
                 </div>
@@ -177,7 +180,7 @@ const EvaluationPage = () => {
         {/* Right: Evaluation Form */}
         <div className={isLecturer ? 'lg:col-span-8' : 'lg:col-span-12'}>
           {!selectedIdea ? (
-            <EmptyState icon={Star} title="Select an idea to evaluate" />
+            <EmptyState icon={Star} title={t('ideaDetail.selectAnIdeaToEvaluate')} />
           ) : (
             <div className="space-y-5">
               {/* Idea Header */}
@@ -195,7 +198,7 @@ const EvaluationPage = () => {
               {/* Evaluation Form (only for lecturers, or show existing) */}
               {isLecturer && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-5 flex items-center gap-2"><Star className="w-5 h-5 text-amber-500" />Score Rubric</h3>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-5 flex items-center gap-2"><Star className="w-5 h-5 text-amber-500" />{t('ideaDetail.scoreRubric')}</h3>
                   <div className="space-y-6">
                     {CRITERIA.map(c => (
                       <ScoreSlider
@@ -211,8 +214,8 @@ const EvaluationPage = () => {
                   {/* Total Score Preview */}
                   <div className="mt-6 p-5 rounded-xl border border-primary-100 flex items-center justify-between bg-primary-50">
                     <div>
-                      <p className="text-sm text-slate-600 font-medium">Total Score</p>
-                      <p className="text-xs text-slate-400">Average of all criteria</p>
+                      <p className="text-sm text-slate-600 font-medium">{t('ideaDetail.totalScore')}</p>
+                      <p className="text-xs text-slate-400">{t('ideaDetail.averageOfAllCriteria')}</p>
                     </div>
                     <div className="text-right">
                       <span className={`text-4xl font-black ${totalScore >= 8 ? 'text-green-600' : totalScore >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{totalScore.toFixed(2)}</span>
@@ -221,18 +224,18 @@ const EvaluationPage = () => {
                   </div>
 
                   <div className="mt-5">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2"><MessageSquare className="w-4 h-4" />Comment & Feedback</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2"><MessageSquare className="w-4 h-4" />{t('ideaDetail.commentFeedback')}</label>
                     <textarea
                       rows={4}
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
-                      placeholder="Provide detailed feedback to help the team improve their startup idea..."
+                      placeholder={t('ideaDetail.provideDetailedFeedbackToHelpThe')}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
                     />
                   </div>
 
                   <div className="mt-5 flex justify-end">
-                    <Button variant="primary" size="md" icon={Award} isLoading={saving} onClick={handleSubmit}>Submit Evaluation</Button>
+                    <Button variant="primary" size="md" icon={Award} isLoading={saving} onClick={handleSubmit}>{t('ideaDetail.submitEvaluation')}</Button>
                   </div>
                 </motion.div>
               )}
@@ -244,7 +247,7 @@ const EvaluationPage = () => {
                     onClick={() => setShowHistory(!showHistory)}
                     className="w-full p-5 flex items-center justify-between hover:bg-slate-50 transition-colors"
                   >
-                    <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-primary" />Evaluation History ({evaluations.length})</h3>
+                    <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-primary" />{t('ideaDetail.evaluationHistory')}{evaluations.length})</h3>
                     {showHistory ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
                   </button>
 
@@ -254,7 +257,7 @@ const EvaluationPage = () => {
                         <div key={ev._id} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex justify-between items-center mb-3">
                             <div>
-                              <p className="font-semibold text-slate-900">{ev.lecturerId?.name || 'Lecturer'}</p>
+                              <p className="font-semibold text-slate-900">{ev.lecturerId?.name || t('groupChat.lecturer')}</p>
                               <p className="text-xs text-slate-400">{ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : '—'}</p>
                             </div>
                             <span className={`text-2xl font-black ${ev.totalScore >= 8 ? 'text-green-600' : ev.totalScore >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{ev.totalScore?.toFixed(2)}/10</span>

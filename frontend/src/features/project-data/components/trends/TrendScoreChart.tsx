@@ -7,6 +7,7 @@ import {
   type ScoreChartRow,
   type ScoreSeries,
 } from '../../../../utils/projectTrends';
+import { useTranslation } from 'react-i18next';
 
 const seriesColor = (series: ScoreSeries): string =>
   series.slot === null ? CHART_COLORS.brand : CHART_SERIES[series.slot];
@@ -23,6 +24,7 @@ interface TooltipProps {
 
 /** The reader has the semester and wants the numbers, so the value leads and the name follows. */
 function ScoreTooltip({ active, label, payload, series }: TooltipProps) {
+  const { t } = useTranslation('projectData');
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
 
@@ -38,8 +40,7 @@ function ScoreTooltip({ active, label, payload, series }: TooltipProps) {
               <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: seriesColor(item) }} aria-hidden="true" />
               <span className="font-semibold text-secondary">{formatScore(score)}</span>
               <span className="text-slate-500">
-                {item.label}, {numberOrNull(row[`${item.key}:graded`]) ?? 0}/{numberOrNull(row[`${item.key}:total`]) ?? 0} graded
-                {numberOrNull(row[`${item.key}:change`]) !== null && ` (${formatScoreChange(numberOrNull(row[`${item.key}:change`]))})`}
+                {t('trendScoreChart.graded', { label: item.label, v2: numberOrNull(row[`${item.key}:graded`]) ?? 0, v3: numberOrNull(row[`${item.key}:total`]) ?? 0, v4: numberOrNull(row[`${item.key}:change`]) !== null && ` (${formatScoreChange(numberOrNull(row[`${item.key}:change`]))})` })}
               </span>
             </li>
           );

@@ -20,11 +20,13 @@ import type { ProjectDataItem } from '../../types/projectData';
 import { parseApiError } from '../../utils/apiError';
 import { downloadBlob, fileDateStamp } from '../../utils/downloadBlob';
 import { findItem, hasActiveSearchOrFilters, nextProjectDataSort, toggleAchievement } from '../../utils/projectData';
+import { useTranslation } from 'react-i18next';
 
 const CONCURRENCY_CONFLICT_CODE = 'PROJECT_DATA_CONCURRENCY_CONFLICT';
 const WRITE_ROLES = ['ADMIN', 'LECTURER'];
 
 export default function ProjectData() {
+  const { t } = useTranslation('projectData');
   const { user } = useAuth();
   const { query, tab, setTab, updateQuery, clearFilters, searchInput, setSearchInput, list, summary, distribution, trends, options, updateAchievements, updateCompetitions, exportProjectData, updateStartupIndustries } = useProjectData();
   const [selected, setSelected] = useState<ProjectDataItem | null>(null);
@@ -67,8 +69,8 @@ export default function ProjectData() {
     const saved: string[] = [];
     // After an earlier part was saved, the toast says so, so the user knows what still needs another try.
     const failureToast = (what: string, isConflict: boolean, message: string) => toast.error(saved.length > 0
-      ? `${saved.join(' and ')} saved, but ${what} not: ${isConflict ? 'the project is out of date.' : message}`
-      : isConflict ? 'Project data is out of date.' : message);
+      ? t('projectData.partialSave', { saved: saved.join(` ${t('projectData.and')} `), what, reason: isConflict ? t('projectData.projectOutOfDate') : message })
+      : isConflict ? t('projectData.projectDataIsOutOfDate') : message);
 
     if (changes.achievements) {
       try {
@@ -92,7 +94,7 @@ export default function ProjectData() {
         const parsed = parseApiError(error, 'Unable to update achievements.');
         const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
         setSaveError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
-        toast.error(isConflict ? 'Project data is out of date.' : parsed.message);
+        toast.error(isConflict ? t('projectData.projectDataIsOutOfDate') : parsed.message);
         return;
       }
     }
@@ -136,7 +138,7 @@ export default function ProjectData() {
       }
     }
 
-    if (saved.length > 0) toast.success(saved.length > 1 ? 'Changes saved.' : `${saved[0]} updated.`);
+    if (saved.length > 0) toast.success(saved.length > 1 ? t('projectData.changesSaved') : `${saved[0]} updated.`);
   }, [selected, updateAchievements, updateCompetitions, updateStartupIndustries]);
 
   const downloadProjectData = useCallback(async () => {
@@ -144,7 +146,7 @@ export default function ProjectData() {
     try {
       const blob = await exportProjectData.mutateAsync(query);
       downloadBlob(blob, `project-data-${fileDateStamp()}.xlsx`);
-      toast.success('Project data report downloaded.');
+      toast.success(t('projectData.projectDataReportDownloaded'));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to export the project data report.').message);
     }
@@ -161,7 +163,7 @@ export default function ProjectData() {
         setSaveError(null);
         setIndustryError(null);
       } else {
-        toast('This project is no longer on the current page.');
+        toast(t('projectData.thisProjectIsNoLongerOn'));
         closeDetail();
       }
     } finally {
@@ -172,7 +174,7 @@ export default function ProjectData() {
   const content = useMemo(() => {
     if (isInitialLoading) {
       return (
-        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm" role="status" aria-label="Loading project data">
+        <div className="rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm" role="status" aria-label={t('projectData.loadingProjectData')}>
           <LoadingSkeleton variant="table" lines={8} />
         </div>
       );
@@ -180,7 +182,7 @@ export default function ProjectData() {
     if (list.isError && !page) {
       return (
         <ErrorState
-          title="Project data could not be loaded"
+          title={t('projectData.projectDataCouldNotBeLoaded')}
           message={parseApiError(list.error, 'Failed to load project data. Please try again.').message}
           onRetry={() => { void list.refetch(); }}
         />
@@ -193,15 +195,15 @@ export default function ProjectData() {
           {filtered ? (
             <EmptyState
               icon={Database}
-              title="No projects match your search"
-              description="Try different keywords or clear the filters to see every project in your scope."
-              action={{ label: 'Clear filters', onClick: clearFilters }}
+              title={t('projectData.noProjectsMatchYourSearch')}
+              description={t('projectData.tryDifferentKeywordsOrClearThe')}
+              action={{ label: t('projectDataFilters.clearFilters'), onClick: clearFilters }}
             />
           ) : (
             <EmptyState
               icon={Database}
-              title="No project data yet"
-              description="Projects appear here once teams in your classes have created a project workspace."
+              title={t('projectData.noProjectDataYet')}
+              description={t('projectData.projectsAppearHereOnceTeamsIn')}
             />
           )}
         </div>
@@ -212,9 +214,9 @@ export default function ProjectData() {
         <div className="rounded-2xl border border-slate-200/60 bg-white shadow-sm">
           <EmptyState
             icon={Database}
-            title="This page is out of range"
-            description={`There are ${page.totalItems} projects, but not enough for page ${page.pageIndex}.`}
-            action={{ label: 'Go to first page', onClick: () => updateQuery({ pageIndex: 1 }) }}
+            title={t('projectData.thisPageIsOutOfRange')}
+            description={t('projectData.thereAreProjectsButNotEnough', { totalItems: page.totalItems, pageIndex: page.pageIndex })}
+            action={{ label: t('projectData.goToFirstPage'), onClick: () => updateQuery({ pageIndex: 1 }) }}
           />
         </div>
       );
@@ -235,17 +237,17 @@ export default function ProjectData() {
   return (
     <div>
       <PageHeader
-        title="Project Data"
-        subtitle="Projects across semesters with their groups, industries, staff and achievements."
+        title={t('projectDataTable.projectData')}
+        subtitle={t('projectData.projectsAcrossSemestersWithTheirGroups')}
       >
         <Button
           variant="outline"
           icon={Download}
           isLoading={exportProjectData.isPending}
           onClick={() => { void downloadProjectData(); }}
-          title="Download an Excel report (overview, projects, summaries and competitions) of the projects matching the current search and filters"
+          title={t('projectData.downloadAnExcelReportOverviewProjects')}
         >
-          Export Project Data
+          {t('projectData.exportProjectData')}
         </Button>
       </PageHeader>
 
@@ -302,13 +304,13 @@ export default function ProjectData() {
       <div role="tabpanel" id={projectDataPanelId('overview')} aria-labelledby={projectDataTabId('overview')}>
       {isRefreshing && (
         <p className="mb-2 flex items-center gap-2 text-xs font-medium text-primary-700" role="status" aria-live="polite">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Updating results...
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {t('projectData.updatingResults')}
         </p>
       )}
       {list.isError && page && (
         <p role="alert" className="mb-2 flex flex-wrap items-center gap-2 text-sm text-danger">
           {parseApiError(list.error, 'Refreshing project data failed.').message}
-          <button type="button" onClick={() => { void list.refetch(); }} className="font-semibold underline underline-offset-2">Retry</button>
+          <button type="button" onClick={() => { void list.refetch(); }} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
         </p>
       )}
 

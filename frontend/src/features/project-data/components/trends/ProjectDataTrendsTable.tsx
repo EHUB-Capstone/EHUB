@@ -8,6 +8,7 @@ import {
   type TrendLevel,
 } from '../../../../utils/projectTrends';
 import { ScoreChange } from './TrendDelta';
+import { useTranslation } from 'react-i18next';
 
 function Count({ value, change }: { value: number; change: number | null }) {
   return (
@@ -20,28 +21,29 @@ function Count({ value, change }: { value: number; change: number | null }) {
 
 /** Every number behind the charts, so no value is reachable only by hovering. */
 export default function ProjectDataTrendsTable({ rows, level }: { rows: ProjectDataTrendRow[]; level: TrendLevel }) {
+  const { t } = useTranslation('projectData');
   const showSubject = level !== 'semester';
   const showClass = level === 'class';
 
   return (
     <div className="mt-3 overflow-x-auto">
       <table className="w-full min-w-[960px] text-left text-body-sm">
-        <caption className="sr-only">Average score and outcomes by {TREND_LEVEL_LABELS[level].toLowerCase()} and semester</caption>
+        <caption className="sr-only">{t('projectDataTrendsTable.averageScoreAndOutcomesByAnd', { v1: TREND_LEVEL_LABELS[level].toLowerCase() })}</caption>
         <thead>
           <tr className="border-b border-slate-200 text-caption text-slate-500">
-            <th scope="col" className="py-2 pr-3 font-medium">Semester</th>
-            {showSubject && <th scope="col" className="py-2 pr-3 font-medium">Subject</th>}
-            {showClass && <th scope="col" className="py-2 pr-3 font-medium">Class</th>}
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Groups</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Graded</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Avg score</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Change</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Potential</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Internally funded</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Externally funded</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Awarded</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Pitching</th>
-            <th scope="col" className="py-2 text-right font-medium">Demo</th>
+            <th scope="col" className="py-2 pr-3 font-medium">{t('projectDataDetailModal.semester')}</th>
+            {showSubject && <th scope="col" className="py-2 pr-3 font-medium">{t('projectDataTrendsTable.subject')}</th>}
+            {showClass && <th scope="col" className="py-2 pr-3 font-medium">{t('projectDataTrendsTable.class')}</th>}
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.groups')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.graded')}</th>
+            <th scope="col" className="py-2 pr-3 font-medium">{t('projectDataTrendsTable.avgScore')}</th>
+            <th scope="col" className="py-2 pr-3 font-medium">{t('projectDataTrendsTable.change')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.potential')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.internallyFunded')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.externallyFunded')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.awarded')}</th>
+            <th scope="col" className="py-2 pr-3 text-right font-medium">{t('projectDataTrendsTable.pitching')}</th>
+            <th scope="col" className="py-2 text-right font-medium">{t('projectDataTrendsTable.demo')}</th>
           </tr>
         </thead>
         <tbody>

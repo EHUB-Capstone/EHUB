@@ -13,6 +13,7 @@ import {
 import type { ProjectCompetitionStage } from '../../../types/projectData';
 import { newCompetitionDraft } from '../../../utils/projectData';
 import type { CompetitionDraftEntry, CompetitionDraftView } from '../../../utils/projectData';
+import { useTranslation } from 'react-i18next';
 
 const controlClass = 'h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
 
@@ -28,13 +29,14 @@ interface ProjectCompetitionEditorProps {
  * it took place, and how far the project got. The list is saved as a whole with the dialog's Save button.
  */
 export default function ProjectCompetitionEditor({ entries, view, disabled, onChange }: ProjectCompetitionEditorProps) {
+  const { t } = useTranslation('projectData');
   const update = (key: string, patch: Partial<CompetitionDraftEntry>) =>
     onChange(entries.map(entry => (entry.key === key ? { ...entry, ...patch } : entry)));
   const atLimit = entries.length >= COMPETITION_MAX_ENTRIES;
 
   return (
     <div className="mt-2 space-y-2">
-      {entries.length === 0 && <p className="text-sm text-slate-400">No competitions yet.</p>}
+      {entries.length === 0 && <p className="text-sm text-slate-400">{t('projectCompetitionEditor.noCompetitionsYet')}</p>}
 
       {entries.length > 0 && (
         <ul className="space-y-2">
@@ -47,12 +49,12 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
                   <select
                     value={entry.competition}
                     disabled={disabled}
-                    aria-label={`Competition (${rowLabel})`}
+                    aria-label={t('projectCompetitionEditor.competition', { rowLabel })}
                     aria-invalid={Boolean(error)}
                     onChange={event => update(entry.key, { competition: event.target.value })}
                     className={controlClass}
                   >
-                    <option value="">Choose a competition…</option>
+                    <option value="">{t('projectCompetitionEditor.chooseACompetition')}</option>
                     {PROJECT_COMPETITIONS.map(name => <option key={name} value={name}>{name}</option>)}
                   </select>
                   <input
@@ -60,8 +62,8 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
                     disabled={disabled}
                     inputMode="numeric"
                     maxLength={4}
-                    placeholder="Year"
-                    aria-label={`Year the competition took place (${rowLabel}), ${COMPETITION_YEAR_MIN} to ${COMPETITION_YEAR_MAX}`}
+                    placeholder={t('projectCompetitionEditor.year')}
+                    aria-label={t('projectCompetitionEditor.yearTheCompetitionTookPlaceTo', { rowLabel, COMPETITION_YEAR_MIN, COMPETITION_YEAR_MAX })}
                     aria-invalid={Boolean(error)}
                     onChange={event => update(entry.key, { year: event.target.value.replace(/\D/g, '') })}
                     className={controlClass}
@@ -69,7 +71,7 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
                   <select
                     value={entry.stage}
                     disabled={disabled}
-                    aria-label={`Stage reached (${rowLabel})`}
+                    aria-label={t('projectCompetitionEditor.stageReached', { rowLabel })}
                     onChange={event => update(entry.key, { stage: event.target.value as ProjectCompetitionStage })}
                     className={controlClass}
                   >
@@ -78,7 +80,7 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
                   <button
                     type="button"
                     disabled={disabled}
-                    aria-label={`Remove ${rowLabel}`}
+                    aria-label={t('projectCompetitionEditor.remove', { rowLabel })}
                     onClick={() => onChange(entries.filter(item => item.key !== entry.key))}
                     className="inline-flex h-9 w-9 items-center justify-center justify-self-end rounded-lg text-slate-500 hover:bg-slate-100 hover:text-danger focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -91,8 +93,8 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
                     value={entry.otherName}
                     disabled={disabled}
                     maxLength={COMPETITION_OTHER_NAME_MAX_LENGTH}
-                    placeholder="Competition name"
-                    aria-label={`Competition name (${rowLabel})`}
+                    placeholder={t('projectCompetitionEditor.competitionName')}
+                    aria-label={t('projectCompetitionEditor.competitionName2', { rowLabel })}
                     aria-invalid={Boolean(error)}
                     onChange={event => update(entry.key, { otherName: event.target.value })}
                     className={`${controlClass} mt-2`}
@@ -115,11 +117,10 @@ export default function ProjectCompetitionEditor({ entries, view, disabled, onCh
         disabled={disabled || atLimit}
         onClick={() => onChange([...entries, newCompetitionDraft()])}
       >
-        Add competition
+        {t('projectCompetitionEditor.addCompetition')}
       </Button>
       <p className="text-xs text-slate-400">
-        Pick the furthest stage the project reached; move it on when the project advances. The year is the year the
-        competition took place.
+        {t('projectCompetitionEditor.pickTheFurthestStageTheProject')}
       </p>
     </div>
   );

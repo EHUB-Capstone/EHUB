@@ -1,8 +1,13 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { PROJECT_DATA_TABS, type ProjectDataTab } from '../../../types/projectData';
 import { cn } from '../../../utils/cn';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../../i18n';
 
-const LABELS: Record<ProjectDataTab, string> = { overview: 'Overview', analytics: 'Analytics' };
+const LABELS: Record<ProjectDataTab, string> = {
+  get overview() { return i18n.t('projectData:projectDataTabs.overview'); },
+  get analytics() { return i18n.t('projectData:projectDataTabs.analytics'); },
+};
 
 export const projectDataTabId = (tab: ProjectDataTab) => `project-data-tab-${tab}`;
 export const projectDataPanelId = (tab: ProjectDataTab) => `project-data-panel-${tab}`;
@@ -14,6 +19,7 @@ interface ProjectDataTabsProps {
 
 /** Overview (the table) and Analytics (distribution charts). Arrow keys, Home and End move between tabs. */
 export default function ProjectDataTabs({ value, onChange }: ProjectDataTabsProps) {
+  const { t } = useTranslation('projectData');
   const refs = useRef<Partial<Record<ProjectDataTab, HTMLButtonElement | null>>>({});
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -31,7 +37,7 @@ export default function ProjectDataTabs({ value, onChange }: ProjectDataTabsProp
   };
 
   return (
-    <div role="tablist" aria-label="Project data views" className="mb-4 flex gap-1 border-b border-slate-200">
+    <div role="tablist" aria-label={t('projectDataTabs.projectDataViews')} className="mb-4 flex gap-1 border-b border-slate-200">
       {PROJECT_DATA_TABS.map(tab => {
         const active = tab === value;
         return (

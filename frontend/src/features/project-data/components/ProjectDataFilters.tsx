@@ -16,6 +16,8 @@ import {
 import type { FilterKey } from '../../../utils/projectData';
 import { majorLabel } from '../../../utils/projectDistribution';
 import type { ProjectDataFilterOptions, ProjectDataQuery } from '../../../types/projectData';
+import { useTranslation } from 'react-i18next';
+import { achievementLabel } from '../../../i18n/labels';
 
 interface SelectOption {
   value: string;
@@ -92,13 +94,14 @@ interface MultiListboxProps {
  * selection.
  */
 function MultiListbox({ id, values, items, disabled, onChange }: MultiListboxProps) {
+  const { t } = useTranslation('projectData');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const listId = `${id}-list`;
-  const entries = useMemo(() => [{ value: '', label: 'All' }, ...items], [items]);
+  const entries = useMemo(() => [{ value: '', label: t('projectDataFilters.all') }, ...items], [items]);
   const selectedLabels = values.map(value => items.find(item => item.value === value)?.label ?? value);
   const triggerLabel = selectedLabels.length === 0
     ? 'All'
@@ -186,7 +189,7 @@ function MultiListbox({ id, values, items, disabled, onChange }: MultiListboxPro
           id={listId}
           role="listbox"
           aria-multiselectable="true"
-          aria-label={selectedLabels.length > 0 ? `Selected: ${selectedLabels.join(', ')}` : 'Nothing selected'}
+          aria-label={selectedLabels.length > 0 ? t('projectDataFilters.selected', { v1: selectedLabels.join(', ') }) : t('projectDataFilters.nothingSelected')}
           tabIndex={-1}
           aria-activedescendant={`${listId}-${activeIndex}`}
           onKeyDown={onListKeyDown}
@@ -250,6 +253,7 @@ export default function ProjectDataFilters({
   optionsError,
   onRetryOptions,
 }: ProjectDataFiltersProps) {
+  const { t } = useTranslation('projectData');
   const searchId = useId();
   const advancedId = useId();
   const [expanded, setExpanded] = useState(false);
@@ -274,7 +278,7 @@ export default function ProjectDataFilters({
       majors: (options?.majors ?? []).map(value => ({ value, label: majorLabel(value) })),
       lecturers: (options?.lecturers ?? []).map(item => ({ value: item.userId, label: item.fullName })),
       mentors: [...mentorsByUser.entries()].map(([value, entry]) => ({ value, label: `${entry.name} (${entry.slots.join(', ')})` })),
-      achievements: (options?.achievements ?? []).map(value => ({ value, label: value })),
+      achievements: (options?.achievements ?? []).map(value => ({ value, label: achievementLabel(value) })),
       competitions: (options?.competitions ?? []).map(value => ({ value, label: value })),
       competitionStages: (options?.competitionStages ?? PROJECT_COMPETITION_STAGES).map(stage => ({ value: stage, label: COMPETITION_STAGE_LABELS[stage] })),
       competitionYears: (options?.competitionYears ?? []).map(year => ({ value: String(year), label: String(year) })),
@@ -300,10 +304,10 @@ export default function ProjectDataFilters({
   };
 
   return (
-    <section aria-label="Search and filters" className="mb-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm">
+    <section aria-label={t('projectDataFilters.searchAndFilters')} className="mb-4 rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[180px] flex-1">
-          <label htmlFor={searchId} className="sr-only">Search projects</label>
+          <label htmlFor={searchId} className="sr-only">{t('projectDataFilters.searchProjects')}</label>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input
             id={searchId}
@@ -311,14 +315,14 @@ export default function ProjectDataFilters({
             value={searchInput}
             maxLength={PROJECT_DATA_SEARCH_MAX_LENGTH}
             onChange={event => onSearchInputChange(event.target.value)}
-            placeholder="Search projects, classes, people…"
-            title="Searches project, description, class, subject, semester, lecturer, mentor and industry"
+            placeholder={t('projectDataFilters.searchProjectsClassesPeople')}
+            title={t('projectDataFilters.searchesProjectDescriptionClassSubjectSemester')}
             className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <SelectField label="Filter by subject" allLabel="All Subjects" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
-        <SelectField label="Filter by semester" allLabel="All Semesters" value={query.semester} options={choices.terms} onChange={value => onChange({ semester: value as ProjectDataQuery['semester'] })} />
-        <SelectField label="Filter by year" allLabel="All Years" value={query.year} options={choices.years} disabled={disabled} onChange={value => onChange({ year: value })} />
+        <SelectField label={t('projectDataFilters.filterBySubject')} allLabel="All Subjects" value={query.subjectCode} options={choices.subjects} disabled={disabled} onChange={value => onChange({ subjectCode: value })} />
+        <SelectField label={t('projectDataFilters.filterBySemester')} allLabel="All Semesters" value={query.semester} options={choices.terms} onChange={value => onChange({ semester: value as ProjectDataQuery['semester'] })} />
+        <SelectField label={t('projectDataFilters.filterByYear')} allLabel="All Years" value={query.year} options={choices.years} disabled={disabled} onChange={value => onChange({ year: value })} />
         <Button
           variant="outline"
           icon={SlidersHorizontal}
@@ -327,35 +331,35 @@ export default function ProjectDataFilters({
           onClick={() => setExpanded(current => !current)}
           className="shrink-0"
         >
-          More filters
+          {t('projectDataFilters.moreFilters')}
         </Button>
       </div>
 
       <div id={advancedId} hidden={!showAdvanced} className={cn('mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', !showAdvanced && 'hidden')}>
-        <MultiSelectField label="Group" values={query.group} options={choices.groups} disabled={disabled} onChange={values => onChange({ group: values })} />
-        <MultiSelectField label="Startup industry" values={query.startupIndustry} options={choices.industries} disabled={disabled} onChange={values => onChange({ startupIndustry: values })} />
-        <MultiSelectField label="Major" values={query.major} options={choices.majors} disabled={disabled} onChange={values => onChange({ major: values })} />
-        <MultiSelectField label="Lecturer" values={query.lecturerId} options={choices.lecturers} disabled={disabled} onChange={values => onChange({ lecturerId: values })} />
-        <MultiSelectField label="Mentor" values={query.mentorId} options={choices.mentors} disabled={disabled} onChange={values => onChange({ mentorId: values })} />
-        <MultiSelectField label="Achievement" values={query.achievement} options={choices.achievements} disabled={disabled} onChange={values => onChange({ achievement: values as ProjectDataQuery['achievement'] })} />
-        <MultiSelectField label="Competition" values={query.competition} options={choices.competitions} disabled={disabled} onChange={values => onChange({ competition: values })} />
-        <MultiSelectField label="Competition stage" values={query.competitionStage} options={choices.competitionStages} disabled={disabled} onChange={values => onChange({ competitionStage: values as ProjectDataQuery['competitionStage'] })} />
-        <MultiSelectField label="Competition year" values={query.competitionYear} options={choices.competitionYears} disabled={disabled} onChange={values => onChange({ competitionYear: values })} />
+        <MultiSelectField label={t('projectDataDetailModal.group')} values={query.group} options={choices.groups} disabled={disabled} onChange={values => onChange({ group: values })} />
+        <MultiSelectField label={t('projectDataFilters.startupIndustry')} values={query.startupIndustry} options={choices.industries} disabled={disabled} onChange={values => onChange({ startupIndustry: values })} />
+        <MultiSelectField label={t('projectDataFilters.major')} values={query.major} options={choices.majors} disabled={disabled} onChange={values => onChange({ major: values })} />
+        <MultiSelectField label={t('projectDataDetailModal.lecturer')} values={query.lecturerId} options={choices.lecturers} disabled={disabled} onChange={values => onChange({ lecturerId: values })} />
+        <MultiSelectField label={t('projectDataDetailModal.mentor')} values={query.mentorId} options={choices.mentors} disabled={disabled} onChange={values => onChange({ mentorId: values })} />
+        <MultiSelectField label={t('projectDataFilters.achievement')} values={query.achievement} options={choices.achievements} disabled={disabled} onChange={values => onChange({ achievement: values as ProjectDataQuery['achievement'] })} />
+        <MultiSelectField label={t('projectDataFilters.competition')} values={query.competition} options={choices.competitions} disabled={disabled} onChange={values => onChange({ competition: values })} />
+        <MultiSelectField label={t('projectDataFilters.competitionStage')} values={query.competitionStage} options={choices.competitionStages} disabled={disabled} onChange={values => onChange({ competitionStage: values as ProjectDataQuery['competitionStage'] })} />
+        <MultiSelectField label={t('projectDataFilters.competitionYear')} values={query.competitionYear} options={choices.competitionYears} disabled={disabled} onChange={values => onChange({ competitionYear: values })} />
       </div>
 
       {optionsError && (
         <p role="alert" className="mt-3 flex flex-wrap items-center gap-2 text-xs text-danger">
-          Filter options could not be loaded.
-          <button type="button" onClick={onRetryOptions} className="font-semibold underline underline-offset-2">Retry</button>
+          {t('projectDataFilters.filterOptionsCouldNotBeLoaded')}
+          <button type="button" onClick={onRetryOptions} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
         </p>
       )}
 
       {hasActiveSearchOrFilters(query) && (
-        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Applied filters">
+        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={t('projectDataFilters.appliedFilters')}>
           {query.search && (
             <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-0.5 pl-2.5 pr-1 text-xs text-slate-600">
-              Search: “{query.search}”
-              <button type="button" aria-label="Remove search" onClick={() => onChange({ search: '' })} className="rounded-full p-0.5 hover:bg-slate-200">
+              {t('projectDataFilters.search')}{query.search}”
+              <button type="button" aria-label={t('projectDataFilters.removeSearch')} onClick={() => onChange({ search: '' })} className="rounded-full p-0.5 hover:bg-slate-200">
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -367,7 +371,7 @@ export default function ProjectDataFilters({
                 {FILTER_LABELS[key]}: {label}
                 <button
                   type="button"
-                  aria-label={`Remove ${FILTER_LABELS[key]} filter ${label}`}
+                  aria-label={t('projectDataFilters.removeFilter', { v1: FILTER_LABELS[key], label })}
                   onClick={() => onChange(removeFilterValue(query, key, value))}
                   className="rounded-full p-0.5 hover:bg-primary-100"
                 >
@@ -376,7 +380,7 @@ export default function ProjectDataFilters({
               </span>
             );
           })}
-          <Button variant="ghost" size="xs" onClick={onClear}>Clear filters</Button>
+          <Button variant="ghost" size="xs" onClick={onClear}>{t('projectDataFilters.clearFilters')}</Button>
         </div>
       )}
     </section>

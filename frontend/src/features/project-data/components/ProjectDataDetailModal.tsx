@@ -34,6 +34,8 @@ import ProjectEvidenceSection from './ProjectEvidenceSection';
 import { MentorLabel } from './ProjectDataTable';
 import ProjectStartupIndustryEditor from './ProjectStartupIndustryEditor';
 import ProjectStartupIndustryHistory from './ProjectStartupIndustryHistory';
+import { useTranslation } from 'react-i18next';
+import { achievementLabel } from '../../../i18n/labels';
 
 export interface ProjectDataSaveError {
   message: string;
@@ -129,6 +131,7 @@ export default function ProjectDataDetailModal({
   competitionError,
   onReload,
 }: ProjectDataDetailModalProps) {
+  const { t } = useTranslation('projectData');
   const legendId = useId();
   const achievementsPanelId = useId();
   const competitionsHeadingId = useId();
@@ -215,19 +218,19 @@ export default function ProjectDataDetailModal({
         onClose={() => { if (!isSaving) onClose(); }}
         title={item.projectName}
         size="lg"
-        submitText="Save changes"
+        submitText={t('projectDataDetailModal.saveChanges')}
         isSubmitting={isSaving}
         submitDisabled={!dirty || blocked}
         onSubmit={canManage ? submit : undefined}
       >
         <div className="space-y-6">
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Semester">{displayText(item.semesterCode)}</Field>
-            <Field label="Class Code">{displayText(item.classCode)}</Field>
-            <Field label="Group"><Chips values={item.groups} /></Field>
-            <Field label="Lecturer">{displayText(item.lecturer?.fullName)}</Field>
-            <Field label="Mentor"><MentorLabel mentor={item.mentor} /></Field>
-            <Field label="Mentor - GV"><MentorLabel mentor={item.academicMentor} /></Field>
+            <Field label={t('projectDataDetailModal.semester')}>{displayText(item.semesterCode)}</Field>
+            <Field label={t('projectDataDetailModal.classCode')}>{displayText(item.classCode)}</Field>
+            <Field label={t('projectDataDetailModal.group')}><Chips values={item.groups} /></Field>
+            <Field label={t('projectDataDetailModal.lecturer')}>{displayText(item.lecturer?.fullName)}</Field>
+            <Field label={t('projectDataDetailModal.mentor')}><MentorLabel mentor={item.mentor} /></Field>
+            <Field label={t('projectDataDetailModal.mentorGv')}><MentorLabel mentor={item.academicMentor} /></Field>
             <div className="sm:col-span-2">
               <ProjectStartupIndustryEditor
                 item={item}
@@ -247,7 +250,7 @@ export default function ProjectDataDetailModal({
               />
             </div>
             <div className="sm:col-span-2">
-              <Field label="Description">
+              <Field label={t('projectDataDetailModal.description')}>
                 <p className="whitespace-pre-wrap">{displayText(item.description)}</p>
               </Field>
             </div>
@@ -255,14 +258,14 @@ export default function ProjectDataDetailModal({
 
           <ProjectEvidenceSection key={item.projectId} projectId={item.projectId} />
 
-          <section aria-label="Showcase interaction reference" className="space-y-3">
-            <h3 className="text-subheading font-semibold text-secondary">Tương tác Showcase</h3>
+          <section aria-label={t('projectDataDetailModal.showcaseInteractionReference')} className="space-y-3">
+            <h3 className="text-subheading font-semibold text-secondary">{t('projectDataDetailModal.tuongTacShowcase')}</h3>
             <p className="text-caption text-slate-600">{SHOWCASE_METRICS_REFERENCE_NOTE}</p>
-            <p className="text-caption text-slate-600">Tổng tương tác hiện tại của dự án qua các học kỳ, gồm cả trang chưa công khai hoặc đã ẩn.</p>
+            <p className="text-caption text-slate-600">{t('projectDataDetailModal.tongTuongTacHienTaiCua')}</p>
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Showcase views">{displayShowcaseMetric(item.showcaseMetrics?.viewCount)}</Field>
-              <Field label="Showcase upvotes">{displayShowcaseMetric(item.showcaseMetrics?.upvoteCount)}</Field>
-              <Field label="Showcase comments">{displayShowcaseMetric(item.showcaseMetrics?.commentCount)}</Field>
+              <Field label={t('projectDataDetailModal.showcaseViews')}>{displayShowcaseMetric(item.showcaseMetrics?.viewCount)}</Field>
+              <Field label={t('projectDataDetailModal.showcaseUpvotes')}>{displayShowcaseMetric(item.showcaseMetrics?.upvoteCount)}</Field>
+              <Field label={t('projectDataDetailModal.showcaseComments')}>{displayShowcaseMetric(item.showcaseMetrics?.commentCount)}</Field>
             </dl>
           </section>
 
@@ -271,16 +274,16 @@ export default function ProjectDataDetailModal({
           <CollapsibleSection
             headingId={legendId}
             panelId={achievementsPanelId}
-            title="Achievements"
+            title={t('projectAchievementBadges.achievements')}
             open={achievementsOpen}
             onToggle={() => setAchievementsOpenFor(achievementsOpen ? null : item.projectId)}
-            summary={`${draft.length > 0 ? `${draft.length} selected` : 'None selected'}${achievementsDirty ? ' · unsaved changes' : ''}`}
+            summary={`${draft.length > 0 ? t('projectDataDetailModal.selectedCount', { count: draft.length }) : t('projectDataDetailModal.noneSelected')}${achievementsDirty ? ` · ${t('projectDataDetailModal.unsavedChanges')}` : ''}`}
             outside={error && (
               <div role="alert" className="mt-3 rounded-xl border border-danger-light bg-danger-50 p-3 text-sm text-danger">
                 <p>{error.message}</p>
                 {error.isConflict && (
                   <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={reload} className="mt-2">
-                    Reload latest data
+                    {t('projectDataDetailModal.reloadLatestData')}
                   </Button>
                 )}
               </div>
@@ -299,20 +302,20 @@ export default function ProjectDataDetailModal({
                         className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary/30"
                       />
                       <Icon className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                      {name}
+                      {achievementLabel(name)}
                     </label>
                   );
                 })}
-                <p className="text-xs text-slate-400">An unchecked label only means the project has not been tagged with it.</p>
+                <p className="text-xs text-slate-400">{t('projectDataDetailModal.anUncheckedLabelOnlyMeansThe')}</p>
                 <label className="block pt-1">
-                  <span className="text-xs font-medium text-slate-500">Note (optional)</span>
+                  <span className="text-xs font-medium text-slate-500">{t('projectDataDetailModal.noteOptional')}</span>
                   <textarea
                     value={effectiveNote}
                     disabled={draft.length === 0}
                     maxLength={PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH}
                     rows={3}
                     onChange={event => setDraft(draft, event.target.value)}
-                    placeholder={draft.length > 0 ? 'Why does this project carry these labels?' : 'Select an achievement to add a note'}
+                    placeholder={draft.length > 0 ? t('projectDataDetailModal.whyDoesThisProjectCarryThese') : t('projectDataDetailModal.selectAnAchievementToAddA')}
                     className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-50"
                   />
                   <span className="block text-right text-xs text-slate-400">{effectiveNote.length}/{PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH}</span>
@@ -333,16 +336,16 @@ export default function ProjectDataDetailModal({
           <CollapsibleSection
             headingId={competitionsHeadingId}
             panelId={competitionsPanelId}
-            title="Competitions"
+            title={t('projectDataDetailModal.competitions')}
             open={competitionsOpen}
             onToggle={() => setCompetitionsOpenFor(competitionsOpen ? null : item.projectId)}
-            summary={`${competitionRows.length > 0 ? `${competitionRows.length} ${competitionRows.length === 1 ? 'entry' : 'entries'}` : 'None'}${competitionsDirty ? (competitionView.blocked ? ' · fix the errors' : ' · unsaved changes') : ''}`}
+            summary={`${competitionRows.length > 0 ? t('projectDataDetailModal.entriesCount', { count: competitionRows.length }) : t('projectDataDetailModal.none')}${competitionsDirty ? ` · ${t(competitionView.blocked ? 'projectDataDetailModal.fixTheErrors' : 'projectDataDetailModal.unsavedChanges')}` : ''}`}
             outside={competitionError && (
               <div role="alert" className="mt-3 rounded-xl border border-danger-light bg-danger-50 p-3 text-sm text-danger">
                 <p>{competitionError.message}</p>
                 {competitionError.isConflict && (
                   <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={reload} className="mt-2">
-                    Reload latest data
+                    {t('projectDataDetailModal.reloadLatestData')}
                   </Button>
                 )}
               </div>
@@ -370,7 +373,7 @@ export default function ProjectDataDetailModal({
               disabled={isSaving}
               onClick={() => navigate(projectWorkspacePath(item.teamId))}
             >
-              Open Startup Workspace
+              {t('projectDataDetailModal.openStartupWorkspace')}
             </Button>
           </div>
         </div>
@@ -380,9 +383,9 @@ export default function ProjectDataDetailModal({
         isOpen={confirmingRemoval}
         onClose={() => setConfirmingRemoval(false)}
         onConfirm={() => { setConfirmingRemoval(false); save(); }}
-        title="Remove achievement labels?"
-        description={`This removes ${removed.join(', ')} from “${item.projectName}”${draft.length === 0 && item.achievementNote ? ' together with its note' : ''}. The change is recorded in the project activity log.`}
-        confirmText="Remove and save"
+        title={t('projectDataDetailModal.removeAchievementLabels')}
+        description={t(draft.length === 0 && item.achievementNote ? 'projectDataDetailModal.removeConfirmWithNote' : 'projectDataDetailModal.removeConfirm', { labels: removed.map(achievementLabel).join(', '), project: item.projectName })}
+        confirmText={t('projectDataDetailModal.removeAndSave')}
         isSubmitting={isSaving}
       />
     </>

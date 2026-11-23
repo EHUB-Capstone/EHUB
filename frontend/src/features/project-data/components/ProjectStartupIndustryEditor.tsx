@@ -6,6 +6,7 @@ import type { ProjectDataItem } from '../../../types/projectData';
 import type { StartupIndustryDto } from '../../../types/startupIndustries';
 import { PROJECT_DATA_EMPTY_VALUE } from '../../../utils/projectData';
 import type { ProjectDataSaveError } from './ProjectDataDetailModal';
+import { useTranslation } from 'react-i18next';
 
 const MAX_INDUSTRIES = 3;
 
@@ -48,12 +49,13 @@ export default function ProjectStartupIndustryEditor({
   error,
   onReload,
 }: ProjectStartupIndustryEditorProps) {
+  const { t } = useTranslation('projectData');
   const labelId = useId();
 
   if (!canManage) {
     return (
       <div className="min-w-0">
-        <dt className="text-xs font-medium uppercase tracking-wider text-slate-400">Startup Industry</dt>
+        <dt className="text-xs font-medium uppercase tracking-wider text-slate-400">{t('projectDataTable.startupIndustry')}</dt>
         <dd className="mt-1 break-words text-sm text-slate-700">
           {item.startupIndustries.length === 0
             ? <span className="text-slate-400">{PROJECT_DATA_EMPTY_VALUE}</span>
@@ -69,7 +71,7 @@ export default function ProjectStartupIndustryEditor({
 
   return (
     <div className="min-w-0">
-      <dt id={labelId} className="text-xs font-medium uppercase tracking-wider text-slate-400">Startup Industry</dt>
+      <dt id={labelId} className="text-xs font-medium uppercase tracking-wider text-slate-400">{t('projectDataTable.startupIndustry')}</dt>
       <dd className="mt-1.5">
         <StartupIndustryPicker
           industries={industries}
@@ -86,7 +88,7 @@ export default function ProjectStartupIndustryEditor({
         />
         {retired.length > 0 && !industriesLoading && (
           <p className="mt-1 text-xs text-slate-500">
-            Not in the active list anymore: {retired.join(', ')}. Saving replaces them with your selection.
+            {t('projectStartupIndustryEditor.notInTheActiveListAnymore', { v1: retired.join(', ') })}
           </p>
         )}
 
@@ -95,7 +97,7 @@ export default function ProjectStartupIndustryEditor({
             <p>{error.message}</p>
             {error.isConflict && (
               <Button variant="outline" size="sm" icon={RefreshCw} isLoading={isReloading} onClick={onReload} className="mt-2">
-                Reload latest data
+                {t('projectDataDetailModal.reloadLatestData')}
               </Button>
             )}
           </div>

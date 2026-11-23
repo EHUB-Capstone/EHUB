@@ -18,6 +18,7 @@ import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import { dataBankApi } from '../../api/dataBankApi';
+import { useTranslation } from 'react-i18next';
 
 const mappingActions = ['MAP_TO_EXISTING', 'ADD_NEW_COLUMN', 'IGNORE_COLUMN', 'RENAME_AND_ADD'];
 const systemColumns = ['RollNumber', 'FullName', 'Email', 'Major'];
@@ -41,6 +42,7 @@ const formatDateTime = (value) => {
 };
 
 const SortableHeaderCell = ({ id, children, className }) => {
+  const { t } = useTranslation('community');
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   return (
     <th
@@ -53,7 +55,7 @@ const SortableHeaderCell = ({ id, children, className }) => {
           {...attributes}
           {...listeners}
           className="mt-0.5 cursor-grab select-none rounded border border-slate-200 bg-white px-1 text-overline text-slate-400 active:cursor-grabbing"
-          title="Drag column"
+          title={t('dataBankPage.dragColumn')}
         >
           ::
         </span>
@@ -64,6 +66,7 @@ const SortableHeaderCell = ({ id, children, className }) => {
 };
 
 const DataBankPage = () => {
+  const { t } = useTranslation('community');
   const location = useLocation();
   const [file, setFile] = useState(null);
   const [sheets, setSheets] = useState([]);
@@ -155,7 +158,7 @@ const DataBankPage = () => {
       setGridDatasets(unwrap(gridRes).datasets || []);
     } catch (err) {
       if (requestId === loadRequestRef.current) {
-        toast.error(err.message || 'Failed to load Data Bank');
+        toast.error(err.message || t('dataBankPage.failedToLoadDataBank'));
       }
     } finally {
       if (requestId === loadRequestRef.current && showLoading) setLoadingData(false);
@@ -331,25 +334,25 @@ const DataBankPage = () => {
       setSheets(workbookSheets);
       setSheetName(workbookSheets[0]?.name || '');
     } catch (err) {
-      toast.error(err.message || 'Workbook inspection failed');
+      toast.error(err.message || t('dataBankPage.workbookInspectionFailed'));
     } finally {
       setBusy('');
     }
   };
 
   const runPreview = async () => {
-    if (!file) return toast.error('Please select an Excel file');
-    if (!selectedClassId) return toast.error('Please select a class first');
-    if (!scope.classCode.trim()) return toast.error('ClassCode is required');
+    if (!file) return toast.error(t('dataBankPage.pleaseSelectAnExcelFile'));
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
+    if (!scope.classCode.trim()) return toast.error(t('dataBankPage.classcodeIsRequired'));
     setBusy('preview');
     try {
       const res = await dataBankApi.previewImport({ file, sheetName, headerRow, scope: { ...scope, classId: selectedClassId }, mappings });
       const batch = unwrap(res).batch;
       setPreview(batch);
       setMappings(batch.columnMappings || []);
-      toast.success('Preview created. No database changes were made.');
+      toast.success(t('dataBankPage.previewCreatedNoDatabaseChangesWere'));
     } catch (err) {
-      toast.error(err.message || 'Preview failed');
+      toast.error(err.message || t('dataBankPage.previewFailed'));
     } finally {
       setBusy('');
     }
@@ -380,27 +383,27 @@ const DataBankPage = () => {
   const commitImport = async () => {
     if (!preview?._id || !file) return;
     const unresolved = mappings.filter((m) => !m.approved && m.action !== 'IGNORE_COLUMN');
-    if (unresolved.length) return toast.error('Approve or ignore all unknown columns before commit');
+    if (unresolved.length) return toast.error(t('dataBankPage.approveOrIgnoreAllUnknownColumns'));
     const highConflicts = preview.analysis?.conflicts?.filter((c) => c.severity === 'HIGH') || [];
-    if (highConflicts.length && !confirmHighConflicts) return toast.error('High conflicts require confirmation');
+    if (highConflicts.length && !confirmHighConflicts) return toast.error(t('dataBankPage.highConflictsRequireConfirmation'));
     setBusy('commit');
     try {
       const res = await dataBankApi.commitImport({ batchId: preview._id, file, mappings, confirmHighConflicts });
       setPreview(unwrap(res).batch);
-      toast.success('Import committed with snapshot and field history');
+      toast.success(t('dataBankPage.importCommittedWithSnapshotAndField'));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Commit failed');
+      toast.error(err.message || t('dataBankPage.commitFailed'));
     } finally {
       setBusy('');
     }
   };
 
   const refreshExportPreview = async () => {
-    if (!selectedClassId) return toast.error('Please select a class first');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
     if (filteredSpreadsheetRows.length === 0) {
       setExportPreviewRows([]);
-      return toast.error('No rows match the current filters');
+      return toast.error(t('dataBankPage.noRowsMatchTheCurrentFilters'));
     }
     setBusy('exportPreview');
     try {
@@ -411,16 +414,16 @@ const DataBankPage = () => {
       });
       setExportPreviewRows(unwrap(res).rows || []);
     } catch (err) {
-      toast.error(err.message || 'Export preview failed');
+      toast.error(err.message || t('dataBankPage.exportPreviewFailed'));
     } finally {
       setBusy('');
     }
   };
 
   const downloadExport = async () => {
-    if (!selectedClassId) return toast.error('Please select a class first');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
     if (filteredSpreadsheetRows.length === 0) {
-      return toast.error('No rows match the current filters');
+      return toast.error(t('dataBankPage.noRowsMatchTheCurrentFilters'));
     }
     setBusy('download');
     try {
@@ -439,9 +442,9 @@ const DataBankPage = () => {
       link.download = `${scope.classCode || 'data-bank'}-all.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success('Export downloaded');
+      toast.success(t('dataBankPage.exportDownloaded'));
     } catch (err) {
-      toast.error(err.message || 'Export failed');
+      toast.error(err.message || t('dataBankPage.exportFailed'));
     } finally {
       setBusy('');
     }
@@ -449,18 +452,18 @@ const DataBankPage = () => {
 
   const rollback = async (batch) => {
     const confirmed = batch.status === 'COMMITTED' && await requestConfirm({
-      title: 'Confirm rollback',
-      description: 'Rollback only latest batch by default. Confirm rollback?',
-      confirmText: 'Rollback',
+      title: t('dataBankPage.confirmRollback'),
+      description: t('dataBankPage.rollbackOnlyLatestBatchByDefault'),
+      confirmText: t('dataBankPage.rollback'),
     });
     if (!confirmed) return;
     setBusy(`rollback-${batch._id}`);
     try {
       await dataBankApi.rollback(batch._id, { forceSnapshotRestore: false });
-      toast.success('Rollback completed');
+      toast.success(t('dataBankPage.rollbackCompleted'));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Rollback failed');
+      toast.error(err.message || t('dataBankPage.rollbackFailed'));
     } finally {
       setBusy('');
     }
@@ -468,9 +471,9 @@ const DataBankPage = () => {
 
   const saveTemplate = async () => {
     const name = await requestText({
-      title: 'Save export template',
-      label: 'Template name',
-      placeholder: 'Training Office Format',
+      title: t('dataBankPage.saveExportTemplate'),
+      label: t('dataBankPage.templateName'),
+      placeholder: t('dataBankPage.trainingOfficeFormat'),
       required: true,
     });
     if (!name) return;
@@ -482,34 +485,34 @@ const DataBankPage = () => {
         filters: { classId: selectedClassId },
         headerAliases: {},
       });
-      toast.success('Template saved');
+      toast.success(t('dataBankPage.templateSaved'));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Template save failed');
+      toast.error(err.message || t('dataBankPage.templateSaveFailed'));
     }
   };
 
   const syncSelectedClass = async () => {
-    if (!selectedClassId) return toast.error('Please select a class first');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
     setBusy('sync');
     try {
       const res = await dataBankApi.syncClass(selectedClassId);
       const result = unwrap(res);
-      toast.success(`Synced ${result.studentCount || 0} students and ${result.teamCount || 0} teams`);
+      toast.success(t('dataBankPage.syncedStudentsAndTeams', { v1: result.studentCount || 0, v2: result.teamCount || 0 }));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Class sync failed');
+      toast.error(err.message || t('dataBankPage.classSyncFailed'));
     } finally {
       setBusy('');
     }
   };
 
   const addGridColumn = async () => {
-    if (!selectedClassId) return toast.error('Please select a class first');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
     const fieldKey = await requestText({
-      title: 'Add column',
-      label: 'New column name',
-      placeholder: 'Checkpoint1',
+      title: t('dataBankPage.addColumn'),
+      label: t('dataBankPage.newColumnName'),
+      placeholder: t('dataBankPage.checkpoint1'),
       required: true,
     });
     if (!fieldKey) return;
@@ -517,17 +520,17 @@ const DataBankPage = () => {
       await dataBankApi.addGridColumn({ classId: selectedClassId, fieldKey, displayName: fieldKey });
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Column add failed');
+      toast.error(err.message || t('dataBankPage.columnAddFailed'));
     }
   };
 
   const deleteGridColumn = async (fieldKey) => {
-    if (!selectedClassId) return toast.error('Please select a class first');
-    if (systemColumns.includes(fieldKey)) return toast.error('System columns cannot be deleted');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
+    if (systemColumns.includes(fieldKey)) return toast.error(t('dataBankPage.systemColumnsCannotBeDeleted'));
     const confirmed = await requestConfirm({
-      title: 'Permanently delete column',
-      description: `Permanently delete column "${fieldKey}" and all of its values from this class? This action cannot be undone.`,
-      confirmText: 'Delete Permanently',
+      title: t('dataBankPage.permanentlyDeleteColumn'),
+      description: t('dataBankPage.permanentlyDeleteColumnAndAllOf', { fieldKey }),
+      confirmText: t('dataBankPage.deletePermanently'),
     });
     if (!confirmed) return;
     try {
@@ -549,26 +552,26 @@ const DataBankPage = () => {
         setGroupColumnInput('');
         localStorage.removeItem(groupStorageKey);
       }
-      toast.success('Column deleted');
+      toast.success(t('dataBankPage.columnDeleted'));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Column delete failed');
+      toast.error(err.message || t('dataBankPage.columnDeleteFailed'));
     }
   };
 
   const addGridRow = async () => {
-    if (!selectedClassId) return toast.error('Please select a class first');
+    if (!selectedClassId) return toast.error(t('dataBankPage.pleaseSelectAClassFirst'));
     const rollNumber = await requestText({
-      title: 'Add row',
-      label: 'RollNumber for new row',
+      title: t('dataBankPage.addRow'),
+      label: t('dataBankPage.rollnumberForNewRow'),
       placeholder: 'DE180185',
       required: true,
     });
     if (!rollNumber) return;
     const fullName = await requestText({
-      title: 'Add row',
-      label: 'FullName (optional)',
-      placeholder: 'Nguyen Van A',
+      title: t('dataBankPage.addRow'),
+      label: t('dataBankPage.fullnameOptional'),
+      placeholder: t('dataBankPage.nguyenVanA'),
     }) || '';
     try {
       await dataBankApi.addGridRow({
@@ -578,24 +581,24 @@ const DataBankPage = () => {
       });
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Row add failed');
+      toast.error(err.message || t('dataBankPage.rowAddFailed'));
     }
   };
 
   const deleteGridRow = async (rollNumber) => {
     if (!selectedClassId || !rollNumber) return;
     const confirmed = await requestConfirm({
-      title: 'Delete row',
-      description: `Delete all Data Bank datasets for ${rollNumber} in this class?`,
-      confirmText: 'Delete Row',
+      title: t('dataBankPage.deleteRow'),
+      description: t('dataBankPage.deleteAllDataBankDatasetsFor', { rollNumber }),
+      confirmText: t('dataBankPage.deleteRow2'),
     });
     if (!confirmed) return;
     try {
       await dataBankApi.deleteGridRow({ classId: selectedClassId, rollNumber });
-      toast.success('Row deleted');
+      toast.success(t('dataBankPage.rowDeleted'));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Row delete failed');
+      toast.error(err.message || t('dataBankPage.rowDeleteFailed'));
     }
   };
 
@@ -619,9 +622,9 @@ const DataBankPage = () => {
     try {
       if (editingValue.trim() === '') {
         const confirmed = await requestConfirm({
-          title: 'Clear cell',
-          description: `Clear value for ${editingCell.column}?`,
-          confirmText: 'Clear Cell',
+          title: t('dataBankPage.clearCell'),
+          description: t('dataBankPage.clearValueFor', { column: editingCell.column }),
+          confirmText: t('dataBankPage.clearCell2'),
         });
         if (!confirmed) return;
         await dataBankApi.clearGridCell({
@@ -648,7 +651,7 @@ const DataBankPage = () => {
         if (nextRow) startEditCell(nextRow, savedCell.column);
       }
     } catch (err) {
-      toast.error(err.message || 'Cell update failed');
+      toast.error(err.message || t('dataBankPage.cellUpdateFailed'));
     } finally {
       savingCellRef.current = false;
     }
@@ -691,7 +694,7 @@ const DataBankPage = () => {
       }));
       await loadReferenceData();
     } catch (err) {
-      toast.error(err.message || 'Fill cells failed');
+      toast.error(err.message || t('dataBankPage.fillCellsFailed'));
     }
   };
 
@@ -713,24 +716,24 @@ const DataBankPage = () => {
     if (!requested) {
       setGroupColumn('');
       localStorage.removeItem(groupStorageKey);
-      toast.success('Grouping cleared');
+      toast.success(t('dataBankPage.groupingCleared'));
       return;
     }
     const matchedColumn = spreadsheetColumns.find((column) => column.toLowerCase() === requested)
       || spreadsheetColumns.find((column) => column.toLowerCase().includes(requested));
-    if (!matchedColumn) return toast.error(`Column "${groupColumnInput}" not found`);
+    if (!matchedColumn) return toast.error(t('dataBankPage.columnNotFound', { groupColumnInput }));
     setGroupColumn(matchedColumn);
     setGroupColumnInput(matchedColumn);
     if (rememberGrouping) localStorage.setItem(groupStorageKey, matchedColumn);
     else localStorage.removeItem(groupStorageKey);
-    toast.success(`Grouped by ${matchedColumn}`);
+    toast.success(t('dataBankPage.groupedBy', { matchedColumn }));
   };
 
   const clearGroupColumn = () => {
     setGroupColumn('');
     setGroupColumnInput('');
     localStorage.removeItem(groupStorageKey);
-    toast.success('Grouping cleared');
+    toast.success(t('dataBankPage.groupingCleared'));
   };
 
   const applyTemplateColumns = (template) => {
@@ -792,24 +795,24 @@ const DataBankPage = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Class Data Bank</h1>
-          <p className="mt-1 text-sm text-slate-500">Preview-first Excel import/export with snapshots, field history and rollback controls.</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('dataBankPage.classDataBank')}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t('dataBankPage.previewFirstExcelImportExportWith')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon={RefreshCw} isLoading={loadingData} onClick={() => loadReferenceData({ showLoading: true })}>Refresh</Button>
-          <Button icon={RefreshCw} isLoading={busy === 'sync'} disabled={loadingData || !selectedClassId} onClick={syncSelectedClass}>Sync Class Data</Button>
+          <Button variant="outline" icon={RefreshCw} isLoading={loadingData} onClick={() => loadReferenceData({ showLoading: true })}>{t('common:actions.refresh')}</Button>
+          <Button icon={RefreshCw} isLoading={busy === 'sync'} disabled={loadingData || !selectedClassId} onClick={syncSelectedClass}>{t('dataBankPage.syncClassData')}</Button>
         </div>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <label className="space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Class</span>
+          <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.class')}</span>
           <select
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             value={selectedClassId}
             onChange={(e) => applyClassToScope(e.target.value)}
           >
-            <option value="">Select class</option>
+            <option value="">{t('dataBankPage.selectClass')}</option>
             {classes.map((cls) => (
               <option key={cls._id} value={cls._id}>
                 {cls.classCode} - {cls.subjectCode} - {cls.semester}{String(cls.year || '').slice(-2)}
@@ -822,7 +825,7 @@ const DataBankPage = () => {
       <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
         {loadingData ? (
           <div className="col-span-full flex items-center justify-center rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading Data Bank...
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('dataBankPage.loadingDataBank')}
           </div>
         ) : ([
           ['Datasets', datasets.length],
@@ -840,23 +843,23 @@ const DataBankPage = () => {
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex items-center gap-2">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold text-slate-900">Import Workflow</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{t('dataBankPage.importWorkflow')}</h2>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">Semester</span>
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.semester')}</span>
             <input className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={scope.semester} readOnly />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">SubjectCode</span>
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.subjectcode')}</span>
             <input className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={scope.subjectCode} readOnly />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">ClassCode</span>
-            <input className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={scope.classCode} readOnly placeholder="EXE101_1" />
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.classcode')}</span>
+            <input className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={scope.classCode} readOnly placeholder={t('dataBankPage.exe1011')} />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">Dataset Type</span>
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.datasetType')}</span>
             <select
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               value={scope.datasetType}
@@ -874,23 +877,23 @@ const DataBankPage = () => {
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
           <label className="lg:col-span-2 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center hover:bg-slate-100">
             <Upload className="mb-2 h-6 w-6 text-slate-400" />
-            <span className="text-sm font-medium text-slate-700">{file?.name || 'Upload .xlsx / .xls'}</span>
+            <span className="text-sm font-medium text-slate-700">{file?.name || t('dataBankPage.uploadXlsxXls')}</span>
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => inspectFile(e.target.files?.[0])} />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">Sheet</span>
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.sheet')}</span>
             <select className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={sheetName} onChange={(e) => setSheetName(e.target.value)}>
               {sheets.map((sheet) => <option key={sheet.name} value={sheet.name}>{sheet.name}</option>)}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500">Header Row</span>
+            <span className="text-xs font-semibold text-slate-500">{t('dataBankPage.headerRow')}</span>
             <input type="number" min="1" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={headerRow} onChange={(e) => setHeaderRow(e.target.value)} />
           </label>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button icon={ShieldAlert} isLoading={busy === 'preview'} onClick={runPreview}>Preview Only</Button>
+          <Button icon={ShieldAlert} isLoading={busy === 'preview'} onClick={runPreview}>{t('dataBankPage.previewOnly')}</Button>
           <Button
             icon={CheckCircle2}
             isLoading={busy === 'commit'}
@@ -898,14 +901,14 @@ const DataBankPage = () => {
             onClick={commitImport}
             className="border border-emerald-600 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 hover:shadow-md focus:ring-emerald-200"
           >
-            Commit Import
+            {t('dataBankPage.commitImport')}
           </Button>
           {conflictCount > 0 && (
             <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${
               confirmHighConflicts ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200'
             }`}>
               <input type="checkbox" checked={confirmHighConflicts} onChange={(e) => setConfirmHighConflicts(e.target.checked)} className="h-4 w-4 rounded border-amber-400 text-emerald-600 focus:ring-emerald-500" />
-              {confirmHighConflicts ? 'High conflicts confirmed' : 'Confirm high severity conflicts'}
+              {confirmHighConflicts ? t('dataBankPage.highConflictsConfirmed') : t('dataBankPage.confirmHighSeverityConflicts')}
             </label>
           )}
         </div>
@@ -914,23 +917,23 @@ const DataBankPage = () => {
           <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="rounded-lg border border-slate-200">
               <div className="border-b border-slate-100 px-4 py-3">
-                <h3 className="font-semibold text-slate-900">Preview Analysis</h3>
+                <h3 className="font-semibold text-slate-900">{t('dataBankPage.previewAnalysis')}</h3>
               </div>
               <div className="grid grid-cols-2 gap-3 p-4 text-sm">
-                <div>Rows to insert: <b>{preview.analysis?.summary?.rowsToInsert || 0}</b></div>
-                <div>Rows to update: <b>{preview.analysis?.summary?.rowsToUpdate || 0}</b></div>
-                <div>Missing RollNumbers: <b>{preview.analysis?.summary?.missingRollNumbers || 0}</b></div>
-                <div>Conflicts: <b>{conflictCount}</b></div>
+                <div>{t('dataBankPage.rowsToInsert')} <b>{preview.analysis?.summary?.rowsToInsert || 0}</b></div>
+                <div>{t('dataBankPage.rowsToUpdate')} <b>{preview.analysis?.summary?.rowsToUpdate || 0}</b></div>
+                <div>{t('dataBankPage.missingRollnumbers')} <b>{preview.analysis?.summary?.missingRollNumbers || 0}</b></div>
+                <div>{t('dataBankPage.conflicts')} <b>{conflictCount}</b></div>
               </div>
               {issueCount > 0 && (
                 <div className="mx-4 mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  <AlertTriangle className="mr-2 inline h-4 w-4" /> Commit blocked: {preview.analysis.blockingIssues.join(', ')}
+                  <AlertTriangle className="mr-2 inline h-4 w-4" /> {t('dataBankPage.commitBlocked')} {preview.analysis.blockingIssues.join(', ')}
                 </div>
               )}
               <div className="max-h-80 overflow-auto px-4 pb-4">
                 {(preview.analysis?.conflicts || []).slice(0, 20).map((conflict, index) => (
                   <div key={`${conflict.row}-${conflict.fieldKey}-${index}`} className="mb-2 rounded-lg border border-slate-200 p-3 text-xs">
-                    <span className="font-semibold">{conflict.severity}</span> row {conflict.row}, {conflict.rollNumber}, {conflict.fieldKey}: {String(conflict.oldValue ?? '')} {'->'} {String(conflict.newValue ?? '')}
+                    <span className="font-semibold">{conflict.severity}</span> {t('dataBankPage.row')} {conflict.row}, {conflict.rollNumber}, {conflict.fieldKey}: {String(conflict.oldValue ?? '')} {'->'} {String(conflict.newValue ?? '')}
                   </div>
                 ))}
               </div>
@@ -938,24 +941,24 @@ const DataBankPage = () => {
 
             <div className="rounded-lg border border-slate-200">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-                <h3 className="font-semibold text-slate-900">Column Mapping</h3>
+                <h3 className="font-semibold text-slate-900">{t('dataBankPage.columnMapping')}</h3>
                 <button
                   type="button"
                   onClick={approveAllMappings}
                   disabled={mappings.every((mapping) => mapping.approved || mapping.action === 'IGNORE_COLUMN')}
                   className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Approve All
+                  {t('dataBankPage.approveAll')}
                 </button>
               </div>
               <div className="max-h-96 overflow-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-600">
                     <tr>
-                      <th className="px-3 py-2">Source</th>
-                      <th className="px-3 py-2">Action</th>
-                      <th className="px-3 py-2">Target</th>
-                      <th className="px-3 py-2">Approval</th>
+                      <th className="px-3 py-2">{t('dataBankPage.source')}</th>
+                      <th className="px-3 py-2">{t('dataBankPage.action')}</th>
+                      <th className="px-3 py-2">{t('dataBankPage.target')}</th>
+                      <th className="px-3 py-2">{t('dataBankPage.approval')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -972,9 +975,9 @@ const DataBankPage = () => {
                         </td>
                         <td className="px-3 py-2">
                           {mapping.approved ? (
-                            <span className="text-xs font-semibold text-green-600">Approved</span>
+                            <span className="text-xs font-semibold text-green-600">{t('dataBankPage.approved')}</span>
                           ) : (
-                            <button className="text-xs font-semibold text-primary-700" onClick={() => approveMapping(index)}>Approve</button>
+                            <button className="text-xs font-semibold text-primary-700" onClick={() => approveMapping(index)}>{t('dataBankPage.approve')}</button>
                           )}
                         </td>
                       </tr>
@@ -990,22 +993,22 @@ const DataBankPage = () => {
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Export Builder</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{t('dataBankPage.exportBuilder')}</h2>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" icon={Save} onClick={saveTemplate}>Template</Button>
-              <Button size="sm" icon={Download} isLoading={busy === 'download'} disabled={!selectedClassId || filteredSpreadsheetRows.length === 0} onClick={downloadExport}>Download</Button>
+              <Button size="sm" variant="outline" icon={Save} onClick={saveTemplate}>{t('dataBankPage.template')}</Button>
+              <Button size="sm" icon={Download} isLoading={busy === 'download'} disabled={!selectedClassId || filteredSpreadsheetRows.length === 0} onClick={downloadExport}>{t('common:actions.download')}</Button>
             </div>
           </div>
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            Tick columns and drag column headers directly in <b>Class Data Grid</b>. Export uses the selected columns, current grid order, and current filtered/grouped rows.
+            {t('dataBankPage.tickColumnsAndDragColumnHeaders')} <b>{t('dataBankPage.classDataGrid')}</b>{t('dataBankPage.exportUsesTheSelectedColumnsCurrent')}
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="xs" variant="outline" onClick={selectAllExportColumns}>Select All Columns</Button>
-              <Button size="xs" variant="outline" onClick={restoreExportColumns}>Reset Column Order</Button>
+              <Button size="xs" variant="outline" onClick={selectAllExportColumns}>{t('dataBankPage.selectAllColumns')}</Button>
+              <Button size="xs" variant="outline" onClick={restoreExportColumns}>{t('dataBankPage.resetColumnOrder')}</Button>
               <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
-                {selectedGridExportColumns.length} / {exportColumns.length} columns selected
+                {t('dataBankPage.columnsSelected', { length: selectedGridExportColumns.length, length2: exportColumns.length })}
               </span>
               <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
-                {filteredSpreadsheetRows.length} rows in current view
+                {t('dataBankPage.rowsInCurrentView', { length: filteredSpreadsheetRows.length })}
               </span>
             </div>
           </div>
@@ -1016,9 +1019,9 @@ const DataBankPage = () => {
               </button>
             ))}
           </div>
-          <Button className="mt-4" variant="outline" icon={RefreshCw} isLoading={busy === 'exportPreview'} disabled={!selectedClassId || filteredSpreadsheetRows.length === 0} onClick={refreshExportPreview}>Preview Export</Button>
+          <Button className="mt-4" variant="outline" icon={RefreshCw} isLoading={busy === 'exportPreview'} disabled={!selectedClassId || filteredSpreadsheetRows.length === 0} onClick={refreshExportPreview}>{t('dataBankPage.previewExport')}</Button>
           <div className="mt-4 max-h-80 overflow-auto rounded-lg border border-slate-200">
-            {exportPreviewRows.length === 0 ? <EmptyState title="No export preview" icon={Download} size="sm" /> : (
+            {exportPreviewRows.length === 0 ? <EmptyState title={t('dataBankPage.noExportPreview')} icon={Download} size="sm" /> : (
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-slate-50">
                   <tr>{Object.keys(exportPreviewRows[0]).map((key) => <th key={key} className="px-3 py-2">{key}</th>)}</tr>
@@ -1038,7 +1041,7 @@ const DataBankPage = () => {
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <div className="mb-4 flex items-center gap-2">
             <History className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-slate-900">Import History</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{t('dataBankPage.importHistory')}</h2>
           </div>
           <div className="max-h-[34rem] overflow-auto">
             {history.map((batch) => (
@@ -1048,20 +1051,18 @@ const DataBankPage = () => {
                     <p className="font-semibold text-slate-900">{batch.fileName}</p>
                     <p className="text-xs text-slate-500">{batch.semester} / {batch.subjectCode} / {batch.classCode}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Uploaded: {formatDateTime(batch.createdAt)}
-                      {batch.committedAt && ` | Committed: ${formatDateTime(batch.committedAt)}`}
-                      {batch.rolledBackAt && ` | Rolled back: ${formatDateTime(batch.rolledBackAt)}`}
+                      {t('dataBankPage.uploaded', { v1: formatDateTime(batch.createdAt), v2: batch.committedAt && ` | Committed: ${formatDateTime(batch.committedAt)}`, v3: batch.rolledBackAt && ` | Rolled back: ${formatDateTime(batch.rolledBackAt)}` })}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">Inserted {batch.rowsInserted || 0}, Updated {batch.rowsUpdated || 0}, Skipped {batch.rowsSkipped || 0}</p>
+                    <p className="mt-1 text-xs text-slate-500">{t('dataBankPage.insertedUpdatedSkipped', { v1: batch.rowsInserted || 0, v2: batch.rowsUpdated || 0, v3: batch.rowsSkipped || 0 })}</p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{batch.status}</span>
                 </div>
                 {batch._id === latestRollbackBatchId && (
-                  <Button className="mt-3" size="xs" variant="outline" icon={busy === `rollback-${batch._id}` ? Loader2 : ArchiveRestore} onClick={() => rollback(batch)}>Rollback</Button>
+                  <Button className="mt-3" size="xs" variant="outline" icon={busy === `rollback-${batch._id}` ? Loader2 : ArchiveRestore} onClick={() => rollback(batch)}>{t('dataBankPage.rollback')}</Button>
                 )}
               </div>
             ))}
-            {history.length === 0 && <EmptyState title="No imports yet" icon={History} size="sm" />}
+            {history.length === 0 && <EmptyState title={t('dataBankPage.noImportsYet')} icon={History} size="sm" />}
           </div>
         </div>
       </section>
@@ -1069,9 +1070,9 @@ const DataBankPage = () => {
       <section className="rounded-lg border border-slate-200 bg-white">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Class Data Grid</h2>
-            <p className="mt-1 text-sm text-slate-500">Edit cells, add/delete rows or columns, and filter like a spreadsheet.</p>
-            {groupColumn && <p className="mt-1 text-xs font-semibold text-primary-700">Grouping rows by {groupColumn}</p>}
+            <h2 className="text-lg font-semibold text-slate-900">{t('dataBankPage.classDataGrid')}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t('dataBankPage.editCellsAddDeleteRowsOr')}</p>
+            {groupColumn && <p className="mt-1 text-xs font-semibold text-primary-700">{t('dataBankPage.groupingRowsBy', { groupColumn })}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
@@ -1080,14 +1081,14 @@ const DataBankPage = () => {
                 value={groupColumnInput}
                 onChange={(e) => setGroupColumnInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') applyGroupColumn(); }}
-                placeholder="Group by column"
+                placeholder={t('dataBankPage.groupByColumn')}
               />
               <button type="button" onClick={applyGroupColumn} className="h-8 rounded bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-dark">
-                Group
+                {t('dataBankPage.group')}
               </button>
               {groupColumn && (
                 <button type="button" onClick={clearGroupColumn} className="h-8 rounded border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  Clear
+                  {t('common:actions.clear')}
                 </button>
               )}
               <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
@@ -1101,24 +1102,24 @@ const DataBankPage = () => {
                     if (!checked) localStorage.removeItem(groupStorageKey);
                   }}
                 />
-                Remember
+                {t('dataBankPage.remember')}
               </label>
             </div>
-            <Button size="sm" variant="outline" icon={Filter} onClick={() => setColumnFilters({})}>Clear Filters</Button>
-            <Button size="sm" variant="outline" icon={Plus} onClick={addGridColumn}>Add Column</Button>
-            <Button size="sm" icon={Plus} onClick={addGridRow}>Add Row</Button>
+            <Button size="sm" variant="outline" icon={Filter} onClick={() => setColumnFilters({})}>{t('dataBankPage.clearFilters')}</Button>
+            <Button size="sm" variant="outline" icon={Plus} onClick={addGridColumn}>{t('dataBankPage.addColumn2')}</Button>
+            <Button size="sm" icon={Plus} onClick={addGridRow}>{t('dataBankPage.addRow2')}</Button>
           </div>
         </div>
 
         {loadingData ? (
           <div className="flex items-center justify-center p-10 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading class data...
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('dataBankPage.loadingClassData')}
           </div>
         ) : !selectedClassId ? (
-          <EmptyState title="Select a class to view Data Bank" icon={FileSpreadsheet} size="sm" />
+          <EmptyState title={t('dataBankPage.selectAClassToViewData')} icon={FileSpreadsheet} size="sm" />
         ) : filteredSpreadsheetRows.length === 0 ? (
           <div className="p-6">
-            <EmptyState title="No rows match" description="Clear filters, sync class data, or import Excel moi." icon={FileSpreadsheet} size="sm" />
+            <EmptyState title={t('dataBankPage.noRowsMatch')} description={t('dataBankPage.clearFiltersSyncClassDataOr')} icon={FileSpreadsheet} size="sm" />
           </div>
         ) : (
           <div className="overflow-auto">
@@ -1145,14 +1146,14 @@ const DataBankPage = () => {
                                     checked={isChecked}
                                     disabled={column === 'RollNumber'}
                                     onChange={(e) => toggleExportColumn(column, e.target.checked)}
-                                    title="Include in export"
+                                    title={t('dataBankPage.includeInExport')}
                                   />
                                   <button type="button" className="min-w-0 truncate text-left font-semibold hover:text-primary-700" onClick={() => updateSort(column)}>
                                     {column}{sortConfig.key === column ? (sortConfig.direction === 'asc' ? ' ASC' : ' DESC') : ''}
                                   </button>
                                 </label>
                                 {manageableColumnKeys.has(column) && (
-                                  <button type="button" className="shrink-0 text-slate-400 hover:text-danger" onClick={() => deleteGridColumn(column)} title="Delete column">
+                                  <button type="button" className="shrink-0 text-slate-400 hover:text-danger" onClick={() => deleteGridColumn(column)} title={t('dataBankPage.deleteColumn')}>
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 )}
@@ -1161,7 +1162,7 @@ const DataBankPage = () => {
                                 className="mt-2 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs font-normal"
                                 value={columnFilters[column] || ''}
                                 onChange={(e) => setColumnFilters((current) => ({ ...current, [column]: e.target.value }))}
-                                placeholder="Filter"
+                                placeholder={t('dataBankPage.filter')}
                               />
                             </div>
                           </SortableHeaderCell>
@@ -1176,7 +1177,7 @@ const DataBankPage = () => {
                       <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-2 py-2 text-center font-medium text-slate-400">
                         <div className="flex items-center justify-center gap-1">
                           <span>{rowIndex + 1}</span>
-                          <button type="button" className="text-slate-300 hover:text-danger" onClick={() => deleteGridRow(row.RollNumber)} title="Delete row">
+                          <button type="button" className="text-slate-300 hover:text-danger" onClick={() => deleteGridRow(row.RollNumber)} title={t('dataBankPage.deleteRow')}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -1246,8 +1247,8 @@ const DataBankPage = () => {
                               <button
                                 type="button"
                                 className="absolute -bottom-1 -right-1 z-20 h-2.5 w-2.5 cursor-crosshair border border-white bg-primary shadow-sm"
-                                title="Drag to fill cells"
-                                aria-label={`Fill ${column} cells`}
+                                title={t('dataBankPage.dragToFillCells')}
+                                aria-label={t('dataBankPage.fillCells', { column })}
                                 onMouseDown={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
@@ -1282,10 +1283,10 @@ const DataBankPage = () => {
         title={textDialog?.title || ''}
         onSubmit={() => {
           const value = String(textDialog?.value || '').trim();
-          if (textDialog?.required && !value) return toast.error('Please enter a value');
+          if (textDialog?.required && !value) return toast.error(t('dataBankPage.pleaseEnterAValue'));
           closeTextDialog(value);
         }}
-        submitText="Confirm"
+        submitText={t('common:actions.confirm')}
       >
         <label className="space-y-1">
           <span className="text-sm font-semibold text-slate-600">{textDialog?.label}</span>
@@ -1298,7 +1299,7 @@ const DataBankPage = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const value = String(textDialog?.value || '').trim();
-                if (textDialog?.required && !value) return toast.error('Please enter a value');
+                if (textDialog?.required && !value) return toast.error(t('dataBankPage.pleaseEnterAValue'));
                 closeTextDialog(value);
               }
             }}
@@ -1310,12 +1311,12 @@ const DataBankPage = () => {
         <div className="space-y-5">
           <p className="text-sm text-slate-600">{confirmDialog?.description}</p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => closeConfirmDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => closeConfirmDialog(false)}>{t('common:actions.cancel')}</Button>
             <Button
               className={confirmDialog?.variant === 'danger' ? 'bg-red-500 text-white hover:bg-red-600' : ''}
               onClick={() => closeConfirmDialog(true)}
             >
-              {confirmDialog?.confirmText || 'Confirm'}
+              {confirmDialog?.confirmText || t('common:actions.confirm')}
             </Button>
           </div>
         </div>

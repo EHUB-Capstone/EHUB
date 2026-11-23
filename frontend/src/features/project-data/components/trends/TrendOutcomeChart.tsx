@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CHART_CHROME, CHART_SERIES } from '../../../../constants/chartColors';
 import type { OutcomeChartRow } from '../../../../utils/projectTrends';
+import { achievementLabel } from '../../../../i18n/labels';
 
 export const OUTCOME_SERIES = [
   { key: 'Potential', color: CHART_SERIES[0] },
@@ -29,7 +30,7 @@ function OutcomeTooltip({ active, label, payload }: TooltipProps) {
           <li key={item.key} className="flex items-center gap-2">
             <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color }} aria-hidden="true" />
             <span className="font-semibold text-secondary">{row[item.key]}</span>
-            <span className="text-slate-500">{item.key}</span>
+            <span className="text-slate-500">{achievementLabel(item.key)}</span>
           </li>
         ))}
       </ul>

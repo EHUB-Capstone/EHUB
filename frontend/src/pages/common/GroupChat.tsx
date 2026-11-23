@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const roleConfig = {
-  ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     label: 'Admin' },
-  LECTURER: { color: 'bg-secondary-50 text-secondary border-secondary-200', icon: <GraduationCap className="w-3 h-3 text-secondary shrink-0" />, label: 'Lecturer' },
-  MENTOR:   { color: 'bg-amber-50 text-amber-700 border-amber-200',  icon: <Star         className="w-3 h-3 text-amber-500 shrink-0" />,    label: 'Mentor' },
-  STUDENT:  { color: 'bg-blue-50 text-blue-700 border-blue-200',   icon: null,                                                            label: 'Student' },
+  ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     get label() { return i18n.t('community:groupChat.admin'); } },
+  LECTURER: { color: 'bg-secondary-50 text-secondary border-secondary-200', icon: <GraduationCap className="w-3 h-3 text-secondary shrink-0" />, get label() { return i18n.t('community:groupChat.lecturer'); } },
+  MENTOR:   { color: 'bg-amber-50 text-amber-700 border-amber-200',  icon: <Star         className="w-3 h-3 text-amber-500 shrink-0" />,    get label() { return i18n.t('community:groupChat.mentor'); } },
+  STUDENT:  { color: 'bg-blue-50 text-blue-700 border-blue-200',   icon: null,                                                            get label() { return i18n.t('community:groupChat.student'); } },
 };
 
 const normalizeRole = (r = '') => r.toUpperCase();
@@ -36,37 +38,37 @@ const isEmojiOnly = (text = '') => {
 const STICKER_CATEGORIES = [
   {
     key: 'popular',
-    label: 'Popular',
+    get label() { return i18n.t('community:groupChat.popular'); },
     icon: Sparkles,
     stickers: ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🔥', '🎉', '✅', '🚀', '💯'],
   },
   {
     key: 'faces',
-    label: 'Faces',
+    get label() { return i18n.t('community:groupChat.faces'); },
     icon: Smile,
     stickers: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😍', '🥰', '😘', '😎', '🤩', '🥳', '😭', '😤', '🤔', '🫡', '😴'],
   },
   {
     key: 'reactions',
-    label: 'Reactions',
+    get label() { return i18n.t('community:groupChat.reactions'); },
     icon: ThumbsUp,
     stickers: ['👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👏', '🙌', '🫶', '💪', '🙏', '☝️', '👀', '💯', '✅', '❌'],
   },
   {
     key: 'celebrate',
-    label: 'Celebrate',
+    get label() { return i18n.t('community:groupChat.celebrate'); },
     icon: PartyPopper,
     stickers: ['🎉', '🎊', '🥳', '🎂', '🎁', '🏆', '🥇', '⭐', '🌟', '✨', '🔥', '🚀', '🎈', '🍾', '🕺', '💃'],
   },
   {
     key: 'work',
-    label: 'Work',
+    get label() { return i18n.t('community:groupChat.work'); },
     icon: Lightbulb,
     stickers: ['💡', '📌', '📣', '📝', '📊', '📈', '📉', '🎯', '🧠', '🔍', '⚡', '✅', '⏰', '📅', '💻', '🛠️', '📚', '✍️'],
   },
   {
     key: 'love',
-    label: 'Love',
+    get label() { return i18n.t('community:groupChat.love'); },
     icon: Heart,
     stickers: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💖', '💗', '💓', '💞', '💕', '💌', '🫶', '😍', '🥰'],
   },
@@ -163,6 +165,7 @@ const Avatar = ({ src, name, size = 'md' }) => {
 
 // ─── Members Panel ───────────────────────────────────────────────────────────
 function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange }) {
+  const { t } = useTranslation('community');
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
   const [editing, setEditing]   = useState(false);
@@ -175,7 +178,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
       const res = await chatApi.getMembers(chatGroupId);
       setData(res?.data || res);
     } catch {
-      toast.error('Could not load member list.');
+      toast.error(t('groupChat.couldNotLoadMemberList'));
     } finally {
       setLoading(false);
     }
@@ -200,7 +203,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
     setSaving(true);
     try {
       await chatApi.updateNickname(chatGroupId, nickInput.trim() || null);
-      toast.success('Nickname updated!');
+      toast.success(t('groupChat.nicknameUpdated'));
       setEditing(false);
       // Notify parent to update nicknameMap immediately
       if (onNicknameChange) {
@@ -208,7 +211,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
       }
       fetchMembers();
     } catch {
-      toast.error('Could not save nickname.');
+      toast.error(t('groupChat.couldNotSaveNickname'));
     } finally {
       setSaving(false);
     }
@@ -220,7 +223,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
     <>
     <button
       type="button"
-      aria-label="Close members panel"
+      aria-label={t('groupChat.closeMembersPanel')}
       onClick={onClose}
       className="fixed inset-0 z-[55] bg-slate-900/30 md:hidden"
     />
@@ -229,7 +232,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" />
-          <span className="font-bold text-sm text-slate-800">Members</span>
+          <span className="font-bold text-sm text-slate-800">{t('groupChat.members')}</span>
           {data?.members && (
             <span className="text-xs text-slate-400 font-medium">({data.members.length})</span>
           )}
@@ -244,14 +247,14 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
         <div className="mx-3 my-3 p-3 rounded-xl border border-primary-100 bg-primary-50/40">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-primary-700 flex items-center gap-1">
-              <BadgeCheck className="w-3.5 h-3.5" /> Your Nickname
+              <BadgeCheck className="w-3.5 h-3.5" /> {t('groupChat.yourNickname')}
             </span>
             {!editing && (
               <button
                 onClick={() => setEditing(true)}
                 className="text-caption text-primary-700 hover:text-primary-700 font-semibold flex items-center gap-0.5 cursor-pointer"
               >
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> {t('common:actions.edit')}
               </button>
             )}
           </div>
@@ -262,7 +265,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
                 value={nickInput}
                 onChange={e => setNickInput(e.target.value)}
                 maxLength={50}
-                placeholder="Enter nickname..."
+                placeholder={t('groupChat.enterNickname')}
                 className="flex-1 text-xs px-2.5 py-1.5 border border-primary-200 rounded-lg focus:outline-none focus:border-primary bg-white"
                 onKeyDown={e => { if (e.key === 'Enter') handleSaveNickname(); if (e.key === 'Escape') setEditing(false); }}
                 autoFocus
@@ -272,7 +275,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
                 disabled={saving}
                 className="px-2.5 py-1.5 bg-primary text-white text-xs rounded-lg font-semibold hover:bg-primary-600 disabled:opacity-50 cursor-pointer transition-all"
               >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save'}
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t('common:actions.save')}
               </button>
               <button
                 onClick={() => setEditing(false)}
@@ -286,7 +289,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
               {myMember?.nickname ? (
                 <span className="text-primary-700">{myMember.nickname}</span>
               ) : (
-                <span className="text-slate-400 italic text-xs">No nickname set</span>
+                <span className="text-slate-400 italic text-xs">{t('groupChat.noNicknameSet')}</span>
               )}
             </p>
           )}
@@ -300,7 +303,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
           </div>
         ) : !data?.members?.length ? (
-          <p className="text-xs text-center text-slate-400 pt-6">No members found.</p>
+          <p className="text-xs text-center text-slate-400 pt-6">{t('groupChat.noMembersFound')}</p>
         ) : (
           data.members.map((m, i) => (
             <div
@@ -316,19 +319,19 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
                       {m.nickname}
                     </p>
                     <p className="text-overline text-slate-500 font-medium break-words leading-snug mt-0.5">
-                      {m.displayName || 'Unknown'}
+                      {m.displayName || t('groupChat.unknown')}
                     </p>
                   </>
                 ) : (
                   <p className="text-xs font-semibold text-slate-800 break-words leading-snug">
-                    {m.displayName || 'Unknown'}
+                    {m.displayName || t('groupChat.unknown')}
                   </p>
                 )}
                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
                   {roleBadge(m.role)}
                   {m.userId?.toString() === currentUserId?.toString() && (
                     <span className="text-[9px] text-primary-700 font-bold bg-primary-50 border border-primary-100 px-1.5 py-0.5 rounded-md">
-                      You
+                      {t('groupChat.you')}
                     </span>
                   )}
                 </div>
@@ -347,6 +350,7 @@ function MembersPanel({ chatGroupId, currentUserId, onClose, onNicknameChange })
 
 // ─── Main GroupChat Component ─────────────────────────────────────────────────
 export default function GroupChat() {
+  const { t } = useTranslation('community');
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const initialGroupId = searchParams.get('groupId');
@@ -453,7 +457,7 @@ export default function GroupChat() {
           setSelectedChannel(target || data[0]);
         }
       } catch {
-        toast.error('Could not load chat channels.');
+        toast.error(t('groupChat.couldNotLoadChatChannels'));
       } finally {
         setLoadingChannels(false);
       }
@@ -491,7 +495,7 @@ export default function GroupChat() {
           setMessages(msgRes.value?.data || msgRes.value || []);
           setTimeout(scrollToBottom, 100);
         } else {
-          toast.error('Could not load message history.');
+          toast.error(t('groupChat.couldNotLoadMessageHistory'));
         }
 
         // Build { userId: nickname } map
@@ -516,7 +520,7 @@ export default function GroupChat() {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { toast.error('File must not exceed 10MB'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error(t('groupChat.fileMustNotExceed10mb')); return; }
     setSelectedFile(file);
   };
 
@@ -552,7 +556,7 @@ export default function GroupChat() {
     if (!inputText.trim() && !selectedFile) return;
 
     if (!runtimeConfig.realtime.enabled || !socketRef.current) {
-      toast.error('Real-time chat is not enabled in this environment.');
+      toast.error(t('groupChat.realTimeChatIsNotEnabled'));
       return;
     }
 
@@ -577,7 +581,7 @@ export default function GroupChat() {
         const d = res?.data || res;
         attachmentPayload = { url: d.url, name: d.name, fileType: d.fileType };
       } catch (err) {
-        toast.error(err?.message || 'Upload failed');
+        toast.error(err?.message || t('groupChat.uploadFailed'));
         setUploading(false);
         return;
       }
@@ -592,12 +596,12 @@ export default function GroupChat() {
     const senderRole = validRoles.includes(rawRole) ? rawRole : 'STUDENT';
 
     if (!currentUserIdString) {
-      toast.error('Unable to send the message because the user is not authenticated.');
+      toast.error(t('groupChat.unableToSendTheMessageBecause'));
       return;
     }
 
     if (!socketRef.current?.connected) {
-      toast.error('The real-time connection was lost. Please try again shortly.');
+      toast.error(t('groupChat.theRealTimeConnectionWasLost'));
       return;
     }
 
@@ -628,7 +632,7 @@ export default function GroupChat() {
       senderId: currentUserId,
       senderName: myNickname || user?.name || 'Anonymous',
       senderRole,
-      sticker: { emoji, label: label || 'Sticker' },
+      sticker: { emoji, label: label || t('groupChat.sticker') },
     });
     setShowStickerPicker(false);
   };
@@ -665,7 +669,7 @@ export default function GroupChat() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading chat...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('groupChat.loadingChat')}</p>
       </div>
     );
   }
@@ -677,7 +681,7 @@ export default function GroupChat() {
       {showMobileChannels && (
         <button
           type="button"
-          aria-label="Close chat list"
+          aria-label={t('groupChat.closeChatList')}
           onClick={() => setShowMobileChannels(false)}
           className="fixed inset-0 z-40 bg-slate-900/30 md:hidden"
         />
@@ -687,14 +691,14 @@ export default function GroupChat() {
         <div className="p-4 border-b border-slate-100 bg-white">
           <div className="mb-3 flex items-center justify-between md:hidden">
             <div>
-              <p className="text-sm font-bold text-slate-900">Chat groups</p>
-              <p className="text-xs text-slate-400">{filteredChannels.length} available</p>
+              <p className="text-sm font-bold text-slate-900">{t('groupChat.chatGroups')}</p>
+              <p className="text-xs text-slate-400">{t('groupChat.available', { length: filteredChannels.length })}</p>
             </div>
             <button
               type="button"
               onClick={() => setShowMobileChannels(false)}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Close chat groups"
+              aria-label={t('groupChat.closeChatGroups')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -703,7 +707,7 @@ export default function GroupChat() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search chat groups..."
+              placeholder={t('groupChat.searchChatGroups')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary transition-all bg-slate-50/30"
@@ -715,7 +719,7 @@ export default function GroupChat() {
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {filteredChannels.length === 0 ? (
             <div className="text-center py-8 text-xs text-slate-400 font-medium">
-              No chat groups found.
+              {t('groupChat.noChatGroupsFound')}
             </div>
           ) : (
             filteredChannels.map((c) => {
@@ -750,7 +754,7 @@ export default function GroupChat() {
                       {c.groupName}
                     </p>
                     <p className="text-overline font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
-                      {c.class?.classCode || 'Startup Group'} • {c.memberCount ?? 0} members
+                      {c.class?.classCode || t('groupChat.startupGroup')} • {t('groupChat.members', { count: c.memberCount ?? 0 })}
                     </p>
                     <p className="text-xs text-slate-400 truncate mt-1">
                       <span className="font-semibold">{lastMsgSender}</span>{lastMsgText}
@@ -774,7 +778,7 @@ export default function GroupChat() {
                   type="button"
                   onClick={() => setShowMobileChannels(true)}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 md:hidden"
-                  aria-label="Open chat groups"
+                  aria-label={t('groupChat.openChatGroups')}
                 >
                   <Menu className="h-4 w-4" />
                 </button>
@@ -786,7 +790,7 @@ export default function GroupChat() {
                     {selectedChannel.groupName}
                   </h2>
                   <p className="mt-0.5 truncate font-mono text-caption text-slate-400 sm:text-xs">
-                    Class: {selectedChannel.class?.classCode || '—'} · {selectedChannel.team ? 'Team chat' : 'General'} · {channelMembers.length || selectedChannel.memberCount || 0} members
+                    {t('groupChat.channelSummary', { classCode: selectedChannel.class?.classCode || '—', kind: t(selectedChannel.team ? 'groupChat.teamChat' : 'groupChat.general'), count: channelMembers.length || selectedChannel.memberCount || 0 })}
                   </p>
                 </div>
               </div>
@@ -794,7 +798,7 @@ export default function GroupChat() {
               {/* Toggle Members Panel */}
               <button
                 onClick={() => setShowMembers(v => !v)}
-                title="View members"
+                title={t('groupChat.viewMembers')}
                 className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition-all cursor-pointer sm:px-3 ${
                   showMembers
                     ? 'bg-primary text-white shadow-sm'
@@ -802,7 +806,7 @@ export default function GroupChat() {
                 }`}
               >
                 <Users className="w-4 h-4" />
-                <span className="hidden sm:inline">Members</span>
+                <span className="hidden sm:inline">{t('groupChat.members')}</span>
                 {(channelMembers.length > 0 || (selectedChannel?.memberCount ?? 0) > 0) && (
                   <span className="text-xs font-bold px-1.5 py-0.5 rounded-md bg-white/20">
                     {channelMembers.length || selectedChannel?.memberCount}
@@ -819,13 +823,13 @@ export default function GroupChat() {
                 {loadingMessages ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                    <p className="text-xs text-slate-400 mt-1 font-medium">Loading messages...</p>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">{t('groupChat.loadingMessages')}</p>
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-slate-300">
                     <MessageSquare className="w-16 h-16 stroke-1 mb-2 animate-bounce" />
-                    <p className="text-sm font-semibold">Welcome to the group chat!</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Start the conversation with your group.</p>
+                    <p className="text-sm font-semibold">{t('groupChat.welcomeToTheGroupChat')}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{t('groupChat.startTheConversationWithYourGroup')}</p>
                   </div>
                 ) : (
                   messages.map((m, index) => {
@@ -889,8 +893,8 @@ export default function GroupChat() {
                                   reactionPickerMessageId === m._id ? null : m._id
                                 )}
                                 className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-amber-500"
-                                title="React to message"
-                                aria-label="React to message"
+                                title={t('groupChat.reactToMessage')}
+                                aria-label={t('groupChat.reactToMessage')}
                                 aria-expanded={reactionPickerMessageId === m._id}
                               >
                                 <Smile className="h-3.5 w-3.5" />
@@ -903,7 +907,7 @@ export default function GroupChat() {
                                     type="button"
                                     onClick={() => handleStartEdit(m)}
                                     className="px-1.5 py-1 text-slate-400 hover:bg-slate-100 hover:text-primary-700"
-                                    title="Edit message"
+                                    title={t('groupChat.editMessage')}
                                   >
                                     <Pencil className="h-3 w-3" />
                                   </button>
@@ -912,7 +916,7 @@ export default function GroupChat() {
                                   type="button"
                                   onClick={() => handleRevokeMessage(m)}
                                   className="px-1.5 py-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
-                                  title="Revoke message"
+                                  title={t('groupChat.revokeMessage')}
                                 >
                                   <RotateCcw className="h-3 w-3" />
                                 </button>
@@ -929,7 +933,7 @@ export default function GroupChat() {
                                     type="button"
                                     onClick={() => handleReactMessage(m._id, emoji)}
                                     className="flex h-8 w-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-125 hover:bg-slate-100"
-                                    aria-label={`React ${emoji}`}
+                                    aria-label={t('groupChat.react', { emoji })}
                                   >
                                     {emoji}
                                   </button>
@@ -951,14 +955,14 @@ export default function GroupChat() {
                           }`}>
                             {m.isRevoked ? (
                               <p className={`italic ${isMine ? 'text-primary-100' : 'text-slate-400'}`}>
-                                Tin nhắn đã được thu hồi
+                                {t('groupChat.tinNhanDaDuocThuHoi')}
                               </p>
                             ) : (
                               <>
                                 {m.messageType === 'STICKER' && m.sticker?.emoji && (
                                   <div
                                     className="inline-flex h-14 min-w-14 items-center justify-center text-[52px] leading-none drop-shadow-sm"
-                                    title={m.sticker.label || 'Sticker'}
+                                    title={m.sticker.label || t('groupChat.sticker')}
                                   >
                                     {m.sticker.emoji}
                                   </div>
@@ -977,7 +981,7 @@ export default function GroupChat() {
                                   <a href={m.attachment.url} target="_blank" rel="noopener noreferrer">
                                     <img
                                       src={m.attachment.url}
-                                      alt={m.attachment.name || 'Attachment'}
+                                      alt={m.attachment.name || t('groupChat.attachment')}
                                       className="max-w-full max-h-48 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
                                     />
                                   </a>
@@ -993,7 +997,7 @@ export default function GroupChat() {
                                     } transition-all`}
                                   >
                                     <Paperclip className="w-4 h-4 shrink-0" />
-                                    <span className="max-w-[150px] truncate">{m.attachment.name || 'Download file'}</span>
+                                    <span className="max-w-[150px] truncate">{m.attachment.name || t('groupChat.downloadFile')}</span>
                                   </a>
                                 )}
                               </div>
@@ -1007,7 +1011,7 @@ export default function GroupChat() {
                               }`
                             }`}>
                               <Clock className="w-2.5 h-2.5" />
-                              {formattedTime}{m.isEdited ? ' · edited' : ''}
+                              {formattedTime}{m.isEdited ? t('groupChat.edited') : ''}
                             </span>
                           </div>
 
@@ -1064,20 +1068,20 @@ export default function GroupChat() {
             <div className="shrink-0 space-y-2 border-t border-slate-100 bg-white p-3 sm:p-4">
               {editingMessage && (
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-primary-100 bg-primary-50 px-3 py-2 text-xs text-primary-700">
-                  <span className="font-semibold">Editing message</span>
+                  <span className="font-semibold">{t('groupChat.editingMessage')}</span>
                   <button
                     type="button"
                     onClick={() => { setEditingMessage(null); setInputText(''); }}
                     className="font-bold hover:text-primary-700"
                   >
-                    Cancel
+                    {t('common:actions.cancel')}
                   </button>
                 </div>
               )}
               {uploading && (
                 <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                  <span>Uploading file...</span>
+                  <span>{t('groupChat.uploadingFile')}</span>
                 </div>
               )}
               {selectedFile && (
@@ -1091,7 +1095,7 @@ export default function GroupChat() {
                     onClick={() => setSelectedFile(null)}
                     className="text-red-500 hover:text-red-700 font-bold shrink-0 ml-2 cursor-pointer"
                   >
-                    Remove
+                    {t('common:actions.remove')}
                   </button>
                 </div>
               )}
@@ -1129,7 +1133,7 @@ export default function GroupChat() {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading || !!editingMessage}
                   className="shrink-0 rounded-xl border border-slate-200 p-3 text-slate-500 transition-all hover:bg-slate-50 cursor-pointer"
-                  title="Upload image or file"
+                  title={t('groupChat.uploadImageOrFile')}
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -1138,7 +1142,7 @@ export default function GroupChat() {
                   onClick={() => setShowStickerPicker(v => !v)}
                   disabled={!!editingMessage}
                   className="shrink-0 rounded-xl border border-slate-200 p-3 text-slate-500 transition-all hover:bg-slate-50 cursor-pointer disabled:opacity-50"
-                  title="Send sticker"
+                  title={t('groupChat.sendSticker')}
                 >
                   <Smile className="w-4 h-4" />
                 </button>
@@ -1146,7 +1150,7 @@ export default function GroupChat() {
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder={editingMessage ? 'Edit your message...' : selectedFile ? 'Add a message or press Send...' : 'Type a message... Use @ to tag'}
+                  placeholder={editingMessage ? t('groupChat.editYourMessage') : selectedFile ? t('groupChat.addAMessageOrPressSend') : t('groupChat.typeAMessageUseToTag')}
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50/20 px-3 py-3 text-sm transition-all focus:outline-none focus:border-primary sm:px-4"
                 />
                 <button
@@ -1154,7 +1158,7 @@ export default function GroupChat() {
                   disabled={uploading || (!inputText.trim() && !selectedFile)}
                   className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-600 disabled:opacity-50 active:scale-95 cursor-pointer sm:px-4"
                 >
-                  <span className="hidden sm:inline">{editingMessage ? 'Save' : 'Send'}</span>
+                  <span className="hidden sm:inline">{editingMessage ? t('common:actions.save') : t('groupChat.send')}</span>
                   {editingMessage ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
                 </button>
               </form>
@@ -1163,7 +1167,7 @@ export default function GroupChat() {
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
             <MessageSquare className="w-16 h-16 stroke-1 mb-2" />
-            <p className="text-sm font-semibold">No chat channel selected</p>
+            <p className="text-sm font-semibold">{t('groupChat.noChatChannelSelected')}</p>
           </div>
         )}
       </div>
