@@ -15,6 +15,7 @@ import type { StartupIndustryDto } from '../../types/startupIndustries';
 import StartupIndustryPicker from './StartupIndustryPicker';
 import type { ProjectWorkspaceProfile } from '../../types/projectWorkspace';
 import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH } from '../../constants/projectProfile';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   team: { _id?: string; id?: string; teamName?: string; name?: string };
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export default function CreateProjectWorkspaceForm({ team, proposal, project, classInfo, onCreated }: Props) {
+  const { t } = useTranslation('workspace');
   const creationDefaults = resolveWorkspaceCreationDefaults(team, proposal, project);
   const [draft, setDraft] = useState<ProjectWorkspaceDraft>(creationDefaults.draft);
   const [errors, setErrors] = useState<ProjectWorkspaceErrors>({});
@@ -76,7 +78,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
     const nextErrors = validateProjectWorkspace(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      toast.error('Please complete the required team and project information.');
+      toast.error(t('createProjectWorkspaceForm.pleaseCompleteTheRequiredTeamAnd'));
       return;
     }
     setSubmitting(true);
@@ -88,7 +90,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
         zaloGroupUrl: draft.zaloGroupUrl.trim(),
         startupIndustryIds: draft.startupIndustryIds,
       });
-      toast.success('Workspace created and project direction submitted for lecturer review.');
+      toast.success(t('createProjectWorkspaceForm.workspaceCreatedAndProjectDirectionSubmitted'));
       await onCreated();
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to create project workspace.').message);
@@ -102,36 +104,36 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
       <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FolderKanban className="h-5 w-5" /></div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Create project workspace</h2>
-          <p className="mt-0.5 text-xs text-slate-500">{contextLabel || 'This workspace will be linked to your team’s academic context.'}</p>
+          <h2 className="text-lg font-bold text-slate-900">{t('createProjectWorkspaceForm.createProjectWorkspace')}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">{contextLabel || t('createProjectWorkspaceForm.thisWorkspaceWillBeLinkedTo')}</p>
         </div>
       </div>
       <div className="grid gap-4 p-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-team-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Team name <span className="text-red-500">*</span></label>
+          <label htmlFor="workspace-team-name" className="mb-1.5 block text-xs font-semibold text-slate-700">{t('createProjectWorkspaceForm.teamName')} <span className="text-red-500">*</span></label>
           <input id="workspace-team-name" value={draft.teamName} onChange={(event) => setField('teamName', event.target.value)} maxLength={100} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.teamName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
-          <p className="mt-1 text-xs text-slate-400">Pre-filled from your team. You can change it before creating the workspace.</p>
+          <p className="mt-1 text-xs text-slate-400">{t('createProjectWorkspaceForm.preFilledFromYourTeamYou')}</p>
           {errors.teamName && <p className="mt-1 text-xs text-red-600">{errors.teamName}</p>}
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-project-name" className="mb-1.5 block text-xs font-semibold text-slate-700">Project name <span className="text-red-500">*</span></label>
+          <label htmlFor="workspace-project-name" className="mb-1.5 block text-xs font-semibold text-slate-700">{t('createProjectWorkspaceForm.projectName')} <span className="text-red-500">*</span></label>
           <input id="workspace-project-name" value={draft.projectName} onChange={(event) => setField('projectName', event.target.value)} maxLength={PROJECT_NAME_MAX_LENGTH} className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.projectName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
           {errors.projectName && <p className="mt-1 text-xs text-red-600">{errors.projectName}</p>}
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-description" className="mb-1.5 block text-xs font-semibold text-slate-700">Project description <span className="text-red-500">*</span></label>
-          <textarea id="workspace-description" value={draft.description} onChange={(event) => setField('description', event.target.value)} rows={4} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} placeholder="Summarize what the project does in a few sentences…" className={`w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
+          <label htmlFor="workspace-description" className="mb-1.5 block text-xs font-semibold text-slate-700">{t('createProjectWorkspaceForm.projectDescription')} <span className="text-red-500">*</span></label>
+          <textarea id="workspace-description" value={draft.description} onChange={(event) => setField('description', event.target.value)} rows={4} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} placeholder={t('createProjectWorkspaceForm.summarizeWhatTheProjectDoesIn')} className={`w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
           <div className="mt-1 flex justify-between text-xs"><span className="text-red-600">{errors.description}</span><span className="text-slate-400">{draft.description.length}/{PROJECT_DESCRIPTION_MAX_LENGTH}</span></div>
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="workspace-zalo-group-url" className="mb-1.5 block text-xs font-semibold text-slate-700">Zalo group link <span className="text-red-500">*</span></label>
+          <label htmlFor="workspace-zalo-group-url" className="mb-1.5 block text-xs font-semibold text-slate-700">{t('projectProfileEditor.zaloGroupLink')} <span className="text-red-500">*</span></label>
           <input id="workspace-zalo-group-url" type="url" value={draft.zaloGroupUrl} onChange={(event) => setField('zaloGroupUrl', event.target.value)} maxLength={500} placeholder="https://zalo.me/g/..." className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/15 ${errors.zaloGroupUrl ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`} />
-          <p className="mt-1 text-xs text-slate-400">This link will be available and editable in Project Profile.</p>
+          <p className="mt-1 text-xs text-slate-400">{t('createProjectWorkspaceForm.thisLinkWillBeAvailableAnd')}</p>
           {errors.zaloGroupUrl && <p className="mt-1 text-xs text-red-600">{errors.zaloGroupUrl}</p>}
         </div>
         <div className="sm:col-span-2">
           <label id="startup-industry-label" className="mb-1.5 block text-xs font-semibold text-slate-700">
-            Startup Industry <span className="text-red-500">*</span>
+            {t('createProjectWorkspaceForm.startupIndustry')} <span className="text-red-500">*</span>
           </label>
           <StartupIndustryPicker
             industries={industries}
@@ -151,9 +153,9 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-        <p className="text-xs text-slate-500">Creating the workspace also submits this information to the lecturer for review.</p>
+        <p className="text-xs text-slate-500">{t('createProjectWorkspaceForm.creatingTheWorkspaceAlsoSubmitsThis')}</p>
         <button type="button" disabled={submitting} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60">
-          {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Create workspace & submit
+          {submitting && <Loader2 className="h-4 w-4 animate-spin" />} {t('createProjectWorkspaceForm.createWorkspaceSubmit')}
         </button>
       </div>
     </div>

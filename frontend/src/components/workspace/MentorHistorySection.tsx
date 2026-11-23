@@ -3,6 +3,7 @@ import type { MentorHistoryItem } from '../../types/teamManagement';
 import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
 import { describeMentorHistoryEnd, groupMentorHistoryBySemester } from '../../utils/mentorHistory';
 import MentorKindTag from '../admin/MentorKindTag';
+import { useTranslation } from 'react-i18next';
 
 interface MentorHistorySectionProps {
   items: MentorHistoryItem[];
@@ -13,6 +14,7 @@ interface MentorHistorySectionProps {
  * give access to the team's workspace, so these cards are deliberately not links.
  */
 export default function MentorHistorySection({ items }: MentorHistorySectionProps) {
+  const { t } = useTranslation('workspace');
   if (items.length === 0) return null;
   const groups = groupMentorHistoryBySemester(items);
 
@@ -21,8 +23,8 @@ export default function MentorHistorySection({ items }: MentorHistorySectionProp
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><History className="h-4 w-4" /></span>
         <div>
-          <h2 id="mentor-history-title" className="text-lg font-bold text-slate-900">Previous teams</h2>
-          <p className="text-xs text-slate-500">Teams you mentored before. This list is for reference; the team workspace is no longer open to you.</p>
+          <h2 id="mentor-history-title" className="text-lg font-bold text-slate-900">{t('mentorHistorySection.previousTeams')}</h2>
+          <p className="text-xs text-slate-500">{t('mentorHistorySection.teamsYouMentoredBeforeThisList')}</p>
         </div>
         <span className="h-px flex-1 bg-slate-200" />
         <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">{items.length}</span>
@@ -30,7 +32,7 @@ export default function MentorHistorySection({ items }: MentorHistorySectionProp
 
       {groups.map(group => (
         <div key={group.semester} className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.semester || 'Unknown semester'}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.semester || t('mentorHistorySection.unknownSemester')}</p>
           <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {group.items.map(item => (
               <li key={item.assignmentId} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">

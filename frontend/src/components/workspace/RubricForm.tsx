@@ -9,25 +9,27 @@ import {
 import {
   applyDraftToRows, clearRubricDraft, decideDraftRestore, getBrowserStorage, loadRubricDraft, rubricDraftKey, saveRubricDraft,
 } from '../../utils/rubricDraft';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const DRAFT_WRITE_DELAY_MS = 500;
 const formatDraftTime = (value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 const evaluationStatusPresentation = {
   DRAFT: {
-    label: 'Draft',
+    get label() { return i18n.t('workspace:projectWorkspaceProfile.draft'); },
     className: 'border-amber-200 bg-amber-50 text-amber-700',
   },
   SUBMITTED: {
-    label: 'Submitted',
+    get label() { return i18n.t('workspace:proposalPreview.submitted'); },
     className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   PUBLISHED: {
-    label: 'Published',
+    get label() { return i18n.t('workspace:rankingTable.published'); },
     className: 'border-blue-200 bg-blue-50 text-blue-700',
   },
   NOT_GRADED: {
-    label: 'Not graded',
+    get label() { return i18n.t('workspace:rubricForm.notGraded'); },
     className: 'border-slate-200 bg-slate-50 text-slate-500',
   },
 };
@@ -44,6 +46,7 @@ export default function RubricForm({
   compact = false,
   draftScope,
 }) {
+  const { t } = useTranslation('workspace');
   const criteria = useMemo(() => normalizeCriteria(customCriteria), [customCriteria]);
 
   // Unsaved edits survive a reload through sessionStorage. Without a scope (user + team) the feature is off.
@@ -237,19 +240,19 @@ export default function RubricForm({
     // Saving an unchanged draft or submitted evaluation is not an update; submitting a draft still is.
     if ((status === 'DRAFT' || isSubmitted) && !hasChanges) return;
     if (rubricScores.length === 0) {
-      toast.error('No rubric criteria are configured for this checkpoint.');
+      toast.error(t('rubricForm.noRubricCriteriaAreConfiguredFor'));
       return;
     }
     const required = status === 'SUBMITTED';
     setAttemptedSubmit(required);
     if (rubricScores.some((item) => scoreError(item, required))) {
       toast.error(required
-        ? 'Score every configured criterion before submitting the evaluation.'
-        : 'Correct invalid scores before saving the draft.');
+        ? t('rubricForm.scoreEveryConfiguredCriterionBeforeSubmitting')
+        : t('rubricForm.correctInvalidScoresBeforeSavingThe'));
       return;
     }
     if (members.some((member) => memberScoreError(member.studentId))) {
-      toast.error('Correct invalid individual member scores before saving.');
+      toast.error(t('rubricForm.correctInvalidIndividualMemberScoresBefore'));
       return;
     }
 
@@ -279,12 +282,12 @@ export default function RubricForm({
     <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-bold text-slate-900">{title} · Enter scores</h3>
-          <p className="text-xs text-slate-500">Type a score for each criterion.</p>
+          <h3 className="truncate text-sm font-bold text-slate-900">{t('rubricForm.enterScores', { title })}</h3>
+          <p className="text-xs text-slate-500">{t('rubricForm.typeAScoreForEachCriterion')}</p>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-overline font-bold uppercase tracking-wider text-slate-400">Evaluation status</span>
+            <span className="text-overline font-bold uppercase tracking-wider text-slate-400">{t('rubricForm.evaluationStatus')}</span>
             <span
-              aria-label={`Evaluation status: ${statusPresentation.label}`}
+              aria-label={t('rubricForm.evaluationStatus2', { label: statusPresentation.label })}
               className={`inline-flex rounded-full border px-2.5 py-1 text-overline font-bold uppercase tracking-wide ${statusPresentation.className}`}
             >
               {statusPresentation.label}
@@ -293,7 +296,7 @@ export default function RubricForm({
         </div>
         {!hideSensitiveScores && (
           <div className="shrink-0 rounded-xl bg-blue-50 px-3 py-1.5 text-right">
-            <span className="text-xs font-semibold text-blue-600">Total </span>
+            <span className="text-xs font-semibold text-blue-600">{t('boardSummary.total')} </span>
             <span className="text-lg font-black text-blue-700">{checkpointTotal.toFixed(2)}</span>
             <span className="text-xs text-blue-500"> / 10</span>
           </div>
@@ -302,22 +305,22 @@ export default function RubricForm({
 
       {restoredAt !== null && (
         <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          <span>Restored your unsaved changes from {formatDraftTime(restoredAt)}.</span>
+          <span>{t('rubricForm.restoredYourUnsavedChangesFrom', { v1: formatDraftTime(restoredAt) })}</span>
           <button type="button" onClick={discardRestoredDraft} disabled={readOnly} className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-            Discard
+            {t('rubricForm.discard')}
           </button>
         </div>
       )}
 
       {draftOffer && (
         <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          <span>You have unsaved changes from {formatDraftTime(draftOffer.draft.savedAt)}, but this evaluation was updated since then.</span>
+          <span>{t('rubricForm.youHaveUnsavedChangesFromBut', { v1: formatDraftTime(draftOffer.draft.savedAt) })}</span>
           <span className="flex shrink-0 gap-2">
             <button type="button" onClick={restoreOfferedDraft} disabled={readOnly} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-              Restore my changes
+              {t('rubricForm.restoreMyChanges')}
             </button>
             <button type="button" onClick={discardOfferedDraft} disabled={readOnly} className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-              Discard
+              {t('rubricForm.discard')}
             </button>
           </span>
         </div>
@@ -325,16 +328,16 @@ export default function RubricForm({
 
       {hasNewerVersion && (
         <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          <span>A newer version of this evaluation was saved elsewhere. Your unsaved edits are kept.</span>
+          <span>{t('rubricForm.aNewerVersionOfThisEvaluation')}</span>
           <button type="button" onClick={applyServerVersion} disabled={readOnly} className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-            Load latest and discard my edits
+            {t('rubricForm.loadLatestAndDiscardMyEdits')}
           </button>
         </div>
       )}
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         {rubricScores.length === 0 && (
-          <p className="px-3 py-4 text-sm text-slate-500">No rubric criteria are configured for this checkpoint.</p>
+          <p className="px-3 py-4 text-sm text-slate-500">{t('rubricForm.noRubricCriteriaAreConfiguredFor')}</p>
         )}
         {rubricScores.map((item, index) => {
           const error = scoreError(item, attemptedSubmit);
@@ -344,10 +347,10 @@ export default function RubricForm({
                 <label htmlFor={`rubric-score-${checkpointNumber}-${index}`} className="block truncate text-sm font-medium text-slate-800">
                   {item.criterionName}
                 </label>
-                <span className="text-caption text-slate-400">{item.weight}% weight</span>
+                <span className="text-caption text-slate-400">{t('rubricForm.weight', { weight: item.weight })}</span>
               </div>
               {hideSensitiveScores ? (
-                <span className="text-xs text-slate-500">Score hidden</span>
+                <span className="text-xs text-slate-500">{t('rubricForm.scoreHidden')}</span>
               ) : (
                 <div className="flex w-28 shrink-0 flex-col items-end">
                   <div className={`flex w-full items-center rounded-lg border bg-white px-2 ${error ? 'border-red-400' : 'border-slate-200 focus-within:border-primary'}`}>
@@ -384,11 +387,11 @@ export default function RubricForm({
           <span className="flex min-w-0 items-center gap-2">
             <Users className="h-4 w-4 shrink-0 text-primary" />
             <span>
-              <span className="block text-xs font-semibold text-slate-700">Individual member scores</span>
+              <span className="block text-xs font-semibold text-slate-700">{t('rubricForm.individualMemberScores')}</span>
               <span className="block text-caption text-slate-500">
                 {Object.keys(memberOverrides).length === 0
-                  ? `All ${members.length} members use the Total score`
-                  : `${Object.keys(memberOverrides).length} custom score${Object.keys(memberOverrides).length === 1 ? '' : 's'}`}
+                  ? t('rubricForm.allMembersUseTheTotalScore', { length: members.length })
+                  : t('rubricForm.customScores', { count: Object.keys(memberOverrides).length })}
               </span>
             </span>
           </span>
@@ -400,7 +403,7 @@ export default function RubricForm({
         {memberScoresExpanded && (
           <div className="border-t border-slate-200 bg-white px-3 py-2">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-caption text-slate-500">Default: Total {checkpointTotal.toFixed(2)} / 10</p>
+              <p className="text-caption text-slate-500">{t('rubricForm.defaultTotal10', { v1: checkpointTotal.toFixed(2) })}</p>
               {Object.keys(memberOverrides).length > 0 && (
                 <button
                   type="button"
@@ -408,12 +411,12 @@ export default function RubricForm({
                   onClick={() => setMemberOverrides({})}
                   className="inline-flex items-center gap-1 text-caption font-semibold text-primary-700 hover:text-primary-700/80 disabled:opacity-50"
                 >
-                  <RotateCcw className="h-3 w-3" /> Reset all
+                  <RotateCcw className="h-3 w-3" /> {t('rubricForm.resetAll')}
                 </button>
               )}
             </div>
             {members.length === 0 ? (
-              <p className="py-2 text-xs text-slate-500">No active team members found.</p>
+              <p className="py-2 text-xs text-slate-500">{t('rubricForm.noActiveTeamMembersFound')}</p>
             ) : (
               <div className="divide-y divide-slate-100">
                 {members.map((member) => {
@@ -424,7 +427,7 @@ export default function RubricForm({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-800">{member.fullName}</p>
                         <p className="text-caption text-slate-400">
-                          {member.rollNumber || 'Student'} · {isOverridden ? 'Custom score' : 'Uses Total'}
+                          {member.rollNumber || t('rubricForm.student')} · {isOverridden ? t('rubricForm.customScore2') : t('rubricForm.usesTotal')}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -434,7 +437,7 @@ export default function RubricForm({
                               type="text"
                               inputMode="decimal"
                       autoComplete="off"
-                              aria-label={`Score for ${member.fullName}`}
+                              aria-label={t('rubricForm.scoreFor', { fullName: member.fullName })}
                               value={isOverridden ? memberOverrides[member.studentId] : checkpointTotal.toFixed(2)}
                               onChange={(event) => updateMemberScore(member.studentId, event.target.value)}
                               disabled={readOnly}
@@ -448,7 +451,7 @@ export default function RubricForm({
                           type="button"
                           onClick={() => resetMemberScore(member.studentId)}
                           disabled={readOnly || !isOverridden}
-                          aria-label={`Reset score for ${member.fullName}`}
+                          aria-label={t('rubricForm.resetScoreFor', { fullName: member.fullName })}
                           className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary-700 disabled:invisible"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
@@ -464,7 +467,7 @@ export default function RubricForm({
       </div>
 
       <div className="mt-3">
-        <label htmlFor={`overall-feedback-${checkpointNumber}`} className="mb-1 block text-xs font-semibold text-slate-600">Overall feedback (optional)</label>
+        <label htmlFor={`overall-feedback-${checkpointNumber}`} className="mb-1 block text-xs font-semibold text-slate-600">{t('rubricForm.overallFeedbackOptional')}</label>
         <AutoSizeTextarea
           id={`overall-feedback-${checkpointNumber}`}
           minRows={compact ? 2 : 3}
@@ -472,14 +475,14 @@ export default function RubricForm({
           value={overallFeedback}
           onChange={(event) => setOverallFeedback(event.target.value)}
           disabled={readOnly}
-          placeholder="General feedback for the team..."
+          placeholder={t('rubricForm.generalFeedbackForTheTeam')}
           className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-700 outline-none focus:border-primary disabled:bg-slate-50"
         />
       </div>
 
       {rubricScores.length > 0 && (
         <details className="mt-2 text-xs text-slate-600">
-          <summary className="cursor-pointer font-semibold">Criterion comments (optional)</summary>
+          <summary className="cursor-pointer font-semibold">{t('rubricForm.criterionCommentsOptional')}</summary>
           <div className="mt-2 space-y-2">
             {rubricScores.map((item, index) => (
               <label key={item.criterionKey} className="block">
@@ -501,12 +504,12 @@ export default function RubricForm({
       {onSubmit && !hideSensitiveScores && (
         <div className="mt-3 flex justify-end gap-2">
           {!isSubmitted && (
-            <button type="button" disabled={readOnly || rubricScores.length === 0 || !hasChanges} title={hasChanges ? undefined : 'Make a change to save a new draft'} onClick={() => handleSubmit('DRAFT')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              Save draft
+            <button type="button" disabled={readOnly || rubricScores.length === 0 || !hasChanges} title={hasChanges ? undefined : t('rubricForm.makeAChangeToSaveA')} onClick={() => handleSubmit('DRAFT')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {t('projectDirectionCard.saveDraft')}
             </button>
           )}
-          <button type="button" disabled={readOnly || rubricScores.length === 0 || (isSubmitted && !hasChanges)} title={isSubmitted && !hasChanges ? 'Make a change to save a new version' : undefined} onClick={() => handleSubmit('SUBMITTED')} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
-            {readOnly ? 'Saving...' : isSubmitted ? 'Save changes' : 'Submit evaluation'}
+          <button type="button" disabled={readOnly || rubricScores.length === 0 || (isSubmitted && !hasChanges)} title={isSubmitted && !hasChanges ? t('rubricForm.makeAChangeToSaveA2') : undefined} onClick={() => handleSubmit('SUBMITTED')} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
+            {readOnly ? t('projectDirectionCard.saving') : isSubmitted ? t('rubricForm.saveChanges') : t('rubricForm.submitEvaluation')}
           </button>
         </div>
       )}

@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { useState } from 'react';
 import { Pencil, Calendar, User, Flag, Milestone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const PRIORITY_STYLES = {
   LOW: 'bg-gray-100 text-gray-600',
@@ -12,10 +14,10 @@ const PRIORITY_STYLES = {
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
 
 const STATUS_LABELS = {
-  TODO: 'To Do',
-  IN_PROGRESS: 'In Progress',
-  REVIEW: 'Review',
-  DONE: 'Done',
+  get TODO() { return i18n.t('workspace:taskStatus.TODO'); },
+  get IN_PROGRESS() { return i18n.t('workspace:taskStatus.IN_PROGRESS'); },
+  get REVIEW() { return i18n.t('workspace:taskStatus.REVIEW'); },
+  get DONE() { return i18n.t('workspace:taskStatus.DONE'); },
 };
 
 function formatDate(dateStr) {
@@ -42,6 +44,7 @@ function isOverdue(task) {
 }
 
 export default function TaskCard({ task, onEdit, onStatusChange, isEditable, members }) {
+  const { t } = useTranslation('workspace');
   if (!task) return null;
 
   const priorityClass = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.LOW;
@@ -67,7 +70,7 @@ export default function TaskCard({ task, onEdit, onStatusChange, isEditable, mem
           <button
             onClick={() => onEdit?.(task)}
             className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-            title="Edit task"
+            title={t('taskCard.editTask')}
           >
             <Pencil size={14} />
           </button>
@@ -83,7 +86,7 @@ export default function TaskCard({ task, onEdit, onStatusChange, isEditable, mem
         </span>
         {overdue && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-overline font-semibold uppercase tracking-wide bg-red-500 text-white">
-            Overdue
+            {t('boardSummary.overdue')}
           </span>
         )}
       </div>

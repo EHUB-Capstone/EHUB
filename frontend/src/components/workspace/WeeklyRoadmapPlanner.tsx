@@ -20,6 +20,8 @@ import {
   getTaskTextError,
 } from '../../utils/taskLimits';
 import type { WeeklyTask, WeeklyTaskKind, WeeklyTaskStatus, SaveWeeklyTaskPayload } from '../../types/workspaceTools';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface RoadmapMember {
   _id?: string;
@@ -44,18 +46,18 @@ const WEEKS = Array.from({ length: 10 }, (_, i) => i + 1);
 const STATUSES = ['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'OVERDUE'];
 
 const STATUS_CFG = {
-  TODO:        { label: 'To Do',      bg: 'bg-slate-100',   text: 'text-slate-600',  dot: 'bg-slate-400'  },
-  IN_PROGRESS: { label: 'In Progress',bg: 'bg-blue-50',     text: 'text-blue-600',   dot: 'bg-blue-500'   },
-  REVIEW:      { label: 'Review',     bg: 'bg-secondary-50',   text: 'text-secondary', dot: 'bg-secondary' },
-  COMPLETED:   { label: 'Completed',  bg: 'bg-emerald-50',  text: 'text-emerald-600',dot: 'bg-emerald-500'},
-  OVERDUE:     { label: 'Overdue',    bg: 'bg-red-50',      text: 'text-red-600',    dot: 'bg-red-500'    },
+  TODO:        { get label() { return i18n.t('workspace:kanbanBoard.toDo'); },      bg: 'bg-slate-100',   text: 'text-slate-600',  dot: 'bg-slate-400'  },
+  IN_PROGRESS: { get label() { return i18n.t('workspace:boardSummary.inProgress'); },bg: 'bg-blue-50',     text: 'text-blue-600',   dot: 'bg-blue-500'   },
+  REVIEW:      { get label() { return i18n.t('workspace:kanbanBoard.review'); },     bg: 'bg-secondary-50',   text: 'text-secondary', dot: 'bg-secondary' },
+  COMPLETED:   { get label() { return i18n.t('workspace:boardSummary.completed'); },  bg: 'bg-emerald-50',  text: 'text-emerald-600',dot: 'bg-emerald-500'},
+  OVERDUE:     { get label() { return i18n.t('workspace:boardSummary.overdue'); },    bg: 'bg-red-50',      text: 'text-red-600',    dot: 'bg-red-500'    },
 };
 
 const PRIORITY_CFG = {
-  LOW:      { label: 'Low',      bg: 'bg-slate-100',  text: 'text-slate-500'  },
-  MEDIUM:   { label: 'Medium',   bg: 'bg-blue-50',    text: 'text-blue-600'   },
-  HIGH:     { label: 'High',     bg: 'bg-amber-50',   text: 'text-amber-600'  },
-  CRITICAL: { label: 'Critical', bg: 'bg-red-50',     text: 'text-red-600'    },
+  LOW:      { get label() { return i18n.t('workspace:weeklyRoadmapPlanner.low'); },      bg: 'bg-slate-100',  text: 'text-slate-500'  },
+  MEDIUM:   { get label() { return i18n.t('workspace:weeklyRoadmapPlanner.medium'); },   bg: 'bg-blue-50',    text: 'text-blue-600'   },
+  HIGH:     { get label() { return i18n.t('workspace:weeklyRoadmapPlanner.high'); },     bg: 'bg-amber-50',   text: 'text-amber-600'  },
+  CRITICAL: { get label() { return i18n.t('workspace:weeklyRoadmapPlanner.critical'); }, bg: 'bg-red-50',     text: 'text-red-600'    },
 };
 
 const EMPTY_TASKS: WeeklyTask[] = [];
@@ -94,7 +96,9 @@ const PriorityBadge = ({ priority }) => {
   return <Badge className={`${cfg.bg} ${cfg.text}`}>{cfg.label}</Badge>;
 };
 
-const SectionEmpty = ({ label }) => (
+const SectionEmpty = ({ label }) => {
+                       const { t: tr } = useTranslation('workspace');
+                       return (
   <div className="text-center py-10">
     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
       <ClipboardList className="w-5 h-5 text-slate-400" />
@@ -102,10 +106,12 @@ const SectionEmpty = ({ label }) => (
     <p className="text-sm text-slate-400 font-medium">No {label} for this week</p>
   </div>
 );
+                     };
 
 // ─── TaskCard ─────────────────────────────────────────────────────────────────
 
 function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDelete, onStatusChange, onMarkComplete }) {
+  const { t: tr } = useTranslation('workspace');
   const [statusOpen, setStatusOpen] = useState(false);
 
   const checklist = task.checklist || [];
@@ -144,19 +150,19 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
             <StatusBadge status={task.status} />
             <PriorityBadge priority={task.priority} />
             {task.isMandatory && (
-              <Badge className="bg-rose-50 text-rose-600"><Star className="w-2.5 h-2.5" />Required</Badge>
+              <Badge className="bg-rose-50 text-rose-600"><Star className="w-2.5 h-2.5" />{tr('weeklyRoadmapPlanner.required')}</Badge>
             )}
           </div>
           {/* Actions */}
           <div className="flex items-center gap-1 shrink-0">
             {canEdit && (
-              <button onClick={() => onEdit(task)} title="Edit"
+              <button onClick={() => onEdit(task)} title={tr('common:actions.edit')}
                 className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
             {canDelete && (
-              <button onClick={() => onDelete(task)} title="Delete"
+              <button onClick={() => onDelete(task)} title={tr('common:actions.delete')}
                 className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -183,7 +189,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
         {checklist.length > 0 && (
           <div className="mb-3">
             <div className="flex items-center justify-between text-overline text-slate-400 mb-1">
-              <span>Checklist</span>
+              <span>{tr('taskCard.checklist')}</span>
               <span>{checklistDone}/{checklist.length}</span>
             </div>
             <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -199,7 +205,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
         {checklist.length === 0 && task.completionPercentage > 0 && (
           <div className="mb-3">
             <div className="flex items-center justify-between text-overline text-slate-400 mb-1">
-              <span>Progress</span><span>{task.completionPercentage}%</span>
+              <span>{tr('taskCard.progress')}</span><span>{task.completionPercentage}%</span>
             </div>
             <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${task.completionPercentage}%` }} />
@@ -221,7 +227,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
           )}
           {task.estimatedHours > 0 && (
             <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />{task.estimatedHours}h est.
+              <MapPin className="w-3 h-3" />{task.estimatedHours}{tr('weeklyRoadmapPlanner.hEst')}
             </span>
           )}
           {task.tags?.length > 0 && (
@@ -238,7 +244,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
               onClick={() => onMarkComplete(task._id)}
               className="flex items-center gap-1.5 text-caption font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition-colors"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />Mark Complete
+              <CheckCircle2 className="w-3.5 h-3.5" />{tr('weeklyRoadmapPlanner.markComplete')}
             </button>
 
             <div className="relative ml-auto">
@@ -246,7 +252,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
                 onClick={() => setStatusOpen(p => !p)}
                 className="flex items-center gap-1 text-caption font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors"
               >
-                Change Status <ChevronDown className="w-3 h-3" />
+                {tr('weeklyRoadmapPlanner.changeStatus')} <ChevronDown className="w-3 h-3" />
               </button>
               {statusOpen && (
                 <div className="absolute right-0 bottom-full mb-1 z-20 bg-white rounded-xl shadow-lg border border-slate-200/80 py-1 min-w-[140px]">
@@ -313,6 +319,7 @@ function SectionPanel({ icon: Icon, label, sublabel, accentClass, tasks, emptyLa
 // ─── WeeklyTaskModal ──────────────────────────────────────────────────────────
 
 function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selectedWeek, teamMembers, loading }) {
+  const { t: tr } = useTranslation('workspace');
   const isEdit = !!task;
 
   const [form, setForm] = useState({
@@ -377,7 +384,7 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
   const handleSubmit = (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     if (loading) return;
-    if (!form.title.trim()) { toast.error('Title is required'); return; }
+    if (!form.title.trim()) { toast.error(tr('taskModal.titleIsRequired')); return; }
 
     const textError = getTaskTextError(form.title, form.description);
     if (textError) { toast.error(textError); return; }
@@ -385,17 +392,17 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
     const today = new Date().toISOString().split('T')[0];
 
     if (!isEdit && form.startDate && form.startDate < today) {
-      toast.error('Start date cannot be in the past');
+      toast.error(tr('taskModal.startDateCannotBeInThe'));
       return;
     }
 
     if (!isEdit && form.dueDate && form.dueDate < today) {
-      toast.error('Due date cannot be in the past');
+      toast.error(tr('taskModal.dueDateCannotBeInThe'));
       return;
     }
 
     if (form.startDate && form.dueDate && form.dueDate < form.startDate) {
-      toast.error('Due date must be on or after start date');
+      toast.error(tr('taskModal.dueDateMustBeOnOr'));
       return;
     }
 
@@ -415,41 +422,41 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
   const labelCls = 'block text-xs font-semibold text-slate-600 mb-1';
 
   return (
-    <Modal isOpen={isOpen} onClose={() => { if (!loading) onClose(); }} title={`${isEdit ? 'Edit Task' : 'New Task'} · Week ${selectedWeek}`}>
+    <Modal isOpen={isOpen} onClose={() => { if (!loading) onClose(); }} title={`${tr(isEdit ? 'weeklyRoadmapPlanner.editTask' : 'weeklyRoadmapPlanner.newTask')} · ${tr('weeklyRoadmapPlanner.week', { w: selectedWeek })}`}>
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
           {/* Title */}
           <div>
             <label className={`${labelCls} flex items-center justify-between`}>
-              <span>Title *</span>
+              <span>{tr('taskModal.title')}</span>
               <CharacterCounter value={form.title} max={TASK_TITLE_MAX_LENGTH} />
             </label>
-            <input className={`${inputCls} ${form.title.length > TASK_TITLE_MAX_LENGTH ? '!border-red-400' : ''}`} placeholder="Task title…" value={form.title}
+            <input className={`${inputCls} ${form.title.length > TASK_TITLE_MAX_LENGTH ? '!border-red-400' : ''}`} placeholder={tr('weeklyRoadmapPlanner.taskTitle')} value={form.title}
               onChange={e => set('title', e.target.value)} aria-invalid={form.title.length > TASK_TITLE_MAX_LENGTH} required />
             {form.title.length > TASK_TITLE_MAX_LENGTH && (
-              <p role="alert" className="mt-1 text-xs text-red-600">Title must be {TASK_TITLE_MAX_LENGTH} characters or fewer.</p>
+              <p role="alert" className="mt-1 text-xs text-red-600">{tr('taskModal.titleMustBeCharactersOrFewer', { TASK_TITLE_MAX_LENGTH })}</p>
             )}
           </div>
 
           {/* Description */}
           <div>
             <label className={`${labelCls} flex items-center justify-between`}>
-              <span>Description</span>
+              <span>{tr('taskModal.description')}</span>
               <CharacterCounter value={form.description} max={TASK_DESCRIPTION_MAX_LENGTH} />
             </label>
-            <textarea className={`${inputCls} resize-none ${form.description.length > TASK_DESCRIPTION_MAX_LENGTH ? '!border-red-400' : ''}`} rows={3} placeholder="Optional description…"
+            <textarea className={`${inputCls} resize-none ${form.description.length > TASK_DESCRIPTION_MAX_LENGTH ? '!border-red-400' : ''}`} rows={3} placeholder={tr('weeklyRoadmapPlanner.optionalDescription')}
               value={form.description} onChange={e => set('description', e.target.value)}
               aria-invalid={form.description.length > TASK_DESCRIPTION_MAX_LENGTH} />
             {form.description.length > TASK_DESCRIPTION_MAX_LENGTH && (
-              <p role="alert" className="mt-1 text-xs text-red-600">Description must be {TASK_DESCRIPTION_MAX_LENGTH} characters or fewer.</p>
+              <p role="alert" className="mt-1 text-xs text-red-600">{tr('taskModal.descriptionMustBeCharactersOrFewer', { TASK_DESCRIPTION_MAX_LENGTH })}</p>
             )}
           </div>
 
           {/* Priority + Assignee row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Priority</label>
+              <label className={labelCls}>{tr('taskModal.priority')}</label>
               <select className={inputCls} value={form.priority} onChange={e => set('priority', e.target.value)}>
                 {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(p => (
                   <option key={p} value={p}>{PRIORITY_CFG[p].label}</option>
@@ -458,9 +465,9 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
             </div>
             {form.taskType === 'TEAM_TASK' && teamMembers?.length > 0 && (
               <div>
-                <label className={labelCls}>Assignee</label>
+                <label className={labelCls}>{tr('taskModal.assignee')}</label>
                 <select className={inputCls} value={form.assigneeStudentId} onChange={e => set('assigneeStudentId', e.target.value)}>
-                  <option value="">Unassigned</option>
+                  <option value="">{tr('taskModal.unassigned')}</option>
                   {teamMembers.map(m => {
                     const id = m._id || m.studentId?._id || m.userId?._id;
                     const name = m.fullName || m.studentId?.fullName || m.userId?.name || id;
@@ -474,15 +481,15 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
           {/* Due date + Estimated hours */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className={labelCls}>Start Date</label>
-              <input aria-label="Start Date" type="date" className={inputCls} min={isEdit ? undefined : new Date().toISOString().split('T')[0]} value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+              <label className={labelCls}>{tr('taskModal.startDate')}</label>
+              <input aria-label={tr('taskModal.startDate')} type="date" className={inputCls} min={isEdit ? undefined : new Date().toISOString().split('T')[0]} value={form.startDate} onChange={e => set('startDate', e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Due Date</label>
-              <input aria-label="Due Date" type="date" className={inputCls} min={form.startDate || (isEdit ? undefined : new Date().toISOString().split('T')[0])} value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+              <label className={labelCls}>{tr('taskModal.dueDate')}</label>
+              <input aria-label={tr('taskModal.dueDate')} type="date" className={inputCls} min={form.startDate || (isEdit ? undefined : new Date().toISOString().split('T')[0])} value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Estimated Hours</label>
+              <label className={labelCls}>{tr('weeklyRoadmapPlanner.estimatedHours')}</label>
               <input type="number" min="0" step="0.5" className={inputCls} placeholder="0"
                 value={form.estimatedHours} onChange={e => set('estimatedHours', e.target.value)} />
             </div>
@@ -490,8 +497,8 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
 
           {/* Tags */}
           <div>
-            <label className={labelCls}>Tags <span className="font-normal text-slate-400">(comma separated)</span></label>
-            <input className={inputCls} placeholder="design, backend, mvp…" value={form.tags}
+            <label className={labelCls}>{tr('taskModal.tags')} <span className="font-normal text-slate-400">{tr('weeklyRoadmapPlanner.commaSeparated')}</span></label>
+            <input className={inputCls} placeholder={tr('weeklyRoadmapPlanner.designBackendMvp')} value={form.tags}
               onChange={e => set('tags', e.target.value)} />
           </div>
 
@@ -500,12 +507,12 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
             <input type="checkbox" id="isMandatory" checked={form.isMandatory}
               onChange={e => set('isMandatory', e.target.checked)}
               className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-            <label htmlFor="isMandatory" className="text-sm font-medium text-slate-700">Mark as Required</label>
+            <label htmlFor="isMandatory" className="text-sm font-medium text-slate-700">{tr('weeklyRoadmapPlanner.markAsRequired')}</label>
           </div>
 
           {/* Checklist */}
           <div>
-            <label className={labelCls}>Checklist</label>
+            <label className={labelCls}>{tr('taskCard.checklist')}</label>
             <div className="space-y-2 mb-2">
               {form.checklist.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2">
@@ -520,12 +527,12 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
               ))}
             </div>
             <div className="flex gap-2">
-              <input className={`${inputCls} flex-1`} placeholder="Add checklist item…"
+              <input className={`${inputCls} flex-1`} placeholder={tr('weeklyRoadmapPlanner.addChecklistItem')}
                 value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCheckItem())} />
               <button type="button" onClick={addCheckItem}
                 className="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">
-                Add
+                {tr('common:actions.add')}
               </button>
             </div>
           </div>
@@ -534,10 +541,10 @@ function WeeklyTaskModal({ isOpen, onClose, onSave, task, fixedTaskType, selecte
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100">
           <Button variant="outline" onClick={onClose} disabled={loading}>
-            Cancel
+            {tr('common:actions.cancel')}
           </Button>
           <Button onClick={() => handleSubmit()} isLoading={loading}>
-            {isEdit ? 'Save Changes' : 'Create Task'}
+            {isEdit ? tr('taskModal.saveChanges') : tr('taskModal.createTask')}
           </Button>
         </div>
     </Modal>
@@ -554,6 +561,7 @@ export default function WeeklyRoadmapPlanner({
   teamMembers = [],
   isReadOnly = false,
 }: WeeklyRoadmapPlannerProps) {
+  const { t: tr } = useTranslation('workspace');
   // ── Permissions ────────────────────────────────────────────
   const role = currentUser?.role?.toUpperCase() || '';
 
@@ -671,7 +679,7 @@ export default function WeeklyRoadmapPlanner({
 
     try {
       await save.mutateAsync({ task: editingTask, payload });
-      toast.success(editingTask ? 'Task updated successfully' : 'Task created successfully');
+      toast.success(editingTask ? tr('weeklyRoadmapPlanner.taskUpdatedSuccessfully') : tr('weeklyRoadmapPlanner.taskCreatedSuccessfully'));
       closeModal();
     } catch (err) {
       toast.error(getTaskSaveErrorMessage(err));
@@ -686,19 +694,19 @@ export default function WeeklyRoadmapPlanner({
     if (!deleteTarget?._id) return;
     try {
       await remove.mutateAsync(deleteTarget._id);
-      toast.success('Task deleted');
+      toast.success(tr('sprintPanel.taskDeleted'));
       setDeleteTarget(null);
     } catch (err) {
-      toast.error(err?.message || 'Failed to delete task');
+      toast.error(err?.message || tr('sprintPanel.failedToDeleteTask'));
     }
   };
 
   const handleStatusChange = async (taskId: string, status: WeeklyTaskStatus) => {
     try {
       await changeStatus.mutateAsync({ taskId, status });
-      toast.success('Status updated');
+      toast.success(tr('weeklyRoadmapPlanner.statusUpdated'));
     } catch (err) {
-      toast.error(err?.message || 'Failed to update status');
+      toast.error(err?.message || tr('weeklyRoadmapPlanner.failedToUpdateStatus'));
     }
   };
 
@@ -764,10 +772,10 @@ export default function WeeklyRoadmapPlanner({
           <div>
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <MapPin className="w-5 h-5 text-blue-500" />
-              Weekly Roadmap
+              {tr('teamWorkspace.weeklyRoadmap')}
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
-              Course roadmap, class requirements, and team execution tasks
+              {tr('weeklyRoadmapPlanner.courseRoadmapClassRequirementsAndTeam')}
             </p>
           </div>
 
@@ -781,7 +789,7 @@ export default function WeeklyRoadmapPlanner({
                 onChange={e => handleWeekChange(e.target.value)}
                 className="text-sm font-semibold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
               >
-                {WEEKS.map(w => <option key={w} value={w}>Week {w}</option>)}
+                {WEEKS.map(w => <option key={w} value={w}>{tr('weeklyRoadmapPlanner.week', { w })}</option>)}
               </select>
             </div>
 
@@ -791,7 +799,7 @@ export default function WeeklyRoadmapPlanner({
               onChange={e => setStatusFilter(e.target.value)}
               className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
             >
-              <option value="ALL">All Status</option>
+              <option value="ALL">{tr('weeklyRoadmapPlanner.allStatus')}</option>
               {STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s].label}</option>)}
             </select>
 
@@ -802,7 +810,7 @@ export default function WeeklyRoadmapPlanner({
                 onChange={e => setAssigneeFilter(e.target.value)}
                 className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
               >
-                <option value="ALL">All Members</option>
+                <option value="ALL">{tr('boardFilters.allMembers')}</option>
                 {teamMembers.map(m => {
                   const id = m._id || m.studentId?._id || m.userId?._id;
                   const name = m.fullName || m.studentId?.fullName || m.userId?.name || 'Member';
@@ -818,7 +826,7 @@ export default function WeeklyRoadmapPlanner({
                 onClick={() => openCreate('TEAM_TASK')}
                 className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
               >
-                <Plus className="w-3.5 h-3.5" />Add Team Task
+                <Plus className="w-3.5 h-3.5" />{tr('weeklyRoadmapPlanner.addTeamTask')}
               </button>
             )}
             {canCreateClassTask && (
@@ -827,7 +835,7 @@ export default function WeeklyRoadmapPlanner({
                 onClick={() => openCreate('CLASS_TASK')}
                 className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
               >
-                <Plus className="w-3.5 h-3.5" />Add Class Task
+                <Plus className="w-3.5 h-3.5" />{tr('weeklyRoadmapPlanner.addClassTask')}
               </button>
             )}
           </div>
@@ -845,7 +853,7 @@ export default function WeeklyRoadmapPlanner({
                   : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}
             >
-              W{w}
+              {tr('weeklyRoadmapPlanner.w', { w })}
             </button>
           ))}
         </div>
@@ -857,7 +865,7 @@ export default function WeeklyRoadmapPlanner({
         {/* A. Course Roadmap */}
         <SectionPanel
           icon={BookOpen}
-          label="Course Roadmap"
+          label={tr('taskCard.courseRoadmap')}
           sublabel="Syllabus requirements — read only"
           accentClass="bg-secondary"
           tasks={courseTasks}
@@ -881,7 +889,7 @@ export default function WeeklyRoadmapPlanner({
         {/* B. Class Requirements */}
         <SectionPanel
           icon={ClipboardList}
-          label="Class Requirements"
+          label={tr('weeklyRoadmapPlanner.classRequirements')}
           sublabel="Instructor assignments for this class"
           accentClass="bg-success-dark"
           tasks={classTasks}
@@ -905,7 +913,7 @@ export default function WeeklyRoadmapPlanner({
         {/* C. Team Tasks */}
         <SectionPanel
           icon={Users}
-          label="Team Tasks"
+          label={tr('weeklyRoadmapPlanner.teamTasks')}
           sublabel="Your team's execution tasks"
           accentClass="bg-info-dark"
           tasks={filteredTeamTasks}
@@ -939,13 +947,13 @@ export default function WeeklyRoadmapPlanner({
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Task"
+        title={tr('executionBoard.deleteTask')}
         description={
           deleteTarget?.title
-            ? `Are you sure you want to delete "${deleteTarget.title}"? This action cannot be undone.`
-            : 'Are you sure you want to delete this task? This action cannot be undone.'
+            ? tr('executionBoard.areYouSureYouWantTo', { title: deleteTarget.title })
+            : tr('executionBoard.areYouSureYouWantTo2')
         }
-        confirmText="Delete Task"
+        confirmText={tr('executionBoard.deleteTask')}
         isSubmitting={actionLoading}
       />
     </div>

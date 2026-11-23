@@ -24,6 +24,7 @@ import { isProjectProfileAvailable, type ProjectDirectionSyncValue } from '../..
 import type { ProjectWorkspaceDetail, ProjectWorkspaceProfile } from '../../types/projectWorkspace';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
 import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
+import { useTranslation } from 'react-i18next';
 
 const emptyDraft: ProjectProfileDraft = {
   projectName: '',
@@ -82,6 +83,7 @@ function ProfileField({ id, label, value, error, maxLength, multiline = false, r
 }
 
 export default function ProjectProfileEditor() {
+  const { t } = useTranslation('workspace');
   const { teamId = '' } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -180,13 +182,13 @@ export default function ProjectProfileEditor() {
     const nextErrors = validateProjectProfile(draft);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      toast.error('Please correct the highlighted project information.');
+      toast.error(t('projectProfileEditor.pleaseCorrectTheHighlightedProjectInformation'));
       return;
     }
     const industryValidation = industryChanged ? validateIndustrySelection(selectedIndustryIds) : '';
     setIndustryError(industryValidation);
     if (industryValidation) {
-      toast.error('Please correct the highlighted project information.');
+      toast.error(t('projectProfileEditor.pleaseCorrectTheHighlightedProjectInformation'));
       return;
     }
     if (!canEdit || !workspace?.project || saving) return;
@@ -238,13 +240,13 @@ export default function ProjectProfileEditor() {
           descriptionChanged && 'Description',
           industryChanged && 'Startup industries',
         ].filter((label): label is string => Boolean(label));
-        toast.success(`Your request to change ${joinChangedFields(changedLabels)} was submitted for lecturer approval. The approved profile remains unchanged until then.`);
+        toast.success(t('projectProfileEditor.yourRequestToChangeWasSubmitted', { v1: joinChangedFields(changedLabels) }));
         navigate(workspacePath);
         return;
       }
       setDraft(toDraft(updated));
       setIndustryIds(null);
-      toast.success('Project profile updated successfully.');
+      toast.success(t('projectProfileEditor.projectProfileUpdatedSuccessfully'));
     } catch (error) {
       toast.error(parseApiError(error, 'The server did not save all project profile fields. Please retry after the API is updated.').message);
     } finally {
@@ -255,35 +257,35 @@ export default function ProjectProfileEditor() {
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center" role="status"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   if (loadError || !workspace?.project) {
-    return <div className="mx-auto max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm"><h1 className="text-heading sm:text-display text-secondary tracking-tight">Unable to open Project Profile</h1><p className="mt-2 text-sm text-slate-600">{loadError}</p><div className="mt-5 flex justify-center gap-2"><button type="button" onClick={() => navigate(workspacePath)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">Back to workspace</button><button type="button" onClick={() => void load()} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Retry</button></div></div>;
+    return <div className="mx-auto max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm"><h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('projectProfileEditor.unableToOpenProjectProfile')}</h1><p className="mt-2 text-sm text-slate-600">{loadError}</p><div className="mt-5 flex justify-center gap-2"><button type="button" onClick={() => navigate(workspacePath)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">{t('projectProfileEditor.backToWorkspace')}</button><button type="button" onClick={() => void load()} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">{t('teamLineageHistory.retry')}</button></div></div>;
   }
 
   if (!isApproved) {
-    return <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-amber-600" /><h1 className="mt-3 text-heading sm:text-display text-secondary tracking-tight">Project Profile is not available yet</h1><p className="mt-2 text-sm text-slate-600">The Project Direction must be approved by the assigned lecturer first.</p><button type="button" onClick={() => navigate(workspacePath)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Back to workspace</button></div>;
+    return <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-amber-600" /><h1 className="mt-3 text-heading sm:text-display text-secondary tracking-tight">{t('projectProfileEditor.projectProfileIsNotAvailableYet')}</h1><p className="mt-2 text-sm text-slate-600">{t('projectProfileEditor.theProjectDirectionMustBeApproved')}</p><button type="button" onClick={() => navigate(workspacePath)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">{t('projectProfileEditor.backToWorkspace')}</button></div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <button type="button" onClick={() => navigate(workspacePath)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary-700"><ArrowLeft className="h-4 w-4" /> Back to workspace</button>
+      <button type="button" onClick={() => navigate(workspacePath)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-primary-700"><ArrowLeft className="h-4 w-4" /> {t('projectProfileEditor.backToWorkspace')}</button>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FolderKanban className="h-5 w-5" /></span><div><h1 className="text-heading sm:text-display text-secondary tracking-tight">Project Profile</h1><p className="mt-1 text-sm text-slate-500">Keep the project name, description, problem, solution, and target users clear and up to date.</p></div></div>
-          <span className="self-start rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Approved</span>
+          <div className="flex gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FolderKanban className="h-5 w-5" /></span><div><h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('projectProfileEditor.projectProfile')}</h1><p className="mt-1 text-sm text-slate-500">{t('projectProfileEditor.keepTheProjectNameDescriptionProblem')}</p></div></div>
+          <span className="self-start rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{t('projectProfileEditor.approved')}</span>
         </header>
 
-        {!isLeader && <div className="mx-6 mt-5 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><p>You can view the latest profile. Only the team leader can update it.</p></div>}
+        {!isLeader && <div className="mx-6 mt-5 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><p>{t('projectProfileEditor.youCanViewTheLatestProfile')}</p></div>}
 
         {latestReview?.comment && <div className="mx-6 mt-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3" role="status">
-          <p className="text-xs font-bold uppercase text-blue-700">Lecturer review · {latestReview.toStatus}</p>
+          <p className="text-xs font-bold uppercase text-blue-700">{t('projectProfileEditor.lecturerReview', { toStatus: latestReview.toStatus })}</p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-blue-900">{latestReview.comment}</p>
         </div>}
 
         <div className="grid gap-5 p-6">
-          {canEdit && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">Project name, Description and Startup industries require lecturer approval.</p><p className="mt-1 text-xs leading-5 text-amber-800">Saving a change to any of these fields creates a new change request. The currently approved values remain active while the request is Pending or needs revision.</p></div>}
+          {canEdit && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><p className="font-semibold">{t('projectProfileEditor.projectNameDescriptionAndStartupIndustries')}</p><p className="mt-1 text-xs leading-5 text-amber-800">{t('projectProfileEditor.savingAChangeToAnyOf')}</p></div>}
           <ProfileField id="projectName" label={PROJECT_PROFILE_LABELS.projectName} value={draft.projectName} error={errors.projectName} maxLength={PROJECT_NAME_MAX_LENGTH} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="description" label={PROJECT_PROFILE_LABELS.description} value={draft.description} error={errors.description} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} multiline readOnly={!canEdit} onChange={setField} />
           <div>
-            <label id="project-profile-industries-label" className="text-sm font-semibold text-slate-700">Startup industries <span className="text-red-500">*</span></label>
+            <label id="project-profile-industries-label" className="text-sm font-semibold text-slate-700">{t('projectProfileEditor.startupIndustries')} <span className="text-red-500">*</span></label>
             <div className="mt-1.5">
               {canEdit ? (
                 <StartupIndustryPicker
@@ -305,20 +307,20 @@ export default function ProjectProfileEditor() {
               ) : (
                 <div className="flex flex-wrap gap-2" aria-labelledby="project-profile-industries-label">
                   {currentIndustryNames.length === 0
-                    ? <span className="text-sm text-slate-500">No startup industry selected.</span>
+                    ? <span className="text-sm text-slate-500">{t('projectProfileEditor.noStartupIndustrySelected')}</span>
                     : currentIndustryNames.map((name) => <span key={name} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{name}</span>)}
                 </div>
               )}
             </div>
-            {canEdit && <p className="mt-1.5 text-xs text-slate-500">Approved: {currentIndustryNames.length > 0 ? currentIndustryNames.join(', ') : 'none'} · choose 1 to 3.</p>}
+            {canEdit && <p className="mt-1.5 text-xs text-slate-500">{t('projectProfileEditor.approvedIndustries', { list: currentIndustryNames.length > 0 ? currentIndustryNames.join(', ') : t('projectProfileEditor.none') })}</p>}
           </div>
           <ProfileField id="problem" label={PROJECT_PROFILE_LABELS.problem} value={draft.problem} error={errors.problem} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="solution" label={PROJECT_PROFILE_LABELS.solution} value={draft.solution} error={errors.solution} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
           <ProfileField id="targetUsers" label={PROJECT_PROFILE_LABELS.targetUsers} value={draft.targetUsers} error={errors.targetUsers} maxLength={2000} multiline required={false} readOnly={!canEdit} onChange={setField} />
-          <ProfileField id="zaloGroupUrl" label="Zalo group link" value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
+          <ProfileField id="zaloGroupUrl" label={t('projectProfileEditor.zaloGroupLink')} value={draft.zaloGroupUrl} error={errors.zaloGroupUrl} maxLength={500} placeholder="https://zalo.me/g/..." type="url" readOnly={!canEdit} onChange={setField} />
         </div>
 
-        {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">Name, Description and Startup industries require approval; other changes save immediately.</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : 'Save profile'}</button></footer>}
+        {canEdit && <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-6 py-4"><p className="text-xs text-slate-500">{t('projectProfileEditor.nameDescriptionAndStartupIndustriesRequire')}</p><button type="button" onClick={() => void save()} disabled={saving || !hasChanges} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? t('projectProfileEditor.saving') : t('projectProfileEditor.saveProfile')}</button></footer>}
       </section>
     </div>
   );

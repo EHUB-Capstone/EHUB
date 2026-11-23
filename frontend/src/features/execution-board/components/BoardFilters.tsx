@@ -1,11 +1,13 @@
 // @ts-nocheck
 import { Search, X } from 'lucide-react';
 import { PRIORITY_CFG, WEEKS } from '../constants';
+import { useTranslation } from 'react-i18next';
 
 const memberId = (member) => member._id || member.studentId?._id || member.userId?._id;
 const memberName = (member) => member.fullName || member.studentId?.fullName || member.userId?.name || 'Member';
 
 export default function BoardFilters({ filters, onChange, onClear, teamMembers, isFetching }) {
+  const { t } = useTranslation('workspace');
   const hasFilters = filters.week !== 'ALL' || filters.assignee !== 'ALL' || filters.priority !== 'ALL' || filters.search.trim();
 
   return (
@@ -17,7 +19,7 @@ export default function BoardFilters({ filters, onChange, onClear, teamMembers, 
             type="search"
             value={filters.search}
             onChange={(event) => onChange({ search: event.target.value })}
-            placeholder="Search tasks..."
+            placeholder={t('boardFilters.searchTasks')}
             className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
           />
         </label>
@@ -27,8 +29,8 @@ export default function BoardFilters({ filters, onChange, onClear, teamMembers, 
           onChange={(event) => onChange({ week: event.target.value })}
           className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition-colors hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
         >
-          <option value="ALL">All Weeks</option>
-          {WEEKS.map((week) => <option key={week} value={week}>Week {week}</option>)}
+          <option value="ALL">{t('boardFilters.allWeeks')}</option>
+          {WEEKS.map((week) => <option key={week} value={week}>{t('boardFilters.week', { week })}</option>)}
         </select>
 
         <select
@@ -36,7 +38,7 @@ export default function BoardFilters({ filters, onChange, onClear, teamMembers, 
           onChange={(event) => onChange({ assignee: event.target.value })}
           className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition-colors hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
         >
-          <option value="ALL">All Members</option>
+          <option value="ALL">{t('boardFilters.allMembers')}</option>
           {teamMembers.map((member) => (
             <option key={memberId(member)} value={memberId(member)}>{memberName(member)}</option>
           ))}
@@ -47,7 +49,7 @@ export default function BoardFilters({ filters, onChange, onClear, teamMembers, 
           onChange={(event) => onChange({ priority: event.target.value })}
           className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition-colors hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
         >
-          <option value="ALL">All Priorities</option>
+          <option value="ALL">{t('boardFilters.allPriorities')}</option>
           {Object.entries(PRIORITY_CFG).map(([priority, cfg]) => (
             <option key={priority} value={priority}>{cfg.label}</option>
           ))}
@@ -60,7 +62,7 @@ export default function BoardFilters({ filters, onChange, onClear, teamMembers, 
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
           >
             <X className="h-4 w-4" />
-            Clear
+            {t('common:actions.clear')}
           </button>
         )}
       </div>

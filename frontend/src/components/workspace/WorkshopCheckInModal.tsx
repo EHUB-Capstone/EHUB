@@ -4,8 +4,10 @@ import { X, Upload, Image, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { chatApi } from '../../api/chatApi';
 import { workshopApi } from '../../api/workshopApi';
+import { useTranslation } from 'react-i18next';
 
 export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onCheckInSuccess }) {
+  const { t } = useTranslation('workspace');
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -18,12 +20,12 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
     if (!selectedFile) return;
 
     if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Please select an image file.');
+      toast.error(t('workshopCheckInModal.pleaseSelectAnImageFile'));
       return;
     }
 
     if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error('Maximum image size is 10MB.');
+      toast.error(t('workshopCheckInModal.maximumImageSizeIs10mb'));
       return;
     }
 
@@ -38,7 +40,7 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
-      toast.error('Please select or capture an evidence photo.');
+      toast.error(t('workshopCheckInModal.pleaseSelectOrCaptureAnEvidence'));
       return;
     }
 
@@ -62,12 +64,12 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
         classId: workshop.classId?._id || workshop.classId,
       });
 
-      toast.success('Check-in successful! Awaiting lecturer approval.');
+      toast.success(t('workshopCheckInModal.checkInSuccessfulAwaitingLecturerApproval'));
       onCheckInSuccess?.();
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || 'An error occurred during check-in.');
+      toast.error(err.response?.data?.message || t('workshopCheckInModal.anErrorOccurredDuringCheckIn'));
     } finally {
       setUploading(false);
       setSubmitting(false);
@@ -87,7 +89,7 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Check-in Workshop</h2>
+            <h2 className="text-xl font-bold text-slate-800">{t('workshopCheckInModal.checkInWorkshop')}</h2>
             <p className="text-xs text-slate-500 mt-0.5 truncate max-w-sm">
               {workshop?.title}
             </p>
@@ -104,10 +106,10 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-slate-700">
-              Upload Evidence Photo <span className="text-rose-500">*</span>
+              {t('workshopCheckInModal.uploadEvidencePhoto')} <span className="text-rose-500">*</span>
             </label>
             <p className="text-xs text-slate-400">
-              Take a screenshot or photo at the workshop/event to verify your participation.
+              {t('workshopCheckInModal.takeAScreenshotOrPhotoAt')}
             </p>
           </div>
 
@@ -117,7 +119,7 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
               <div className="relative w-full h-[200px]">
                 <img
                   src={preview}
-                  alt="Evidence Preview"
+                  alt={t('workshopCheckInModal.evidencePreview')}
                   className="w-full h-full object-contain rounded-xl"
                 />
                 <button
@@ -137,8 +139,8 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
                   <Image className="w-8 h-8" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-slate-700">Select or capture evidence photo</p>
-                  <p className="text-xs text-slate-400 mt-1">PNG, JPG or JPEG up to 10MB</p>
+                  <p className="text-sm font-bold text-slate-700">{t('workshopCheckInModal.selectOrCaptureEvidencePhoto')}</p>
+                  <p className="text-xs text-slate-400 mt-1">{t('workshopCheckInModal.pngJpgOrJpegUpTo')}</p>
                 </div>
                 <input
                   type="file"
@@ -158,7 +160,7 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
               disabled={submitting}
               className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-200/60 rounded-xl hover:bg-slate-100 hover:text-slate-800 transition-colors disabled:opacity-50"
             >
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
@@ -168,12 +170,12 @@ export default function WorkshopCheckInModal({ isOpen, onClose, workshop, onChec
               {submitting ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  <span>Processing...</span>
+                  <span>{t('workshopCheckInModal.processing')}</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  <span>Confirm Check-in</span>
+                  <span>{t('workshopCheckInModal.confirmCheckIn')}</span>
                 </>
               )}
             </button>

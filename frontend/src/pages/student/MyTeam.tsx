@@ -13,6 +13,7 @@ import { isOpenFormationForMe } from '../../utils/teamFormation';
 import { entityId, getTeamMajorWarning, getTeamMembers, normalizeManagedTeam } from '../../utils/teamManagement';
 import PendingTeamFormationView from './PendingTeamFormationView';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import { useTranslation } from 'react-i18next';
 
 const majorColor = (major) => {
   const palette = [
@@ -29,6 +30,7 @@ const majorColor = (major) => {
 };
 
 export default function MyTeam() {
+  const { t } = useTranslation('class');
   const [data, setData] = useState(null);
   const [currentClasses, setCurrentClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function MyTeam() {
         setData({ ...payload, team, members: getTeamMembers(team) });
       }
     } catch (err) {
-      toast.error(err?.message || 'Failed to load your team details');
+      toast.error(err?.message || t('myTeam.failedToLoadYourTeamDetails'));
     }
     try {
       const response = await teamFormationApi.mine();
@@ -83,7 +85,7 @@ export default function MyTeam() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading your team details...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('myTeam.loadingYourTeamDetails')}</p>
       </div>
     );
   }
@@ -108,17 +110,17 @@ export default function MyTeam() {
   const viewControls = (
     <>
       {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-        Could not load invitations. <button type="button" onClick={() => void fetchTeam()} className="font-semibold underline">Retry</button>
+        {t('myTeam.couldNotLoadInvitations')} <button type="button" onClick={() => void fetchTeam()} className="font-semibold underline">{t('assignMentorsModal.retry')}</button>
       </div>}
-      {showViewSwitcher && <div className="flex flex-wrap gap-2" role="group" aria-label="Choose team or invitation">
+      {showViewSwitcher && <div className="flex flex-wrap gap-2" role="group" aria-label={t('myTeam.chooseTeamOrInvitation')}>
         {team && <button type="button" aria-pressed={!selectedFormation} onClick={() => setSelectedFormationId(null)}
           className={`rounded-lg border px-3 py-2 text-sm font-semibold ${!selectedFormation ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-          Active team
+          {t('myTeam.activeTeam')}
         </button>}
         {pendingFormations.map(formation => <button key={formation.id} type="button"
           aria-pressed={selectedFormation?.id === formation.id} onClick={() => setSelectedFormationId(formation.id)}
           className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selectedFormation?.id === formation.id ? 'border-primary bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-          Invitation · {formation.classCode}
+          {t('myTeam.invitation', { classCode: formation.classCode })}
         </button>)}
       </div>}
     </>
@@ -135,18 +137,18 @@ export default function MyTeam() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Team</h1>
-          <p className="text-sm text-slate-500 mt-1">View and collaborate with your startup team members.</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('myTeam.myTeam')}</h1>
+          <p className="text-sm text-slate-500 mt-1">{t('myTeam.viewAndCollaborateWithYourStartup')}</p>
         </div>
 
         {viewControls}
         <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
           <EmptyState
             icon={Users}
-            title="You have not been assigned to a team yet"
-            description="Choose one of your current classes to invite 4–6 students to form a team."
+            title={t('myTeam.youHaveNotBeenAssignedTo')}
+            description={t('myTeam.chooseOneOfYourCurrentClasses')}
             action={currentClasses.length === 0 ? {
-              label: 'View my classes',
+              label: t('myTeam.viewMyClasses'),
               onClick: () => navigate('/student/classes'),
             } : undefined}
           />
@@ -161,7 +163,7 @@ export default function MyTeam() {
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-slate-800">{item.classCode}</span>
-                    <span className="block truncate text-xs text-slate-500">{item.subjectCode} · Create team formation</span>
+                    <span className="block truncate text-xs text-slate-500">{t('myTeam.createTeamFormation', { subjectCode: item.subjectCode })}</span>
                   </span>
                   <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
                 </button>
@@ -179,15 +181,15 @@ export default function MyTeam() {
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Team</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('myTeam.myTeam')}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Collaborate with your startup team in class <span className="font-semibold text-slate-700">{cls?.classCode || '—'}</span>.
+            {t('myTeam.collaborateWithYourStartupTeamIn')} <span className="font-semibold text-slate-700">{cls?.classCode || '—'}</span>.
           </p>
         </div>
 
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/40 rounded-xl px-3 py-1.5">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span>Semester: {cls?.semester || '—'}</span>
+          <span>{t('myTeam.semester', { v1: cls?.semester || '—' })}</span>
         </div>
       </div>
 
@@ -223,7 +225,7 @@ export default function MyTeam() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white hover:bg-primary-dark hover:scale-[1.01] active:scale-95 transition-all text-sm font-bold rounded-xl cursor-pointer shadow-sm"
               >
                 <Sparkles className="w-4 h-4 animate-pulse" />
-                Open Startup Workspace
+                {t('myTeam.openStartupWorkspace')}
               </button>
             </div>
           </div>
@@ -232,7 +234,7 @@ export default function MyTeam() {
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-                <Users className="w-4 h-4 text-primary" /> Team Members ({members.length})
+                <Users className="w-4 h-4 text-primary" /> {t('myTeam.teamMembers')}{members.length})
               </h3>
             </div>
 
@@ -257,12 +259,12 @@ export default function MyTeam() {
                           {isLeader && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-overline font-bold uppercase text-amber-700">
                               <Crown className="h-3 w-3" />
-                              Leader
+                              {t('myTeam.leader')}
                             </span>
                           )}
                           {isSelected && (
                             <span className="px-1.5 py-0.5 bg-primary-100 text-primary-700 text-overline font-bold rounded-md uppercase">
-                              You
+                              {t('teamFormationMemberList.you')}
                             </span>
                           )}
                         </div>
@@ -291,7 +293,7 @@ export default function MyTeam() {
             <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm space-y-4">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-secondary" />
-                <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Class Lecturer</h3>
+                <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">{t('myTeam.classLecturer')}</h3>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-secondary-100 flex items-center justify-center text-secondary font-bold text-sm shrink-0">
@@ -309,7 +311,7 @@ export default function MyTeam() {
           <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2">
               <Star className="w-4 h-4 text-primary" />
-              <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Team Mentors</h3>
+              <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider">{t('myTeam.teamMentors')}</h3>
             </div>
             {mentorAssignments.length > 0 ? (
               <div className="space-y-3">
@@ -328,7 +330,7 @@ export default function MyTeam() {
               <div className="flex items-start gap-2 bg-amber-50 rounded-xl p-3 border border-amber-100">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700">
-                  No mentors assigned to your team yet. Your lecturer will assign an enterprise and an academic mentor soon.
+                  {t('myTeam.noMentorsAssignedToYourTeam')}
                 </p>
               </div>
             )}

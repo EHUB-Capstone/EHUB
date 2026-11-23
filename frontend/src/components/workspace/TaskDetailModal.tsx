@@ -5,6 +5,8 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { PRIORITY_CFG, STATUS_CFG } from '../../features/execution-board/constants';
 import type { WeeklyTask } from '../../types/workspaceTools';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 type DetailTask = WeeklyTask & { computedStatus?: string };
 
@@ -15,9 +17,9 @@ interface TaskDetailModalProps {
 }
 
 const TASK_TYPE_LABEL: Record<string, string> = {
-  COURSE_TEMPLATE: 'Course Roadmap',
-  CLASS_TASK: 'Class Requirement',
-  TEAM_TASK: 'Team Task',
+  get COURSE_TEMPLATE() { return i18n.t('workspace:taskType.COURSE_TEMPLATE'); },
+  get CLASS_TASK() { return i18n.t('workspace:taskType.CLASS_TASK'); },
+  get TEAM_TASK() { return i18n.t('workspace:taskType.TEAM_TASK'); },
 };
 
 const formatDate = (value?: string | null) =>
@@ -37,6 +39,7 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
 );
 
 export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps) {
+  const { t } = useTranslation('workspace');
   const isOpen = Boolean(task);
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
   const tags = task.tags || [];
 
   return (
-    <Modal isOpen onClose={onClose} title="Task details" size="lg">
+    <Modal isOpen onClose={onClose} title={t('taskDetailModal.taskDetails')} size="lg">
       <div className="space-y-5">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -68,25 +71,25 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-caption font-semibold ${priorityCfg.bg} ${priorityCfg.text}`}>
               {priorityCfg.label}
             </span>
-            <span className="text-xs text-slate-400">{TASK_TYPE_LABEL[task.taskType] || 'Task'} · Week {task.weekNumber}</span>
+            <span className="text-xs text-slate-400">{TASK_TYPE_LABEL[task.taskType] || t('taskDetailModal.task')} · {t('taskDetailModal.weekNumber', { number: task.weekNumber })}</span>
           </div>
           <h3 className="whitespace-pre-wrap break-words text-base font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]">{task.title}</h3>
         </div>
 
         <div>
-          <h4 className="mb-1 text-caption font-semibold uppercase tracking-wide text-slate-400">Description</h4>
+          <h4 className="mb-1 text-caption font-semibold uppercase tracking-wide text-slate-400">{t('taskModal.description')}</h4>
           {task.description ? (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 [overflow-wrap:anywhere]">{task.description}</p>
           ) : (
-            <p className="text-sm text-slate-400">No description.</p>
+            <p className="text-sm text-slate-400">{t('taskDetailModal.noDescription')}</p>
           )}
         </div>
 
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Field label="Assignee"><span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5 text-slate-400" />{assigneeLabel(task)}</span></Field>
-          <Field label="Start date"><span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-slate-400" />{formatDate(task.startDate)}</span></Field>
-          <Field label="Due date"><span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-slate-400" />{formatDate(task.dueDate)}</span></Field>
-          <Field label="Est. hours">{task.estimatedHours ? `${task.estimatedHours}h` : '—'}</Field>
+          <Field label={t('taskModal.assignee')}><span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5 text-slate-400" />{assigneeLabel(task)}</span></Field>
+          <Field label={t('taskDetailModal.startDate')}><span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-slate-400" />{formatDate(task.startDate)}</span></Field>
+          <Field label={t('taskDetailModal.dueDate')}><span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-slate-400" />{formatDate(task.dueDate)}</span></Field>
+          <Field label={t('taskDetailModal.estHours')}>{task.estimatedHours ? `${task.estimatedHours}h` : '—'}</Field>
         </dl>
 
         {tags.length > 0 && (
@@ -101,14 +104,14 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
         {checklist.length > 0 && (
           <div>
             <h4 className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-slate-400">
-              Checklist ({checklist.filter((item) => item.isCompleted).length}/{checklist.length})
+              {t('taskDetailModal.checklist', { length: checklist.filter((item) => item.isCompleted).length, length2: checklist.length })}
             </h4>
             <ul className="space-y-1">
               {checklist.map((item, index) => (
                 <li key={`${item.text}-${index}`} className="flex items-start gap-2 text-sm">
                   {item.isCompleted
-                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-label="Completed" />
-                    : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" aria-label="Not completed" />}
+                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-label={t('boardSummary.completed')} />
+                    : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" aria-label={t('taskDetailModal.notCompleted')} />}
                   <span className={`break-words [overflow-wrap:anywhere] ${item.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{item.text}</span>
                 </li>
               ))}
@@ -117,9 +120,9 @@ export default function TaskDetailModal({ task, onClose, onEdit }: TaskDetailMod
         )}
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>{t('common:actions.close')}</Button>
           {onEdit && (
-            <Button variant="primary" icon={Pencil} onClick={() => onEdit(task)}>Edit</Button>
+            <Button variant="primary" icon={Pencil} onClick={() => onEdit(task)}>{t('common:actions.edit')}</Button>
           )}
         </div>
       </div>

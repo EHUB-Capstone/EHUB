@@ -1,12 +1,14 @@
 // @ts-nocheck
 import React from 'react';
 import TaskCard from './TaskCard';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const COLUMNS = [
-  { key: 'TODO',        label: 'To Do',       border: 'border-t-gray-400',  badge: 'bg-gray-100 text-gray-700' },
-  { key: 'IN_PROGRESS', label: 'In Progress', border: 'border-t-blue-500',  badge: 'bg-blue-100 text-blue-700' },
-  { key: 'REVIEW',      label: 'Review',      border: 'border-t-amber-400', badge: 'bg-amber-100 text-amber-700' },
-  { key: 'DONE',        label: 'Done',        border: 'border-t-green-500', badge: 'bg-green-100 text-green-700' },
+  { key: 'TODO',        get label() { return i18n.t('workspace:kanbanBoard.toDo'); },       border: 'border-t-gray-400',  badge: 'bg-gray-100 text-gray-700' },
+  { key: 'IN_PROGRESS', get label() { return i18n.t('workspace:boardSummary.inProgress'); }, border: 'border-t-blue-500',  badge: 'bg-blue-100 text-blue-700' },
+  { key: 'REVIEW',      get label() { return i18n.t('workspace:kanbanBoard.review'); },      border: 'border-t-amber-400', badge: 'bg-amber-100 text-amber-700' },
+  { key: 'DONE',        get label() { return i18n.t('workspace:kanbanBoard.done'); },        border: 'border-t-green-500', badge: 'bg-green-100 text-green-700' },
 ];
 
 export default function KanbanBoard({
@@ -16,6 +18,7 @@ export default function KanbanBoard({
   isEditable = false,
   members = [],
 }) {
+  const { t: tr } = useTranslation('workspace');
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
   // Show empty state if no tasks at all
@@ -25,7 +28,7 @@ export default function KanbanBoard({
         <svg className="mx-auto h-10 w-10 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
         </svg>
-        <p className="text-gray-500 text-sm">No tasks yet. Create your first task to get started.</p>
+        <p className="text-gray-500 text-sm">{tr('kanbanBoard.noTasksYetCreateYourFirst')}</p>
       </div>
     );
   }
@@ -52,7 +55,7 @@ export default function KanbanBoard({
             <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[500px]">
               {columnTasks.length === 0 ? (
                 <div className="flex items-center justify-center h-20 text-xs text-gray-400 italic">
-                  No tasks
+                  {tr('kanbanBoard.noTasks')}
                 </div>
               ) : (
                 columnTasks.map((task) => (

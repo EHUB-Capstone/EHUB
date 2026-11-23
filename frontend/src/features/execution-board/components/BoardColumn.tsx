@@ -4,6 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { STATUS_CFG } from '../constants';
 import TaskCard from './TaskCard';
+import { useTranslation } from 'react-i18next';
 
 function BoardColumn({
   status,
@@ -20,6 +21,7 @@ function BoardColumn({
   dropPlaceholderIndex = 0,
   dropPlaceholderHeight,
 }) {
+  const { t } = useTranslation('workspace');
   const cfg = STATUS_CFG[status];
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${status}`,
@@ -60,7 +62,7 @@ function BoardColumn({
                 highlighted ? 'border-primary-200 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white/70 text-slate-400'
               }`}
             >
-              Drop task here
+              {t('boardColumn.dropTaskHere')}
             </div>
           ) : (
             <>

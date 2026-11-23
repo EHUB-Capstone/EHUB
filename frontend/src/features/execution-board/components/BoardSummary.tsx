@@ -1,12 +1,15 @@
+import { useTranslation } from 'react-i18next';
+import i18n from '../../../i18n';
 // @ts-nocheck
 const ITEMS = [
-  { key: 'total', label: 'Total' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'inProgress', label: 'In Progress' },
-  { key: 'overdue', label: 'Overdue' },
+  { key: 'total', get label() { return i18n.t('workspace:boardSummary.total'); } },
+  { key: 'completed', get label() { return i18n.t('workspace:boardSummary.completed'); } },
+  { key: 'inProgress', get label() { return i18n.t('workspace:boardSummary.inProgress'); } },
+  { key: 'overdue', get label() { return i18n.t('workspace:boardSummary.overdue'); } },
 ];
 
 export default function BoardSummary({ summary }) {
+  const { t } = useTranslation('workspace');
   if (!summary) return null;
 
   return (
@@ -21,7 +24,7 @@ export default function BoardSummary({ summary }) {
         <div className="col-span-2 rounded-md bg-white px-3 py-2 ring-1 ring-slate-200/70 md:col-span-1">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold text-slate-950">{summary.completionPercentage || 0}%</div>
-            <div className="text-xs font-medium text-slate-500">Completion</div>
+            <div className="text-xs font-medium text-slate-500">{t('boardSummary.completion')}</div>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div

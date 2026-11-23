@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Crown, Loader2, RefreshCw } from 'lucide-rea
 import { teamLineageApi } from '../../api/teamLineageApi';
 import type { TeamLineage, TeamLineageSubmission, TeamLineageTerm } from '../../types/teamLineage';
 import { parseApiError } from '../../utils/apiError';
+import { useTranslation } from 'react-i18next';
 
 interface TeamLineageHistoryProps {
   teamId: string;
@@ -14,6 +15,7 @@ type SubmissionState =
   | { status: 'ready'; items: TeamLineageSubmission[] };
 
 function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
+  const { t } = useTranslation('workspace');
   const [open, setOpen] = useState(false);
   const [submissions, setSubmissions] = useState<SubmissionState | null>(null);
 
@@ -58,7 +60,7 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
             <span className="font-semibold text-slate-900">{term.semesterCode}</span>
             <span className="text-xs text-slate-500">{term.classCode}</span>
             {term.isCurrent && (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-overline font-bold uppercase text-green-700">Current</span>
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-overline font-bold uppercase text-green-700">{t('teamLineageHistory.current')}</span>
             )}
           </span>
           <span className="mt-0.5 block truncate text-xs text-slate-500">
@@ -73,11 +75,11 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
       {open && (
         <div className="space-y-4 border-t border-slate-100 px-4 py-3 text-sm">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Members</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('teamLineageHistory.members')}</p>
             <ul className="mt-1.5 flex flex-wrap gap-2">
               {term.members.map((member) => (
                 <li key={member.studentId} className="flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
-                  {member.isLeader && <Crown className="h-3 w-3 text-amber-500" aria-label="Leader" />}
+                  {member.isLeader && <Crown className="h-3 w-3 text-amber-500" aria-label={t('teamLineageHistory.leader')} />}
                   {member.fullName}
                 </li>
               ))}
@@ -86,20 +88,20 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
 
           {term.canViewSubmissions ? (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Submissions</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('teamLineageHistory.submissions')}</p>
               {submissions?.status === 'loading' && (
-                <p className="mt-2 flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Loading submissions…</p>
+                <p className="mt-2 flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {t('teamLineageHistory.loadingSubmissions')}</p>
               )}
               {submissions?.status === 'error' && (
                 <div className="mt-2 flex items-center gap-3 text-xs text-red-600" role="alert">
                   <span>{submissions.message}</span>
                   <button type="button" onClick={() => void loadSubmissions()} className="flex items-center gap-1 font-semibold underline">
-                    <RefreshCw className="h-3 w-3" aria-hidden="true" /> Retry
+                    <RefreshCw className="h-3 w-3" aria-hidden="true" /> {t('teamLineageHistory.retry')}
                   </button>
                 </div>
               )}
               {submissions?.status === 'ready' && submissions.items.length === 0 && (
-                <p className="mt-2 text-xs text-slate-500">No submissions in this semester.</p>
+                <p className="mt-2 text-xs text-slate-500">{t('teamLineageHistory.noSubmissionsInThisSemester')}</p>
               )}
               {submissions?.status === 'ready' && submissions.items.length > 0 && (
                 <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-100">
@@ -107,12 +109,12 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
                     <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
                       <span className="min-w-0">
                         <span className="font-semibold text-slate-800">{item.checkpointName}</span>
-                        <span className="text-slate-500"> · {item.title} (v{item.versionNumber}, {item.status})</span>
+                        <span className="text-slate-500"> {t('teamLineageHistory.v', { title: item.title, versionNumber: item.versionNumber, status: item.status })}</span>
                       </span>
                       {item.evaluations === null ? (
-                        <span className="text-slate-400">Scores hidden</span>
+                        <span className="text-slate-400">{t('teamLineageHistory.scoresHidden')}</span>
                       ) : item.evaluations.length === 0 ? (
-                        <span className="text-slate-400">Not scored</span>
+                        <span className="text-slate-400">{t('teamLineageHistory.notScored')}</span>
                       ) : (
                         <span className="font-semibold text-slate-700">
                           {item.evaluations.map((evaluation) => `${evaluation.totalScore}/${evaluation.maxTotalScore}`).join(', ')}
@@ -124,7 +126,7 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
               )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">You cannot view submissions of this semester.</p>
+            <p className="text-xs text-slate-500">{t('teamLineageHistory.youCannotViewSubmissionsOfThis')}</p>
           )}
         </div>
       )}
@@ -133,6 +135,7 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
 }
 
 export default function TeamLineageHistory({ teamId }: TeamLineageHistoryProps) {
+  const { t } = useTranslation('workspace');
   const [lineage, setLineage] = useState<TeamLineage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +161,7 @@ export default function TeamLineageHistory({ teamId }: TeamLineageHistoryProps) 
   }, [load]);
 
   if (loading) {
-    return <p className="flex items-center gap-2 py-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading team history…</p>;
+    return <p className="flex items-center gap-2 py-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('teamLineageHistory.loadingTeamHistory')}</p>;
   }
 
   if (error) {
@@ -166,18 +169,18 @@ export default function TeamLineageHistory({ teamId }: TeamLineageHistoryProps) 
       <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
         <p>{error}</p>
         <button type="button" onClick={() => void load()} className="mt-2 flex items-center gap-1 font-semibold underline">
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Retry
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> {t('teamLineageHistory.retry')}
         </button>
       </div>
     );
   }
 
   if (!lineage || lineage.terms.length === 0) {
-    return <p className="py-8 text-sm text-slate-500">No semester history is available for this team.</p>;
+    return <p className="py-8 text-sm text-slate-500">{t('teamLineageHistory.noSemesterHistoryIsAvailableFor')}</p>;
   }
 
   return (
-    <ol className="space-y-3" aria-label="Team history by semester">
+    <ol className="space-y-3" aria-label={t('teamLineageHistory.teamHistoryBySemester')}>
       {[...lineage.terms].reverse().map((term) => (
         <TermCard key={term.teamId} teamId={teamId} term={term} />
       ))}

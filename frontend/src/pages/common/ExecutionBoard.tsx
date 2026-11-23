@@ -46,6 +46,7 @@ import {
   useTeamContext,
   useTeamMembers,
 } from '../../features/execution-board/hooks/useExecutionBoard';
+import { useTranslation } from 'react-i18next';
 
 const DEFAULT_FILTERS = {
   week: 'ALL',
@@ -66,6 +67,7 @@ const getInitialView = () => {
 };
 
 export default function ExecutionBoard() {
+  const { t } = useTranslation('workspace');
   const { user } = useAuth();
   const location = useLocation();
   const queryTeamId = useMemo(() => new URLSearchParams(location.search).get('teamId'), [location.search]);
@@ -353,10 +355,10 @@ export default function ExecutionBoard() {
     return (
       <EmptyState
         icon={CheckSquare}
-        title={role === 'STUDENT' ? 'No Team Assigned' : 'Team Workspace Required'}
+        title={role === 'STUDENT' ? t('executionBoard.noTeamAssigned') : t('executionBoard.teamWorkspaceRequired')}
         description={role === 'STUDENT'
-          ? 'You need to be part of a team to view the execution board.'
-          : 'Open a specific Team Workspace or pass a teamId to view this board.'}
+          ? t('executionBoard.youNeedToBePartOf')
+          : t('executionBoard.openASpecificTeamWorkspaceOr')}
       />
     );
   }
@@ -365,14 +367,14 @@ export default function ExecutionBoard() {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
         <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-red-400" />
-        <p className="font-semibold text-red-700">Unable to load this execution board. Check your access and try again.</p>
+        <p className="font-semibold text-red-700">{t('executionBoard.unableToLoadThisExecutionBoard')}</p>
         <button
           type="button"
           onClick={() => { teamContextQuery.refetch(); if (teamId) { boardQuery.refetch(); workspaceContextQuery.refetch(); } }}
           className="mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100"
         >
           <RotateCcw className="h-4 w-4" />
-          Retry
+          {t('teamLineageHistory.retry')}
         </button>
       </div>
     );
@@ -384,18 +386,18 @@ export default function ExecutionBoard() {
         <BoardHeader canCreate={canCreateTeamTask} onCreate={handleCreate} />
         {isReadOnly && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-            This execution board is read-only for this workspace or your role.
+            {t('executionBoard.thisExecutionBoardIsReadOnly')}
           </div>
         )}
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-5">
           <div>
             <p className="text-sm font-semibold text-slate-800">
-              {view === 'kanban' ? 'Kanban View' : 'Table View'}
+              {view === 'kanban' ? t('executionBoard.kanbanView') : t('executionBoard.tableView')}
             </p>
             <p className="text-xs text-slate-500">
               {view === 'kanban'
-                ? 'Drag tasks between columns to update this team’s progress.'
-                : 'Review task details, deadlines, progress, and notes.'}
+                ? t('executionBoard.dragTasksBetweenColumnsToUpdate')
+                : t('executionBoard.reviewTaskDetailsDeadlinesProgressAnd')}
             </p>
           </div>
           <BoardViewToggle view={view} onChange={handleViewChange} />
@@ -531,13 +533,13 @@ export default function ExecutionBoard() {
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Task"
+        title={t('executionBoard.deleteTask')}
         description={
           deleteTarget?.title
-            ? `Are you sure you want to delete "${deleteTarget.title}"? This action cannot be undone.`
-            : 'Are you sure you want to delete this task? This action cannot be undone.'
+            ? t('executionBoard.areYouSureYouWantTo', { title: deleteTarget.title })
+            : t('executionBoard.areYouSureYouWantTo2')
         }
-        confirmText="Delete Task"
+        confirmText={t('executionBoard.deleteTask')}
         isSubmitting={mutations.removeTask.isPending}
       />
     </div>

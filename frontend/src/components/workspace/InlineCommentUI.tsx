@@ -4,6 +4,7 @@ import { CornerDownRight, MessageSquareText, RefreshCcw, Send, CheckCircle2 } fr
 import { getProposalComments, createProposalComment, resolveComment } from '../../api/commentApi';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 const roleBadge = (role) => {
   const normalized = (role || '').toUpperCase();
@@ -51,6 +52,7 @@ const buildTree = (comments = []) => {
 };
 
 function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
+  const { t } = useTranslation('workspace');
   const [showReply, setShowReply] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [posting, setPosting] = useState(false);
@@ -79,13 +81,13 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
             {comment.sectionLabel && <span className="text-overline font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{comment.sectionLabel}</span>}
             {comment.resolved && (
               <span className="inline-flex items-center gap-1 text-overline font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
-                <CheckCircle2 className="w-3 h-3" /> Resolved
+                <CheckCircle2 className="w-3 h-3" /> {t('inlineCommentUI.resolved')}
               </span>
             )}
           </div>
           <p className="text-xs text-slate-400 flex items-center gap-1.5">
             {new Date(comment.createdAt).toLocaleString()}
-            {comment.resolvedAt && <span>· resolved {new Date(comment.resolvedAt).toLocaleString()}</span>}
+            {comment.resolvedAt && <span>{t('inlineCommentUI.resolved2', { v1: new Date(comment.resolvedAt).toLocaleString() })}</span>}
           </p>
           <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{comment.content}</p>
 
@@ -95,7 +97,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
                 onClick={() => setShowReply((v) => !v)}
                 className="text-xs font-semibold text-primary-700 hover:underline"
               >
-                {showReply ? 'Cancel' : 'Reply'}
+                {showReply ? t('common:actions.cancel') : t('inlineCommentUI.reply')}
               </button>
             )}
             {canResolve && !comment.resolved && (
@@ -103,7 +105,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
                 onClick={() => onResolve(comment._id)}
                 className="text-xs font-semibold text-emerald-600 hover:underline"
               >
-                Resolve
+                {t('inlineCommentUI.resolve')}
               </button>
             )}
           </div>
@@ -116,7 +118,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   rows={2}
-                  placeholder="Write a reply..."
+                  placeholder={t('inlineCommentUI.writeAReply')}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
                 />
                 <div className="mt-2 flex justify-end">
@@ -125,7 +127,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
                     disabled={!replyText.trim() || posting}
                     className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                   >
-                    <Send className="w-3.5 h-3.5" /> Reply
+                    <Send className="w-3.5 h-3.5" /> {t('inlineCommentUI.reply')}
                   </button>
                 </div>
               </div>
@@ -153,6 +155,7 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
 }
 
 export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }) {
+  const { t } = useTranslation('workspace');
   const { user } = useAuth();
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -180,7 +183,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
         setComments(filtered);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to load comments');
+      toast.error(err.response?.data?.message || err.response?.data?.error || t('inlineCommentUI.failedToLoadComments'));
     } finally {
       setLoading(false);
     }
@@ -198,12 +201,12 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
         content: newComment,
       });
       if (res.success) {
-        toast.success('Comment added');
+        toast.success(t('inlineCommentUI.commentAdded'));
         setNewComment('');
         fetchComments();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to add comment');
+      toast.error(err.response?.data?.message || err.response?.data?.error || t('inlineCommentUI.failedToAddComment'));
     } finally {
       setPosting(false);
     }
@@ -213,11 +216,11 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
     try {
       const res = await resolveComment(commentId);
       if (res.success) {
-        toast.success('Comment resolved');
+        toast.success(t('inlineCommentUI.commentResolved'));
         fetchComments();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to resolve comment');
+      toast.error(err.response?.data?.message || err.response?.data?.error || t('inlineCommentUI.failedToResolveComment'));
     }
   };
 
@@ -229,7 +232,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
       parentCommentId,
     });
     if (!res.success) throw new Error('Failed to reply');
-    toast.success('Reply posted');
+    toast.success(t('inlineCommentUI.replyPosted'));
     fetchComments();
   };
 
@@ -252,19 +255,19 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
         <div className="mt-3 p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 shadow-inner space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-slate-900">Section comments</p>
-              <p className="text-xs text-slate-500">Threaded feedback attached to this proposal section.</p>
+              <p className="text-sm font-bold text-slate-900">{t('inlineCommentUI.sectionComments')}</p>
+              <p className="text-xs text-slate-500">{t('inlineCommentUI.threadedFeedbackAttachedToThisProposal')}</p>
             </div>
             <button
               onClick={fetchComments}
               className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-700"
             >
-              <RefreshCcw className="w-3.5 h-3.5" /> Refresh
+              <RefreshCcw className="w-3.5 h-3.5" /> {t('common:actions.refresh')}
             </button>
           </div>
 
           {loading ? (
-            <div className="text-sm text-slate-500">Loading comments...</div>
+            <div className="text-sm text-slate-500">{t('inlineCommentUI.loadingComments')}</div>
           ) : threads.length > 0 ? (
             <div className="space-y-4">
               {threads.map((root) => (
@@ -279,7 +282,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-500 italic">No comments yet for this section.</p>
+            <p className="text-sm text-slate-500 italic">{t('inlineCommentUI.noCommentsYetForThisSection')}</p>
           )}
 
           {canStartThread ? (
@@ -291,7 +294,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
                     rows={2}
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment..."
+                    placeholder={t('inlineCommentUI.addAComment')}
                     className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 resize-none"
                   />
                   <div className="mt-2 flex justify-end">
@@ -300,7 +303,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
                       disabled={!newComment.trim() || posting}
                       className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                     >
-                      <Send className="w-3.5 h-3.5" /> Post Comment
+                      <Send className="w-3.5 h-3.5" /> {t('inlineCommentUI.postComment')}
                     </button>
                   </div>
                 </div>
@@ -308,7 +311,7 @@ export default function InlineCommentUI({ proposalId, sectionKey, sectionLabel }
             </form>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
-              Students can reply to comments if enabled, but cannot create new official threads.
+              {t('inlineCommentUI.studentsCanReplyToCommentsIf')}
             </div>
           )}
         </div>

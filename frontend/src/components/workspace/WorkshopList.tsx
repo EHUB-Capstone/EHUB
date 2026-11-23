@@ -2,8 +2,10 @@
 import { Calendar, Clock, MapPin, ExternalLink, Edit2, Trash2, Monitor, Globe } from 'lucide-react';
 import Badge from '../ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendance }) => {
+  const { t } = useTranslation('workspace');
   const { user } = useAuth();
 
   const getAudienceLabel = (scope, classCodes) => {
@@ -23,17 +25,17 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
 
   const getAttendanceBadge = (attendance) => {
     if (!attendance) {
-      return <Badge variant="Neutral">Chưa tham gia</Badge>;
+      return <Badge variant="Neutral">{t('workshopList.chuaThamGia')}</Badge>;
     }
     switch (attendance.status) {
       case 'NOT_PARTICIPATED':
-        return <Badge variant="Neutral">Chưa tham gia</Badge>;
+        return <Badge variant="Neutral">{t('workshopList.chuaThamGia')}</Badge>;
       case 'CHECKED_IN':
-        return <Badge variant="Progress">Đã check-in</Badge>;
+        return <Badge variant="Progress">{t('workshopList.daCheckIn')}</Badge>;
       case 'VERIFIED':
-        return <Badge variant="Approved">Đã xác nhận</Badge>;
+        return <Badge variant="Approved">{t('workshopList.daXacNhan')}</Badge>;
       case 'REJECTED':
-        return <Badge variant="Failed">Bị từ chối</Badge>;
+        return <Badge variant="Failed">{t('workshopList.biTuChoi')}</Badge>;
       default:
         return null;
     }
@@ -43,8 +45,8 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
     return (
       <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-12 text-center text-slate-400">
         <Calendar className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-        <h3 className="font-semibold text-slate-700 text-sm">No Events Scheduled</h3>
-        <p className="text-xs text-slate-400 mt-1">There are no upcoming workshops or seminars scheduled at this time.</p>
+        <h3 className="font-semibold text-slate-700 text-sm">{t('workshopList.noEventsScheduled')}</h3>
+        <p className="text-xs text-slate-400 mt-1">{t('workshopList.thereAreNoUpcomingWorkshopsOr')}</p>
       </div>
     );
   }
@@ -74,7 +76,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
             {/* Background pill decoration or Banner */}
             {ws.bannerUrl ? (
               <div className="absolute top-0 left-0 w-full h-24 -z-10">
-                <img src={ws.bannerUrl} alt="Workshop Banner" className="w-full h-full object-cover opacity-20" />
+                <img src={ws.bannerUrl} alt={t('workshopList.workshopBanner')} className="w-full h-full object-cover opacity-20" />
                 <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white"></div>
               </div>
             ) : (
@@ -110,14 +112,14 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                     <button
                       onClick={() => onEdit(ws)}
                       className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-colors"
-                      title="Edit Event"
+                      title={t('workshopList.editEvent')}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => onDelete(ws._id)}
                       className="p-1.5 hover:bg-red-50 rounded-lg text-red-400 hover:text-red-600 transition-colors"
-                      title="Delete Event"
+                      title={t('workshopList.deleteEvent')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -130,22 +132,22 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                   {ws.title}
                 </h4>
                 <p className="text-xs text-slate-500 font-semibold uppercase mt-0.5 tracking-wider">
-                  Target: {getAudienceLabel(ws.targetAudience, allClassCodes)}
+                  {t('workshopList.target', { v1: getAudienceLabel(ws.targetAudience, allClassCodes) })}
                 </p>
               </div>
 
               <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed pt-1">
-                {ws.description || 'No description provided for this session.'}
+                {ws.description || t('workshopList.noDescriptionProvidedForThisSession')}
               </p>
 
               {ws.checkInDeadline && (
                 <div className="text-caption font-semibold text-rose-500 bg-rose-50 px-2 py-1 rounded-md inline-block mt-2 border border-rose-100">
-                  Hạn check-in: {new Date(ws.checkInDeadline).toLocaleString()}
+                  {t('workshopList.hanCheckIn', { v1: new Date(ws.checkInDeadline).toLocaleString() })}
                 </div>
               )}
               {attendance && attendance.status === 'REJECTED' && attendance.rejectReason && (
                 <div className="text-caption font-semibold text-rose-600 bg-rose-50 px-2 py-1.5 rounded-md mt-2 border border-rose-200">
-                  Lý do từ chối: {attendance.rejectReason}
+                  {t('workshopList.lyDoTuChoi', { rejectReason: attendance.rejectReason })}
                 </div>
               )}
             </div>
@@ -181,7 +183,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary-700 transition-all flex-1 min-w-0"
                         >
-                          <span>Join Session</span>
+                          <span>{t('workshopList.joinSession')}</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
@@ -189,7 +191,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                   ) : (
                     <>
                       {ws.location && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200/60 rounded-xl text-xs text-slate-600 flex-1 min-w-0" title={`Location: ${ws.location}`}>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200/60 rounded-xl text-xs text-slate-600 flex-1 min-w-0" title={t('workshopList.location', { location: ws.location })}>
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate font-semibold">{ws.location}</span>
                         </div>
@@ -201,7 +203,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/10 rounded-xl text-xs font-bold text-primary-700 transition-all flex-1 min-w-0"
                         >
-                          <span>Join Session</span>
+                          <span>{t('workshopList.joinSession')}</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
@@ -216,7 +218,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                       onClick={() => onCheckIn(ws)}
                       className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] rounded-xl text-xs font-bold text-white shadow-sm hover:shadow-glow-primary transition-all"
                     >
-                      <span>Check-in</span>
+                      <span>{t('workshopList.checkIn')}</span>
                     </button>
                   )}
                   {isLecturerOrAdmin && (
@@ -224,15 +226,15 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
                       onClick={() => onManageAttendance(ws)}
                       className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 active:scale-[0.98] rounded-xl text-xs font-bold text-white shadow-sm transition-all"
                     >
-                      <span>Attendance Management</span>
+                      <span>{t('workshopAttendanceManager.attendanceManagement')}</span>
                     </button>
                   )}
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-overline text-slate-400 pt-1 font-semibold">
-                <span>By: {ws.createdBy?.name || 'Instructor'}</span>
-                <span>Scheduled {new Date(ws.createdAt).toLocaleDateString()}</span>
+                <span>{t('workshopList.by', { name: ws.createdBy?.name || t('workshopList.instructor') })}</span>
+                <span>{t('workshopList.scheduled', { v1: new Date(ws.createdAt).toLocaleDateString() })}</span>
               </div>
             </div>
           </div>

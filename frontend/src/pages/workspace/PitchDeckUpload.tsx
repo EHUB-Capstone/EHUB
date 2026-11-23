@@ -4,8 +4,10 @@ import { useState, useRef } from 'react';
 import { UploadCloud, FileText, Download, Trash2, Loader2, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
+import { useTranslation } from 'react-i18next';
 
 export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEditable, onRefresh }) {
+  const { t } = useTranslation('workspace');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -25,7 +27,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
     // Validate size (20MB)
     const maxSize = 20 * 1024 * 1024;
     if (file.size > maxSize) {
-      toast.error('File size must be less than 20MB.');
+      toast.error(t('pitchDeckUpload.fileSizeMustBeLessThan'));
       return;
     }
 
@@ -33,7 +35,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     const allowed = ['.pdf', '.ppt', '.pptx'];
     if (!allowed.includes(ext)) {
-      toast.error('Only PDF, PPT, and PPTX files are allowed.');
+      toast.error(t('pitchDeckUpload.onlyPdfPptAndPptxFiles'));
       return;
     }
 
@@ -43,11 +45,11 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
     setUploading(true);
     try {
       await workspaceApi.uploadPitchDeck(teamId, formData);
-      toast.success('Pitch deck uploaded successfully!');
+      toast.success(t('pitchDeckUpload.pitchDeckUploadedSuccessfully'));
       onRefresh();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Upload failed');
+      toast.error(err.response?.data?.error || err.message || t('pitchDeckUpload.uploadFailed'));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -61,13 +63,13 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
   };
 
   const handleDelete = async (deckId) => {
-    if (!window.confirm('Are you sure you want to delete/archive this pitch deck?')) return;
+    if (!window.confirm(t('pitchDeckUpload.areYouSureYouWantTo'))) return;
     try {
       await workspaceApi.deletePitchDeck(deckId);
-      toast.success('Pitch deck archived successfully.');
+      toast.success(t('pitchDeckUpload.pitchDeckArchivedSuccessfully'));
       onRefresh();
     } catch (err) {
-      toast.error(err.response?.data?.error || err.message || 'Failed to archive pitch deck');
+      toast.error(err.response?.data?.error || err.message || t('pitchDeckUpload.failedToArchivePitchDeck'));
     }
   };
 
@@ -85,11 +87,11 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-2">
           <UploadCloud className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-bold text-slate-800">Pitch Deck</h2>
+          <h2 className="text-lg font-bold text-slate-800">{t('pitchDeckUpload.pitchDeck')}</h2>
         </div>
         {latestDeck && (
           <span className="px-2 py-0.5 bg-primary-50 border border-primary-100 text-primary-700 rounded-full text-xs font-bold">
-            Ver {latestDeck.versionNumber} Active
+            {t('pitchDeckUpload.verActive', { versionNumber: latestDeck.versionNumber })}
           </span>
         )}
       </div>
@@ -110,14 +112,14 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
           {uploading ? (
             <div className="space-y-2">
               <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
-              <p className="text-sm font-semibold text-slate-700">Uploading pitch deck...</p>
-              <p className="text-xs text-slate-400">Please wait while the file is uploading.</p>
+              <p className="text-sm font-semibold text-slate-700">{t('pitchDeckUpload.uploadingPitchDeck')}</p>
+              <p className="text-xs text-slate-400">{t('pitchDeckUpload.pleaseWaitWhileTheFileIs')}</p>
             </div>
           ) : (
             <div className="space-y-2">
               <UploadCloud className="w-8 h-8 text-slate-400 mx-auto" />
-              <p className="text-sm font-semibold text-slate-700">Click to upload pitch deck</p>
-              <p className="text-xs text-slate-400">Supported formats: PDF, PPT, PPTX (Max 20MB)</p>
+              <p className="text-sm font-semibold text-slate-700">{t('pitchDeckUpload.clickToUploadPitchDeck')}</p>
+              <p className="text-xs text-slate-400">{t('pitchDeckUpload.supportedFormatsPdfPptPptxMax')}</p>
             </div>
           )}
         </div>
@@ -134,7 +136,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
               <h3 className="text-sm font-bold text-slate-800 truncate" title={latestDeck.originalName}>
                 {latestDeck.originalName}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">{formatBytes(latestDeck.fileSize)} - Version {latestDeck.versionNumber}</p>
+              <p className="text-xs text-slate-400 mt-1">{t('pitchDeckUpload.version', { v1: formatBytes(latestDeck.fileSize), versionNumber: latestDeck.versionNumber })}</p>
               <div className="flex items-center gap-3 mt-3 text-xs text-slate-400">
                 <span className="flex items-center gap-1 shrink-0"><Calendar className="w-3.5 h-3.5" />{new Date(latestDeck.createdAt).toLocaleDateString()}</span>
                 {getWorkspaceLabel(latestDeck.teamId) && (
@@ -142,7 +144,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
                 )}
                 {!isCurrentTeamDeck(latestDeck) && (
                   <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
-                    Inherited
+                    {t('pitchDeckUpload.inherited')}
                   </span>
                 )}
               </div>
@@ -153,7 +155,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
             <button 
               onClick={() => handleDownload(latestDeck._id)}
               className="p-2 border border-slate-200 bg-white text-slate-600 rounded-xl hover:text-primary-700 hover:border-primary/50 transition-all shadow-xs"
-              title="Download File"
+              title={t('pitchDeckUpload.downloadFile')}
             >
               <Download className="w-4 h-4" />
             </button>
@@ -161,7 +163,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
               <button 
                 onClick={() => handleDelete(latestDeck._id)}
                 className="p-2 border border-slate-200 bg-white text-slate-600 rounded-xl hover:text-red-600 hover:border-red-200 transition-all shadow-xs"
-                title="Delete Deck"
+                title={t('pitchDeckUpload.deleteDeck')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -170,14 +172,14 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
         </div>
       ) : (
         <div className="text-center py-6 text-slate-400 text-sm">
-          No pitch deck uploaded yet.
+          {t('pitchDeckUpload.noPitchDeckUploadedYet')}
         </div>
       )}
 
       {/* History Decks (Previous versions) */}
       {pitchDecks && pitchDecks.length > 1 && (
         <div className="space-y-3 pt-3 border-t border-slate-100">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Upload History</h4>
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">{t('pitchDeckUpload.uploadHistory')}</h4>
           <div className="space-y-2 max-h-[160px] overflow-y-auto">
             {pitchDecks.slice(1).map(deck => (
               <div key={deck._id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all">
@@ -188,8 +190,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
                       {deck.originalName}
                     </p>
                     <p className="text-overline text-slate-400">
-                      {formatBytes(deck.fileSize)} - Version {deck.versionNumber}
-                      {getWorkspaceLabel(deck.teamId) ? ` - ${getWorkspaceLabel(deck.teamId)}` : ''}
+                      {t('pitchDeckUpload.version2', { v1: formatBytes(deck.fileSize), versionNumber: deck.versionNumber, v3: getWorkspaceLabel(deck.teamId) ? ` - ${getWorkspaceLabel(deck.teamId)}` : '' })}
                     </p>
                   </div>
                 </div>

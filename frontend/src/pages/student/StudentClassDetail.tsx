@@ -25,6 +25,7 @@ import Modal from '../../components/ui/Modal';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { updateOwnMajor } from '../../api/authApi';
 import type { ClassMentorSummary } from '../../types/classes';
+import { useTranslation } from 'react-i18next';
 
 const mentorInitials = (fullName: string) => fullName
   .trim()
@@ -41,6 +42,7 @@ const mentorRoleLabel = (mentorType?: string) => {
 };
 
 export default function StudentClassDetail() {
+  const { t } = useTranslation('class');
   const { slug: id } = useParams();
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
@@ -99,7 +101,7 @@ export default function StudentClassDetail() {
         setFormationError(true);
       }
     } catch (err) {
-      toast.error(err?.message || 'Failed to load class details');
+      toast.error(err?.message || t('studentClassDetail.failedToLoadClassDetails'));
       navigate('/student/classes');
     } finally {
       setLoading(false);
@@ -128,7 +130,7 @@ export default function StudentClassDetail() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading class details...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('studentClassDetail.loadingClassDetails')}</p>
       </div>
     );
   }
@@ -199,13 +201,13 @@ export default function StudentClassDetail() {
 
   const startTeamProposal = () => {
     if (majorActionRequired) {
-      toast.error('Select your major before creating a team.');
+      toast.error(t('studentClassDetail.selectYourMajorBeforeCreatingA'));
       document.getElementById('major-action-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('select-major-action')?.focus();
       return;
     }
     if (!currentStudent?._id) {
-      toast.error('Your student profile could not be found in this class.');
+      toast.error(t('studentClassDetail.yourStudentProfileCouldNotBe'));
       return;
     }
     setProposalToRevise(null);
@@ -221,8 +223,8 @@ export default function StudentClassDetail() {
       updateUser({ major: result.majorCode, majorCode: result.majorCode });
       toast.success(
         result.updatedEnrollmentCount > 1
-          ? `Major updated in your profile and ${result.updatedEnrollmentCount} active classes.`
-          : 'Major updated successfully.',
+          ? t('studentClassDetail.majorUpdatedInYourProfileAnd', { updatedEnrollmentCount: result.updatedEnrollmentCount })
+          : t('studentClassDetail.majorUpdatedSuccessfully'),
       );
       await fetchClassDetail();
       return true;
@@ -255,7 +257,7 @@ export default function StudentClassDetail() {
         proposalToCancel.rowVersion,
         cancellationReason.trim(),
       );
-      toast.success('Team proposal cancelled.');
+      toast.success(t('studentClassDetail.teamProposalCancelled'));
       setProposalToCancel(null);
       setCancellationReason('');
       await fetchClassDetail();
@@ -288,7 +290,7 @@ export default function StudentClassDetail() {
   const majorNextAction: StudentMajorNextAction | undefined = (() => {
     if (workspaceTeamId) {
       return {
-        label: 'Open Startup Workspace',
+        label: t('myTeam.openStartupWorkspace'),
         kind: 'workspace',
         onClick: () => navigate(`/student/workspace/${workspaceTeamId}`),
       };
@@ -297,14 +299,14 @@ export default function StudentClassDetail() {
     if (isReadOnly) return undefined;
     if (formationError) {
       return {
-        label: 'Retry Team Status',
+        label: t('studentClassDetail.retryTeamStatus'),
         kind: 'retry',
         onClick: () => { void fetchClassDetail(); },
       };
     }
     if (hasPendingFormation) {
       return {
-        label: 'Review Team Invitation',
+        label: t('studentClassDetail.reviewTeamInvitation'),
         kind: 'review',
         onClick: () => scrollToTeamSection('pending-team-formation'),
       };
@@ -312,14 +314,14 @@ export default function StudentClassDetail() {
     if (reservedProposal) {
       return {
         label: ['NEEDS_REVISION', 'NEEDSREVISION'].includes(reservedProposalStatus)
-          ? 'Continue Team Setup'
-          : 'View Team Proposal',
+          ? t('studentClassDetail.continueTeamSetup')
+          : t('studentClassDetail.viewTeamProposal'),
         kind: 'review',
         onClick: openReservedProposal,
       };
     }
     return {
-      label: 'Create a Team',
+      label: t('studentClassDetail.createATeam'),
       kind: 'team',
       onClick: startTeamProposal,
     };
@@ -332,7 +334,7 @@ export default function StudentClassDetail() {
         onClick={() => navigate('/student/classes')}
         className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 transition-colors text-sm font-semibold"
       >
-        <ChevronLeft className="w-4 h-4" /> Back to My Classes
+        <ChevronLeft className="w-4 h-4" /> {t('studentClassDetail.backToMyClasses')}
       </button>
 
       {/* Hero Header */}
@@ -352,14 +354,14 @@ export default function StudentClassDetail() {
                 </span>
               </div>
               <h1 className="mt-1.5 text-heading sm:text-display text-secondary tracking-tight">{cls?.classCode}</h1>
-              <p className="text-sm text-slate-500 mt-0.5">{cls?.description || 'Classroom for Startup Idea Development.'}</p>
+              <p className="text-sm text-slate-500 mt-0.5">{cls?.description || t('studentClassDetail.classroomForStartupIdeaDevelopment')}</p>
             </div>
           </div>
 
           <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto">
             {lecturer && (
               <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
-                <p className="text-overline font-semibold text-slate-400 uppercase tracking-wider">Lecturer</p>
+                <p className="text-overline font-semibold text-slate-400 uppercase tracking-wider">{t('classDetail.lecturer')}</p>
                 <p className="font-bold text-slate-800 text-sm mt-1">{lecturer.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
                   <Mail className="w-3.5 h-3.5 shrink-0 text-slate-300" />
@@ -370,7 +372,7 @@ export default function StudentClassDetail() {
 
             <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:min-w-[230px]">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Mentors</p>
+                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">{t('classDetail.mentors')}</p>
                 <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-50 px-1.5 text-caption font-bold text-primary-700">
                   {classMentors.length}
                 </span>
@@ -397,11 +399,11 @@ export default function StudentClassDetail() {
                     onClick={() => setIsMentorModalOpen(true)}
                     className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-700 transition hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
                   >
-                    View mentors <ArrowRight className="h-3.5 w-3.5" />
+                    {t('studentClassDetail.viewMentors')} <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ) : (
-                <p className="mt-2 text-xs text-slate-400">No mentors assigned yet</p>
+                <p className="mt-2 text-xs text-slate-400">{t('studentClassDetail.noMentorsAssignedYet')}</p>
               )}
             </div>
           </div>
@@ -411,12 +413,12 @@ export default function StudentClassDetail() {
       <Modal
         isOpen={isMentorModalOpen}
         onClose={() => setIsMentorModalOpen(false)}
-        title="Class mentors"
+        title={t('studentClassDetail.classMentors')}
         size="lg"
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-slate-500">
-            Mentors supporting <span className="font-semibold text-slate-700">{cls?.classCode}</span>
+            {t('studentClassDetail.mentorsSupporting')} <span className="font-semibold text-slate-700">{cls?.classCode}</span>
           </p>
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
             {classMentors.length} {classMentors.length === 1 ? 'mentor' : 'mentors'}
@@ -472,10 +474,10 @@ export default function StudentClassDetail() {
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold">
-              {cls?.classStatus === 'Archived' ? 'Archived class' : 'Completed class'} — history is read-only
+              {t(cls?.classStatus === 'Archived' ? 'studentClassDetail.archivedHistoryReadOnly' : 'studentClassDetail.completedHistoryReadOnly')}
             </p>
             <p className="mt-0.5 text-xs text-blue-700">
-              You can review classmates, teams and proposals, but cannot create or change academic data.
+              {t('studentClassDetail.youCanReviewClassmatesTeamsAnd')}
             </p>
           </div>
         </div>
@@ -485,12 +487,12 @@ export default function StudentClassDetail() {
         <div className="flex flex-col gap-3 rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-slate-800">
-              {majorActionRequired ? 'Team actions are locked until you select your major' : 'You do not have a team in this class yet'}
+              {majorActionRequired ? t('studentClassDetail.teamActionsAreLockedUntilYou') : t('studentClassDetail.youDoNotHaveATeam')}
             </p>
             <p className="mt-0.5 text-xs text-slate-600">
               {majorActionRequired
-                ? 'Complete the required step above to create a team or accept a team invitation.'
-                : 'Choose 4–6 classmates and a leader. Your team is created only after everyone accepts the invitation.'}
+                ? t('studentClassDetail.completeTheRequiredStepAboveTo')
+                : t('studentClassDetail.choose46ClassmatesAndA')}
             </p>
           </div>
           <button
@@ -502,13 +504,13 @@ export default function StudentClassDetail() {
               : 'bg-primary text-white hover:bg-primary-600'}`}
           >
             {majorActionRequired ? <Lock className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-            {majorActionRequired ? 'Select major first' : 'Create team'}
+            {majorActionRequired ? t('studentClassDetail.selectMajorFirst') : t('studentTeamGeneratePanel.createTeam')}
           </button>
         </div>
       )}
 
       {formationError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-        Could not load team invitations. <button type="button" onClick={() => void fetchClassDetail()} className="font-semibold underline">Retry</button>
+        {t('studentClassDetail.couldNotLoadTeamInvitations')} <button type="button" onClick={() => void fetchClassDetail()} className="font-semibold underline">{t('assignMentorsModal.retry')}</button>
       </div>}
       {openFormations.map((formation, index) => (
         <div key={formation.id} id={index === 0 ? 'pending-team-formation' : undefined}>
@@ -522,21 +524,20 @@ export default function StudentClassDetail() {
 
       {!isReadOnly && canInviteMore && (
         <div className="rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 text-sm text-slate-700" role="status">
-          You can invite up to <strong>{inviteSlotsLeft}</strong> more classmate{inviteSlotsLeft === 1 ? '' : 's'}. Select them in the
-          Classmates tab below. Students who declined, left or did not answer in time can also be invited again.
+          {t('studentClassDetail.youCanInviteUpTo')} <strong>{inviteSlotsLeft}</strong> {t('studentClassDetail.moreClassmate')}{inviteSlotsLeft === 1 ? '' : 's'}{t('studentClassDetail.selectThemInTheClassmatesTab')}
         </div>
       )}
 
       {!isReadOnly && reservedProposal && !canEditReservedProposal && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold">Your {reservedProposal.approvedTeamId ? 'project' : 'team'} proposal is {String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase()}.</p>
+            <p className="font-semibold">{t(reservedProposal.approvedTeamId ? 'studentClassDetail.yourProjectProposalIs' : 'studentClassDetail.yourTeamProposalIs', { status: t(`studentClassDetail.proposalStatus.${String(reservedProposal.status || 'PENDING').toUpperCase()}`, { defaultValue: String(reservedProposal.status || 'pending').replaceAll('_', ' ').toLowerCase() }) })}</p>
             <p className="mt-0.5 text-xs text-amber-700">
               {isPendingProjectProposal
-                ? 'Your team is already active. Only the project proposal is awaiting review. The Team Leader should create the project workspace next; every team member can open the Startup Workspace to follow the team’s progress.'
+                ? t('studentClassDetail.yourTeamIsAlreadyActiveOnly')
                 : reservedProposal.approvedTeamId
-                  ? 'Your team is already active. Check the proposal status and lecturer feedback in the Class Teams tab.'
-                  : 'You cannot join another proposal while this one is open. View it in the Class Teams tab.'}
+                  ? t('studentClassDetail.yourTeamIsAlreadyActiveCheck')
+                  : t('studentClassDetail.youCannotJoinAnotherProposalWhile')}
             </p>
           </div>
         </div>
@@ -566,7 +567,7 @@ export default function StudentClassDetail() {
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          <Users className="w-4 h-4" /> Classmates ({students.length})
+          <Users className="w-4 h-4" /> {t('studentClassDetail.classmates')}{students.length})
         </button>
         <button
           onClick={() => setActiveTab('teams')}
@@ -576,7 +577,7 @@ export default function StudentClassDetail() {
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          <LayoutGrid className="w-4 h-4" /> Class Teams ({teams.length})
+          <LayoutGrid className="w-4 h-4" /> {t('studentClassDetail.classTeams')}{teams.length})
         </button>
       </div>
 
@@ -600,14 +601,13 @@ export default function StudentClassDetail() {
                 onClick={startTeamProposal}
                 className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
               >
-                <UserPlus className="h-3.5 w-3.5" /> Create team
+                <UserPlus className="h-3.5 w-3.5" /> {t('studentTeamGeneratePanel.createTeam')}
               </button>
-              <TeamSuggestionTooltip label="Xem hướng dẫn tạo nhóm">
+              <TeamSuggestionTooltip label={t('studentClassDetail.xemHuongDanTaoNhom')}>
                 <div className="space-y-2">
-                  <p className="font-semibold text-white">Hướng dẫn tạo nhóm</p>
+                  <p className="font-semibold text-white">{t('studentClassDetail.huongDanTaoNhom')}</p>
                   <p className="text-slate-200">
-                    Chọn chính bạn và các thành viên trong bảng để bắt đầu. Nhóm cần 4–6 thành viên,
-                    có ít nhất một sinh viên nhóm BBA và một sinh viên nhóm BIT.
+                    {t('studentClassDetail.chonChinhBanVaCacThanh')}
                   </p>
                 </div>
               </TeamSuggestionTooltip>
@@ -644,14 +644,14 @@ export default function StudentClassDetail() {
         isOpen={Boolean(proposalToCancel)}
         onClose={closeCancellationDialog}
         onConfirm={cancelProposal}
-        title="Cancel team proposal?"
-        description="This will cancel the current proposal for every selected team member. You can create a new proposal afterward."
+        title={t('studentClassDetail.cancelTeamProposal')}
+        description={t('studentClassDetail.thisWillCancelTheCurrentProposal')}
         isSubmitting={cancellingProposal}
-        confirmText="Cancel proposal"
-        cancelText="Keep proposal"
+        confirmText={t('studentClassDetail.cancelProposal')}
+        cancelText={t('studentClassDetail.keepProposal')}
         reason={cancellationReason}
         onReasonChange={setCancellationReason}
-        reasonLabel="Reason for cancellation"
+        reasonLabel={t('studentClassDetail.reasonForCancellation')}
         reasonRequired
         actionLayout="confirmWide"
       />

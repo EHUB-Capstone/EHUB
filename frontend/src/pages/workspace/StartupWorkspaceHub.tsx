@@ -13,16 +13,19 @@ import { parseApiError } from '../../utils/apiError';
 import { filterWorkspaces, groupWorkspacesByClass, latestWorkspaceSemester, normalizeAccessibleWorkspaces, parseWorkspaceSemester, resolveWorkspaceSemesterScope } from '../../utils/workspaceHub';
 import MentorHistorySection from '../../components/workspace/MentorHistorySection';
 import type { MentorHistoryItem } from '../../types/teamManagement';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const roleHint = {
-  ADMIN: 'Startup teams you can access',
-  LECTURER: 'Teams in classes you teach',
-  MENTOR: 'Teams you mentor',
+  get ADMIN() { return i18n.t('workspace:startupWorkspaceHub.roleHint.ADMIN'); },
+  get LECTURER() { return i18n.t('workspace:startupWorkspaceHub.roleHint.LECTURER'); },
+  get MENTOR() { return i18n.t('workspace:startupWorkspaceHub.roleHint.MENTOR'); },
 };
 
 type WorkspaceHubRole = keyof typeof roleHint;
 
 export default function StartupWorkspaceHub() {
+  const { t } = useTranslation('workspace');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
@@ -70,12 +73,12 @@ export default function StartupWorkspaceHub() {
       ]);
       if (!response.success) {
         setTeams([]);
-        setErrorMessage(response.message || 'Failed to load startup workspaces.');
+        setErrorMessage(response.message || t('startupWorkspaceHub.failedToLoadStartupWorkspaces'));
         return;
       }
       if (!semesterResponse.success) {
         setTeams([]);
-        setErrorMessage(semesterResponse.message || 'Failed to load the active semester.');
+        setErrorMessage(semesterResponse.message || t('startupWorkspaceHub.failedToLoadTheActiveSemester'));
         return;
       }
 
@@ -118,7 +121,7 @@ export default function StartupWorkspaceHub() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-9 h-9 text-primary animate-spin" />
-        <p className="text-sm text-slate-500 mt-3 font-medium">Loading startup workspaces…</p>
+        <p className="text-sm text-slate-500 mt-3 font-medium">{t('startupWorkspaceHub.loadingStartupWorkspaces')}</p>
       </div>
     );
   }
@@ -127,9 +130,9 @@ export default function StartupWorkspaceHub() {
     return (
       <EmptyState
         icon={Kanban}
-        title="Unable to load startup workspaces"
+        title={t('startupWorkspaceHub.unableToLoadStartupWorkspaces')}
         description={errorMessage}
-        action={{ label: 'Try again', onClick: () => void loadTeams() }}
+        action={{ label: t('startupWorkspaceHub.tryAgain'), onClick: () => void loadTeams() }}
       />
     );
   }
@@ -143,16 +146,16 @@ export default function StartupWorkspaceHub() {
               <Kanban className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-heading sm:text-display text-secondary tracking-tight">Startup Workspace</h1>
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('startupWorkspaceHub.startupWorkspace')}</h1>
               <p className="text-sm text-slate-500 mt-0.5">
-                {roleHint[role] || 'Teams you can access'}
+                {roleHint[role] || t('startupWorkspaceHub.teamsYouCanAccess')}
               </p>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-semibold text-slate-600 bg-white border border-slate-200/80 px-4 py-2 rounded-xl shadow-sm">
-            {filtered.length === teams.length ? `${teams.length} team${teams.length !== 1 ? 's' : ''}` : `${filtered.length} of ${teams.length} teams`}
+            {filtered.length === teams.length ? `${teams.length} team${teams.length !== 1 ? 's' : ''}` : t('startupWorkspaceHub.ofTeams', { length: filtered.length, length2: teams.length })}
           </p>
         </div>
       </div>
@@ -165,66 +168,66 @@ export default function StartupWorkspaceHub() {
               type="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder="Search team, class, course, or semester…"
-              aria-label="Search workspaces"
+              placeholder={t('startupWorkspaceHub.searchTeamClassCourseOrSemester')}
+              aria-label={t('startupWorkspaceHub.searchWorkspaces')}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
           </div>
-          <select value={subject} onChange={event => updateFilter('subject', event.target.value)} aria-label="Filter by subject" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="">All Subjects</option>
+          <select value={subject} onChange={event => updateFilter('subject', event.target.value)} aria-label={t('startupWorkspaceHub.filterBySubject')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="">{t('startupWorkspaceHub.allSubjects')}</option>
             {subjects.map(code => <option key={code} value={code}>{code}</option>)}
           </select>
-          <select value={semester} onChange={event => updateFilter('semester', event.target.value)} aria-label="Filter by semester" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="all">All Semesters</option>
-            {semester === 'none' && <option value="none" disabled>No active semester</option>}
+          <select value={semester} onChange={event => updateFilter('semester', event.target.value)} aria-label={t('startupWorkspaceHub.filterBySemester')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="all">{t('startupWorkspaceHub.allSemesters')}</option>
+            {semester === 'none' && <option value="none" disabled>{t('startupWorkspaceHub.noActiveSemester')}</option>}
             {['SP', 'SU', 'FA'].map(code => <option key={code} value={code}>{code}</option>)}
           </select>
-          <select value={year} onChange={event => updateFilter('year', event.target.value)} aria-label="Filter by year" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="all">All Years</option>
-            {year === 'none' && <option value="none" disabled>No active year</option>}
+          <select value={year} onChange={event => updateFilter('year', event.target.value)} aria-label={t('startupWorkspaceHub.filterByYear')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="all">{t('startupWorkspaceHub.allYears')}</option>
+            {year === 'none' && <option value="none" disabled>{t('startupWorkspaceHub.noActiveYear')}</option>}
             {years.map(value => <option key={value} value={value}>{value}</option>)}
           </select>
-          <select value={workspaceStatus} onChange={event => updateFilter('workspaceStatus', event.target.value)} aria-label="Filter by workspace status" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="">All Workspaces</option>
-            <option value="created">Created</option>
-            <option value="not-created">Not created yet</option>
+          <select value={workspaceStatus} onChange={event => updateFilter('workspaceStatus', event.target.value)} aria-label={t('startupWorkspaceHub.filterByWorkspaceStatus')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="">{t('startupWorkspaceHub.allWorkspaces')}</option>
+            <option value="created">{t('startupWorkspaceHub.created')}</option>
+            <option value="not-created">{t('startupWorkspaceHub.notCreatedYet')}</option>
           </select>
-          <select value={access} onChange={event => updateFilter('access', event.target.value)} aria-label="Filter by access" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="">All Access</option>
-            <option value="READ_WRITE">Available</option>
-            <option value="READ_ONLY">Read-only</option>
+          <select value={access} onChange={event => updateFilter('access', event.target.value)} aria-label={t('startupWorkspaceHub.filterByAccess')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="">{t('startupWorkspaceHub.allAccess')}</option>
+            <option value="READ_WRITE">{t('startupWorkspaceHub.available')}</option>
+            <option value="READ_ONLY">{t('startupWorkspaceHub.readOnly')}</option>
           </select>
-          <select value={sort} onChange={event => updateFilter('sort', event.target.value)} aria-label="Sort workspaces" className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
-            <option value="class-asc">Class code A–Z</option>
-            <option value="class-desc">Class code Z–A</option>
-            <option value="team-asc">Team name A–Z (within class)</option>
-            <option value="team-desc">Team name Z–A (within class)</option>
+          <select value={sort} onChange={event => updateFilter('sort', event.target.value)} aria-label={t('startupWorkspaceHub.sortWorkspaces')} className="border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <option value="class-asc">{t('startupWorkspaceHub.classCodeAZ')}</option>
+            <option value="class-desc">{t('startupWorkspaceHub.classCodeZA')}</option>
+            <option value="team-asc">{t('startupWorkspaceHub.teamNameAZWithinClass')}</option>
+            <option value="team-desc">{t('startupWorkspaceHub.teamNameZAWithinClass')}</option>
           </select>
           <button type="submit" className="flex items-center gap-2 px-4 py-2 bg-secondary text-white rounded-xl text-sm hover:bg-secondary-700 transition-all">
-            <Filter className="w-4 h-4" /> Filter
+            <Filter className="w-4 h-4" /> {t('startupWorkspaceHub.filter')}
           </button>
           <button type="button" onClick={() => { setSearch(''); setSearchParams(new URLSearchParams(), { replace: true }); }} className="text-sm text-slate-400 hover:text-slate-600 px-2">
-            Reset
+            {t('common:actions.reset')}
           </button>
         </form>
       </div>
 
       {semesterScope.usesFallback && (
         <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-          No semester is active right now, so teams of the most recent semester ({semester}{year}) are shown. Choose another semester or year in the filters to see more.
+          {t('startupWorkspaceHub.noSemesterIsActiveRightNow', { semester, year })}
         </p>
       )}
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={Kanban}
-          title={semesterScope.isDefault && !activeSemester ? 'No active semester' : teams.length === 0 ? 'No teams available' : 'No matches'}
+          title={semesterScope.isDefault && !activeSemester ? t('startupWorkspaceHub.noActiveSemester') : teams.length === 0 ? t('startupWorkspaceHub.noTeamsAvailable') : t('startupWorkspaceHub.noMatches')}
           description={
             semesterScope.isDefault && !activeSemester
-              ? 'There is no active semester. Select another semester and year to view teams from other terms.'
+              ? t('startupWorkspaceHub.thereIsNoActiveSemesterSelect')
               : teams.length === 0
-              ? 'You are not assigned to any class teams yet, or teams have not been created.'
-              : 'Try a different search or filter, or reset the filters.'
+              ? t('startupWorkspaceHub.youAreNotAssignedToAny')
+              : t('startupWorkspaceHub.tryADifferentSearchOrFilter')
           }
         />
       ) : (
@@ -234,15 +237,15 @@ export default function StartupWorkspaceHub() {
               <div className="mb-4 flex items-center gap-3">
                 <div className="min-w-0">
                   <h2 id={`workspace-class-${group.classId}`} className="text-lg font-bold text-slate-900">
-                    {group.classCode || 'Unknown Class'}
+                    {group.classCode || t('startupWorkspaceHub.unknownClass')}
                   </h2>
                   <p className="text-xs font-medium text-slate-500">
-                    {[group.courseCode, group.semester].filter(Boolean).join(' · ') || 'Academic context unavailable'}
+                    {[group.courseCode, group.semester].filter(Boolean).join(' · ') || t('startupWorkspaceHub.academicContextUnavailable')}
                   </p>
                 </div>
                 <span className="h-px flex-1 bg-slate-200" />
                 <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-                  {group.workspaces.length} team{group.workspaces.length !== 1 ? 's' : ''}
+                  {t('startupWorkspaceHub.teamCount', { count: group.workspaces.length })}
                 </span>
               </div>
 
@@ -259,12 +262,12 @@ export default function StartupWorkspaceHub() {
                         <div className="flex flex-wrap items-center gap-2">
                           {team.isCurrent && (
                             <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-overline font-bold uppercase tracking-wider text-emerald-700">
-                              Current
+                              {t('teamLineageHistory.current')}
                             </span>
                           )}
                           {team.isArchived && (
                             <span className="inline-flex items-center gap-1 rounded-md border border-amber-100 bg-amber-50 px-2 py-0.5 text-overline font-bold uppercase tracking-wider text-amber-700">
-                              <Archive className="w-3 h-3" /> Archived
+                              <Archive className="w-3 h-3" /> {t('startupWorkspaceHub.archived')}
                             </span>
                           )}
                         </div>
@@ -277,7 +280,7 @@ export default function StartupWorkspaceHub() {
 
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
                       <span className="inline-flex items-center gap-1 text-overline font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-100">
-                        <FolderKanban className="w-3 h-3" /> {team.hasWorkspace ? 'Workspace created' : 'Not created yet'}
+                        <FolderKanban className="w-3 h-3" /> {team.hasWorkspace ? t('startupWorkspaceHub.workspaceCreated') : t('startupWorkspaceHub.notCreatedYet')}
                       </span>
                       <span className={`inline-flex items-center gap-1 text-overline font-semibold px-2 py-1 rounded-lg border ${
                         team.accessMode === 'READ_ONLY'
@@ -285,7 +288,7 @@ export default function StartupWorkspaceHub() {
                           : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                       }`}>
                         {team.accessMode === 'READ_ONLY' ? <Eye className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
-                        {team.accessMode === 'READ_ONLY' ? 'Read-only' : 'Available'}
+                        {team.accessMode === 'READ_ONLY' ? t('startupWorkspaceHub.readOnly') : t('startupWorkspaceHub.available')}
                       </span>
                     </div>
                   </button>
@@ -299,7 +302,7 @@ export default function StartupWorkspaceHub() {
       {isMentor && <MentorHistorySection items={history} />}
 
       <p className="text-xs text-slate-400 text-center pb-4">
-        Open a team to review its project profile, roadmap, shortcuts, and checkpoint submissions.
+        {t('startupWorkspaceHub.openATeamToReviewIts')}
       </p>
     </div>
   );

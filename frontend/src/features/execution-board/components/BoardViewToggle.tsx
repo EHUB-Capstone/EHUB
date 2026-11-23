@@ -1,15 +1,18 @@
 // @ts-nocheck
 import { Kanban, Table2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../../i18n';
 
 const VIEWS = [
-  { key: 'kanban', label: 'Kanban', icon: Kanban },
-  { key: 'table', label: 'Table', icon: Table2 },
+  { key: 'kanban', get label() { return i18n.t('workspace:boardViewToggle.kanban'); }, icon: Kanban },
+  { key: 'table', get label() { return i18n.t('workspace:boardViewToggle.table'); }, icon: Table2 },
 ];
 
 export default function BoardViewToggle({ view, onChange }) {
+  const { t } = useTranslation('workspace');
   return (
     <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
-      <span className="hidden px-2 text-xs font-semibold text-slate-500 sm:inline">View</span>
+      <span className="hidden px-2 text-xs font-semibold text-slate-500 sm:inline">{t('common:actions.view')}</span>
       {VIEWS.map(({ key, label, icon: Icon }) => {
         const active = view === key;
         return (
