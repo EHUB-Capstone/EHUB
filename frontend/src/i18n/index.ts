@@ -18,7 +18,13 @@ const lazyBackend: BackendModule = {
       callback(null, {});
       return;
     }
-    load().then((module) => callback(null, module.default), (error: Error) => callback(error, null));
+    load().then(
+      (module) => callback(null, module.default),
+      (error: Error) => {
+        console.error(`Failed to load translations "${namespace}" (${language})`, error);
+        callback(error, null);
+      },
+    );
   },
 };
 

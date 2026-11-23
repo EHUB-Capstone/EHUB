@@ -33,54 +33,56 @@ export const resources = {
 } as const;
 
 // Feature namespaces are split into their own chunks and fetched the first time a screen needs them.
+// No JSON import attribute here: Vite's dev server rewrites the URL to a JS module, which browsers reject
+// when a JSON attribute is present. Node cannot import these without it, so tests load them from disk.
 export const lazyNamespaces = {
   admin: {
-    en: () => import('./locales/en/admin.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/admin.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/admin.json'),
+    vi: () => import('./locales/vi/admin.json'),
   },
   ai: {
-    en: () => import('./locales/en/ai.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/ai.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/ai.json'),
+    vi: () => import('./locales/vi/ai.json'),
   },
   checkpoint: {
-    en: () => import('./locales/en/checkpoint.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/checkpoint.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/checkpoint.json'),
+    vi: () => import('./locales/vi/checkpoint.json'),
   },
   class: {
-    en: () => import('./locales/en/class.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/class.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/class.json'),
+    vi: () => import('./locales/vi/class.json'),
   },
   community: {
-    en: () => import('./locales/en/community.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/community.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/community.json'),
+    vi: () => import('./locales/vi/community.json'),
   },
   dashboard: {
-    en: () => import('./locales/en/dashboard.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/dashboard.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/dashboard.json'),
+    vi: () => import('./locales/vi/dashboard.json'),
   },
   evaluation: {
-    en: () => import('./locales/en/evaluation.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/evaluation.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/evaluation.json'),
+    vi: () => import('./locales/vi/evaluation.json'),
   },
   mentoring: {
-    en: () => import('./locales/en/mentoring.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/mentoring.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/mentoring.json'),
+    vi: () => import('./locales/vi/mentoring.json'),
   },
   profile: {
-    en: () => import('./locales/en/profile.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/profile.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/profile.json'),
+    vi: () => import('./locales/vi/profile.json'),
   },
   projectData: {
-    en: () => import('./locales/en/projectData.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/projectData.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/projectData.json'),
+    vi: () => import('./locales/vi/projectData.json'),
   },
   showcase: {
-    en: () => import('./locales/en/showcase.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/showcase.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/showcase.json'),
+    vi: () => import('./locales/vi/showcase.json'),
   },
   workspace: {
-    en: () => import('./locales/en/workspace.json', { with: { type: 'json' } }),
-    vi: () => import('./locales/vi/workspace.json', { with: { type: 'json' } }),
+    en: () => import('./locales/en/workspace.json'),
+    vi: () => import('./locales/vi/workspace.json'),
   },
 } as const;
 

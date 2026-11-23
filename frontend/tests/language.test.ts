@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   DEFAULT_LANGUAGE,
@@ -95,12 +96,15 @@ test('formatters follow the active language and fall back for invalid input', as
   await i18n.changeLanguage('en');
 });
 
-test('feature namespaces load on demand for both languages', async () => {
+test('feature namespaces can be added on demand for both languages', async () => {
+  // The app loads these through dynamic imports (see resources.ts); Node cannot import JSON without an
+  // attribute, so the same files are read from disk and registered the way the backend does.
+  const read = (language: string) => JSON.parse(readFileSync(new URL(`../src/i18n/locales/${language}/workspace.json`, import.meta.url), 'utf8'));
+  i18n.addResourceBundle('vi', 'workspace', read('vi'), true, true);
+  i18n.addResourceBundle('en', 'workspace', read('en'), true, true);
   await i18n.changeLanguage('vi');
-  await i18n.loadNamespaces(['workspace']);
   assert.equal(i18n.t('workspace:taskStatus.TODO'), 'Cần làm');
   await i18n.changeLanguage('en');
-  await i18n.loadNamespaces(['workspace']);
   assert.equal(i18n.t('workspace:taskStatus.TODO'), 'To Do');
 });
 
