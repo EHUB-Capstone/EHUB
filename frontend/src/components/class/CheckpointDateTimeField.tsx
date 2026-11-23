@@ -3,6 +3,7 @@ import { CalendarDays } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import { checkpointDateParts } from '../../utils/checkpointDateTime';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   label: string;
@@ -47,6 +48,7 @@ function displayDate(value: string): string {
 }
 
 export default function CheckpointDateTimeField({ label, value, defaultTime, onChange, minDate, error }: Props) {
+  const { t } = useTranslation('class');
   const id = useId();
   const { date, hour, minute } = checkpointDateParts(value, defaultTime);
   const selected = parseCalendarDate(date);
@@ -71,7 +73,7 @@ export default function CheckpointDateTimeField({ label, value, defaultTime, onC
       <p className="text-sm font-semibold text-slate-700">{label}</p>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
         <div>
-          <span className="mb-1 block text-xs font-medium text-slate-500">Date</span>
+          <span className="mb-1 block text-xs font-medium text-slate-500">{t('checkpointDateTimeField.date')}</span>
           <button
             type="button"
             onClick={() => { setMonth(selected || minimum || new Date()); setOpen(current => !current); }}
@@ -85,13 +87,13 @@ export default function CheckpointDateTimeField({ label, value, defaultTime, onC
           </button>
         </div>
         <div>
-          <span className="mb-1 block text-xs font-medium text-slate-500">Time (24-hour)</span>
+          <span className="mb-1 block text-xs font-medium text-slate-500">{t('checkpointDateTimeField.time24Hour')}</span>
           <div className="flex items-center gap-1 text-sm font-semibold text-slate-600">
             <input
-              aria-label={`${label} hour (00–23)`}
+              aria-label={t('checkpointDateTimeField.hour0023', { label })}
               inputMode="numeric"
               maxLength={2}
-              placeholder="HH"
+              placeholder={t('checkpointDateTimeField.hh')}
               value={hour}
               onFocus={event => event.target.select()}
               onChange={event => changeTime('hour', event.target.value)}
@@ -100,7 +102,7 @@ export default function CheckpointDateTimeField({ label, value, defaultTime, onC
             />
             <span aria-hidden="true">:</span>
             <input
-              aria-label={`${label} minute (00–59)`}
+              aria-label={t('checkpointDateTimeField.minute0059', { label })}
               inputMode="numeric"
               maxLength={2}
               placeholder="mm"

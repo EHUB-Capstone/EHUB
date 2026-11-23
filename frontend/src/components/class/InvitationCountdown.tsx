@@ -1,6 +1,7 @@
 import { Clock } from 'lucide-react';
 import { useCountdown } from '../../hooks/useCountdown';
 import { countdownTone, formatCountdown, type CountdownTone } from '../../utils/teamFormation';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   expiresAtUtc: string | null;
@@ -18,6 +19,7 @@ const TONE_CLASSES: Record<CountdownTone, string> = {
 };
 
 export default function InvitationCountdown({ expiresAtUtc, serverTimeUtc, onExpire, className = '' }: Props) {
+  const { t } = useTranslation('class');
   const remaining = useCountdown(expiresAtUtc, serverTimeUtc, onExpire);
   if (remaining === null) return null;
   const tone = countdownTone(remaining);
@@ -26,7 +28,7 @@ export default function InvitationCountdown({ expiresAtUtc, serverTimeUtc, onExp
   return (
     <span
       role="timer"
-      aria-label={remaining === 0 ? 'Invitation expired' : `Time left to respond: ${label}`}
+      aria-label={remaining === 0 ? t('invitationCountdown.invitationExpired') : t('invitationCountdown.timeLeftToRespond', { label })}
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-xs font-semibold tabular-nums ${TONE_CLASSES[tone]} ${className}`}
     >
       <Clock className="h-3 w-3" aria-hidden="true" />

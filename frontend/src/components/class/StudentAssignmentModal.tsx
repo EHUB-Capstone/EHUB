@@ -32,6 +32,8 @@ import {
   TEAM_MEMBER_LIMIT,
 } from '../../utils/teamManagement';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface StudentAssignmentModalProps {
   classInfo: TeamClassOption;
@@ -51,13 +53,13 @@ const MODES: Array<{
 }> = [
   {
     value: 'CLASS',
-    title: 'Assign to class',
-    description: 'Add selected students to this class roster.',
+    get title() { return i18n.t('class:studentAssignmentModal.assignToClass'); },
+    get description() { return i18n.t('class:studentAssignmentModal.addSelectedStudentsToThisClass'); },
   },
   {
     value: 'TEAM',
-    title: 'Assign to team',
-    description: 'Place class students into an existing team.',
+    get title() { return i18n.t('class:studentAssignmentModal.assignToTeam'); },
+    get description() { return i18n.t('class:studentAssignmentModal.placeClassStudentsIntoAnExisting'); },
   },
 ];
 
@@ -71,6 +73,7 @@ export default function StudentAssignmentModal({
   onClose,
   onSave,
 }: StudentAssignmentModalProps) {
+  const { t } = useTranslation('class');
   const knownStudentIds = new Set(students.map((student) => student._id));
   const [draft, setDraft] = useState<StudentAssignmentDraft>({
     mode: initialMode,
@@ -138,7 +141,7 @@ export default function StudentAssignmentModal({
       : Boolean(draft.teamId && assignment?.teamId === draft.teamId);
 
     if (alreadyAssigned) {
-      toast(`${student.fullName} is already in the selected ${draft.mode === 'CLASS' ? 'class' : 'team'}.`);
+      toast(t(draft.mode === 'CLASS' ? 'studentAssignmentModal.alreadyInClass' : 'studentAssignmentModal.alreadyInTeam', { name: student.fullName }));
       return;
     }
 
@@ -154,9 +157,9 @@ export default function StudentAssignmentModal({
     setAttemptedSubmit(true);
     if (!validation.isValid) {
       if (validation.studentsOutsideClass.length > 0) {
-        toast.error('Team assignment blocked: selected students must belong to this class.');
+        toast.error(t('studentAssignmentModal.teamAssignmentBlockedSelectedStudentsMust'));
       } else {
-        toast.error('Please correct the highlighted assignment information.');
+        toast.error(t('studentAssignmentModal.pleaseCorrectTheHighlightedAssignmentInformation'));
       }
       return;
     }
@@ -167,8 +170,8 @@ export default function StudentAssignmentModal({
       await onSave(result);
       toast.success(
         draft.mode === 'CLASS'
-          ? `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${classInfo.code}`
-          : `${draft.studentIds.length} student${draft.studentIds.length === 1 ? '' : 's'} assigned to ${targetTeam?.teamName || 'team'}`,
+          ? t('studentAssignmentModal.studentsAssignedToClass', { count: draft.studentIds.length, code: classInfo.code })
+          : t('studentAssignmentModal.studentsAssignedToTeam', { count: draft.studentIds.length, v3: targetTeam?.teamName || t('studentAssignmentModal.teamFallback') }),
       );
     } catch (error) {
       toast.error(parseApiError(error, 'Unable to update the student assignment.').message);
@@ -179,7 +182,7 @@ export default function StudentAssignmentModal({
 
   return (
     <div className="fixed inset-0 z-[76] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="student-assignment-title">
-      <button type="button" className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm" onClick={onClose} aria-label="Close student assignment dialog" />
+      <button type="button" className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm" onClick={onClose} aria-label={t('studentAssignmentModal.closeStudentAssignmentDialog')} />
       <div className="relative flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[92vh] sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
@@ -187,11 +190,11 @@ export default function StudentAssignmentModal({
               <UserRoundCheck className="h-5 w-5" />
             </div>
             <div>
-              <h2 id="student-assignment-title" className="text-lg font-bold text-slate-900">Assign students</h2>
-              <p className="text-sm text-slate-500">Keep class and team placement consistent</p>
+              <h2 id="student-assignment-title" className="text-lg font-bold text-slate-900">{t('studentAssignmentModal.assignStudents')}</h2>
+              <p className="text-sm text-slate-500">{t('studentAssignmentModal.keepClassAndTeamPlacementConsistent')}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label={t('common:actions.close')}>
             <X className="h-5 w-5" />
           </button>
         </header>
@@ -202,7 +205,7 @@ export default function StudentAssignmentModal({
               <section className="space-y-3 rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-bold text-slate-900">Assignment type</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t('studentAssignmentModal.assignmentType')}</h3>
                 </div>
                 {MODES.map((mode) => (
                   <button
@@ -224,7 +227,7 @@ export default function StudentAssignmentModal({
 
               <section className="space-y-4 rounded-2xl border border-slate-200 p-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">Selected class <span className="text-red-500">*</span></label>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">{t('studentAssignmentModal.selectedClass')} <span className="text-red-500">*</span></label>
                   <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary-100 text-secondary"><GraduationCap className="h-4 w-4" /></span>
                     <span>
@@ -236,32 +239,32 @@ export default function StudentAssignmentModal({
 
                 {draft.mode === 'TEAM' && (
                   <div>
-                    <label htmlFor="assignment-team" className="mb-1.5 block text-xs font-semibold text-slate-600">Team <span className="text-red-500">*</span></label>
+                    <label htmlFor="assignment-team" className="mb-1.5 block text-xs font-semibold text-slate-600">{t('lecturerCheckpointManagement.team')} <span className="text-red-500">*</span></label>
                     <select
                       id="assignment-team"
                       value={draft.teamId}
                       onChange={(event) => setDraft((current) => ({ ...current, teamId: event.target.value }))}
                       className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 ${attemptedSubmit && validation.errors.teamId ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                     >
-                      <option value="">Select a team</option>
+                      <option value="">{t('studentAssignmentModal.selectATeam')}</option>
                       {classTeams.map((team) => (
                         <option key={team._id} value={team._id}>{team.teamName} ({getTeamMemberIds(team).length}/{TEAM_MEMBER_LIMIT})</option>
                       ))}
                     </select>
                     {attemptedSubmit && validation.errors.teamId && <p className="mt-1 text-xs text-red-600">{validation.errors.teamId}</p>}
-                    {targetTeam && <p className="mt-1.5 text-xs text-slate-500">{availableTeamSlots} place{availableTeamSlots === 1 ? '' : 's'} available in this team.</p>}
+                    {targetTeam && <p className="mt-1.5 text-xs text-slate-500">{t('studentAssignmentModal.placesAvailable', { count: availableTeamSlots })}</p>}
                   </div>
                 )}
               </section>
 
               <section className="rounded-2xl border border-secondary-100 bg-secondary-50/50 p-4">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                  <ArrowRight className="h-4 w-4 text-secondary" /> Assignment summary
+                  <ArrowRight className="h-4 w-4 text-secondary" /> {t('studentAssignmentModal.assignmentSummary')}
                 </div>
                 <div className="mt-3 space-y-2 text-xs text-slate-600">
-                  <p><strong>{draft.studentIds.length}</strong> student{draft.studentIds.length === 1 ? '' : 's'} selected</p>
-                  <p>Destination: <strong>{draft.mode === 'TEAM' ? targetTeam?.teamName || 'Select a team' : classInfo.code}</strong></p>
-                  <p>{draft.mode === 'TEAM' ? 'Only students already in this class can be assigned.' : 'A student can have only one active enrollment for the same subject and term.'}</p>
+                  <p><strong>{draft.studentIds.length}</strong> {t('studentAssignmentModal.student')}{draft.studentIds.length === 1 ? '' : 's'} {t('studentAssignmentModal.selected')}</p>
+                  <p>{t('studentAssignmentModal.destination')} <strong>{draft.mode === 'TEAM' ? targetTeam?.teamName || t('studentAssignmentModal.selectATeam') : classInfo.code}</strong></p>
+                  <p>{draft.mode === 'TEAM' ? t('studentAssignmentModal.onlyStudentsAlreadyInThisClass') : t('studentAssignmentModal.aStudentCanHaveOnlyOne')}</p>
                 </div>
               </section>
             </div>
@@ -272,19 +275,19 @@ export default function StudentAssignmentModal({
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">Students <span className="text-red-500">*</span></h3>
-                      <p className="text-xs text-slate-500">Select one or more student records</p>
+                      <h3 className="text-sm font-bold text-slate-900">{t('studentAssignmentModal.students')} <span className="text-red-500">*</span></h3>
+                      <p className="text-xs text-slate-500">{t('studentAssignmentModal.selectOneOrMoreStudentRecords')}</p>
                     </div>
                   </div>
                   {loadingCandidates ? (
-                    <span className="flex items-center gap-1.5 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading directory</span>
+                    <span className="flex items-center gap-1.5 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('studentAssignmentModal.loadingDirectory')}</span>
                   ) : (
-                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700">{draft.studentIds.length} selected</span>
+                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700">{t('studentAssignmentModal.selected2', { length: draft.studentIds.length })}</span>
                   )}
                 </div>
                 <div className="relative mt-3">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, student code, email or major" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('studentAssignmentModal.searchNameStudentCodeEmailOr')} className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
                 </div>
                 {attemptedSubmit && validation.errors.studentIds && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 p-2.5 text-xs text-red-700"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{validation.errors.studentIds}</span></div>
@@ -293,7 +296,7 @@ export default function StudentAssignmentModal({
 
               <div className="flex-1 space-y-2 overflow-y-auto p-3">
                 {visibleStudents.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-slate-400">No students match this search.</p>
+                  <p className="py-12 text-center text-sm text-slate-400">{t('studentAssignmentModal.noStudentsMatchThisSearch')}</p>
                 ) : visibleStudents.map((student) => {
                   const selected = draft.studentIds.includes(student._id);
                   const belongsToClass = studentBelongsToClass(student, classInfo.id);
@@ -322,18 +325,18 @@ export default function StudentAssignmentModal({
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white bg-secondary">{student.fullName.charAt(0).toUpperCase()}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-slate-800">{student.fullName}</span>
-                        <span className="block truncate text-xs text-slate-500">{student.rollNumber || 'No student code'}{student.major ? ` · ${student.major}` : ''}</span>
+                        <span className="block truncate text-xs text-slate-500">{student.rollNumber || t('studentAssignmentModal.noStudentCode')}{student.major ? ` · ${student.major}` : ''}</span>
                       </span>
                       <span className="flex max-w-40 shrink-0 flex-col items-end gap-1">
                         {outsideClass ? (
-                          <span className="rounded-full bg-red-100 px-2 py-1 text-right text-overline font-semibold text-red-700">Not in {classInfo.code}</span>
+                          <span className="rounded-full bg-red-100 px-2 py-1 text-right text-overline font-semibold text-red-700">{t('studentAssignmentModal.notIn', { code: classInfo.code })}</span>
                         ) : belongsToClass ? (
-                          <span className="rounded-full bg-green-100 px-2 py-1 text-overline font-semibold text-green-700">In {classInfo.code}</span>
+                          <span className="rounded-full bg-green-100 px-2 py-1 text-overline font-semibold text-green-700">{t('studentAssignmentModal.in', { code: classInfo.code })}</span>
                         ) : (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-overline font-semibold text-slate-600">Unassigned</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-overline font-semibold text-slate-600">{t('bulkCreateModal.unassigned')}</span>
                         )}
-                        {conflict && <span className="max-w-40 truncate text-overline font-semibold text-amber-700">Team: {assignment.teamName}</span>}
-                        {alreadyAtDestination && <span className="text-overline font-semibold text-slate-500">Already assigned</span>}
+                        {conflict && <span className="max-w-40 truncate text-overline font-semibold text-amber-700">{t('studentAssignmentModal.team', { teamName: assignment.teamName })}</span>}
+                        {alreadyAtDestination && <span className="text-overline font-semibold text-slate-500">{t('studentAssignmentModal.alreadyAssigned')}</span>}
                       </span>
                     </button>
                   );
@@ -344,11 +347,11 @@ export default function StudentAssignmentModal({
         </div>
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-xs text-slate-500">Changes are applied consistently to the class roster and team member list.</p>
+          <p className="text-xs text-slate-500">{t('studentAssignmentModal.changesAreAppliedConsistentlyToThe')}</p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="outline" onClick={onClose} disabled={saving}>{t('common:actions.cancel')}</Button>
             <Button variant="primary" icon={saving ? Loader2 : UserRoundCheck} onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Saving assignment...' : draft.mode === 'CLASS' ? 'Assign to class' : 'Assign to team'}
+              {saving ? t('studentAssignmentModal.savingAssignment') : draft.mode === 'CLASS' ? t('studentAssignmentModal.assignToClass') : t('studentAssignmentModal.assignToTeam')}
             </Button>
           </div>
         </footer>

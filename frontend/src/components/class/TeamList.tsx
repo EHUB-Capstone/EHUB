@@ -17,6 +17,7 @@ import {
 import Button from '../ui/Button';
 import type { ManagedTeam, TeamProject, TeamStudent } from '../../types/teamManagement';
 import { entityId, getTeamMembers, getTeamProject } from '../../utils/teamManagement';
+import { useTranslation } from 'react-i18next';
 
 interface TeamListProps {
   teams: ManagedTeam[];
@@ -76,6 +77,7 @@ export default function TeamList({
   onProjectDirection,
   onCancelProposal,
 }: TeamListProps) {
+  const { t } = useTranslation('class');
   const safeTeams = Array.isArray(teams) ? teams : [];
   const teamCount = safeTeams.filter((team) => !team.isProposal).length;
   const standaloneProposalCount = safeTeams.length - teamCount;
@@ -86,9 +88,9 @@ export default function TeamList({
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><Users className="h-5 w-5" /></div>
           <div>
-            <h2 className="font-bold text-slate-900">Team management</h2>
+            <h2 className="font-bold text-slate-900">{t('teamList.teamManagement')}</h2>
             <p className="text-sm text-slate-500">
-              {teamCount} team{teamCount === 1 ? '' : 's'} in this class
+              {t('teamList.teamsInClass', { count: teamCount })}
               {standaloneProposalCount > 0
                 ? ` · ${standaloneProposalCount} standalone proposal${standaloneProposalCount === 1 ? '' : 's'}`
                 : ''}
@@ -97,8 +99,8 @@ export default function TeamList({
         </div>
         {canManageInfo && (onAssign || onCreate) && (
           <div className="flex flex-col gap-2 sm:flex-row">
-            {onAssign && <Button variant="outline" icon={UserRoundCheck} onClick={onAssign}>Assign students</Button>}
-            {onCreate && <Button variant="primary" icon={Plus} onClick={onCreate}>Create team</Button>}
+            {onAssign && <Button variant="outline" icon={UserRoundCheck} onClick={onAssign}>{t('studentAssignmentModal.assignStudents')}</Button>}
+            {onCreate && <Button variant="primary" icon={Plus} onClick={onCreate}>{t('studentTeamGeneratePanel.createTeam')}</Button>}
           </div>
         )}
       </div>
@@ -106,9 +108,9 @@ export default function TeamList({
       {safeTeams.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-12 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-xs"><Users className="h-6 w-6" /></div>
-          <h3 className="mt-4 font-semibold text-slate-700">No teams yet</h3>
-          <p className="mt-1 text-sm text-slate-500">Create the first team and assign students from this class.</p>
-          {canManageInfo && onCreate && <Button className="mt-4" variant="outline" icon={Plus} onClick={onCreate}>Create first team</Button>}
+          <h3 className="mt-4 font-semibold text-slate-700">{t('teamList.noTeamsYet')}</h3>
+          <p className="mt-1 text-sm text-slate-500">{t('teamList.createTheFirstTeamAndAssign')}</p>
+          {canManageInfo && onCreate && <Button className="mt-4" variant="outline" icon={Plus} onClick={onCreate}>{t('teamList.createFirstTeam')}</Button>}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -161,6 +163,7 @@ function TeamCard({
   onProjectDirection,
   onCancelProposal,
 }: TeamCardProps) {
+  const { t } = useTranslation('class');
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const members = getTeamMembers(team, students);
@@ -183,18 +186,18 @@ function TeamCard({
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-base font-bold text-white">{teamInitial}</div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate font-bold text-slate-900">{team.teamName || 'Unnamed team'}</h3>
+                <h3 className="truncate font-bold text-slate-900">{team.teamName || t('mentorTeamsBoard.unnamedTeam')}</h3>
                 <span className={`rounded-full px-2 py-0.5 text-overline font-bold uppercase ${statusStyles[status] || statusStyles.ACTIVE}`}>{readableStatus(status)}</span>
               </div>
               {team.isContinued && (
                 <p className="mt-1 text-xs font-medium text-secondary">
-                  Continued from {team.continuedFromSemesterCode || 'the previous semester'}
+                  {t('teamList.continuedFrom', { semester: team.continuedFromSemesterCode || t('teamList.previousSemester') })}
                   {team.continuedFromClassCode ? ` · ${team.continuedFromClassCode}` : ''}
                 </p>
               )}
               {team.linkedProposal && (
                 <p className="mt-1 text-xs font-medium text-slate-500">
-                  Project proposal:{' '}
+                  {t('teamList.projectProposal')}{' '}
                   <span className={`rounded-full px-1.5 py-0.5 text-overline font-bold uppercase ${statusStyles[proposalStatus] || statusStyles.ACTIVE}`}>
                     {readableStatus(proposalStatus)}
                   </span>
@@ -204,26 +207,26 @@ function TeamCard({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {proposalStatus === 'PENDING' && actionProposal && onReview && <button type="button" onClick={() => onReview(actionProposal)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">Review</button>}
-            {currentStudentIsMember && needsRevision && actionProposal && onRevise && <button type="button" onClick={() => onRevise(actionProposal)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">Revise</button>}
-            {currentStudentIsMember && actionProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(proposalStatus) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(actionProposal)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">Cancel</button>}
-            {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary-700" aria-label={`Edit ${team.teamName}`} title="Edit team"><Pencil className="h-4 w-4" /></button>}
-            {!team.isProposal && canDelete && onDelete && <button type="button" onClick={() => onDelete(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${team.teamName}`} title="Delete team"><Trash2 className="h-4 w-4" /></button>}
+            {proposalStatus === 'PENDING' && actionProposal && onReview && <button type="button" onClick={() => onReview(actionProposal)} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100">{t('teamList.review')}</button>}
+            {currentStudentIsMember && needsRevision && actionProposal && onRevise && <button type="button" onClick={() => onRevise(actionProposal)} className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100">{t('teamList.revise')}</button>}
+            {currentStudentIsMember && actionProposal && ['PENDING', 'NEEDSREVISION', 'NEEDS_REVISION', 'DRAFT'].includes(proposalStatus) && onCancelProposal && <button type="button" onClick={() => onCancelProposal(actionProposal)} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100">{t('common:actions.cancel')}</button>}
+            {!team.isProposal && canManageInfo && onEdit && <button type="button" onClick={() => onEdit(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-primary-50 hover:text-primary-700" aria-label={t('teamList.edit', { teamName: team.teamName })} title={t('teamList.editTeam')}><Pencil className="h-4 w-4" /></button>}
+            {!team.isProposal && canDelete && onDelete && <button type="button" onClick={() => onDelete(team)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label={t('teamList.delete', { teamName: team.teamName })} title={t('teamList.deleteTeam')}><Trash2 className="h-4 w-4" /></button>}
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-slate-50 p-3">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Users className="h-3.5 w-3.5" /> Members</p>
+            <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Users className="h-3.5 w-3.5" /> {t('teamList.members')}</p>
             <p className="mt-1 text-lg font-bold text-slate-900">{members.length}</p>
           </div>
           <div className={`rounded-xl p-3 ${project ? 'bg-secondary-50' : 'bg-slate-50'}`}>
-            <p className={`flex items-center gap-1.5 text-xs font-medium ${project ? 'text-secondary' : 'text-slate-500'}`}><Rocket className="h-3.5 w-3.5" /> Project</p>
-            <p className={`mt-1 truncate text-sm font-bold ${project ? 'text-secondary-dark' : 'text-slate-400'}`}>{project?.name || 'Not linked'}</p>
+            <p className={`flex items-center gap-1.5 text-xs font-medium ${project ? 'text-secondary' : 'text-slate-500'}`}><Rocket className="h-3.5 w-3.5" /> {t('groupProjectWarningBanner.project')}</p>
+            <p className={`mt-1 truncate text-sm font-bold ${project ? 'text-secondary-dark' : 'text-slate-400'}`}>{project?.name || t('teamList.notLinked')}</p>
           </div>
         </div>
 
-        <p className="mt-3 text-xs font-medium text-slate-500">Chat: {team.hasChatGroup ? 'Chat' : 'No Chat'}</p>
+        <p className="mt-3 text-xs font-medium text-slate-500">{t('teamList.chat', { status: team.hasChatGroup ? t('teamList.chatOn') : t('teamList.chatOff') })}</p>
 
         <button
           type="button"
@@ -238,7 +241,7 @@ function TeamCard({
             {members.length > 5 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-overline font-bold text-slate-600">+{members.length - 5}</span>}
           </div>
           <span className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 group-hover:bg-slate-100">
-            {expanded ? 'Hide details' : 'View details'}
+            {expanded ? t('teamList.hideDetails') : t('teamList.viewDetails')}
             {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </span>
         </button>
@@ -247,22 +250,22 @@ function TeamCard({
       {expanded && (
         <div className="border-t border-slate-100 bg-slate-50/50 p-4">
           {actionProposal?.rejectReason && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Lecturer review note:</strong> {actionProposal.rejectReason}</div>
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>{t('teamList.lecturerReviewNote')}</strong> {actionProposal.rejectReason}</div>
           )}
 
           <div className="space-y-4">
             <div>
-              <h4 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Users className="h-3.5 w-3.5" /> Members</h4>
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Users className="h-3.5 w-3.5" /> {t('teamList.members')}</h4>
               {members.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-white py-5 text-center text-sm text-slate-400">No members assigned</p>
+                <p className="rounded-xl border border-dashed border-slate-200 bg-white py-5 text-center text-sm text-slate-400">{t('teamList.noMembersAssigned')}</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {members.map((member) => (
                     <div key={member._id} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-2.5">
                       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${member._id === leaderId ? 'bg-amber-500' : 'bg-secondary'}`}>{member.fullName.charAt(0).toUpperCase()}</span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{member.fullName}</span><span className="block truncate text-xs text-slate-400">{member.rollNumber || member.email || 'Student'}</span></span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{member.fullName}</span><span className="block truncate text-xs text-slate-400">{member.rollNumber || member.email || t('importSemesterGroupsModal.student')}</span></span>
                       {member._id === leaderId && <Crown className="h-4 w-4 shrink-0 text-amber-500" />}
-                      {member._id === currentStudentId && <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-overline font-semibold text-primary-700">You</span>}
+                      {member._id === currentStudentId && <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-overline font-semibold text-primary-700">{t('teamFormationMemberList.you')}</span>}
                     </div>
                   ))}
                 </div>
@@ -273,13 +276,13 @@ function TeamCard({
 
             {team.description && (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Lightbulb className="h-3.5 w-3.5" /> Team description</h4>
+                <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500"><Lightbulb className="h-3.5 w-3.5" /> {t('teamList.teamDescription')}</h4>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{team.description}</p>
               </div>
             )}
 
-            {!team.isProposal && canOpenTeamWorkspace && onProjectDirection && <button type="button" onClick={() => onProjectDirection(team)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 bg-white px-4 py-2.5 text-sm font-semibold text-secondary hover:bg-secondary-50"><Lightbulb className="h-4 w-4" /> Project direction</button>}
-            {!team.isProposal && canOpenTeamWorkspace && <button type="button" onClick={() => navigate(`/workspace/teams/${team._id}`)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary-700">Open team workspace <ExternalLink className="h-4 w-4" /></button>}
+            {!team.isProposal && canOpenTeamWorkspace && onProjectDirection && <button type="button" onClick={() => onProjectDirection(team)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary-200 bg-white px-4 py-2.5 text-sm font-semibold text-secondary hover:bg-secondary-50"><Lightbulb className="h-4 w-4" /> {t('teamList.projectDirection')}</button>}
+            {!team.isProposal && canOpenTeamWorkspace && <button type="button" onClick={() => navigate(`/workspace/teams/${team._id}`)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary-700">{t('teamList.openTeamWorkspace')} <ExternalLink className="h-4 w-4" /></button>}
           </div>
         </div>
       )}
@@ -288,11 +291,12 @@ function TeamCard({
 }
 
 function ProjectDetail({ project }: { project: TeamProject | null }) {
+  const { t } = useTranslation('class');
   if (!project) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-center">
         <FolderKanban className="mx-auto h-5 w-5 text-slate-300" />
-        <p className="mt-2 text-sm font-medium text-slate-500">No project linked to this team</p>
+        <p className="mt-2 text-sm font-medium text-slate-500">{t('teamList.noProjectLinkedToThisTeam')}</p>
       </div>
     );
   }
@@ -303,15 +307,15 @@ function ProjectDetail({ project }: { project: TeamProject | null }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-secondary shadow-xs"><Rocket className="h-4 w-4" /></span>
-          <div className="min-w-0"><p className="text-overline font-bold uppercase tracking-wider text-secondary">Linked project</p><h4 className="truncate font-bold text-slate-900">{project.name}</h4></div>
+          <div className="min-w-0"><p className="text-overline font-bold uppercase tracking-wider text-secondary">{t('teamList.linkedProject')}</p><h4 className="truncate font-bold text-slate-900">{project.name}</h4></div>
         </div>
         <span className={`shrink-0 rounded-full px-2 py-1 text-overline font-bold uppercase ${projectStatusStyles[status] || projectStatusStyles.DRAFT}`}>{readableStatus(status)}</span>
       </div>
       {project.description && <p className="mt-2 text-sm leading-6 text-slate-600">{project.description}</p>}
       {(project.problem || project.solution) && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {project.problem && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-overline font-bold uppercase text-slate-400">Problem</p><p className="mt-1 text-xs text-slate-600">{project.problem}</p></div>}
-          {project.solution && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-overline font-bold uppercase text-slate-400">Solution</p><p className="mt-1 text-xs text-slate-600">{project.solution}</p></div>}
+          {project.problem && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-overline font-bold uppercase text-slate-400">{t('teamList.problem')}</p><p className="mt-1 text-xs text-slate-600">{project.problem}</p></div>}
+          {project.solution && <div className="rounded-lg bg-white/80 p-2.5"><p className="text-overline font-bold uppercase text-slate-400">{t('teamList.solution')}</p><p className="mt-1 text-xs text-slate-600">{project.solution}</p></div>}
         </div>
       )}
     </div>

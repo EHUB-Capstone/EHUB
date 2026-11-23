@@ -599,7 +599,7 @@
     "available": "khả dụng",
     "alreadyIn": "· {{length}} đã có trong {{semesterLabel}}",
     "clearSelection": "Bỏ chọn",
-    "selectAll": "Chọn tất cả{{v1}} ({{length}})",
+    "selectAll": "Chọn tất cả ({{length}})",
     "noMatchesTheCurrentSearch": "Không có {{roleNoun}} nào khớp với tìm kiếm hiện tại.",
     "noActiveAccountsExistYet": "Chưa có tài khoản {{roleNoun}} nào đang hoạt động.",
     "noMoreSMatchTheCurrent": "Không còn {{roleNoun}} nào khớp với tìm kiếm hiện tại.",
@@ -616,7 +616,8 @@
     "addCount_other": "Thêm {{count}} {{roleNoun}}",
     "addRoleToSemester": "Thêm {{roleNoun}} vào {{semesterLabel}}",
     "searchMentorsPlaceholder": "Tìm Mentor theo tên, email, hợp đồng hoặc thẻ...",
-    "searchLecturersPlaceholder": "Tìm giảng viên theo tên, email..."
+    "searchLecturersPlaceholder": "Tìm giảng viên theo tên, email...",
+    "selectAllShown": "Chọn tất cả kết quả đang hiển thị ({{length}})"
   },
   "aiSummaryDiagnosticsCard": {
     "onlyAdministratorsCanSeeThis": "Chỉ quản trị viên mới xem được nội dung này.",

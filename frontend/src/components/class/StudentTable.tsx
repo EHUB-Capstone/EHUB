@@ -6,6 +6,7 @@ import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { isMissingTeamMajor, orderStudentsByTeamBlock } from '../../utils/teamManagement';
 import { shortenSemesterCode } from '../../utils/semester';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Get display label for a major code.
@@ -41,6 +42,7 @@ const majorColor = (major) => {
 };
 
 function ServerRosterSearchInput({ initialValue, onSearch }) {
+  const { t: tr } = useTranslation('class');
   const onSearchRef = useRef(onSearch);
   const debounceRef = useRef<number | undefined>(undefined);
 
@@ -58,9 +60,9 @@ function ServerRosterSearchInput({ initialValue, onSearch }) {
   return (
     <input
       type="search"
-      aria-label="Search students"
+      aria-label={tr('studentTable.searchStudents')}
       autoComplete="off"
-      placeholder="Search name, roll, email…"
+      placeholder={tr('studentTable.searchNameRollEmail')}
       defaultValue={initialValue || ''}
       onChange={(event) => handleChange(event.target.value)}
       className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
@@ -91,6 +93,7 @@ export default function StudentTable({
   priorityTeamId = undefined,
   descriptionFromWidth = '5xl',
 }) {
+  const { t: tr } = useTranslation('class');
   // Tailwind needs complete class names, so the two supported breakpoints are spelled out.
   const descriptionVisibility = descriptionFromWidth === '4xl' ? '@4xl:table-cell' : '@5xl:table-cell';
   const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []), [rawStudents]);
@@ -146,7 +149,7 @@ export default function StudentTable({
     onSelectionChange(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id);
       if (prev.length >= maxSelection) {
-        toast.error(`You can only select up to ${maxSelection} students.`);
+        toast.error(tr('studentTable.youCanOnlySelectUpTo', { maxSelection }));
         return prev;
       }
       return [...prev, id];
@@ -166,11 +169,11 @@ export default function StudentTable({
         const newIds = unassigned.filter(id => !prev.includes(id));
         const allowedToAdd = maxSelection - prev.length;
         if (allowedToAdd <= 0) {
-          toast.error(`Maximum of ${maxSelection} students reached.`);
+          toast.error(tr('studentTable.maximumOfStudentsReached', { maxSelection }));
           return prev;
         }
         if (newIds.length > allowedToAdd) {
-          toast.error(`You can only add ${allowedToAdd} more students to reach the maximum of 6.`);
+          toast.error(tr('studentTable.youCanOnlyAddMoreStudents', { allowedToAdd }));
           return [...prev, ...newIds.slice(0, allowedToAdd)];
         }
         return [...prev, ...newIds];
@@ -210,9 +213,9 @@ export default function StudentTable({
           ) : (
             <input
               type="search"
-              aria-label="Search students"
+              aria-label={tr('studentTable.searchStudents')}
               autoComplete="off"
-              placeholder="Search name, roll, email…"
+              placeholder={tr('studentTable.searchNameRollEmail')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="min-h-8 w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
@@ -226,7 +229,7 @@ export default function StudentTable({
             : setLocalFilterMajor(e.target.value)}
           className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
         >
-          <option value="">All majors</option>
+          <option value="">{tr('studentTable.allMajors')}</option>
           {TEAM_MAJOR_GROUPS.map(group => {
             const presentInGroup = serverQuery ? group.majors : group.majors.filter(m => majors.includes(m.code));
             if (presentInGroup.length === 0) return null;
@@ -243,7 +246,7 @@ export default function StudentTable({
             const others = majors.filter(m => !teamMajorCodes.includes(m));
             if (others.length === 0) return null;
             return (
-              <optgroup label="Other">
+              <optgroup label={tr('studentTable.other')}>
                 {others.map(m => (
                   <option key={m} value={m}>{m}{getMajorName(m) ? ` — ${getMajorName(m)}` : ''}</option>
                 ))}
@@ -257,15 +260,15 @@ export default function StudentTable({
             onChange={(e) => onServerQueryChange?.({ status: e.target.value })}
             className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 sm:text-sm"
           >
-            <option value="">All enrollment statuses</option>
-            <option value="Active">Active</option>
-            <option value="Dropped">Dropped</option>
-            <option value="Completed">Completed</option>
+            <option value="">{tr('studentTable.allEnrollmentStatuses')}</option>
+            <option value="Active">{tr('studentTable.active')}</option>
+            <option value="Dropped">{tr('studentTable.dropped')}</option>
+            <option value="Completed">{tr('studentTable.completed')}</option>
           </select>
         )}
         {selected.length > 0 && (
           <span className="inline-flex min-h-8 items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">
-            {selected.length} selected
+            {tr('studentAssignmentModal.selected2', { length: selected.length })}
           </span>
         )}
         {majorMismatchCount > 0 && onSynchronizeMajors && (
@@ -274,10 +277,10 @@ export default function StudentTable({
             onClick={onSynchronizeMajors}
             disabled={synchronizingMajors}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
-            title="Use the official major imported for this class to correct registered profiles"
+            title={tr('studentTable.useTheOfficialMajorImportedFor')}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${synchronizingMajors ? 'animate-spin' : ''}`} />
-            Synchronize majors ({majorMismatchCount})
+            {tr('studentTable.synchronizeMajors')}{majorMismatchCount})
           </button>
         )}
         {toolbarAction}
@@ -285,7 +288,7 @@ export default function StudentTable({
 
       {filtered.length === 0 ? (
         <div className="p-7" aria-busy={refreshing || undefined}>
-          <EmptyState icon={Users} title="No students found" description="Try adjusting your search or filters" />
+          <EmptyState icon={Users} title={tr('studentTable.noStudentsFound')} description={tr('studentTable.tryAdjustingYourSearchOrFilters')} />
         </div>
       ) : (
         <div
@@ -305,18 +308,18 @@ export default function StudentTable({
                     />
                   </th>
                 )}
-                <th className="min-w-[220px] px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">Student</th>
-                <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 sm:table-cell">Roll No.</th>
-                <th className="px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">Major</th>
+                <th className="min-w-[220px] px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">{tr('importSemesterGroupsModal.student')}</th>
+                <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 sm:table-cell">{tr('studentTable.rollNo')}</th>
+                <th className="px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600">{tr('addStudentModal.major')}</th>
                 <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 lg:table-cell">{groupColumnLabel}</th>
                 {!hideProjectName && (
-                  <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 @4xl:table-cell">Project Name</th>
+                  <th className="hidden px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 @4xl:table-cell">{tr('projectDirectionModal.projectName')}</th>
                 )}
-                <th className={`hidden w-1/4 px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 ${descriptionVisibility}`}>Description</th>
-                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Team Status</th>
-                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Enrollment</th>
+                <th className={`hidden w-1/4 px-3 py-2.5 text-left text-overline font-bold uppercase tracking-wider text-slate-600 ${descriptionVisibility}`}>{tr('classDirectionOverview.description')}</th>
+                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">{tr('studentTable.teamStatus')}</th>
+                <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">{tr('studentTable.enrollment')}</th>
                 {(onDeleteStudent || onReEnrollStudent) && (
-                  <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">Action</th>
+                  <th className="px-3 py-2.5 text-center text-overline font-bold uppercase tracking-wider text-slate-600">{tr('lecturerCheckpointManagement.action')}</th>
                 )}
               </tr>
             </thead>
@@ -356,9 +359,9 @@ export default function StudentTable({
                         </div>
                         <div className="flex min-w-0 flex-col">
                           <span className="flex flex-wrap items-center gap-1 whitespace-normal break-words text-sm font-medium leading-snug text-slate-800">
-                            {s.fullName || 'Unknown'}
+                            {s.fullName || tr('studentTable.unknown')}
                             {team && team.leaderId && (typeof team.leaderId === 'string' ? team.leaderId : team.leaderId._id).toString() === s._id.toString() && (
-                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-overline rounded font-bold ml-1">L</span>
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-overline rounded font-bold ml-1">{tr('studentTable.l')}</span>
                             )}
                           </span>
                         </div>
@@ -371,7 +374,7 @@ export default function StudentTable({
                       {canEditOwnMajor ? (
                         <div className="flex min-w-[190px] flex-col items-start gap-1">
                           <select
-                            aria-label="Select your major"
+                            aria-label={tr('studentTable.selectYourMajor')}
                             value={s.profileMajorCode || ''}
                             disabled={updatingMajor}
                             onClick={(event) => event.stopPropagation()}
@@ -381,7 +384,7 @@ export default function StudentTable({
                             }}
                             className="min-h-8 w-full rounded-lg border border-primary-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-wait disabled:opacity-60"
                           >
-                            <option value="">Select your major</option>
+                            <option value="">{tr('studentTable.selectYourMajor')}</option>
                             {TEAM_MAJOR_GROUPS.map(group => (
                               <optgroup key={group.key} label={group.label}>
                                 {group.majors.map(major => (
@@ -390,7 +393,7 @@ export default function StudentTable({
                               </optgroup>
                             ))}
                           </select>
-                          <span className="text-overline text-slate-400">Your profile and active classes update together</span>
+                          <span className="text-overline text-slate-400">{tr('studentTable.yourProfileAndActiveClassesUpdate')}</span>
                         </div>
                       ) : mLabel ? (
                         <div className="flex flex-col items-start gap-1">
@@ -399,28 +402,28 @@ export default function StudentTable({
                           </span>
                           {s.majorVerificationStatus && (
                             <span className="text-overline font-medium text-slate-400">
-                              {s.majorVerificationStatus === 'Matched' ? 'Verified' : s.majorVerificationStatus}
+                              {s.majorVerificationStatus === 'Matched' ? tr('studentMajorActionCard.verified') : s.majorVerificationStatus}
                             </span>
                           )}
                           {s.hasMajorMismatch && (
                             <span
                               className="flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-overline font-semibold text-orange-700"
-                              title={`Registered major: ${s.profileMajorCode}. Official imported major: ${s.major}.`}
+                              title={tr('studentTable.registeredMajorOfficialImportedMajor', { profileMajorCode: s.profileMajorCode, major: s.major })}
                             >
-                              <AlertTriangle className="h-2.5 w-2.5" /> Registered as {s.profileMajorCode}
+                              <AlertTriangle className="h-2.5 w-2.5" /> {tr('studentTable.registeredAs')} {s.profileMajorCode}
                             </span>
                           )}
                           {isOwnRow && s.isMajorLocked && (
-                            <span className="text-overline font-semibold text-red-600">Locked by an active class</span>
+                            <span className="text-overline font-semibold text-red-600">{tr('studentTable.lockedByAnActiveClass')}</span>
                           )}
                         </div>
                       ) : (
                         <div className="flex flex-col items-start gap-1">
-                          <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700" title="Missing major">
-                            <AlertTriangle className="h-2.5 w-2.5" /> Missing
+                          <span className="flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700" title={tr('reviewTeamProposalModal.missingMajor')}>
+                            <AlertTriangle className="h-2.5 w-2.5" /> {tr('studentTable.missing')}
                           </span>
                           {isOwnRow && s.isMajorLocked && (
-                            <span className="text-overline font-semibold text-red-600">Locked by an active class</span>
+                            <span className="text-overline font-semibold text-red-600">{tr('studentTable.lockedByAnActiveClass')}</span>
                           )}
                         </div>
                       )}
@@ -446,13 +449,13 @@ export default function StudentTable({
                       {(!s.teamId || isFirstInTeam) ? (
                         team ? (
                           team.status === 'PENDING' ? (
-                            <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-caption font-semibold text-orange-700">Pending</span>
+                            <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-caption font-semibold text-orange-700">{tr('studentTable.pending')}</span>
                           ) : team.status === 'NEEDS_REVISION' ? (
-                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700">Needs revision</span>
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-caption font-semibold text-amber-700">{tr('reviewTeamProposalModal.needsRevision')}</span>
                           ) : team.status === 'REJECTED' ? (
-                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-caption font-semibold text-red-700">Rejected</span>
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-caption font-semibold text-red-700">{tr('studentTable.rejected')}</span>
                           ) : (
-                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-caption font-semibold text-green-700">Approved</span>
+                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-caption font-semibold text-green-700">{tr('studentTable.approved')}</span>
                           )
                         ) : s.hasPendingTeamInvitation ? (
                           <span
@@ -461,15 +464,15 @@ export default function StudentTable({
                           >
                             <span>
                               {s.isPendingTeamFormationMember
-                                ? pendingInvitationAccepted ? 'Accepted invitation' : 'Awaiting response'
-                                : 'Pending another invitation'}
+                                ? pendingInvitationAccepted ? tr('studentTable.acceptedInvitation') : tr('studentTable.awaitingResponse')
+                                : tr('studentTable.pendingAnotherInvitation')}
                             </span>
                             {s.isPendingTeamFormationMember && (
                               <span className="mt-0.5 font-bold">{pendingTeamName}</span>
                             )}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">Unassigned</span>
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">{tr('bulkCreateModal.unassigned')}</span>
                         )
                       ) : ''}
                     </td>
@@ -482,7 +485,7 @@ export default function StudentTable({
                             ? 'bg-red-100 text-red-700'
                             : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {s.enrollmentStatus || 'Active'}
+                        {s.enrollmentStatus || tr('studentTable.active')}
                       </span>
                     </td>
                     
@@ -492,8 +495,8 @@ export default function StudentTable({
                           <button
                             onClick={(e) => { e.stopPropagation(); onDeleteStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                            title="Drop enrollment"
-                            aria-label={`Drop enrollment for ${s.fullName || 'student'}`}
+                            title={tr('studentTable.dropEnrollment')}
+                            aria-label={tr('studentTable.dropEnrollmentFor', { v1: s.fullName || 'student' })}
                           >
                             <UserMinus className="h-3.5 w-3.5" />
                           </button>
@@ -501,8 +504,8 @@ export default function StudentTable({
                           <button
                             onClick={(e) => { e.stopPropagation(); onReEnrollStudent(s); }}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-green-50 hover:text-green-700"
-                            title="Re-enroll student"
-                            aria-label={`Re-enroll ${s.fullName || 'student'}`}
+                            title={tr('studentTable.reEnrollStudent')}
+                            aria-label={tr('studentTable.reEnroll', { v1: s.fullName || 'student' })}
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>
@@ -519,16 +522,16 @@ export default function StudentTable({
 
       <div className="flex flex-col gap-2 border-t border-slate-100 px-3 py-2.5 text-caption text-slate-400 sm:flex-row sm:items-center sm:justify-between">
         <span>
-          Showing {filtered.length} of {serverQuery?.totalCount ?? students.length} students · {students.filter(s => s.teamId).length} assigned on this page
+          {tr('studentTable.showingOfStudentsAssignedOnThis', { length: filtered.length, v2: serverQuery?.totalCount ?? students.length, length3: students.filter(s => s.teamId).length })}
         </span>
         {serverQuery && serverQuery.totalPages > 1 && (
           <div className="flex items-center gap-2">
             <button type="button" disabled={serverQuery.page <= 1} onClick={() => onServerQueryChange?.({ page: serverQuery.page - 1 })} className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              <ChevronLeft className="h-3.5 w-3.5" /> {tr('common:actions.previous')}
             </button>
-            <span>Page {serverQuery.page} of {serverQuery.totalPages}</span>
+            <span>{tr('studentTable.pageOf', { page: serverQuery.page, totalPages: serverQuery.totalPages })}</span>
             <button type="button" disabled={serverQuery.page >= serverQuery.totalPages} onClick={() => onServerQueryChange?.({ page: serverQuery.page + 1 })} className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-              Next <ChevronRight className="h-3.5 w-3.5" />
+              {tr('common:actions.next')} <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         )}

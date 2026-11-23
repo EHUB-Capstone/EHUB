@@ -8,6 +8,8 @@ import { currentInvitations } from '../../utils/teamFormation';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import InvitationCountdown from './InvitationCountdown';
 import TeamFormationFinalizePanel from './TeamFormationFinalizePanel';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface Props {
   formation: TeamFormation;
@@ -19,14 +21,15 @@ interface Props {
 type Action = 'accept' | 'decline' | 'leave' | 'cancel';
 
 const SUCCESS_MESSAGES: Record<Action, string> = {
-  accept: 'Invitation accepted.',
-  decline: 'Invitation declined.',
-  leave: 'You left the team formation.',
-  cancel: 'Team formation cancelled.',
+  get accept() { return i18n.t('class:teamFormationControls.accept'); },
+  get decline() { return i18n.t('class:teamFormationControls.decline'); },
+  get leave() { return i18n.t('class:teamFormationControls.leave'); },
+  get cancel() { return i18n.t('class:teamFormationControls.cancel'); },
 };
 
 /** Actions available to the signed-in student on a pending formation, by role in it. */
 export default function TeamFormationControls({ formation, onChanged, acceptDisabledReason }: Props) {
+  const { t } = useTranslation('class');
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState<'decline' | 'leave' | 'cancel' | null>(null);
   const own = currentInvitations(formation).find(item => item.studentId === formation.myStudentId);
@@ -51,22 +54,22 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
   const buttonBase = 'rounded-lg px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50';
   const dialog = {
     decline: {
-      title: 'Decline team invitation?',
-      description: 'You will not join this team. The other members can still continue without you.',
-      confirmText: 'Decline invitation',
-      cancelText: 'Keep invitation',
+      title: t('teamFormationControls.declineTeamInvitation'),
+      description: t('teamFormationControls.youWillNotJoinThisTeam'),
+      confirmText: t('teamFormationControls.declineInvitation'),
+      cancelText: t('teamFormationControls.keepInvitation'),
     },
     leave: {
-      title: 'Leave this team formation?',
-      description: 'Your place will be released and the creator can invite someone else. You can be invited again later.',
-      confirmText: 'Leave formation',
-      cancelText: 'Stay',
+      title: t('teamFormationControls.leaveThisTeamFormation'),
+      description: t('teamFormationControls.yourPlaceWillBeReleasedAnd'),
+      confirmText: t('teamFormationControls.leaveFormation'),
+      cancelText: t('teamFormationControls.stay'),
     },
     cancel: {
-      title: 'Cancel team formation?',
-      description: 'Cancel this formation and release every invitation? All invited students will be notified.',
-      confirmText: 'Cancel formation',
-      cancelText: 'Keep formation',
+      title: t('teamFormationControls.cancelTeamFormation'),
+      description: t('teamFormationControls.cancelThisFormationAndReleaseEvery'),
+      confirmText: t('teamFormationControls.cancelFormation'),
+      cancelText: t('teamFormationControls.keepFormation'),
     },
   } as const;
 
@@ -75,7 +78,7 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
       {own.status === 'Pending' && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <span>{own.isProposedLeader ? 'You are invited as Team Leader. Time left to respond:' : 'Time left to respond:'}</span>
+            <span>{own.isProposedLeader ? t('teamFormationControls.youAreInvitedAsTeamLeader') : t('teamFormationControls.timeLeftToRespond')}</span>
             <InvitationCountdown
               expiresAtUtc={own.expiresAtUtc}
               serverTimeUtc={formation.serverTimeUtc}
@@ -91,11 +94,11 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={working || Boolean(acceptDisabledReason)} onClick={() => void act('accept')}
               className={`${buttonBase} bg-green-600 text-white hover:bg-green-700`}>
-              {working ? 'Updating…' : 'Accept invitation'}
+              {working ? t('teamFormationControls.updating') : t('teamFormationControls.acceptInvitation')}
             </button>
             <button type="button" disabled={working} onClick={() => setConfirming('decline')}
               className={`${buttonBase} border border-red-200 text-red-700 hover:bg-red-50`}>
-              Decline
+              {t('teamFormationControls.decline')}
             </button>
           </div>
         </div>
@@ -103,10 +106,10 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
 
       {own.status === 'Accepted' && !isCreator && (
         <div className="flex flex-wrap items-center gap-3">
-          <p className="text-sm font-medium text-green-700">You accepted. Waiting for the creator to finalize the team.</p>
+          <p className="text-sm font-medium text-green-700">{t('teamFormationControls.youAcceptedWaitingForTheCreator')}</p>
           <button type="button" disabled={working} onClick={() => setConfirming('leave')}
             className={`${buttonBase} border border-slate-300 text-slate-700 hover:bg-slate-50`}>
-            Leave formation
+            {t('teamFormationControls.leaveFormation')}
           </button>
         </div>
       )}
@@ -116,7 +119,7 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
       {isCreator && (
         <button type="button" disabled={working} onClick={() => setConfirming('cancel')}
           className={`${buttonBase} border border-slate-300 text-slate-700 hover:bg-slate-50`}>
-          Cancel formation
+          {t('teamFormationControls.cancelFormation')}
         </button>
       )}
 

@@ -605,7 +605,7 @@
     "available": "available",
     "alreadyIn": "· {{length}} already in {{semesterLabel}}",
     "clearSelection": "Clear selection",
-    "selectAll": "Select all{{v1}} ({{length}})",
+    "selectAll": "Select all ({{length}})",
     "noMatchesTheCurrentSearch": "No {{roleNoun}} match the current search.",
     "noActiveAccountsExistYet": "No active {{roleNoun}} accounts exist yet.",
     "noMoreSMatchTheCurrent": "No more {{roleNoun}} match the current search.",
@@ -623,7 +623,8 @@
     "addCount_other": "Add {{count}} {{roleNoun}}",
     "addRoleToSemester": "Add {{roleNoun}} to {{semesterLabel}}",
     "searchMentorsPlaceholder": "Search mentors by name, email, contract or tag...",
-    "searchLecturersPlaceholder": "Search lecturers by name, email..."
+    "searchLecturersPlaceholder": "Search lecturers by name, email...",
+    "selectAllShown": "Select all shown ({{length}})"
   },
   "aiSummaryDiagnosticsCard": {
     "onlyAdministratorsCanSeeThis": "Only administrators can see this.",

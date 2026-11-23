@@ -11,12 +11,14 @@ import {
   getProjectDirectionSubmitGuidance,
   hasUnsavedProjectDirectionChanges,
 } from '../../utils/projectDirectionSync';
+import { useTranslation } from 'react-i18next';
 
 const formatStatus = (status) => String(status || 'Not created')
   .replace(/^NEEDSREVISION$/i, 'Needs revision')
   .replace(/([a-z])([A-Z])/g, '$1 $2');
 
 export default function ProjectDirectionModal({ team, role, currentStudentId = '', onClose }) {
+  const { t } = useTranslation('class');
   const [direction, setDirection] = useState(null);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -63,7 +65,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       });
       const value = unwrapApiData(response);
       setDirection(value);
-      toast.success('Project direction saved as draft.');
+      toast.success(t('projectDirectionModal.projectDirectionSavedAsDraft'));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to save project direction.').message);
     } finally {
@@ -77,7 +79,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
     try {
       const response = await teamApi.submitProjectDirection(team._id, direction.rowVersion);
       setDirection(unwrapApiData(response));
-      toast.success('Project direction submitted to the assigned lecturer.');
+      toast.success(t('projectDirectionModal.projectDirectionSubmittedToTheAssigned'));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to submit project direction.').message);
     } finally {
@@ -87,7 +89,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
 
   const review = async () => {
     if (comment.trim().length > 0 && (comment.trim().length < 3 || comment.trim().length > 1000)) {
-      toast.error('Review comment must be between 3 and 1000 characters.');
+      toast.error(t('projectDirectionModal.reviewCommentMustBeBetween3'));
       return;
     }
     setSubmitting(true);
@@ -99,7 +101,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       });
       setDirection(unwrapApiData(response));
       setComment('');
-      toast.success(decision === 'Approved' ? 'Project direction approved.' : 'Changes requested.');
+      toast.success(decision === 'Approved' ? t('projectDirectionModal.projectDirectionApproved') : t('projectDirectionModal.changesRequested'));
     } catch (error) {
       toast.error(parseApiError(error, 'Failed to review project direction.').message);
     } finally {
@@ -111,38 +113,38 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
     <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
         <header className="flex items-start justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
-          <div><h3 className="font-bold text-slate-900">Project direction · {team.teamName}</h3><p className="mt-0.5 text-xs text-slate-500">Project information submitted from the team workspace.</p></div>
+          <div><h3 className="font-bold text-slate-900">{t('projectDirectionModal.projectDirection', { teamName: team.teamName })}</h3><p className="mt-0.5 text-xs text-slate-500">{t('projectDirectionModal.projectInformationSubmittedFromTheTeam')}</p></div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-200"><X className="h-4 w-4" /></button>
         </header>
 
         {loading ? <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : (
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
-            <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase text-slate-500">Current status</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{formatStatus(direction?.status)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase text-slate-500">{t('projectDirectionModal.currentStatus')}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{formatStatus(direction?.status)}</span></div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Project Name</label>
+              <label className="text-xs font-semibold text-slate-600">{t('projectDirectionModal.projectName')}</label>
               <input value={title} onChange={event => setTitle(event.target.value)} disabled={!canEdit} maxLength={PROJECT_NAME_MAX_LENGTH} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary disabled:bg-slate-50" />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">Project description</label>
+              <label className="text-xs font-semibold text-slate-600">{t('projectDirectionModal.projectDescription')}</label>
               <textarea value={summary} onChange={event => setSummary(event.target.value)} disabled={!canEdit} maxLength={PROJECT_DESCRIPTION_MAX_LENGTH} rows={7} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-primary disabled:bg-slate-50" />
-              <p className="mt-1 text-right text-caption text-slate-400">{summary.length}/{PROJECT_DESCRIPTION_MAX_LENGTH} · minimum 20</p>
+              <p className="mt-1 text-right text-caption text-slate-400">{t('projectDirectionModal.minimum20', { length: summary.length, PROJECT_DESCRIPTION_MAX_LENGTH })}</p>
             </div>
 
-            {direction?.startupIndustries?.length > 0 && <div><p className="mb-2 text-xs font-semibold text-slate-600">Startup Industry</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}
+            {direction?.startupIndustries?.length > 0 && <div><p className="mb-2 text-xs font-semibold text-slate-600">{t('classDirectionOverview.startupIndustry')}</p><div className="flex flex-wrap gap-2">{direction.startupIndustries.map(industry => <span key={industry} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">{industry}</span>)}</div></div>}
 
-            {canEdit && <><div className="flex justify-end gap-2"><button type="button" onClick={save} disabled={submitting || !valid || !hasUnsavedChanges} className="rounded-xl border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">Save draft</button>{direction && <button type="button" onClick={submit} disabled={submitting || !canSubmitDirection} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"><Send className="h-4 w-4" /> Submit</button>}</div>{submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}</>}
+            {canEdit && <><div className="flex justify-end gap-2"><button type="button" onClick={save} disabled={submitting || !valid || !hasUnsavedChanges} className="rounded-xl border border-primary-200 px-4 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">{t('projectDirectionModal.saveDraft')}</button>{direction && <button type="button" onClick={submit} disabled={submitting || !canSubmitDirection} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-100"><Send className="h-4 w-4" /> {t('common:actions.submit')}</button>}</div>{submitGuidance && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{submitGuidance}</p>}</>}
 
             {canReview && <section className="rounded-xl border border-secondary-100 bg-secondary-50 p-4">
-              <h4 className="text-sm font-bold text-slate-800">Lecturer review</h4>
+              <h4 className="text-sm font-bold text-slate-800">{t('projectDirectionModal.lecturerReview')}</h4>
               <div className="mt-3 flex gap-2">
-                <button type="button" onClick={() => setDecision('Approved')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'Approved' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-600'}`}><CheckCircle2 className="h-4 w-4" /> Approve</button>
-                <button type="button" onClick={() => setDecision('NeedsRevision')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'NeedsRevision' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600'}`}><FilePenLine className="h-4 w-4" /> Request changes</button>
+                <button type="button" onClick={() => setDecision('Approved')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'Approved' ? 'border-green-400 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-600'}`}><CheckCircle2 className="h-4 w-4" /> {t('classDirectionOverview.approve')}</button>
+                <button type="button" onClick={() => setDecision('NeedsRevision')} className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${decision === 'NeedsRevision' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600'}`}><FilePenLine className="h-4 w-4" /> {t('classDirectionOverview.requestChanges')}</button>
               </div>
-              <textarea value={comment} onChange={event => setComment(event.target.value)} maxLength={1000} rows={3} placeholder="Optional: 3–1000 characters" className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary" />
-              <div className="mt-2 flex justify-end"><button type="button" onClick={review} disabled={submitting || (comment.trim().length > 0 && comment.trim().length < 3)} className="rounded-xl bg-secondary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Submit review</button></div>
+              <textarea value={comment} onChange={event => setComment(event.target.value)} maxLength={1000} rows={3} placeholder={t('projectDirectionModal.optional31000Characters')} className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary" />
+              <div className="mt-2 flex justify-end"><button type="button" onClick={review} disabled={submitting || (comment.trim().length > 0 && comment.trim().length < 3)} className="rounded-xl bg-secondary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{t('projectDirectionModal.submitReview')}</button></div>
             </section>}
 
-            {direction?.reviews?.length > 0 && <section><h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Review history</h4><div className="space-y-2">{direction.reviews.map(review => <div key={review.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex justify-between gap-3 text-xs font-semibold text-slate-700"><span>{formatStatus(review.fromStatus)} → {formatStatus(review.toStatus)}</span><span className="text-slate-400">{new Date(review.occurredAtUtc).toLocaleString()}</span></div><p className="mt-1 text-sm text-slate-600">{review.comment}</p></div>)}</div></section>}
+            {direction?.reviews?.length > 0 && <section><h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{t('projectDirectionModal.reviewHistory')}</h4><div className="space-y-2">{direction.reviews.map(review => <div key={review.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex justify-between gap-3 text-xs font-semibold text-slate-700"><span>{formatStatus(review.fromStatus)} → {formatStatus(review.toStatus)}</span><span className="text-slate-400">{new Date(review.occurredAtUtc).toLocaleString()}</span></div><p className="mt-1 text-sm text-slate-600">{review.comment}</p></div>)}</div></section>}
           </div>
         )}
       </div>

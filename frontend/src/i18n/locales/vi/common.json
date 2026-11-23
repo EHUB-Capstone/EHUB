@@ -79,5 +79,15 @@
     "LECTURER": "Giảng viên",
     "MENTOR": "Mentor",
     "STUDENT": "Sinh viên"
+  },
+  "mentorKind": {
+    "Enterprise": {
+      "label": "Mentor doanh nghiệp",
+      "hint": "Mentor đến từ doanh nghiệp"
+    },
+    "Academic": {
+      "label": "Mentor là giảng viên",
+      "hint": "Mentor thuộc khoa/giảng viên"
+    }
   }
 }

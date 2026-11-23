@@ -6,6 +6,7 @@ import type { TeamFormation, TeamFormationInvitation, TeamInvitationStatus } fro
 import { parseApiError } from '../../utils/apiError';
 import { canReinvite, currentInvitations, historyInvitations, remainingInviteSlots } from '../../utils/teamFormation';
 import InvitationCountdown from './InvitationCountdown';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   formation: TeamFormation;
@@ -23,6 +24,7 @@ const STATUS_CLASSES: Record<TeamInvitationStatus, string> = {
 const formatDateTime = (value: string | null) => (value ? new Date(value).toLocaleString() : '');
 
 export default function TeamFormationMemberList({ formation, onChanged }: Props) {
+  const { t } = useTranslation('class');
   const [reinvitingId, setReinvitingId] = useState<string | null>(null);
   const isCreator = formation.creatorStudentId === formation.myStudentId;
   const isPending = formation.status === 'Pending';
@@ -34,7 +36,7 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
     setReinvitingId(member.studentId);
     try {
       await teamFormationApi.invite(formation.id, [member.studentId]);
-      toast.success(`Invitation sent to ${member.fullName}.`);
+      toast.success(t('teamFormationMemberList.invitationSentTo', { fullName: member.fullName }));
       await onChanged();
     } catch (error) {
       toast.error(parseApiError(error, 'Could not send the invitation. Please refresh and try again.').message);
@@ -44,7 +46,7 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
   };
 
   return (
-    <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100" aria-label="Team formation members">
+    <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100" aria-label={t('teamFormationMemberList.teamFormationMembers')}>
       {members.map(member => {
         const history = historyInvitations(formation, member.studentId);
         const showCountdown = isPending && member.status === 'Pending';
@@ -55,12 +57,12 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="font-medium text-slate-800">{member.fullName}</span>
                   {member.studentId === formation.myStudentId && (
-                    <span className="rounded-md bg-primary-100 px-1.5 py-0.5 text-overline font-bold uppercase text-primary-700">You</span>
+                    <span className="rounded-md bg-primary-100 px-1.5 py-0.5 text-overline font-bold uppercase text-primary-700">{t('teamFormationMemberList.you')}</span>
                   )}
-                  {member.isCreator && <span className="text-xs text-slate-500">· Creator</span>}
+                  {member.isCreator && <span className="text-xs text-slate-500">{t('teamFormationMemberList.creator')}</span>}
                   {member.isProposedLeader && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-overline font-bold uppercase text-amber-700">
-                      <Crown className="h-3 w-3" aria-hidden="true" /> {isPending ? 'Invited as Team Leader' : 'Team Leader'}
+                      <Crown className="h-3 w-3" aria-hidden="true" /> {isPending ? t('teamFormationMemberList.invitedAsTeamLeader') : t('studentTeamGeneratePanel.teamLeader')}
                     </span>
                   )}
                 </div>
@@ -75,18 +77,18 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
                   />
                 )}
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASSES[member.status]}`}>
-                  {!isPending && member.status === 'Pending' ? 'Closed' : member.status}
+                  {!isPending && member.status === 'Pending' ? t('teamFormationMemberList.closed') : member.status}
                 </span>
                 {isCreator && isPending && canReinvite(member.status) && (
                   <button
                     type="button"
                     disabled={Boolean(reinvitingId) || slotsLeft === 0}
                     onClick={() => void reinvite(member)}
-                    title={slotsLeft === 0 ? 'The team already has 6 members or pending invitations.' : undefined}
+                    title={slotsLeft === 0 ? t('teamFormationMemberList.theTeamAlreadyHas6Members') : undefined}
                     className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                    {reinvitingId === member.studentId ? 'Sending…' : 'Re-invite'}
+                    {reinvitingId === member.studentId ? t('teamFormationMemberList.sending') : t('teamFormationMemberList.reInvite')}
                   </button>
                 )}
               </div>
@@ -94,13 +96,12 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
             {history.length > 0 && (
               <details className="text-xs text-slate-500">
                 <summary className="inline-flex cursor-pointer items-center gap-1 select-none">
-                  <History className="h-3 w-3" aria-hidden="true" /> Invitation history ({history.length})
+                  <History className="h-3 w-3" aria-hidden="true" /> {t('teamFormationMemberList.invitationHistory')}{history.length})
                 </summary>
                 <ul className="mt-1 space-y-0.5 pl-4">
                   {history.map(record => (
                     <li key={record.id}>
-                      {record.status} · invited {formatDateTime(record.createdAtUtc)}
-                      {record.respondedAtUtc ? ` · responded ${formatDateTime(record.respondedAtUtc)}` : ''}
+                      {t('teamFormationMemberList.invited', { status: record.status, v2: formatDateTime(record.createdAtUtc), v3: record.respondedAtUtc ? ` · ${t('teamFormationMemberList.respondedAt', { date: formatDateTime(record.respondedAtUtc) })}` : '' })}
                     </li>
                   ))}
                 </ul>

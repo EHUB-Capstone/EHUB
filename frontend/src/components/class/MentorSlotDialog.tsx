@@ -17,6 +17,7 @@ import MentorTagFilter from '../admin/MentorTagFilter';
 import TemporaryMentorBadge from '../admin/TemporaryMentorBadge';
 import MentorKindTag from '../admin/MentorKindTag';
 import { MENTOR_KIND_STYLES } from '../../utils/mentorKindStyles';
+import { useTranslation } from 'react-i18next';
 
 interface MentorSlotDialogProps {
   team: ManagedTeam;
@@ -31,6 +32,7 @@ interface MentorSlotDialogProps {
 
 /** Picks the mentor for one slot of one team: assigns it when empty, replaces the current mentor in one save otherwise. */
 export default function MentorSlotDialog({ team, slot, current, mentors, onClose, onSaved }: MentorSlotDialogProps) {
+  const { t } = useTranslation('class');
   const ref = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -77,7 +79,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
       const temporary = Boolean(mentors.find(option => option._id === selectedId)?.isTemporary);
       if (current) await teamApi.replaceMentor(team._id, current.assignmentId, selectedId, buildChangeReason(reasonCode, reasonNote), null, temporary);
       else await teamApi.assignMentor(team._id, selectedId, null, temporary);
-      toast.success(replacing ? 'Mentor replaced' : 'Mentor assigned');
+      toast.success(replacing ? t('mentorSlotDialog.mentorReplaced') : t('mentorSlotDialog.mentorAssigned'));
       await onSaved();
       onClose();
     } catch (requestError: unknown) {
@@ -94,26 +96,26 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
       <div ref={ref} tabIndex={-1} className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-float outline-none sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
-            <h3 id="mentor-slot-title" className="text-base font-bold text-slate-900">{replacing ? 'Replace' : 'Assign'} {label.toLowerCase()}</h3>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{team.teamName}{current ? ` · now ${current.mentor.fullName}` : ''}</p>
+            <h3 id="mentor-slot-title" className="text-base font-bold text-slate-900">{replacing ? t('mentorSlotDialog.replace') : t('mentorSlotDialog.assign')} {label.toLowerCase()}</h3>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{team.teamName}{current ? t('mentorSlotDialog.now', { fullName: current.mentor.fullName }) : ''}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50" aria-label="Close"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50" aria-label={t('common:actions.close')}><X className="h-4 w-4" /></button>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
-          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" aria-label="Mentor recommendations">
-            <h4 className="text-sm font-semibold text-slate-900">Suggested mentors for this team</h4>
-            <p className="mt-1 text-xs text-slate-600">Recommendations compare the project title and description with mentor profiles. Review the evidence before assigning.</p>
-            {recommendationsLoading ? <p className="mt-2 text-xs">Calculating recommendations…</p> :
+          <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-3" aria-label={t('mentorSlotDialog.mentorRecommendations')}>
+            <h4 className="text-sm font-semibold text-slate-900">{t('mentorSlotDialog.suggestedMentorsForThisTeam')}</h4>
+            <p className="mt-1 text-xs text-slate-600">{t('mentorSlotDialog.recommendationsCompareTheProjectTitleAnd')}</p>
+            {recommendationsLoading ? <p className="mt-2 text-xs">{t('mentorSlotDialog.calculatingRecommendations')}</p> :
               recommendationsError ? <div role="alert" className="mt-2 text-xs text-red-700">{recommendationsError}
-                <button type="button" className="ml-2 underline" disabled={saving} onClick={() => setRecommendationAttempt(value => value + 1)}>Retry</button>
+                <button type="button" className="ml-2 underline" disabled={saving} onClick={() => setRecommendationAttempt(value => value + 1)}>{t('assignMentorsModal.retry')}</button>
               </div> :
-              recommendations.length === 0 ? <p className="mt-2 text-xs">No eligible recommendations for this slot.</p> :
+              recommendations.length === 0 ? <p className="mt-2 text-xs">{t('mentorSlotDialog.noEligibleRecommendationsForThisSlot')}</p> :
               <div className="mt-2 max-h-44 space-y-2 overflow-y-auto">{recommendations.map(item =>
                 <button key={item.mentor.id} type="button" disabled={saving || !item.hasCapacity}
                   onClick={() => setSelectedId(item.mentor.id)}
                   className="w-full rounded-lg border bg-white p-2 text-left text-xs disabled:opacity-50">
-                  <span className="font-semibold">{item.mentor.fullName}</span> · Điểm xếp hạng {item.fitScore}/100
+                  <span className="font-semibold">{item.mentor.fullName}</span> {t('mentorSlotDialog.diemXepHang')} {item.fitScore}/100
                   <span className="block text-slate-600">{item.reasons.join(' · ')}</span>
                 </button>)}</div>}
           </section>
@@ -122,17 +124,17 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
-              aria-label={`Search ${label.toLowerCase()}s`}
-              placeholder="Search by name, email, contract or tag..."
+              aria-label={t('mentorSlotDialog.searchS', { v1: label.toLowerCase() })}
+              placeholder={t('assignMentorsModal.searchByNameEmailContractOr')}
               value={search}
               onChange={event => setSearch(event.target.value)}
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/50 p-2" role="radiogroup" aria-label={`${label} candidates`}>
+          <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/50 p-2" role="radiogroup" aria-label={t('mentorSlotDialog.candidates', { label })}>
             {candidates.length === 0 ? (
               <p className="px-3 py-8 text-center text-xs text-slate-400">
-                {search ? 'No matching mentors.' : `No other ${label.toLowerCase()} is active in this semester. Add one first in Subject Management > Lecturers & Mentors > Add mentors.`}
+                {search ? t('mentorSlotDialog.noMatchingMentors') : t('mentorSlotDialog.noOtherIsActiveInThis', { v1: label.toLowerCase() })}
               </p>
             ) : candidates.map(option => {
               const checked = selectedId === option._id;
@@ -148,7 +150,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
                 >
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">{option.name}{option.isTemporary && <TemporaryMentorBadge />}</p>
-                    <p className="truncate text-overline text-slate-400">{option.isTemporary ? 'No email yet' : option.email}{option.contractType ? ` · ${option.contractType}` : ''} · {option.activeTeamCount} team{option.activeTeamCount === 1 ? '' : 's'} this semester</p>
+                    <p className="truncate text-overline text-slate-400">{option.isTemporary ? t('mentorSlotDialog.noEmailYet') : option.email}{option.contractType ? ` · ${option.contractType}` : ''} · {t('mentorSlotDialog.teamsThisSemester', { count: option.activeTeamCount })}</p>
                     <MentorTagChips tags={option.tags} />
                   </div>
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${checked ? 'border-primary bg-primary' : 'border-slate-300 bg-white'}`}>
@@ -170,7 +172,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
                 onCodeChange={setReasonCode}
                 onNoteChange={setReasonNote}
               />
-              <p className="mt-1 text-caption text-slate-400">The current assignment is ended and kept in the history, and the new mentor starts in the same save.</p>
+              <p className="mt-1 text-caption text-slate-400">{t('mentorSlotDialog.theCurrentAssignmentIsEndedAnd')}</p>
             </div>
           )}
 
@@ -180,9 +182,9 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
         <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
           <MentorKindTag type={slot} />
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50">{t('common:actions.cancel')}</button>
             <button type="button" onClick={() => void save()} disabled={!canSave} className="flex min-w-28 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50">
-              {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...</> : replacing ? 'Replace mentor' : 'Assign mentor'}
+              {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('assignLectureModal.saving')}</> : replacing ? t('mentorSlotDialog.replaceMentor') : t('mentorSlotDialog.assignMentor')}
             </button>
           </div>
         </div>

@@ -256,7 +256,7 @@ export default function AddSemesterStaffModal({
                     {selectionState === 'all' && <Check className="h-3 w-3 text-white" />}
                     {selectionState === 'some' && <Minus className="h-3 w-3 text-white" />}
                   </span>
-                  {selectionState === 'all' ? t('addSemesterStaffModal.clearSelection') : t('addSemesterStaffModal.selectAll', { v1: hasFilters ? ' shown' : '', length: groups.available.length })}
+                  {selectionState === 'all' ? t('addSemesterStaffModal.clearSelection') : t(hasFilters ? 'addSemesterStaffModal.selectAllShown' : 'addSemesterStaffModal.selectAll', { length: groups.available.length })}
                 </button>
               )}
             </div>

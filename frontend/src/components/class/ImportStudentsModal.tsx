@@ -24,6 +24,8 @@ import type {
   ImportStudentsCommitResponse,
   ImportStudentsPreviewResponse,
 } from '../../types/classes';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface ImportStudentsModalProps {
   classId: string;
@@ -34,9 +36,9 @@ interface ImportStudentsModalProps {
 type ImportPhase = 'upload' | 'review' | 'result';
 
 const IMPORT_STEPS = [
-  { key: 'upload', label: 'Select file' },
-  { key: 'review', label: 'Review data' },
-  { key: 'result', label: 'Import result' },
+  { key: 'upload', get label() { return i18n.t('class:importStudentsModal.selectFile'); } },
+  { key: 'review', get label() { return i18n.t('class:importStudentsModal.reviewData'); } },
+  { key: 'result', get label() { return i18n.t('class:importStudentsModal.importResult'); } },
 ] as const;
 
 const phaseIndex = (phase: ImportPhase) => IMPORT_STEPS.findIndex((step) => step.key === phase);
@@ -52,6 +54,7 @@ export default function ImportStudentsModal({
   onClose,
   onImported,
 }: ImportStudentsModalProps) {
+  const { t } = useTranslation('class');
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<ImportPhase>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -142,9 +145,9 @@ export default function ImportStudentsModal({
       link.download = 'Student_Import_Template.xlsx';
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success('Template downloaded');
+      toast.success(t('importStudentsModal.templateDownloaded'));
     } catch {
-      toast.error('Unable to download template');
+      toast.error(t('importStudentsModal.unableToDownloadTemplate'));
     }
   };
 
@@ -165,19 +168,19 @@ export default function ImportStudentsModal({
         ? result.createdMembershipCount
         : result.insertedCount + result.updatedCount;
       if (result.importMode === 'TeamAssignment' && result.createdTeamCount > 0) {
-        toast.success(`Added ${result.insertedCount} students, created ${result.createdTeamCount} teams and ${result.createdProjectCount} projects.`);
+        toast.success(t('importStudentsModal.addedStudentsCreatedTeamsAndProjects', { insertedCount: result.insertedCount, createdTeamCount: result.createdTeamCount, createdProjectCount: result.createdProjectCount }));
       } else if (committedCount > 0) {
         toast.success(
           result.synchronizedMajorCount > 0
-            ? `Imported ${committedCount} students and synchronized ${result.synchronizedMajorCount} registered major${result.synchronizedMajorCount > 1 ? 's' : ''}.`
+            ? t('importStudentsModal.importedStudentsAndSynchronizedMajors', { committedCount, count: result.synchronizedMajorCount })
             : result.errorCount > 0
-              ? `Imported ${committedCount} students; ${result.errorCount} rows require attention.`
-              : `Successfully imported ${committedCount} students.`,
+              ? t('importStudentsModal.importedStudentsRowsRequireAttention', { committedCount, errorCount: result.errorCount })
+              : t('importStudentsModal.successfullyImportedStudents', { committedCount }),
         );
       } else if (result.errorCount > 0) {
-        toast.error(`No students were imported. ${result.errorCount} rows require attention.`);
+        toast.error(t('importStudentsModal.noStudentsWereImportedRowsRequire', { errorCount: result.errorCount }));
       } else {
-        toast('Import completed; no profile or enrollment changes were needed.');
+        toast(t('importStudentsModal.importCompletedNoProfileOrEnrollment'));
       }
     } catch (err: unknown) {
       toast.error(parseApiError(err, 'Failed to commit student import.').message);
@@ -203,7 +206,7 @@ export default function ImportStudentsModal({
         type="button"
         className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm"
         onClick={importing ? undefined : onClose}
-        aria-label="Close import dialog"
+        aria-label={t('importStudentsModal.closeImportDialog')}
       />
 
       <div className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[90vh] sm:rounded-2xl">
@@ -214,8 +217,8 @@ export default function ImportStudentsModal({
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">Import students or team assignments</h2>
-                <p className="truncate text-sm text-slate-500">One Excel file, validated before any class data changes</p>
+                <h2 id="import-students-title" className="text-lg font-bold text-slate-900">{t('importStudentsModal.importStudentsOrTeamAssignments')}</h2>
+                <p className="truncate text-sm text-slate-500">{t('importStudentsModal.oneExcelFileValidatedBeforeAny')}</p>
               </div>
             </div>
             <button
@@ -223,13 +226,13 @@ export default function ImportStudentsModal({
               onClick={onClose}
               disabled={importing}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
-              aria-label="Close"
+              aria-label={t('common:actions.close')}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Import progress">
+          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label={t('importStudentsModal.importProgress')}>
             {IMPORT_STEPS.map((step, index) => {
               const complete = index < currentStep;
               const active = index === currentStep;
@@ -257,24 +260,24 @@ export default function ImportStudentsModal({
                 <div className="flex items-start gap-3">
                   <Download className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
                   <div>
-                    <p className="text-sm font-semibold text-secondary-dark">Start with the official EHUB template</p>
-                    <p className="mt-0.5 text-xs text-slate-500">Supports student roster import and complete Team + Project assignment.</p>
+                    <p className="text-sm font-semibold text-secondary-dark">{t('importStudentsModal.startWithTheOfficialEhubTemplate')}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{t('importStudentsModal.supportsStudentRosterImportAndComplete')}</p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" icon={Download} onClick={() => void handleDownloadTemplate()} className="shrink-0 border-secondary-200 text-secondary">
-                  Download template (.xlsx)
+                  {t('importStudentsModal.downloadTemplateXlsx')}
                 </Button>
               </div>
 
               <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
                 <div className="text-xs leading-5 text-slate-600">
-                  <p><strong className="text-slate-700">Required columns:</strong> StudentCode (RollNumber), FullName, Email. The file name updates the student's class roster and profile name.</p>
-                  <p><strong className="text-slate-700">MajorCode:</strong> Optional for legacy files; missing values are imported as unverified.</p>
-                  <p><strong className="text-slate-700">Team assignment:</strong> Add Group and Project. EHUB adds or re-enrolls students in the class before creating teams; Zalo and Description may appear once per Group.</p>
-                  <p><strong className="text-slate-700">Automatic mode:</strong> If no Group value is present, EHUB keeps the existing student roster import flow.</p>
-                  <p><strong className="text-slate-700">Dropped students:</strong> Matching enrollments in this class will be re-enrolled instead of duplicated.</p>
-                  <p><strong className="text-slate-700">Limits:</strong> Max file size 10 MB · Maximum 5,000 rows · Validated line by line before commit</p>
+                  <p><strong className="text-slate-700">{t('importSemesterGroupsModal.requiredColumns')}</strong> {t('importStudentsModal.studentcodeRollnumberFullnameEmailTheFile')}</p>
+                  <p><strong className="text-slate-700">{t('importStudentsModal.majorcode')}</strong> {t('importStudentsModal.optionalForLegacyFilesMissingValues')}</p>
+                  <p><strong className="text-slate-700">{t('importStudentsModal.teamAssignment')}</strong> {t('importStudentsModal.addGroupAndProjectEhubAdds')}</p>
+                  <p><strong className="text-slate-700">{t('importStudentsModal.automaticMode')}</strong> {t('importStudentsModal.ifNoGroupValueIsPresent')}</p>
+                  <p><strong className="text-slate-700">{t('importStudentsModal.droppedStudents')}</strong> {t('importStudentsModal.matchingEnrollmentsInThisClassWill')}</p>
+                  <p><strong className="text-slate-700">{t('importStudentsModal.limits')}</strong> {t('importStudentsModal.maxFileSize10MbMaximum')}</p>
                 </div>
               </div>
 
@@ -298,19 +301,19 @@ export default function ImportStudentsModal({
 
                 {analyzing ? (
                   <>
-                    <p className="mt-4 text-sm font-semibold text-slate-800">Analyzing {file?.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">Validating rows and checking cross-class conflicts…</p>
+                    <p className="mt-4 text-sm font-semibold text-slate-800">{t('importStudentsModal.analyzing', { name: file?.name })}</p>
+                    <p className="mt-1 text-xs text-slate-500">{t('importStudentsModal.validatingRowsAndCheckingCrossClass')}</p>
                   </>
                 ) : (
                   <>
                     <p className="mt-4 text-sm font-semibold text-slate-800">
-                      {fileError ? 'This file cannot be used' : 'Drop your student list here'}
+                      {fileError ? t('importStudentsModal.thisFileCannotBeUsed') : t('importStudentsModal.dropYourStudentListHere')}
                     </p>
                     <p className={`mx-auto mt-1 max-w-lg text-xs ${fileError ? 'text-red-600' : 'text-slate-500'}`}>
-                      {fileError || 'Choose an Excel (.xlsx or .xls) file'}
+                      {fileError || t('importStudentsModal.chooseAnExcelXlsxOrXls')}
                     </p>
                     <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
-                      {fileError ? 'Choose another file' : 'Browse files'}
+                      {fileError ? t('importStudentsModal.chooseAnotherFile') : t('importStudentsModal.browseFiles')}
                     </Button>
                   </>
                 )}
@@ -327,29 +330,29 @@ export default function ImportStudentsModal({
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p>
-                    <p className="text-xs text-slate-500">{file ? formatFileSize(file.size) : ''} · {totalRows} data rows</p>
+                    <p className="text-xs text-slate-500">{t('importStudentsModal.dataRows', { v1: file ? formatFileSize(file.size) : '', totalRows })}</p>
                   </div>
                 </div>
                 <button type="button" onClick={resetImport} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700 hover:text-primary-dark">
-                  <RotateCcw className="h-3.5 w-3.5" /> Choose another file
+                  <RotateCcw className="h-3.5 w-3.5" /> {t('importStudentsModal.chooseAnotherFile')}
                 </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                <SummaryCard label="Total rows" value={totalRows} tone="neutral" />
-                <SummaryCard label="Valid &amp; Ready" value={successCount} tone="success" />
-                <SummaryCard label="Errors / Skip" value={failedCount} tone="danger" />
+                <SummaryCard label={t('importStudentsModal.totalRows')} value={totalRows} tone="neutral" />
+                <SummaryCard label={t('importStudentsModal.validReady')} value={successCount} tone="success" />
+                <SummaryCard label={t('importStudentsModal.errorsSkip')} value={failedCount} tone="danger" />
                 {isTeamAssignment ? (
-                  <SummaryCard label="Teams ready" value={previewData.teamCount} tone={previewData.teamCount > 0 ? 'success' : 'warning'} />
+                  <SummaryCard label={t('importStudentsModal.teamsReady')} value={previewData.teamCount} tone={previewData.teamCount > 0 ? 'success' : 'warning'} />
                 ) : (
-                  <SummaryCard label="Major mismatches" value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
+                  <SummaryCard label={t('importStudentsModal.majorMismatches')} value={majorMismatchCount} tone={majorMismatchCount > 0 ? 'warning' : 'success'} />
                 )}
               </div>
 
               {isTeamAssignment && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-sm text-blue-900">
                   <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>Team assignment mode detected.</strong> EHUB will add or re-enroll the students in this class, create each valid Team and its Project, import Zalo/Description, then assign the members. Major composition is not required.</p>
+                  <p><strong>{t('importStudentsModal.teamAssignmentModeDetected')}</strong> {t('importStudentsModal.ehubWillAddOrReEnroll')}</p>
                 </div>
               )}
 
@@ -357,8 +360,8 @@ export default function ImportStudentsModal({
                 <div className="flex items-start gap-2.5 rounded-xl border border-orange-200 bg-orange-50 p-3.5 text-sm text-orange-900">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
-                    <p className="font-semibold">{majorMismatchCount} student{majorMismatchCount > 1 ? 's registered' : ' registered'} the wrong major.</p>
-                    <p className="mt-0.5 text-xs text-orange-800">Review the registered and imported values below. Majors are synchronized from the file only after you confirm the import.</p>
+                    <p className="font-semibold">{t('importStudentsModal.studentsWrongMajor', { count: majorMismatchCount })}</p>
+                    <p className="mt-0.5 text-xs text-orange-800">{t('importStudentsModal.reviewTheRegisteredAndImportedValues')}</p>
                   </div>
                 </div>
               )}
@@ -366,7 +369,7 @@ export default function ImportStudentsModal({
               {failedCount > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-800">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p><strong>{failedCount} row{failedCount > 1 ? 's have' : ' has'} validation errors.</strong> Invalid rows will be skipped; valid rows will be committed safely.</p>
+                  <p><strong>{t('importStudentsModal.rowsHaveValidationErrors', { count: failedCount })}</strong> {t('importStudentsModal.invalidRowsWillBeSkippedValid')}</p>
                 </div>
               )}
 
@@ -384,21 +387,21 @@ export default function ImportStudentsModal({
                 </div>
                 <h3 className="mt-3 text-lg font-bold text-slate-900">
                   {commitHasChanges
-                    ? commitResult.importMode === 'TeamAssignment' ? 'Teams and projects created successfully' : 'Import committed successfully'
-                    : commitResult.importMode === 'TeamAssignment' ? 'No teams were created' : commitResult.errorCount > 0 ? 'No students were imported' : 'No changes were needed'}
+                    ? commitResult.importMode === 'TeamAssignment' ? t('importStudentsModal.teamsAndProjectsCreatedSuccessfully') : t('importStudentsModal.importCommittedSuccessfully')
+                    : commitResult.importMode === 'TeamAssignment' ? t('importStudentsModal.noTeamsWereCreated') : commitResult.errorCount > 0 ? t('importStudentsModal.noStudentsWereImported') : t('importStudentsModal.noChangesWereNeeded')}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
                   {commitResult.importMode === 'TeamAssignment'
-                    ? `${commitResult.insertedCount} new enrollments, ${commitResult.updatedCount} updated, ${commitResult.createdTeamCount} teams, ${commitResult.createdProjectCount} projects, ${commitResult.createdMembershipCount} memberships, ${commitResult.skippedCount} rows skipped.`
-                    : `${commitResult.insertedCount} new inserted, ${commitResult.updatedCount} updated, ${commitResult.skippedCount} skipped.`}
+                    ? t('importStudentsModal.newEnrollmentsUpdatedTeamsProjectsMemberships', { insertedCount: commitResult.insertedCount, updatedCount: commitResult.updatedCount, createdTeamCount: commitResult.createdTeamCount, createdProjectCount: commitResult.createdProjectCount, createdMembershipCount: commitResult.createdMembershipCount, skippedCount: commitResult.skippedCount })
+                    : t('importStudentsModal.newInsertedUpdatedSkipped', { insertedCount: commitResult.insertedCount, updatedCount: commitResult.updatedCount, skippedCount: commitResult.skippedCount })}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Teams' : 'Inserted'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdTeamCount : commitResult.insertedCount} tone="success" />
-                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Projects' : 'Updated'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdProjectCount : commitResult.updatedCount} tone="neutral" />
-                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? 'Memberships' : 'Majors synced'} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdMembershipCount : commitResult.synchronizedMajorCount ?? 0} tone="success" />
-                <SummaryCard label="Skipped" value={commitResult.skippedCount} tone="danger" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? t('importStudentsModal.teams') : t('importStudentsModal.inserted')} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdTeamCount : commitResult.insertedCount} tone="success" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? t('importStudentsModal.projects') : t('importStudentsModal.updated')} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdProjectCount : commitResult.updatedCount} tone="neutral" />
+                <SummaryCard label={commitResult.importMode === 'TeamAssignment' ? t('importStudentsModal.memberships') : t('importStudentsModal.majorsSynced')} value={commitResult.importMode === 'TeamAssignment' ? commitResult.createdMembershipCount : commitResult.synchronizedMajorCount ?? 0} tone="success" />
+                <SummaryCard label={t('importStudentsModal.skipped')} value={commitResult.skippedCount} tone="danger" />
               </div>
 
               <TeamContinuationPanel summary={commitResult.continuation} applied />
@@ -406,12 +409,12 @@ export default function ImportStudentsModal({
               {commitResult.errors?.length > 0 && (
                 <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
                   <div className="border-b border-amber-200 px-4 py-3 text-sm font-semibold text-amber-900">
-                    Rows skipped because data changed after preview
+                    {t('importStudentsModal.rowsSkippedBecauseDataChangedAfter')}
                   </div>
                   <div className="max-h-52 divide-y divide-amber-100 overflow-y-auto">
                     {commitResult.errors.map((error: ImportStudentCommitError) => (
                       <div key={`${error.rowNumber}-${error.studentCode}`} className="grid gap-1 px-4 py-3 text-xs sm:grid-cols-[5rem_8rem_1fr]">
-                        <span className="font-semibold text-amber-900">Row {error.rowNumber}</span>
+                        <span className="font-semibold text-amber-900">{t('importStudentsModal.row', { rowNumber: error.rowNumber })}</span>
                         <span className="font-mono text-slate-700">{error.studentCode}</span>
                         <span className="text-slate-600">{error.errorMessage}</span>
                       </div>
@@ -425,12 +428,12 @@ export default function ImportStudentsModal({
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
           {phase === 'upload' && (
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={onClose}>{t('common:actions.cancel')}</Button>
           )}
 
           {phase === 'review' && (
             <>
-              <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>Back</Button>
+              <Button variant="outline" icon={ArrowLeft} onClick={resetImport} disabled={importing}>{t('common:actions.back')}</Button>
               <Button
                 variant="primary"
                 icon={Upload}
@@ -439,19 +442,19 @@ export default function ImportStudentsModal({
                 onClick={() => void handleImport(!isTeamAssignment && majorMismatchCount > 0)}
               >
                 {successCount === 0
-                  ? 'No valid rows to commit'
+                  ? t('importStudentsModal.noValidRowsToCommit')
                   : isTeamAssignment
-                    ? `Create ${previewData?.teamCount ?? 0} team${(previewData?.teamCount ?? 0) === 1 ? '' : 's'} and assign ${successCount} students`
+                    ? t('importStudentsModal.createTeamsAndAssignStudents', { count: previewData?.teamCount ?? 0, successCount })
                   : majorMismatchCount > 0
-                    ? `Import & synchronize ${majorMismatchCount} major${majorMismatchCount > 1 ? 's' : ''}`
-                    : `Commit ${successCount} valid student${successCount > 1 ? 's' : ''}`}
+                    ? t('importStudentsModal.importSynchronizeMajors', { count: majorMismatchCount })
+                    : t('importStudentsModal.commitValidStudents', { count: successCount })}
               </Button>
             </>
           )}
 
           {phase === 'result' && (
             <>
-              <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>
+              <Button variant="primary" icon={Check} onClick={onClose}>{t('importStudentsModal.done')}</Button>
             </>
           )}
         </footer>
@@ -477,6 +480,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 }
 
 function TeamPreviewList({ teams }: { teams: ImportStudentsPreviewResponse['teams'] }) {
+  const { t } = useTranslation('class');
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {teams.map((team) => (
@@ -484,13 +488,13 @@ function TeamPreviewList({ teams }: { teams: ImportStudentsPreviewResponse['team
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-900">{team.teamName}</p>
-              <p className="mt-0.5 truncate text-xs font-medium text-slate-600">Project: {team.projectName || 'Missing'}</p>
+              <p className="mt-0.5 truncate text-xs font-medium text-slate-600">{t('importStudentsModal.projectLabel', { name: team.projectName || t('importStudentsModal.missing') })}</p>
             </div>
             <span className={`shrink-0 rounded-full px-2 py-1 text-caption font-semibold ${team.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {team.validMemberCount}/{team.memberCount} ready
+              {t('importStudentsModal.ready', { validMemberCount: team.validMemberCount, memberCount: team.memberCount })}
             </span>
           </div>
-          {team.zaloGroupUrl && <p className="mt-2 truncate text-xs text-slate-600">Zalo: {team.zaloGroupUrl}</p>}
+          {team.zaloGroupUrl && <p className="mt-2 truncate text-xs text-slate-600">{t('importStudentsModal.zalo', { zaloGroupUrl: team.zaloGroupUrl })}</p>}
           {team.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{team.description}</p>}
         </div>
       ))}
@@ -507,20 +511,21 @@ function StudentRowsTable({
   compact?: boolean;
   teamAssignment?: boolean;
 }) {
+  const { t } = useTranslation('class');
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <div className={`${compact ? 'max-h-52' : 'max-h-72'} overflow-auto`}>
         <table className={`w-full ${teamAssignment ? 'min-w-[1050px]' : 'min-w-[900px]'} text-left text-xs`}>
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600">
             <tr>
-              <th className="w-16 px-3 py-2.5 font-semibold">Row</th>
-              <th className="px-3 py-2.5 font-semibold">Student code</th>
-              <th className="px-3 py-2.5 font-semibold">Full name</th>
-              <th className="px-3 py-2.5 font-semibold">Email</th>
-              {teamAssignment && <th className="px-3 py-2.5 font-semibold">Group / Project</th>}
-              <th className="px-3 py-2.5 font-semibold">Registered major</th>
-              <th className="px-3 py-2.5 font-semibold">Major in file</th>
-              <th className="w-52 px-3 py-2.5 font-semibold">Validation</th>
+              <th className="w-16 px-3 py-2.5 font-semibold">{t('importSemesterGroupsModal.row')}</th>
+              <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.studentCode')}</th>
+              <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.fullName')}</th>
+              <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.email')}</th>
+              {teamAssignment && <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.groupProject')}</th>}
+              <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.registeredMajor')}</th>
+              <th className="px-3 py-2.5 font-semibold">{t('importStudentsModal.majorInFile')}</th>
+              <th className="w-52 px-3 py-2.5 font-semibold">{t('importStudentsModal.validation')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -533,7 +538,7 @@ function StudentRowsTable({
                 {teamAssignment && (
                   <td className="px-3 py-3">
                     <p className="font-semibold text-slate-700">{row.groupName || '—'}</p>
-                    <p className="mt-0.5 text-caption text-slate-500">{row.projectName || 'No project'}</p>
+                    <p className="mt-0.5 text-caption text-slate-500">{row.projectName || t('importStudentsModal.noProject')}</p>
                   </td>
                 )}
                 <td className={`px-3 py-3 font-mono ${row.needsMajorSync ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
@@ -548,25 +553,25 @@ function StudentRowsTable({
                   ) : row.needsMajorSync ? (
                     <div>
                       <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 font-semibold text-orange-700">
-                        <AlertCircle className="h-3 w-3" /> Needs synchronization
+                        <AlertCircle className="h-3 w-3" /> {t('importStudentsModal.needsSynchronization')}
                       </span>
                       <p className="mt-1 max-w-xs text-caption leading-4 text-orange-700">{row.majorWarningMessage}</p>
                     </div>
                   ) : row.status === 'ReEnroll' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
-                      <RotateCcw className="h-3 w-3" /> Ready to re-enroll
+                      <RotateCcw className="h-3 w-3" /> {t('importStudentsModal.readyToReEnroll')}
                     </span>
                   ) : row.status === 'UpdateProfile' ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
-                      <CheckCircle2 className="h-3 w-3" /> Ready to update profile
+                      <CheckCircle2 className="h-3 w-3" /> {t('importStudentsModal.readyToUpdateProfile')}
                     </span>
                   ) : row.majorComparisonStatus?.startsWith('AwaitingRegistration') ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
-                      <Info className="h-3 w-3" /> Awaiting registration
+                      <Info className="h-3 w-3" /> {t('importStudentsModal.awaitingRegistration')}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
-                      <CheckCircle2 className="h-3 w-3" /> Ready
+                      <CheckCircle2 className="h-3 w-3" /> {t('importStudentsModal.ready2')}
                     </span>
                   )}
                 </td>
