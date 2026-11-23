@@ -30,7 +30,9 @@
       "Closed": "Đã đóng",
       "NotScheduled": "Chưa lên lịch"
     },
-    "notScheduled": "Chưa lên lịch"
+    "notScheduled": "Chưa lên lịch",
+    "fileCount_other": "{{count}} tệp",
+    "linkCount_other": "{{count}} liên kết"
   },
   "checkpointControlPanel": {
     "unableToLoadClassesForCheckpoint": "Không thể tải danh sách lớp cho hạn nộp checkpoint.",

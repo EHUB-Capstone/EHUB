@@ -99,10 +99,10 @@ export default function CheckpointCard({
                 {t(`checkpointCard.scheduleStatus.${checkpoint.scheduleStatus}`, { defaultValue: checkpoint.scheduleStatus })}
               </span>
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasFiles ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
-                {fileCount} file{fileCount !== 1 ? 's' : ''}
+                {t('checkpointCard.fileCount', { count: fileCount })}
               </span>
               <span className={`rounded-md px-2.5 py-1 text-overline font-bold ${hasLinks ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
-                {linkCount} link{linkCount !== 1 ? 's' : ''}
+                {t('checkpointCard.linkCount', { count: linkCount })}
               </span>
               {latestVersion > 0 && (
                 <span className="rounded-md bg-orange-100 px-2.5 py-1 text-overline font-bold text-orange-700">

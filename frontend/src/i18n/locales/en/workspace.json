@@ -524,7 +524,9 @@
     "unableToLoadProjectDirection": "Unable to load project direction.",
     "unableToSaveProjectDirection": "Unable to save project direction.",
     "unableToSubmitProjectDirection": "Unable to submit project direction.",
-    "unableToRefreshProjectDirectionBefore": "Unable to refresh project direction before editing."
+    "unableToRefreshProjectDirectionBefore": "Unable to refresh project direction before editing.",
+    "clickToUpdateChangeRequest": "Click this change request to update the proposed Project name and Description.",
+    "clickToUpdateDirection": "Click this Project Direction card to update the proposed Project name and Description."
   },
   "projectWorkspaceProfile": {
     "draft": "Draft",
@@ -876,15 +878,7 @@
     "CLASS_TASK": "Class Requirement",
     "TEAM_TASK": "Team Task"
   },
-  "ideaForm": {
-    "stages": {
-      "Idea": "Idea",
-      "Research": "Research",
-      "MVP": "MVP",
-      "Launch": "Launch",
-      "Growth": "Growth"
-    }
-  },
+  "ideaForm": {},
   "weeklyRoadmapPlanner": {
     "low": "Low",
     "medium": "Medium",

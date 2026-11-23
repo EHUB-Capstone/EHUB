@@ -523,7 +523,9 @@
     "unableToLoadProjectDirection": "Không thể tải định hướng dự án.",
     "unableToSaveProjectDirection": "Không thể lưu định hướng dự án.",
     "unableToSubmitProjectDirection": "Không thể gửi định hướng dự án.",
-    "unableToRefreshProjectDirectionBefore": "Không thể làm mới định hướng dự án trước khi chỉnh sửa."
+    "unableToRefreshProjectDirectionBefore": "Không thể làm mới định hướng dự án trước khi chỉnh sửa.",
+    "clickToUpdateChangeRequest": "Nhấp vào yêu cầu thay đổi này để cập nhật Tên dự án và Mô tả đề xuất.",
+    "clickToUpdateDirection": "Nhấp vào thẻ Định hướng dự án này để cập nhật Tên dự án và Mô tả đề xuất."
   },
   "projectWorkspaceProfile": {
     "draft": "Bản nháp",
@@ -874,15 +876,7 @@
     "CLASS_TASK": "Yêu cầu của lớp",
     "TEAM_TASK": "Công việc nhóm"
   },
-  "ideaForm": {
-    "stages": {
-      "Idea": "Ý tưởng",
-      "Research": "Nghiên cứu",
-      "MVP": "MVP",
-      "Launch": "Ra mắt",
-      "Growth": "Tăng trưởng"
-    }
-  },
+  "ideaForm": {},
   "weeklyRoadmapPlanner": {
     "low": "Thấp",
     "medium": "Trung bình",

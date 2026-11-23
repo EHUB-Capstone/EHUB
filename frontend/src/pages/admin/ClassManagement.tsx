@@ -725,7 +725,7 @@ export default function ClassManagement() {
                     <h2 className="text-lg font-bold text-slate-900">{cls.subjectCode || t('classManagement.unknownSubject')}</h2>
                     <span className="h-px flex-1 bg-slate-200" />
                     <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                      {subjectGroups.find(group => group.subjectCode === (cls.subjectCode || 'Unknown Subject'))?.classes.length || 0} classes
+                      {t('classManagement.classCount', { count: subjectGroups.find(group => group.subjectCode === (cls.subjectCode || 'Unknown Subject'))?.classes.length || 0 })}
                     </span>
                   </div>
                 )}
@@ -828,8 +828,8 @@ export default function ClassManagement() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-slate-400">{t('classManagement.weeklySessions', { count: cls.schedules.length })}</p>
                         <p className="text-sm font-medium text-slate-800 truncate">
-                          {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][cls.schedules[0].dayOfWeek]}, Slot {cls.schedules[0].slotNumber} · Room {cls.schedules[0].room || cls.room || 'TBD'}
-                          {cls.schedules.length > 1 ? ` · +${cls.schedules.length - 1} more` : ''}
+                          {t('classManagement.scheduleLine', { day: t(`classManagement.weekdays.${cls.schedules[0].dayOfWeek}`), slot: cls.schedules[0].slotNumber, room: cls.schedules[0].room || cls.room || t('classManagement.tbd') })}
+                          {cls.schedules.length > 1 ? ` · ${t('classManagement.moreSessions', { count: cls.schedules.length - 1 })}` : ''}
                         </p>
                       </div>
                     </div>

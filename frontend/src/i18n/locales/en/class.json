@@ -992,7 +992,14 @@
     "competitors": "Competitors",
     "whoAreYourCompetitorsWhatS": "Who are your competitors? What's your competitive advantage?",
     "saveDraft": "Save Draft",
-    "submitForReview": "Submit for Review"
+    "submitForReview": "Submit for Review",
+    "stages": {
+      "Idea": "Idea",
+      "Research": "Research",
+      "MVP": "MVP",
+      "Launch": "Launch",
+      "Growth": "Growth"
+    }
   },
   "myClasses": {
     "failedToLoadYourClasses": "Failed to load your classes",

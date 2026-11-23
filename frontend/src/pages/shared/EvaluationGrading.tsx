@@ -221,7 +221,7 @@ function FeedbackDialog({
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary-700 shadow-sm"><ClipboardCheck className="h-4 w-4" /></span>
                   <span className="min-w-0">
                     <span className="block text-sm font-bold text-slate-900">{t('evaluationGrading.criterionScoreDetails')}</span>
-                    <span className="block text-xs text-slate-500">{criterionScores.length} scored {criterionScores.length === 1 ? 'criterion' : 'criteria'}</span>
+                    <span className="block text-xs text-slate-500">{t('evaluationGrading.scoredCriteria', { count: criterionScores.length })}</span>
                   </span>
                 </span>
                 {criterionScoresExpanded ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}

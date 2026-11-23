@@ -30,7 +30,11 @@
       "Closed": "Closed",
       "NotScheduled": "Not scheduled"
     },
-    "notScheduled": "Not scheduled"
+    "notScheduled": "Not scheduled",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "linkCount_one": "{{count}} link",
+    "linkCount_other": "{{count}} links"
   },
   "checkpointControlPanel": {
     "unableToLoadClassesForCheckpoint": "Unable to load classes for checkpoint deadlines.",

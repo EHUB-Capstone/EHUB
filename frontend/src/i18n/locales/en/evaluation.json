@@ -266,7 +266,9 @@
     "unableToLoadEvaluationAndGrading": "Unable to load evaluation and grading data.",
     "unableToExportEvaluationReport": "Unable to export evaluation report.",
     "unableToPublishEvaluation": "Unable to publish evaluation.",
-    "unableToHidePublishedScores": "Unable to hide published scores."
+    "unableToHidePublishedScores": "Unable to hide published scores.",
+    "scoredCriteria_one": "{{count}} scored criterion",
+    "scoredCriteria_other": "{{count}} scored criteria"
   },
   "rankings": {
     "teamRankings": "Team Rankings",

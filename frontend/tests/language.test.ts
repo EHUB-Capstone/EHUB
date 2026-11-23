@@ -10,7 +10,7 @@ import {
   writeStoredLanguage,
 } from '../src/i18n/config.ts';
 import i18n from '../src/i18n/index.ts';
-import { resources } from '../src/i18n/resources.ts';
+import { lazyNamespaces, resources } from '../src/i18n/resources.ts';
 import {
   formatDate,
   formatDateTime,
@@ -93,4 +93,21 @@ test('formatters follow the active language and fall back for invalid input', as
   assert.equal(formatNumber(Number.NaN, undefined, '-'), '-');
   assert.ok(formatRelativeTime(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)).length > 0);
   await i18n.changeLanguage('en');
+});
+
+test('feature namespaces load on demand for both languages', async () => {
+  await i18n.changeLanguage('vi');
+  await i18n.loadNamespaces(['workspace']);
+  assert.equal(i18n.t('workspace:taskStatus.TODO'), 'Cần làm');
+  await i18n.changeLanguage('en');
+  await i18n.loadNamespaces(['workspace']);
+  assert.equal(i18n.t('workspace:taskStatus.TODO'), 'To Do');
+});
+
+test('every lazy namespace resolves a loader for each supported language', () => {
+  for (const [namespace, loaders] of Object.entries(lazyNamespaces)) {
+    for (const { code } of SUPPORTED_LANGUAGES) {
+      assert.equal(typeof (loaders as Record<string, unknown>)[code], 'function', `${namespace}/${code}`);
+    }
+  }
 });

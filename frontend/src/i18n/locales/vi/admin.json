@@ -88,7 +88,20 @@
     "weeklySessions_other": "{{count}} buổi mỗi tuần",
     "failedToLoadClasses": "Không thể tải các lớp",
     "failedToRestoreClass": "Không thể khôi phục lớp",
-    "failedToExportClassData": "Không thể xuất dữ liệu lớp."
+    "failedToExportClassData": "Không thể xuất dữ liệu lớp.",
+    "scheduleLine": "{{day}}, Ca {{slot}} · Phòng {{room}}",
+    "tbd": "Chưa xác định",
+    "moreSessions": "+{{count}} nữa",
+    "weekdays": {
+      "0": "Chủ nhật",
+      "1": "Thứ Hai",
+      "2": "Thứ Ba",
+      "3": "Thứ Tư",
+      "4": "Thứ Năm",
+      "5": "Thứ Sáu",
+      "6": "Thứ Bảy"
+    },
+    "classCount_other": "{{count}} lớp"
   },
   "mentorProfileDetail": {
     "atRisk": "Có rủi ro",

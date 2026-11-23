@@ -259,7 +259,8 @@
     "unableToLoadEvaluationAndGrading": "Không thể tải dữ liệu đánh giá và chấm điểm.",
     "unableToExportEvaluationReport": "Không thể xuất báo cáo đánh giá.",
     "unableToPublishEvaluation": "Không thể công bố đánh giá.",
-    "unableToHidePublishedScores": "Không thể ẩn các điểm đã công bố."
+    "unableToHidePublishedScores": "Không thể ẩn các điểm đã công bố.",
+    "scoredCriteria_other": "{{count}} tiêu chí đã chấm"
   },
   "rankings": {
     "teamRankings": "Xếp hạng nhóm",

@@ -967,7 +967,14 @@
     "competitors": "Đối thủ cạnh tranh",
     "whoAreYourCompetitorsWhatS": "Đối thủ của bạn là ai? Lợi thế cạnh tranh của bạn là gì?",
     "saveDraft": "Lưu bản nháp",
-    "submitForReview": "Gửi để xem xét"
+    "submitForReview": "Gửi để xem xét",
+    "stages": {
+      "Idea": "Ý tưởng",
+      "Research": "Nghiên cứu",
+      "MVP": "MVP",
+      "Launch": "Ra mắt",
+      "Growth": "Tăng trưởng"
+    }
   },
   "myClasses": {
     "failedToLoadYourClasses": "Không thể tải các lớp của bạn",

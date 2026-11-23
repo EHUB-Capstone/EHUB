@@ -90,7 +90,21 @@
     "weeklySessions_other": "{{count}} weekly sessions",
     "failedToLoadClasses": "Failed to load classes",
     "failedToRestoreClass": "Failed to restore class",
-    "failedToExportClassData": "Failed to export class data."
+    "failedToExportClassData": "Failed to export class data.",
+    "scheduleLine": "{{day}}, Slot {{slot}} · Room {{room}}",
+    "tbd": "TBD",
+    "moreSessions": "+{{count}} more",
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "classCount_one": "{{count}} class",
+    "classCount_other": "{{count}} classes"
   },
   "mentorProfileDetail": {
     "atRisk": "At Risk",

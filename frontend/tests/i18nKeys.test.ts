@@ -70,3 +70,35 @@ test('every literal translation key used in source exists in the en resources', 
 
   assert.deepEqual(missing, [], `Translation keys missing from en resources:\n${missing.join('\n')}`);
 });
+
+// A dynamic key such as t(`status.${value}`) cannot be checked in full, but its static prefix must exist
+// in one of the file's namespaces; this catches keys filed under a namespace the component never loads.
+function hasPrefix(namespace: string, prefix: string): boolean {
+  let node: Json | string | undefined = resources[namespace];
+  if (!node) return false;
+  for (const part of prefix.split('.').filter(Boolean)) {
+    if (typeof node !== 'object' || node === null) return false;
+    if (part in node) node = node[part];
+    else return Object.keys(node).some((key) => key.startsWith(part));
+  }
+  return true;
+}
+
+test('dynamic translation keys start with a prefix that exists in the file namespace', () => {
+  const missing: string[] = [];
+  for (const file of listSourceFiles(srcDir)) {
+    const source = readFileSync(file, 'utf8');
+    if (!/useTranslation|i18n/.test(source)) continue;
+    const namespaces = declaredNamespaces(source);
+    for (const match of source.matchAll(/\b(?:t|tr|i18n\.t)\(\s*`([^`$]*)\$\{/g)) {
+      const raw = match[1];
+      const colon = raw.indexOf(':');
+      const candidates = colon > 0 ? [raw.slice(0, colon)] : namespaces;
+      const prefix = colon > 0 ? raw.slice(colon + 1) : raw;
+      if (!candidates.some((ns) => hasPrefix(ns, prefix))) {
+        missing.push(`${file.slice(srcDir.length).replaceAll('\\', '/')}: ${raw}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], `Dynamic keys with no matching prefix:\n${missing.join('\n')}`);
+});
