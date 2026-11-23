@@ -22,6 +22,8 @@ import type {
 } from '../../../types/projectData';
 import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectCompetitionBadges from './ProjectCompetitionBadges';
+import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 const headerClass = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap';
 const cellClass = 'px-4 py-3 align-top text-sm text-slate-700';
@@ -40,6 +42,7 @@ function ChipList({ values }: { values: readonly string[] }) {
 }
 
 export function MentorLabel({ mentor }: { mentor: ProjectDataMentor | null }) {
+  const { t } = useTranslation('projectData');
   if (!mentor) return <span className="text-slate-400">{PROJECT_DATA_EMPTY_VALUE}</span>;
   return (
     <span className="flex flex-col">
@@ -47,9 +50,9 @@ export function MentorLabel({ mentor }: { mentor: ProjectDataMentor | null }) {
       {mentor.isHistorical && (
         <span
           className="text-caption font-medium text-slate-400"
-          title={mentor.endedAtUtc ? `Assignment ended ${new Date(mentor.endedAtUtc).toLocaleDateString()}` : 'Assignment ended'}
+          title={mentor.endedAtUtc ? t('projectDataTable.assignmentEnded2', { v1: fmtDate(mentor.endedAtUtc) }) : t('projectDataTable.assignmentEnded')}
         >
-          Assignment ended
+          {t('projectDataTable.assignmentEnded')}
         </span>
       )}
     </span>
@@ -99,35 +102,36 @@ export default function ProjectDataTable({
   onPageChange,
   onPageSizeChange,
 }: ProjectDataTableProps) {
+  const { t } = useTranslation('projectData');
   const totalPages = Math.max(page.totalPages, 1);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
       <div className="space-y-1 px-4 py-3 text-caption text-slate-600">
-        <p><span className="font-semibold">Tương tác Showcase. </span>{SHOWCASE_METRICS_REFERENCE_NOTE}</p>
-        <p>Tổng tương tác hiện tại của dự án qua các học kỳ, gồm cả trang chưa công khai hoặc đã ẩn.</p>
+        <p><span className="font-semibold">{t('projectDataTable.tuongTacShowcase')} </span>{SHOWCASE_METRICS_REFERENCE_NOTE}</p>
+        <p>{t('projectDataDetailModal.tongTuongTacHienTaiCua')}</p>
       </div>
       <div className="relative" aria-busy={isRefreshing}>
         {/* Desktop and tablet: the full table, including reference-only showcase counters. */}
-        <div className={cn('hidden overflow-x-auto transition-opacity md:block', isRefreshing && 'opacity-60')} tabIndex={0} aria-label="Scrollable project data table">
+        <div className={cn('hidden overflow-x-auto transition-opacity md:block', isRefreshing && 'opacity-60')} tabIndex={0} aria-label={t('projectDataTable.scrollableProjectDataTable')}>
           <table className="w-full min-w-[1380px] border-collapse">
-            <caption className="sr-only">Project Data</caption>
+            <caption className="sr-only">{t('projectDataTable.projectData')}</caption>
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
-                <SortHeader label="Semester" field="semester" query={query} onSort={onSort} />
-                <SortHeader label="Class Code" field="classCode" query={query} onSort={onSort} />
-                <SortHeader label="Group" field="group" query={query} onSort={onSort} />
-                <SortHeader label="Project Name" field="projectName" query={query} onSort={onSort} />
-                <th scope="col" className={headerClass}>Description</th>
-                <th scope="col" className={headerClass}>Startup Industry</th>
-                <th scope="col" className={headerClass}>Lecturer</th>
-                <th scope="col" className={headerClass}>Mentor</th>
-                <th scope="col" className={headerClass}>Mentor - GV</th>
-                <th scope="col" className={headerClass}>Achievements</th>
-                <th scope="col" className={headerClass}>Competitions</th>
-                <th scope="col" className={headerClass}>Showcase views</th>
-                <th scope="col" className={headerClass}>Showcase upvotes</th>
-                <th scope="col" className={headerClass}>Showcase comments</th>
+                <SortHeader label={t('projectDataDetailModal.semester')} field="semester" query={query} onSort={onSort} />
+                <SortHeader label={t('projectDataDetailModal.classCode')} field="classCode" query={query} onSort={onSort} />
+                <SortHeader label={t('projectDataDetailModal.group')} field="group" query={query} onSort={onSort} />
+                <SortHeader label={t('projectDataTable.projectName')} field="projectName" query={query} onSort={onSort} />
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.description')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataTable.startupIndustry')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.lecturer')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.mentor')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.mentorGv')}</th>
+                <th scope="col" className={headerClass}>{t('projectAchievementBadges.achievements')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.competitions')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.showcaseViews')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.showcaseUpvotes')}</th>
+                <th scope="col" className={headerClass}>{t('projectDataDetailModal.showcaseComments')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -180,7 +184,7 @@ export default function ProjectDataTable({
         <p className="text-xs text-slate-500" aria-live="polite">{pageSummary(page)}</p>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-slate-500">
-            Rows per page
+            {t('projectDataTable.rowsPerPage')}
             <select
               value={query.pageSize}
               onChange={event => onPageSizeChange(Number(event.target.value) as ProjectDataPageSize)}
@@ -189,10 +193,10 @@ export default function ProjectDataTable({
               {PROJECT_DATA_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
-          <span className="text-xs text-slate-500">Page <strong className="text-slate-900">{page.pageIndex}</strong> of <strong className="text-slate-900">{totalPages}</strong></span>
+          <span className="text-xs text-slate-500">{t('projectDataTable.page')} <strong className="text-slate-900">{page.pageIndex}</strong> {t('projectDataTable.of')} <strong className="text-slate-900">{totalPages}</strong></span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" icon={ArrowLeft} disabled={isRefreshing || page.pageIndex <= 1} onClick={() => onPageChange(page.pageIndex - 1)}>Prev</Button>
-            <Button variant="outline" size="sm" iconRight={ArrowRight} disabled={isRefreshing || page.pageIndex >= totalPages} onClick={() => onPageChange(page.pageIndex + 1)}>Next</Button>
+            <Button variant="outline" size="sm" icon={ArrowLeft} disabled={isRefreshing || page.pageIndex <= 1} onClick={() => onPageChange(page.pageIndex - 1)}>{t('projectDataTable.prev')}</Button>
+            <Button variant="outline" size="sm" iconRight={ArrowRight} disabled={isRefreshing || page.pageIndex >= totalPages} onClick={() => onPageChange(page.pageIndex + 1)}>{t('common:actions.next')}</Button>
           </div>
         </div>
       </div>

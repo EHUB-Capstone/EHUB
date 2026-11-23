@@ -16,11 +16,15 @@ import { formatSlotTime, SLOT_OPTIONS, TEACHING_DAYS } from '../../constants/cla
 import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { normalizeManagedTeam } from '../../utils/teamManagement';
 import { Calendar, Plus, Video, Clock, Trash2, Edit, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatDate } from '../../i18n/format';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 const MentoringSessions = () => {
+  const { t: tr } = useTranslation('mentoring');
   const { user } = useAuth();
   const toId = (value) => {
     if (!value) return '';
@@ -82,7 +86,7 @@ const MentoringSessions = () => {
     } catch (err) {
       console.error('Failed to load class teams:', err);
       setClassTeams([]);
-      toast.error('Failed to load teams for the selected class');
+      toast.error(tr('mentoringSessions.failedToLoadTeamsForThe'));
     }
   };
 
@@ -171,7 +175,7 @@ const MentoringSessions = () => {
 
         setTeams(filteredTeams);
         if (user?.role === 'MENTOR' && filteredTeams.length === 0) {
-          toast('You are assigned to class(es), but no teams are available yet. Please generate/assign teams first.', {
+          toast(tr('mentoringSessions.youAreAssignedToClassEs'), {
             icon: 'ℹ️'
           });
         }
@@ -180,7 +184,7 @@ const MentoringSessions = () => {
       setSessions(Array.isArray(list) ? list : []);
       setMyClasses(Array.isArray(accessibleClasses) ? accessibleClasses : []);
     } catch {
-      toast.error('Failed to load sessions');
+      toast.error(tr('mentoringSessions.failedToLoadSessions'));
     } finally {
       setLoading(false);
     }
@@ -261,15 +265,15 @@ const MentoringSessions = () => {
       if (deleteTarget.action === 'delete') {
         await mentoringApi.deleteSession(deleteTarget.id);
         setSessions(sessions.filter(s => s._id !== deleteTarget.id));
-        toast.success('Session deleted!');
+        toast.success(tr('mentoringSessions.sessionDeleted'));
       } else {
         await mentoringApi.cancelSession(deleteTarget.id);
         setSessions(sessions.map(s => s._id === deleteTarget.id ? { ...s, status: 'CANCELLED' } : s));
-        toast.success('Session cancelled!');
+        toast.success(tr('mentoringSessions.sessionCancelled'));
       }
       setDeleteTarget(null);
     } catch (err) {
-      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update session');
+      toast.error(err.response?.data?.message || err.response?.data?.error || tr('mentoringSessions.failedToUpdateSession'));
     } finally {
       setIsDeleting(false);
     }
@@ -277,39 +281,39 @@ const MentoringSessions = () => {
 
   const handleSubmit = async () => {
     if (!form.title || form.title.trim() === '') { 
-      toast.error('Session title is required'); 
+      toast.error(tr('mentoringSessions.sessionTitleIsRequired')); 
       return; 
     }
     if (!form.meetingDate) { 
-      toast.error('Meeting date is required'); 
+      toast.error(tr('mentoringSessions.meetingDateIsRequired')); 
       return; 
     }
 
     const selectedDate = form.meetingDate.split('T')[0];
     if (selectedDate < minMeetingDate) {
-      toast.error('Past dates are not allowed');
+      toast.error(tr('mentoringSessions.pastDatesAreNotAllowed'));
       return;
     }
     
     // Validate time range if both start and end time provided
     if (form.startTime && form.endTime && form.startTime >= form.endTime) {
-      toast.error('Start time must be before end time');
+      toast.error(tr('mentoringSessions.startTimeMustBeBeforeEnd'));
       return;
     }
     
     if (user?.role !== 'STUDENT' && !form.classId) {
-      toast.error('Please select a class');
+      toast.error(tr('mentoringSessions.pleaseSelectAClass'));
       return;
     }
 
     if (user?.role !== 'STUDENT' && !form.teamId) { 
-      toast.error('Please select a team'); 
+      toast.error(tr('mentoringSessions.pleaseSelectATeam')); 
       return; 
     }
     
     // Check if user has teams
     if (user?.role !== 'STUDENT' && teams.length === 0) {
-      toast.error('You do not have permission to create sessions for any team');
+      toast.error(tr('mentoringSessions.youDoNotHavePermissionTo'));
       return;
     }
     
@@ -331,10 +335,10 @@ const MentoringSessions = () => {
       
       if (editingSession) {
         await mentoringApi.updateSession(editingSession._id, payload);
-        toast.success('Session updated!');
+        toast.success(tr('mentoringSessions.sessionUpdated'));
       } else {
         await mentoringApi.createSession(payload);
-        toast.success('Session scheduled!');
+        toast.success(tr('mentoringSessions.sessionScheduled'));
       }
       setIsModalOpen(false);
       await fetchData();
@@ -392,15 +396,15 @@ const MentoringSessions = () => {
           <div>
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" />
-              {user?.role === 'LECTURER' || user?.role === 'LECTURE' ? 'Teaching Timetable' : 'Class Timetable'}
+              {user?.role === 'LECTURER' || user?.role === 'LECTURE' ? tr('mentoringSessions.teachingTimetable') : tr('mentoringSessions.classTimetable')}
             </h3>
-            <p className="text-xs text-slate-400 mt-1">Weekly schedule of all your classes and slots</p>
+            <p className="text-xs text-slate-400 mt-1">{tr('mentoringSessions.weeklyScheduleOfAllYourClasses')}</p>
           </div>
         </div>
         <table className="w-full min-w-[700px] border-collapse">
           <thead>
             <tr className="bg-slate-50/70 border-b border-slate-200">
-              <th className="py-3 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-[150px]">Time / Slot</th>
+              <th className="py-3 px-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-[150px]">{tr('mentoringSessions.timeSlot')}</th>
               {TEACHING_DAYS.map(d => (
                 <th key={d} className="py-3 px-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">
                   {d}
@@ -412,7 +416,7 @@ const MentoringSessions = () => {
             {slots.map(slot => (
               <tr key={slot} className="hover:bg-slate-50/10 transition-colors">
                 <td className="py-4 px-4 align-top border-r border-slate-100/60">
-                  <div className="font-semibold text-slate-800 text-sm">Slot {slot}</div>
+                  <div className="font-semibold text-slate-800 text-sm">{tr('mentoringSessions.slot', { slot })}</div>
                   <div className="text-xs text-slate-400 mt-1">{formatSlotTime(slot)}</div>
                 </td>
                 {TEACHING_DAYS.map(day => {
@@ -424,7 +428,7 @@ const MentoringSessions = () => {
                           <div className="font-bold text-primary-700 text-sm truncate">{cls.classCode}</div>
                           <div className="text-caption font-semibold text-slate-500 mt-1">{cls.subjectCode}</div>
                           <div className="inline-flex items-center gap-1 mt-2 text-overline bg-white px-2.5 py-0.5 rounded-full border border-primary-200 text-primary-700 font-medium">
-                            Room: {cls.schedule.room || 'TBD'}
+                            {t('mentoringSessions.room', { room: cls.schedule.room || t('mentoringSessions.tbd') })}
                           </div>
                         </div>
                       ) : (
@@ -447,8 +451,8 @@ const MentoringSessions = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Schedules & Timetable</h1>
-          <p className="text-slate-500 mt-1">Manage your weekly learning classes and mentoring sessions</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{tr('mentoringSessions.schedulesTimetable')}</h1>
+          <p className="text-slate-500 mt-1">{tr('mentoringSessions.manageYourWeeklyLearningClassesAnd')}</p>
         </div>
         {activeView === 'mentoring' && (
           <Button 
@@ -457,9 +461,9 @@ const MentoringSessions = () => {
             icon={Plus} 
             onClick={openAdd}
             disabled={user?.role !== 'STUDENT' && (!teams || teams.length === 0)}
-            title={user?.role !== 'STUDENT' && (!teams || teams.length === 0) ? 'No teams available. You don\'t have permission to create sessions.' : 'Schedule a new mentoring session'}
+            title={user?.role !== 'STUDENT' && (!teams || teams.length === 0) ? tr('mentoringSessions.noTeamsAvailableYouDonT') : tr('mentoringSessions.scheduleANewMentoringSession')}
           >
-            Schedule Session
+            {tr('mentoringSessions.scheduleSession')}
           </Button>
         )}
       </div>
@@ -475,7 +479,7 @@ const MentoringSessions = () => {
           }`}
         >
           <Clock className="w-4 h-4" />
-          Weekly Timetable
+          {tr('mentoringSessions.weeklyTimetable')}
         </button>
         <button
           onClick={() => setActiveView('mentoring')}
@@ -486,7 +490,7 @@ const MentoringSessions = () => {
           }`}
         >
           <Calendar className="w-4 h-4" />
-          Mentoring Sessions
+          {tr('mentoringSessions.mentoringSessions')}
         </button>
       </div>
 
@@ -495,7 +499,7 @@ const MentoringSessions = () => {
         {/* Calendar */}
         <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-slate-900">{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</h3>
+            <h3 className="text-lg font-semibold text-slate-900">{formatDate(calMonth, { month: 'long', year: 'numeric' })}</h3>
             <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
               <button className="p-1.5 rounded-md hover:bg-white transition-all" onClick={() => setCalMonth(d => new Date(d.getFullYear(), d.getMonth() - 1))}>
                 <ChevronLeft className="w-4 h-4 text-slate-500" />
@@ -524,7 +528,7 @@ const MentoringSessions = () => {
                       {daySessions.slice(0, 2).map(s => (
                         <div key={s._id} className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded truncate font-medium">{s.title}</div>
                       ))}
-                      {daySessions.length > 2 && <div className="text-[9px] text-slate-400">+{daySessions.length - 2} more</div>}
+                      {daySessions.length > 2 && <div className="text-[9px] text-slate-400">{tr('mentoringSessions.more', { v1: daySessions.length - 2 })}</div>}
                     </div>
                   </div>
                 );
@@ -538,11 +542,11 @@ const MentoringSessions = () => {
           {/* Upcoming */}
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-slate-900">Upcoming</h3>
-              <span className="text-xs text-slate-400">{upcomingSessions.length} sessions</span>
+              <h3 className="font-semibold text-slate-900">{tr('mentoringSessions.upcoming')}</h3>
+              <span className="text-xs text-slate-400">{tr('mentoringSessions.sessions', { length: upcomingSessions.length })}</span>
             </div>
             {upcomingSessions.length === 0 ? (
-              <EmptyState icon={Calendar} title="No upcoming sessions" size="sm" />
+              <EmptyState icon={Calendar} title={tr('mentoringSessions.noUpcomingSessions')} size="sm" />
             ) : (
               <div className="space-y-3">
                 {upcomingSessions.slice(0, 3).map(s => (
@@ -553,20 +557,20 @@ const MentoringSessions = () => {
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-semibold text-slate-900 truncate">{s.title}</h4>
                           {s.status === 'CANCELLED' && (
-                            <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full font-medium">Cancelled</span>
+                            <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full font-medium">{tr('mentoringSessions.cancelled')}</span>
                           )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {new Date(s.meetingDate).toLocaleDateString()} {s.startTime ? `${s.startTime}${s.endTime ? ` - ${s.endTime}` : ''}` : ''}
+                          {fmtDate(s.meetingDate)} {s.startTime ? `${s.startTime}${s.endTime ? ` - ${s.endTime}` : ''}` : ''}
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0 ml-2 items-start">
-                        <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700 hover:bg-white transition-all" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
+                        <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700 hover:bg-white transition-all" title={tr('mentoringSessions.editSession')} aria-label={tr('mentoringSessions.editSession')}><Edit className="w-3 h-3" /></button>
                         <button
                           onClick={() => handleDelete(s)}
-                          title={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'}
-                          aria-label={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'}
+                          title={user?.role === 'ADMIN' ? tr('mentoringSessions.deleteSession') : tr('mentoringSessions.cancelSession')}
+                          aria-label={user?.role === 'ADMIN' ? tr('mentoringSessions.deleteSession') : tr('mentoringSessions.cancelSession')}
                           className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-white transition-all"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -577,10 +581,10 @@ const MentoringSessions = () => {
                       className={`mt-2 ml-2 w-full text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors ${s.status === 'CANCELLED' ? 'bg-slate-100 text-slate-400 pointer-events-none' : 'bg-primary text-white hover:bg-primary-dark'}`}
                       onClick={() => {
                         if (s.status === 'CANCELLED') return;
-                        toast.success('Opening Google Meet...', { icon: '🎥' }); setTimeout(() => window.open('https://meet.google.com/new', '_blank'), 800);
+                        toast.success(tr('mentoringSessions.openingGoogleMeet'), { icon: '🎥' }); setTimeout(() => window.open('https://meet.google.com/new', '_blank'), 800);
                       }}
                     >
-                      <Video className="w-3 h-3" /> {s.status === 'CANCELLED' ? 'Cancelled' : 'Join Meet'}
+                      <Video className="w-3 h-3" /> {s.status === 'CANCELLED' ? tr('mentoringSessions.cancelled') : tr('mentoringSessions.joinMeet')}
                     </button>
                   </div>
                 ))}
@@ -590,9 +594,9 @@ const MentoringSessions = () => {
 
           {/* Past Sessions */}
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-            <h3 className="font-semibold text-slate-900 mb-3">Past Sessions</h3>
+            <h3 className="font-semibold text-slate-900 mb-3">{tr('mentoringSessions.pastSessions')}</h3>
             {pastSessions.length === 0 ? (
-              <p className="text-sm text-slate-400">No past sessions</p>
+              <p className="text-sm text-slate-400">{tr('mentoringSessions.noPastSessions')}</p>
             ) : (
               <div className="space-y-2">
                 {pastSessions.slice(0, 4).map(s => (
@@ -600,11 +604,11 @@ const MentoringSessions = () => {
                     <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-700 truncate">{s.title}</p>
-                      <p className="text-xs text-slate-400">{new Date(s.meetingDate).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-400">{fmtDate(s.meetingDate)}</p>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                      <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700" title="Edit session" aria-label="Edit session"><Edit className="w-3 h-3" /></button>
-                      <button onClick={() => handleDelete(s)} title={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'} aria-label={user?.role === 'ADMIN' ? 'Delete session' : 'Cancel session'} className="p-1 rounded text-slate-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                      <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700" title={tr('mentoringSessions.editSession')} aria-label={tr('mentoringSessions.editSession')}><Edit className="w-3 h-3" /></button>
+                      <button onClick={() => handleDelete(s)} title={user?.role === 'ADMIN' ? tr('mentoringSessions.deleteSession') : tr('mentoringSessions.cancelSession')} aria-label={user?.role === 'ADMIN' ? tr('mentoringSessions.deleteSession') : tr('mentoringSessions.cancelSession')} className="p-1 rounded text-slate-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
                 ))}
@@ -620,8 +624,8 @@ const MentoringSessions = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingSession ? 'Edit Session' : 'Schedule Mentoring Session'}
-        submitText={editingSession ? 'Save' : 'Schedule'}
+        title={editingSession ? tr('mentoringSessions.editSession2') : tr('mentoringSessions.scheduleMentoringSession')}
+        submitText={editingSession ? tr('common:actions.save') : tr('mentoringSessions.schedule')}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
       >
@@ -629,10 +633,10 @@ const MentoringSessions = () => {
           {user?.role !== 'STUDENT' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select Class * {myClasses.length === 0 && <span className="text-red-500 text-xs">(No classes available)</span>}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.selectClass')} {myClasses.length === 0 && <span className="text-red-500 text-xs">{tr('mentoringSessions.noClassesAvailable')}</span>}</label>
                 {myClasses.length === 0 ? (
                   <div className="w-full p-3 border border-red-300 bg-red-50 rounded-lg text-sm text-red-700">
-                    No classes available for your account.
+                    {tr('mentoringSessions.noClassesAvailableForYourAccount')}
                   </div>
                 ) : (
                   <select
@@ -641,7 +645,7 @@ const MentoringSessions = () => {
                     onChange={(e) => handleClassChange(e.target.value)}
                     required
                   >
-                    <option value="">-- Choose Class --</option>
+                    <option value="">{tr('mentoringSessions.chooseClass')}</option>
                     {myClasses.map(cls => (
                       <option key={cls._id} value={cls._id}>
                         {getClassLabel(cls)}
@@ -651,14 +655,14 @@ const MentoringSessions = () => {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Select Team * {form.classId && selectedClassTeams.length === 0 && <span className="text-red-500 text-xs">(No teams in this class)</span>}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.selectTeam')} {form.classId && selectedClassTeams.length === 0 && <span className="text-red-500 text-xs">{tr('mentoringSessions.noTeamsInThisClass')}</span>}</label>
                 {!form.classId ? (
                   <div className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg text-sm text-slate-500">
-                    Choose a class first to see its teams.
+                    {tr('mentoringSessions.chooseAClassFirstToSee')}
                   </div>
                 ) : selectedClassTeams.length === 0 ? (
                   <div className="w-full p-3 border border-red-300 bg-red-50 rounded-lg text-sm text-red-700">
-                    No teams available for the selected class. Contact your admin.
+                    {tr('mentoringSessions.noTeamsAvailableForTheSelected')}
                   </div>
                 ) : (
                   <select
@@ -667,7 +671,7 @@ const MentoringSessions = () => {
                     onChange={(e) => handleTeamChange(e.target.value)}
                     required
                   >
-                    <option value="">-- Choose Team --</option>
+                    <option value="">{tr('mentoringSessions.chooseTeam')}</option>
                     {selectedClassTeams.map(t => (
                       <option key={t._id} value={t._id}>
                         {t.teamName}
@@ -679,18 +683,18 @@ const MentoringSessions = () => {
             </>
           )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Session Title *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.sessionTitle')}</label>
             <input 
               type="text" 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
               value={form.title} 
               onChange={(e) => setForm({ ...form, title: e.target.value })} 
-              placeholder="e.g. Business Model Review" 
+              placeholder={tr('mentoringSessions.eGBusinessModelReview')} 
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.date')}</label>
             <input 
               type="date" 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
@@ -706,7 +710,7 @@ const MentoringSessions = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.startTime')}</label>
               <input 
                 type="time" 
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
@@ -715,7 +719,7 @@ const MentoringSessions = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">End Time</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.endTime')}</label>
               <input 
                 type="time" 
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
@@ -725,17 +729,17 @@ const MentoringSessions = () => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.location')}</label>
             <input 
               type="text" 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
               value={form.location} 
               onChange={(e) => setForm({ ...form, location: e.target.value })} 
-              placeholder="e.g. Room 302 or Online" 
+              placeholder={tr('mentoringSessions.eGRoom302OrOnline')} 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Link</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.meetingLink')}</label>
             <input 
               type="url" 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" 
@@ -745,17 +749,17 @@ const MentoringSessions = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.notes')}</label>
             <textarea 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none" 
               rows={3} 
               value={form.notes} 
               onChange={(e) => setForm({ ...form, notes: e.target.value })} 
-              placeholder="Session agenda, topics to discuss..." 
+              placeholder={tr('mentoringSessions.sessionAgendaTopicsToDiscuss')} 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Action Items</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('mentoringSessions.actionItems')}</label>
             {form.actionItems.map((item, i) => (
               <div key={i} className="flex gap-2 mb-2">
                 <input 
@@ -767,7 +771,7 @@ const MentoringSessions = () => {
                     arr[i] = e.target.value; 
                     setForm({ ...form, actionItems: arr });
                   }} 
-                  placeholder={`Action item ${i + 1}`} 
+                  placeholder={tr('mentoringSessions.actionItem', { v1: i + 1 })} 
                 />
                 {i > 0 && (
                   <button 
@@ -785,7 +789,7 @@ const MentoringSessions = () => {
               onClick={() => setForm({ ...form, actionItems: [...form.actionItems, ''] })} 
               className="text-sm text-primary-700 hover:underline"
             >
-              + Add action item
+              {tr('mentoringSessions.addActionItem')}
             </button>
           </div>
         </div>
@@ -795,12 +799,12 @@ const MentoringSessions = () => {
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
-        title={deleteTarget?.action === 'delete' ? 'Delete Session' : 'Cancel Session'}
+        title={deleteTarget?.action === 'delete' ? tr('mentoringSessions.deleteSession2') : tr('mentoringSessions.cancelSession2')}
         description={deleteTarget?.action === 'delete'
-          ? `Are you sure you want to delete ${deleteTarget?.title || 'this item'}? This action cannot be undone.`
-          : `Are you sure you want to cancel ${deleteTarget?.title || 'this session'}?`
+          ? t('mentoringSessions.confirmDelete', { title: deleteTarget?.title || t('mentoringSessions.thisItem') })
+          : t('mentoringSessions.confirmCancel', { title: deleteTarget?.title || t('mentoringSessions.thisSession') })
         }
-        confirmText={deleteTarget?.action === 'delete' ? 'Delete' : 'Cancel'}
+        confirmText={deleteTarget?.action === 'delete' ? tr('common:actions.delete') : tr('common:actions.cancel')}
         isSubmitting={isDeleting}
       />
     </div>

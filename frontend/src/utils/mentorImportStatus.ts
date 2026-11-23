@@ -1,4 +1,5 @@
 import type { MentorImportRowPreview } from '../types/mentorAdmin';
+import i18n from '../i18n/index.ts';
 
 /** What the import will do with one row of the file. Every row falls in exactly one category. */
 export type ImportRowCategory = 'create' | 'complete' | 'update' | 'incomplete' | 'invalid';
@@ -8,11 +9,11 @@ export type ImportStatusFilter = 'all' | ImportRowCategory;
 export type ImportStatusTone = 'success' | 'info' | 'warning' | 'danger';
 
 export const IMPORT_STATUS_META: Record<ImportRowCategory, { label: string; tone: ImportStatusTone }> = {
-  create: { label: 'Create', tone: 'success' },
-  complete: { label: 'Complete record', tone: 'success' },
-  update: { label: 'Update', tone: 'info' },
-  incomplete: { label: 'Incomplete', tone: 'warning' },
-  invalid: { label: 'Invalid', tone: 'danger' },
+  create: { get label() { return i18n.t('common:actions.create'); }, tone: 'success' },
+  complete: { get label() { return i18n.t('utils:mentorImportStatus.completeRecord'); }, tone: 'success' },
+  update: { get label() { return i18n.t('utils:mentorImportStatus.update'); }, tone: 'info' },
+  incomplete: { get label() { return i18n.t('utils:mentorImportStatus.incomplete'); }, tone: 'warning' },
+  invalid: { get label() { return i18n.t('utils:mentorImportStatus.invalid'); }, tone: 'danger' },
 };
 
 /** Order of the filter chips, the same as the summary tiles. */

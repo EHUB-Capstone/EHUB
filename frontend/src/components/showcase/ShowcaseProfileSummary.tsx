@@ -3,6 +3,7 @@ import { FolderKanban, Pencil } from 'lucide-react';
 import Card from '../ui/Card';
 import { PROJECT_PROFILE_LABELS } from '../../constants/projectProfile';
 import type { ShowcaseProfileDto } from '../../types/showcase';
+import { useTranslation } from 'react-i18next';
 
 interface ShowcaseProfileSummaryProps {
   profile: ShowcaseProfileDto;
@@ -26,23 +27,23 @@ function Field({ label, value, empty }: { label: string; value: string | null; e
  * page, which keeps one source of truth with the same field names on both pages.
  */
 export default function ShowcaseProfileSummary({ profile, editPath }: ShowcaseProfileSummaryProps) {
+  const { t } = useTranslation('showcase');
   return (
     <Card hover={false} className="space-y-4">
       <Card.Header className="mb-0">
-        <Card.Title icon={FolderKanban}>Project Profile</Card.Title>
+        <Card.Title icon={FolderKanban}>{t('showcaseProfileSummary.projectProfile')}</Card.Title>
         {editPath && (
           <Link
             to={editPath}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-body-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />
-            Edit in Project Profile
+            {t('showcaseProfileSummary.editInProjectProfile')}
           </Link>
         )}
       </Card.Header>
       <p className="text-body-sm text-slate-600">
-        These fields come straight from your Project Profile, so both pages always match.
-        Changes to Project name and Description need your lecturer&apos;s approval.
+        {t('showcaseProfileSummary.theseFieldsComeStraightFromYour')}
       </p>
       <dl className="space-y-4">
         <Field label={PROJECT_PROFILE_LABELS.projectName} value={profile.projectName} empty="Not provided" />

@@ -1,8 +1,10 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
 import { Archive, Check, ChevronDown, Clock3, History } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function WorkspaceSelector({ selectedWorkspace, availableWorkspaces = [], onChangeWorkspace, disabled = false }) {
+  const { t } = useTranslation('workspace');
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -58,7 +60,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
           </span>
           <span className="min-w-0">
             <span className="block text-overline font-bold uppercase tracking-wide text-slate-400">
-              Workspace
+              {t('workspaceSelector.workspace')}
             </span>
             <span className="block truncate text-sm font-bold text-slate-800">
               {selectedLabel}
@@ -70,11 +72,11 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
           {selectedWorkspace.isArchived ? (
             <span className="hidden items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-overline font-bold text-amber-700 sm:inline-flex">
               <Archive className="h-3 w-3" />
-              Archived
+              {t('startupWorkspaceHub.archived')}
             </span>
           ) : (
             <span className="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-overline font-bold text-emerald-700 sm:inline-flex">
-              Current
+              {t('teamLineageHistory.current')}
             </span>
           )}
           <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -84,11 +86,11 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl sm:w-[360px]">
           <div className="border-b border-slate-100 px-3 py-2">
-            <p className="text-xs font-bold text-slate-800">Switch workspace</p>
-            <p className="text-caption text-slate-400">Move between detected EXE101, EXE201, and archived startup workspaces.</p>
+            <p className="text-xs font-bold text-slate-800">{t('workspaceSelector.switchWorkspace')}</p>
+            <p className="text-caption text-slate-400">{t('workspaceSelector.moveBetweenDetectedExe101Exe201And')}</p>
           </div>
 
-          <div className="max-h-72 overflow-y-auto p-1" role="listbox" aria-label="Available workspaces">
+          <div className="max-h-72 overflow-y-auto p-1" role="listbox" aria-label={t('workspaceSelector.availableWorkspaces')}>
             {availableWorkspaces.map((workspace) => {
               const isSelected = String(workspace.teamId) === selectedTeamId;
               const label = [workspace.courseCode || 'Workspace', workspace.semester].filter(Boolean).join(' - ');
@@ -125,7 +127,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
                         ? 'bg-amber-50 text-amber-700'
                         : 'bg-emerald-50 text-emerald-700'
                     }`}>
-                      {workspace.accessMode === 'READ_ONLY' ? 'Read-only' : 'Editable'}
+                      {workspace.accessMode === 'READ_ONLY' ? t('startupWorkspaceHub.readOnly') : t('workspaceSelector.editable')}
                     </span>
                     {isSelected && <Check className="h-4 w-4" />}
                   </span>
@@ -136,7 +138,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
 
           {!hasMultipleWorkspaces && (
             <div className="px-3 pb-3 text-xs text-slate-400">
-              No related workspace detected yet.
+              {t('workspaceSelector.noRelatedWorkspaceDetectedYet')}
             </div>
           )}
         </div>
@@ -144,7 +146,7 @@ export default function WorkspaceSelector({ selectedWorkspace, availableWorkspac
 
       {!hasMultipleWorkspaces && (
         <p className="mt-1 text-caption font-medium text-slate-400">
-          No related EXE101/EXE201 workspace detected yet.
+          {t('workspaceSelector.noRelatedExe101Exe201WorkspaceDetected')}
         </p>
       )}
     </div>

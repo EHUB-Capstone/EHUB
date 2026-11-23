@@ -4,12 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import NotificationDropdown from './NotificationDropdown';
+import LanguageSwitcher from '../ui/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
 
 const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { t } = useTranslation('nav');
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [classConflictAlert, setClassConflictAlert] = useState(null);
@@ -27,13 +30,6 @@ const Navbar = ({ onMenuClick }) => {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileMenu]);
-
-  const roleLabels = {
-    ADMIN: 'Administrator',
-    LECTURER: 'Lecturer',
-    MENTOR: 'Mentor',
-    STUDENT: 'Student',
-  };
 
   const roleBadgeVariant = {
     ADMIN: 'Approved',
@@ -93,7 +89,7 @@ const Navbar = ({ onMenuClick }) => {
         <button
           onClick={onMenuClick}
           className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all lg:hidden shrink-0"
-          aria-label="Open sidebar menu"
+          aria-label={t('sidebar.open')}
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -101,12 +97,14 @@ const Navbar = ({ onMenuClick }) => {
 
       {/* Right Section */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <LanguageSwitcher />
+
         <button
           type="button"
           onClick={toggleTheme}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
-          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-          title={isDark ? 'Light theme' : 'Dark theme'}
+          aria-label={isDark ? t('common:theme.switchToLight') : t('common:theme.switchToDark')}
+          title={isDark ? t('common:theme.light') : t('common:theme.dark')}
         >
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
@@ -125,14 +123,14 @@ const Navbar = ({ onMenuClick }) => {
             aria-haspopup="true"
           >
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[13px] font-semibold text-secondary leading-tight">{user.name || 'User'}</span>
+              <span className="text-[13px] font-semibold text-secondary leading-tight">{user.name || t('header.user')}</span>
               <Badge variant={roleBadgeVariant[role]} size="xs">
-                {roleLabels[role] || role}
+                {t(`common:roles.${role}`, { defaultValue: role })}
               </Badge>
             </div>
             <div className="w-9 h-9 rounded-xl bg-primary-100 overflow-hidden border border-primary-100 flex items-center justify-center shrink-0">
               {user.avatar ? (
-                <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={user.avatar} alt={t('header.avatarAlt')} className="w-full h-full object-cover" />
               ) : (
                 <span className="font-display font-bold text-primary-700 text-[13px]">{user.name?.charAt(0)?.toUpperCase() || 'U'}</span>
               )}
@@ -143,27 +141,27 @@ const Navbar = ({ onMenuClick }) => {
           {showProfileMenu && (
             <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-float border border-slate-100 overflow-hidden py-1 animate-scale-in origin-top-right">
               <div className="px-4 py-3 border-b border-slate-100 sm:hidden">
-                <p className="text-sm font-semibold text-slate-900">{user.name || 'User'}</p>
+                <p className="text-sm font-semibold text-slate-900">{user.name || t('header.user')}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{user.email || ''}</p>
               </div>
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors flex items-center gap-2.5"
                 onClick={() => { setShowProfileMenu(false); navigate('/settings'); }}
               >
-                <Settings className="w-4 h-4" /> Settings
+                <Settings className="w-4 h-4" /> {t('header.settings')}
               </button>
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-primary-700 transition-colors flex items-center gap-2.5"
                 onClick={() => { setShowProfileMenu(false); navigate('/profile'); }}
               >
-                <User className="w-4 h-4" /> Profile
+                <User className="w-4 h-4" /> {t('header.profile')}
               </button>
               <div className="h-px w-full bg-slate-100 my-1" />
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-danger-dark hover:bg-danger-50 transition-colors flex items-center gap-2.5 font-medium"
                 onClick={() => { logout(); navigate('/login'); }}
               >
-                <LogOut className="w-4 h-4" /> Sign Out
+                <LogOut className="w-4 h-4" /> {t('common:actions.signOut')}
               </button>
             </div>
           )}
@@ -178,7 +176,7 @@ const Navbar = ({ onMenuClick }) => {
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Please verify your class code</h2>
+                <h2 className="text-lg font-bold text-slate-900">{t('header.classCodeAlert.title')}</h2>
                 <p className="text-sm text-slate-600 mt-1">{classConflictAlert.message}</p>
                 {classConflictAlert.data?.classCode && (
                   <p className="text-xs font-semibold text-slate-500 mt-2">
@@ -194,14 +192,14 @@ const Navbar = ({ onMenuClick }) => {
                 onClick={() => closeClassConflictAlert(false)}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 transition-all"
               >
-                Dismiss
+                {t('header.classCodeAlert.dismiss')}
               </button>
               <button
                 type="button"
                 onClick={() => closeClassConflictAlert(true)}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
               >
-                Check classes
+                {t('header.classCodeAlert.checkClasses')}
               </button>
             </div>
           </div>

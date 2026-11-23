@@ -1,4 +1,6 @@
 import { CalendarDays, Clock3, GraduationCap, Tag } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 type Props = {
   project: {
@@ -29,10 +31,10 @@ const formatDateTime = (value?: string | null) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
     ? 'Not available'
-    : new Intl.DateTimeFormat(undefined, {
+    : fmtDate(parsed, {
         dateStyle: 'medium',
         timeStyle: 'short',
-      }).format(parsed);
+      });
 };
 
 const TagList = ({ values, empty }: { values?: string[]; empty: string }) => (
@@ -48,6 +50,7 @@ const TagList = ({ values, empty }: { values?: string[]; empty: string }) => (
 );
 
 export default function ProjectWorkspaceProfile({ project, classInfo, activities = [] }: Props) {
+  const { t } = useTranslation('workspace');
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
@@ -56,7 +59,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">{project.projectName}</h2>
               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-caption font-bold uppercase tracking-wide text-emerald-700">
-                {project.status || 'Draft'}
+                {project.status || t('projectWorkspaceProfile.draft')}
               </span>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{project.description}</p>
@@ -66,7 +69,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
         <div className="px-5 py-4">
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
-              <Tag className="h-3.5 w-3.5" /> Keywords
+              <Tag className="h-3.5 w-3.5" /> {t('projectWorkspaceProfile.keywords')}
             </p>
             <TagList values={project.keywords} empty="No keywords listed." />
           </div>
@@ -74,12 +77,12 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
 
         <div className="grid border-t border-slate-100 bg-slate-50/60 sm:grid-cols-3">
           <div className="border-b border-slate-100 px-5 py-3 sm:border-b-0 sm:border-r">
-            <p className="text-overline font-bold uppercase tracking-wider text-slate-400">Class</p>
+            <p className="text-overline font-bold uppercase tracking-wider text-slate-400">{t('projectWorkspaceProfile.class')}</p>
             <p className="mt-1 text-sm font-semibold text-slate-700">{classInfo.classCode || '—'}</p>
           </div>
           <div className="border-b border-slate-100 px-5 py-3 sm:border-b-0 sm:border-r">
             <p className="flex items-center gap-1 text-overline font-bold uppercase tracking-wider text-slate-400">
-              <GraduationCap className="h-3 w-3" /> Subject
+              <GraduationCap className="h-3 w-3" /> {t('projectWorkspaceProfile.subject')}
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">
               {[classInfo.subjectCode, classInfo.subjectName].filter(Boolean).join(' · ') || '—'}
@@ -87,7 +90,7 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
           </div>
           <div className="px-5 py-3">
             <p className="flex items-center gap-1 text-overline font-bold uppercase tracking-wider text-slate-400">
-              <CalendarDays className="h-3 w-3" /> Semester
+              <CalendarDays className="h-3 w-3" /> {t('projectWorkspaceProfile.semester')}
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">{classInfo.semesterCode || '—'}</p>
           </div>
@@ -97,16 +100,16 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
       <section className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-slate-800">Project activity</h3>
-            <p className="mt-0.5 text-xs text-slate-400">Latest workspace profile changes.</p>
+            <h3 className="font-bold text-slate-800">{t('projectWorkspaceProfile.projectActivity')}</h3>
+            <p className="mt-0.5 text-xs text-slate-400">{t('projectWorkspaceProfile.latestWorkspaceProfileChanges')}</p>
           </div>
           {project.updatedAtUtc && (
-            <span className="text-xs font-medium text-slate-400">Updated {formatDateTime(project.updatedAtUtc)}</span>
+            <span className="text-xs font-medium text-slate-400">{t('projectWorkspaceProfile.updated', { v1: formatDateTime(project.updatedAtUtc) })}</span>
           )}
         </div>
         {activities.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400">
-            No project activity recorded yet.
+            {t('projectWorkspaceProfile.noProjectActivityRecordedYet')}
           </div>
         ) : (
           <ol className="space-y-0">
@@ -117,9 +120,9 @@ export default function ProjectWorkspaceProfile({ project, classInfo, activities
                   <Clock3 className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0 pt-0.5">
-                  <p className="text-sm font-semibold text-slate-700">{activity.summary || 'Project workspace updated.'}</p>
+                  <p className="text-sm font-semibold text-slate-700">{activity.summary || t('projectWorkspaceProfile.projectWorkspaceUpdated')}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    {activity.actorName || 'System'} · {formatDateTime(activity.occurredAtUtc)}
+                    {activity.actorName || t('evaluationPanel.system')} · {formatDateTime(activity.occurredAtUtc)}
                   </p>
                 </div>
               </li>

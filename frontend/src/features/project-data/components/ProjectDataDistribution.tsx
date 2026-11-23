@@ -16,6 +16,9 @@ import {
   limitDistributionBuckets,
   majorLabel,
 } from '../../../utils/projectDistribution';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '../../../i18n/format';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 interface ProjectDataDistributionProps {
   distribution: ProjectDataDistributionData | undefined;
@@ -41,8 +44,9 @@ interface Row {
 }
 
 function BarList({ rows, total, label }: { rows: Row[]; total: number; label: string }) {
+  const { t } = useTranslation('projectData');
   const max = Math.max(0, ...rows.map(row => row.count));
-  if (rows.length === 0) return <p className="text-body-sm text-slate-500">Nothing to show.</p>;
+  if (rows.length === 0) return <p className="text-body-sm text-slate-500">{t('projectDataDistribution.nothingToShow')}</p>;
 
   return (
     <ul aria-label={label} className="space-y-1">
@@ -53,7 +57,7 @@ function BarList({ rows, total, label }: { rows: Row[]; total: number; label: st
             <span className="flex items-baseline justify-between gap-3 text-body-sm">
               <span className="min-w-0 truncate text-slate-700">{row.label}</span>
               <span className="shrink-0 font-semibold text-secondary">
-                {row.count.toLocaleString()} <span className="font-normal text-slate-500">({percent}%)</span>
+                {fmtNumber(row.count)} <span className="font-normal text-slate-500">({percent}%)</span>
               </span>
             </span>
             <span className="mt-1 block h-2 w-full rounded-full bg-slate-100" aria-hidden="true">
@@ -72,7 +76,7 @@ function BarList({ rows, total, label }: { rows: Row[]; total: number; label: st
                 type="button"
                 onClick={row.onSelect}
                 aria-pressed={row.selected ?? false}
-                aria-label={`${row.label}: ${row.count} groups. Filter the table by this value.`}
+                aria-label={t('projectDataDistribution.groupsFilterTheTableByThis', { label: row.label, countValue: row.count })}
                 className="block w-full rounded-lg px-2 py-1.5 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
               >
                 {content}
@@ -125,9 +129,10 @@ export default function ProjectDataDistribution({
   onFilter,
   onViewTable,
 }: ProjectDataDistributionProps) {
+  const { t } = useTranslation('projectData');
   if (isLoading) {
     return (
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="status" aria-label="Loading distribution">
+      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="status" aria-label={t('projectDataDistribution.loadingDistribution')}>
         {[0, 1, 2, 3].map(index => <LoadingSkeleton key={index} variant="card" />)}
       </div>
     );
@@ -136,8 +141,8 @@ export default function ProjectDataDistribution({
   if (!distribution) {
     return isError ? (
       <p role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-danger">
-        The project distribution could not be loaded.
-        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">Retry</button>
+        {t('projectDataDistribution.theProjectDistributionCouldNotBe')}
+        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
       </p>
     ) : null;
   }
@@ -146,7 +151,7 @@ export default function ProjectDataDistribution({
   if (total === 0) {
     return (
       <p className="mb-4 text-body-sm text-slate-500" role="status">
-        No projects match the current filters, so there is no distribution to show.
+        {t('projectDataDistribution.noProjectsMatchTheCurrentFilters')}
       </p>
     );
   }
@@ -178,10 +183,10 @@ export default function ProjectDataDistribution({
     bucket => hasFilterValue(query.startupIndustry, bucket.name),
   );
   if (industries.otherCount > 0) {
-    industryRows.push({ key: '__other', label: `${industries.otherBuckets} more industries`, count: industries.otherCount, onSelect: null });
+    industryRows.push({ key: '__other', label: t('projectDataDistribution.moreIndustries', { otherBuckets: industries.otherBuckets }), count: industries.otherCount, onSelect: null });
   }
   if (distribution.unspecifiedStartupIndustryCount > 0) {
-    industryRows.push({ key: '__none', label: 'No industry set', count: distribution.unspecifiedStartupIndustryCount, onSelect: null });
+    industryRows.push({ key: '__none', label: t('projectDataDistribution.noIndustrySet'), count: distribution.unspecifiedStartupIndustryCount, onSelect: null });
   }
 
   const outcomeRows: Row[] = toRows(
@@ -190,35 +195,35 @@ export default function ProjectDataDistribution({
     bucket => query.achievement.includes(bucket.name as ProjectAchievement),
   );
   if (distribution.noOutcomeCount > 0) {
-    outcomeRows.push({ key: '__none', label: 'No label', count: distribution.noOutcomeCount, onSelect: null });
+    outcomeRows.push({ key: '__none', label: t('projectDataDistribution.noLabel'), count: distribution.noOutcomeCount, onSelect: null });
   }
 
   return (
     <section
-      aria-label="Project distribution"
+      aria-label={t('projectDataDistribution.projectDistribution')}
       aria-busy={isRefreshing}
       className={cn('mb-4 transition-opacity', isRefreshing && 'opacity-60')}
     >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Panel title="By semester">
-          <BarList rows={semesterRows} total={total} label="Groups by semester" />
+        <Panel title={t('projectDataDistribution.bySemester')}>
+          <BarList rows={semesterRows} total={total} label={t('projectDataDistribution.groupsBySemester')} />
         </Panel>
-        <Panel title="By major" note="A group counts once for each major among its members.">
-          <BarList rows={majorRows} total={total} label="Groups by major" />
+        <Panel title={t('projectDataDistribution.byMajor')} note="A group counts once for each major among its members.">
+          <BarList rows={majorRows} total={total} label={t('projectDataDistribution.groupsByMajor')} />
         </Panel>
-        <Panel title="By startup industry / topic" note="A group can have up to three industries.">
-          <BarList rows={industryRows} total={total} label="Groups by startup industry" />
+        <Panel title={t('projectDataDistribution.byStartupIndustryTopic')} note="A group can have up to three industries.">
+          <BarList rows={industryRows} total={total} label={t('projectDataDistribution.groupsByStartupIndustry')} />
         </Panel>
-        <Panel title="By outcome" note="Labels are independent, so a group can have several.">
-          <BarList rows={outcomeRows} total={total} label="Groups by outcome" />
+        <Panel title={t('projectDataDistribution.byOutcome')} note="Labels are independent, so a group can have several.">
+          <BarList rows={outcomeRows} total={total} label={t('projectDataDistribution.groupsByOutcome')} />
         </Panel>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption text-slate-500">
-          Percentages are shares of {total.toLocaleString()} groups, so major, industry and outcome rows can add up to more than 100%.
+          {t('projectDataDistribution.percentagesAreSharesOfGroupsSo', { v1: fmtNumber(total) })}
         </p>
         <Button variant="outline" size="sm" onClick={onViewTable}>
-          View {total.toLocaleString()} {total === 1 ? 'group' : 'groups'} in table
+          {t('projectDataDistribution.viewGroupsInTable', { count: total, formatted: formatNumber(total) })}
         </Button>
       </div>
     </section>

@@ -41,6 +41,8 @@ import { canManageClass as canManageClassPermission, hasClassRole } from '../../
 import type { ClassCompletionPreview } from '../../types/classes';
 import type { StudentAssignmentMode } from '../../types/studentAssignment';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const mapRosterStudents = (rawStudents, currentClassId, proposals = []) => {
   const reservedTeamIds = new Map();
@@ -107,6 +109,7 @@ function ClassActionButton({ icon: Icon, tone = 'neutral', loading = false, chil
 }
 
 export default function ClassDetail() {
+  const { t: tr } = useTranslation('class');
   const { slug: id } = useParams();
   const navigate  = useNavigate();
   const { user }  = useContext(AuthContext);
@@ -192,7 +195,7 @@ export default function ClassDetail() {
   // `background` refreshes in place: swapping the page for a skeleton would unmount open modals.
   const fetchData = useCallback(async (options?: { background?: boolean; rosterOnly?: boolean }) => {
     if (!id || id === 'undefined') {
-      toast.error('Invalid class identifier');
+      toast.error(tr('classDetail.invalidClassIdentifier'));
       setLoading(false);
       return null;
     }
@@ -230,7 +233,7 @@ export default function ClassDetail() {
         setStudents(mapRosterStudents(rawStudents, currentClassId, teamProposalsRef.current));
       } catch (error) {
         if (!controller.signal.aborted) {
-          setRosterLoadError(parseApiError(error, 'Failed to load the class roster.').message);
+          setRosterLoadError(parseApiError(error, tr('classDetail.failedToLoadTheClassRoster')).message);
         }
       } finally {
         // A superseded request must not clear the indicator of the one that replaced it.
@@ -247,7 +250,7 @@ export default function ClassDetail() {
       const classRes = await classApi.getById(id);
       const classData = unwrapApiData(classRes);
       if (!classData) {
-        toast.error('Failed to load class');
+        toast.error(tr('classDetail.failedToLoadClass'));
         return null;
       }
 
@@ -298,7 +301,7 @@ export default function ClassDetail() {
       } else if (rawClass.students) {
         rawStudents = rawClass.students;
       } else {
-        setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
+        setRosterLoadError(parseApiError(studentRes.reason, tr('classDetail.failedToLoadTheClassRoster')).message);
       }
 
       let rawTeams = [];
@@ -336,7 +339,7 @@ export default function ClassDetail() {
 
       return classData;
     } catch (err) {
-      toast.error(err?.message || 'Failed to load class');
+      toast.error(err?.message || tr('classDetail.failedToLoadClass'));
       return null;
     } finally {
       setLoading(false);
@@ -394,7 +397,7 @@ export default function ClassDetail() {
 
   const startInlineTeamCreation = () => {
     setTab('students');
-    toast('Select 4–6 students in the table to create a team.');
+    toast(tr('classDetail.select46StudentsInThe'));
   };
 
   const openEditTeam = (team) => {
@@ -428,7 +431,7 @@ export default function ClassDetail() {
       const directoryCandidates = records.map(directoryRecordToStudent).filter(Boolean);
       setAssignmentCandidates(mergeAssignmentCandidates(classCandidates, directoryCandidates));
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to load the student directory.').message);
+      toast.error(parseApiError(error, tr('classDetail.unableToLoadTheStudentDirectory')).message);
     } finally {
       setAssignmentCandidatesLoading(false);
     }
@@ -450,11 +453,11 @@ export default function ClassDetail() {
     setDeletingTeam(true);
     try {
       await teamApi.deleteTeam(teamToDelete._id);
-      toast.success('Team permanently deleted and members were unassigned.');
+      toast.success(tr('classDetail.teamPermanentlyDeletedAndMembersWere'));
       setTeamToDelete(null);
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to delete the team.').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToDeleteTheTeam')).message);
     } finally {
       setDeletingTeam(false);
     }
@@ -466,11 +469,11 @@ export default function ClassDetail() {
       const res: any = await classApi.repairChatMemberships(loadedClassId);
       const summary = res?.data || res;
       toast.success(
-        `Repair complete: ${summary.groupsCreated || 0} groups created, ${summary.membershipsAdded || 0} members added, ${summary.membershipsEnded || 0} stale memberships ended.`
+        tr('classDetail.repairCompleteGroupsCreatedMembersAdded', { v1: summary.groupsCreated || 0, v2: summary.membershipsAdded || 0, v3: summary.membershipsEnded || 0 })
       );
       await fetchData();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to repair chat memberships').message);
+      toast.error(parseApiError(e, tr('classDetail.failedToRepairChatMemberships')).message);
     } finally {
       setBackfilling(false);
     }
@@ -483,9 +486,9 @@ export default function ClassDetail() {
         ? await classApi.unlockMajors(loadedClassId)
         : await classApi.lockMajors(loadedClassId);
       setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
-      toast.success(res.message || 'Major update lock status changed successfully.');
+      toast.success(res.message || tr('classDetail.majorUpdateLockStatusChangedSuccessfully'));
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change the major update lock status.').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeTheMajorUpdate')).message);
     } finally {
       setTogglingLock(false);
     }
@@ -494,17 +497,17 @@ export default function ClassDetail() {
   const handleSynchronizeMajors = async () => {
     const mismatchCount = safeStudents.filter(student => student.hasMajorMismatch).length;
     if (mismatchCount === 0 || !window.confirm(
-      `Synchronize registered majors from the official class enrollment for ${mismatchCount} student${mismatchCount > 1 ? 's' : ''}?`,
+      tr('classDetail.synchronizeRegisteredMajorsConfirm', { count: mismatchCount }),
     )) return;
 
     setSynchronizingMajors(true);
     try {
       const response: any = await classApi.synchronizeProfileMajors(loadedClassId);
       const result = unwrapApiData(response);
-      toast.success(`Synchronized ${result.synchronizedCount ?? 0} registered major${result.synchronizedCount === 1 ? '' : 's'}.`);
+      toast.success(tr('classDetail.synchronizedRegisteredMajors', { count: result.synchronizedCount ?? 0 }));
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to synchronize registered majors.').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToSynchronizeRegisteredMajors')).message);
     } finally {
       setSynchronizingMajors(false);
     }
@@ -528,9 +531,9 @@ export default function ClassDetail() {
       link.download = `${cls.classCode || 'students'}_students.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success('Export successful');
+      toast.success(tr('classDetail.exportSuccessful'));
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to export students').message);
+      toast.error(parseApiError(e, tr('classDetail.failedToExportStudents')).message);
     } finally {
       setExporting(false);
     }
@@ -544,11 +547,11 @@ export default function ClassDetail() {
     setRemovingStudent(true);
     try {
       await classApi.dropStudent(loadedClassId, studentToDelete._id);
-      toast.success('Enrollment dropped successfully');
+      toast.success(tr('classDetail.enrollmentDroppedSuccessfully'));
       setStudentToDelete(null);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to drop enrollment').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToDropEnrollment')).message);
     } finally {
       setRemovingStudent(false);
     }
@@ -561,15 +564,15 @@ export default function ClassDetail() {
       const result = unwrapApiData<{ droppedCount?: number }>(response);
       const droppedCount = result?.droppedCount ?? 0;
       toast.success(droppedCount === 0
-        ? 'There are no active student enrollments to remove.'
-        : `Removed ${droppedCount} student enrollment${droppedCount === 1 ? '' : 's'} from the class.`);
+        ? tr('classDetail.thereAreNoActiveStudentEnrollments')
+        : tr('classDetail.removedStudentEnrollments', { count: droppedCount }));
       setShowDropAllStudents(false);
       setSelected([]);
       setSelectedStudentSnapshots([]);
       setRosterPage(1);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to remove all students from the class.').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToRemoveAllStudentsFrom')).message);
     } finally {
       setDroppingAllStudents(false);
     }
@@ -581,16 +584,16 @@ export default function ClassDetail() {
       const isCurrentlyArchived = cls.status === 'Archived';
       if (isCurrentlyArchived) {
         await classApi.restore(loadedClassId, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
-        toast.success('Class restored successfully');
+        toast.success(tr('classDetail.classRestoredSuccessfully'));
         await fetchData();
       } else {
         await classApi.archive(loadedClassId, { rowVersion: cls.rowVersion, reason: lifecycleReason.trim() });
-        toast.success('Class archived successfully');
+        toast.success(tr('classDetail.classArchivedSuccessfully'));
         const targetRoute = user?.role === 'LECTURER' ? '/lecturer/classes' : '/admin/classes';
         navigate(targetRoute);
       }
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change class lifecycle').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeClassLifecycle')).message);
     } finally {
       setDeletingClass(false);
       setShowDeleteClass(false);
@@ -610,7 +613,7 @@ export default function ClassDetail() {
       setCompletionPreview(unwrapApiData(response));
       setShowCompletion(true);
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to preview class completion').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToPreviewClassCompletion')).message);
     } finally {
       setCompletionLoading(false);
     }
@@ -627,10 +630,10 @@ export default function ClassDetail() {
       };
       if (cls.status === 'Completed') {
         await classApi.reopen(loadedClassId, payload);
-        toast.success('Class reopened successfully');
+        toast.success(tr('classDetail.classReopenedSuccessfully'));
       } else {
         await classApi.complete(loadedClassId, payload);
-        toast.success('Class completed successfully');
+        toast.success(tr('classDetail.classCompletedSuccessfully'));
         setRosterStatus('Completed');
       }
       setShowCompletion(false);
@@ -638,14 +641,14 @@ export default function ClassDetail() {
       setCompletionPreview(null);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change class completion status').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeClassCompletionStatus')).message);
     } finally {
       setCompletionLoading(false);
     }
   };
 
   if (loading) return <LoadingSkeleton />;
-  if (!cls)    return <div className="text-center py-20 text-slate-400">Class not found.</div>;
+  if (!cls)    return <div className="text-center py-20 text-slate-400">{tr('classDetail.classNotFound')}</div>;
 
   const safeStudents = Array.isArray(students) ? students : [];
   const safeTeams    = Array.isArray(teams) ? teams : [];
@@ -703,7 +706,7 @@ export default function ClassDetail() {
   const isFeatureVisible = (enabled) => enabled || showDevelopmentControls;
   const runFeatureAction = (enabled, featureName, action) => {
     if (!enabled) {
-      toast(`${featureName} is visible for local development, but its API is not enabled yet.`);
+      toast(tr('classDetail.isVisibleForLocalDevelopmentBut', { featureName }));
       return;
     }
 
@@ -715,11 +718,11 @@ export default function ClassDetail() {
     setReEnrollingStudent(true);
     try {
       await classApi.reEnrollStudent(loadedClassId, studentToReEnroll._id);
-      toast.success('Student re-enrolled successfully');
+      toast.success(tr('classDetail.studentReEnrolledSuccessfully'));
       setStudentToReEnroll(null);
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to re-enroll student').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToReEnrollStudent')).message);
     } finally {
       setReEnrollingStudent(false);
     }
@@ -735,7 +738,7 @@ export default function ClassDetail() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              aria-label="Go back"
+              aria-label={tr('classDetail.goBack')}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 cursor-pointer"
             >
               <ArrowLeft className="h-4.5 w-4.5" />
@@ -755,10 +758,10 @@ export default function ClassDetail() {
                 onClick={() => setShowActionsMenu(prev => !prev)}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 cursor-pointer"
                 aria-expanded={showActionsMenu}
-                aria-label="Toggle class action menu"
+                aria-label={tr('classDetail.toggleClassActionMenu')}
               >
                 <MoreHorizontal className="h-4 w-4 text-slate-500" />
-                <span>Actions</span>
+                <span>{tr('classDetail.actions')}</span>
                 <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${showActionsMenu ? 'rotate-180' : ''}`} />
               </button>
             </div>
@@ -779,16 +782,16 @@ export default function ClassDetail() {
             )} */}
 
             {/* Roster */}
-            <div role="group" aria-label="Roster actions" className="flex flex-wrap items-center gap-1.5 empty:hidden">
+            <div role="group" aria-label={tr('classDetail.rosterActions')} className="flex flex-wrap items-center gap-1.5 empty:hidden">
               {!isReadOnly && (isAdmin || classFeatureFlags.lecturerStudentImport) && (
                 <ClassActionButton icon={Upload} tone="primary" onClick={() => setShowImport(true)}>
-                  Import Students
+                  {tr('classDetail.importStudents')}
                 </ClassActionButton>
               )}
 
               {!isReadOnly && (
                 <ClassActionButton icon={UserPlus} tone="primary" onClick={() => setShowAddStudent(true)}>
-                  Add student
+                  {tr('addStudentModal.addStudent2')}
                 </ClassActionButton>
               )}
 
@@ -805,17 +808,17 @@ export default function ClassDetail() {
                     setShowSemesterGroupImport(true);
                   }}
                 >
-                  Import semester groups
+                  {tr('importSemesterGroupsModal.importSemesterGroups')}
                 </ClassActionButton>
               )}
 
               <ClassActionButton icon={Download} loading={exporting} onClick={handleExportExcel} disabled={exporting}>
-                Export Class Data
+                {tr('classDetail.exportClassData')}
               </ClassActionButton>
             </div>
 
             {/* Majors */}
-            <div role="group" aria-label="Major actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+            <div role="group" aria-label={tr('classDetail.majorActions')} className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
               {!isReadOnly && isFeatureVisible(classFeatureFlags.majorVerification) && (
                 <ClassActionButton
                   id="btn-verify-majors"
@@ -823,7 +826,7 @@ export default function ClassDetail() {
                   tone="indigo"
                   onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major verification', () => setShowVerify(true))}
                 >
-                  Verify / sync majors
+                  {tr('classDetail.verifySyncMajors')}
                 </ClassActionButton>
               )}
 
@@ -835,13 +838,13 @@ export default function ClassDetail() {
                   onClick={() => runFeatureAction(classFeatureFlags.majorVerification, 'Major locking', handleToggleMajorLock)}
                   disabled={togglingLock}
                 >
-                  {cls.isMajorLocked ? 'Unlock major updates' : 'Lock major updates'}
+                  {cls.isMajorLocked ? tr('classDetail.unlockMajorUpdates') : tr('classDetail.lockMajorUpdates')}
                 </ClassActionButton>
               )}
             </div>
 
             {/* Class lifecycle */}
-            <div role="group" aria-label="Class lifecycle actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+            <div role="group" aria-label={tr('classDetail.classLifecycleActions')} className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
               {((cls.status === 'Active') || (isCompleted && isAdmin)) && (
                 <ClassActionButton
                   icon={isCompleted ? Play : CircleCheck}
@@ -850,7 +853,7 @@ export default function ClassDetail() {
                   onClick={openCompletionDialog}
                   disabled={completionLoading}
                 >
-                  {isCompleted ? 'Reopen Class' : 'Complete Class'}
+                  {isCompleted ? tr('classDetail.reopenClass') : tr('classDetail.completeClass')}
                 </ClassActionButton>
               )}
 
@@ -866,7 +869,7 @@ export default function ClassDetail() {
             </div>
 
             {/* Destructive */}
-            <div role="group" aria-label="Destructive actions" className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
+            <div role="group" aria-label={tr('classDetail.destructiveActions')} className="flex flex-wrap items-center gap-1.5 border-slate-200 empty:hidden sm:border-l sm:pl-2">
               {!isReadOnly && (
                 <ClassActionButton
                   icon={Trash2}
@@ -876,7 +879,7 @@ export default function ClassDetail() {
                     setShowDropAllStudents(true);
                   }}
                 >
-                  Remove all students
+                  {tr('classDetail.removeAllStudents')}
                 </ClassActionButton>
               )}
             </div>
@@ -888,16 +891,16 @@ export default function ClassDetail() {
         <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="font-semibold">{isArchived ? 'Archived class' : 'Completed class'} — read-only</p>
+            <p className="font-semibold">{tr(isArchived ? 'classDetail.archivedClassReadOnly' : 'classDetail.completedClassReadOnly')}</p>
             <p className="mt-0.5 text-xs text-amber-700">
               {isArchived
-                ? 'Roster, teams, chat membership and history are retained. Restore the class before changing operational data.'
-                : 'Academic data and history are retained. Only an administrator can reopen the class; archive remains a separate lifecycle action.'}
+                ? tr('classDetail.rosterTeamsChatMembershipAndHistory')
+                : tr('classDetail.academicDataAndHistoryAreRetained')}
             </p>
             {cls.completedAtUtc && (
               <p className="mt-2 text-xs text-amber-800">
-                <span className="font-semibold">Completed:</span>{' '}
-                {new Date(cls.completedAtUtc).toLocaleString()}
+                <span className="font-semibold">{tr('classDetail.completed')}</span>{' '}
+                {fmtDateTime(cls.completedAtUtc)}
                 {cls.completionReason ? ` — ${cls.completionReason}` : ''}
               </p>
             )}
@@ -909,10 +912,9 @@ export default function ClassDetail() {
         <div role="status" data-testid="major-lock-banner" className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-3 text-sm text-blue-800">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="font-semibold">Major updates are locked</p>
+            <p className="font-semibold">{tr('classDetail.majorUpdatesAreLocked')}</p>
             <p className="mt-0.5 text-xs text-blue-700">
-              Students can no longer change their major in this class, and the verification file cannot be synchronized.
-              The lock is applied automatically once every student is verified. Use Actions &rarr; Unlock major updates to make corrections.
+              {tr('classDetail.studentsCanNoLongerChangeTheir')}
             </p>
           </div>
         </div>
@@ -929,8 +931,8 @@ export default function ClassDetail() {
             <div className="min-w-0">
             </div>
             <div className="min-w-0">
-              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Lecturer</p>
-              <p className="font-semibold text-slate-800 text-sm truncate">{cls.lectureId?.name || <span className="text-amber-500">Not assigned</span>}</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">{tr('classDetail.lecturer')}</p>
+              <p className="font-semibold text-slate-800 text-sm truncate">{cls.lectureId?.name || <span className="text-amber-500">{tr('mentorTeamsBoard.notAssigned')}</span>}</p>
               {cls.lectureId?.email && <p className="text-caption text-slate-400 truncate">{cls.lectureId.email}</p>}
             </div>
           </div>
@@ -939,7 +941,7 @@ export default function ClassDetail() {
               onClick={() => setShowAssignLecturer(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
-              Edit
+              {tr('common:actions.edit')}
             </button>
           )}
         </div>
@@ -951,19 +953,19 @@ export default function ClassDetail() {
               <Calendar className="h-4.5 w-4.5 text-secondary" />
             </div>
             <div className="min-w-0">
-              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Schedule</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">{tr('classDetail.schedule')}</p>
               {primarySchedule ? (
                 <div className="space-y-0.5">
                   {schedules.slice(0, 3).map((schedule, index) => {
                     const day = schedule.dayOfWeek ?? schedule.DayOfWeek;
                     const slot = schedule.slotNumber ?? schedule.SlotNumber ?? schedule.slot;
                     const room = schedule.room ?? schedule.Room ?? cls.room;
-                    return <p key={`${day}-${slot}-${index}`} className="truncate text-xs font-semibold text-slate-700">{typeof day === 'number' ? scheduleDayNames[day] : day}, Slot {slot} · Room {room || 'TBD'}</p>;
+                    return <p key={`${day}-${slot}-${index}`} className="truncate text-xs font-semibold text-slate-700">{tr('classDetail.scheduleLine', { day: typeof day === 'number' ? scheduleDayNames[day] : day, slot, room: room || tr('classDetail.tbd') })}</p>;
                   })}
-                  {schedules.length > 3 && <p className="text-caption font-medium text-primary-700">+{schedules.length - 3} more sessions</p>}
+                  {schedules.length > 3 && <p className="text-caption font-medium text-primary-700">{tr('classDetail.moreSessions', { v1: schedules.length - 3 })}</p>}
                 </div>
               ) : (
-                <p className="font-semibold text-slate-800 text-sm truncate">TBD</p>
+                <p className="font-semibold text-slate-800 text-sm truncate">{tr('classDetail.tbd')}</p>
               )}
             </div>
           </div>
@@ -972,7 +974,7 @@ export default function ClassDetail() {
               onClick={() => setShowEditSchedule(true)}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
-              Edit
+              {tr('common:actions.edit')}
             </button>
           )}
         </div>
@@ -984,16 +986,16 @@ export default function ClassDetail() {
               <Users className="h-4.5 w-4.5 text-amber-500" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Mentors</p>
+              <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">{tr('classDetail.mentors')}</p>
               {activeMentors.length > 0 ? (
                 <>
                   <p className="font-semibold text-slate-800 text-sm truncate">
                     {activeMentors.map(m => m.name || 'Unknown').join(', ')}
                   </p>
-                  <p className="text-caption text-slate-400">{activeMentors.length} assigned</p>
+                  <p className="text-caption text-slate-400">{tr('classDetail.assigned', { length: activeMentors.length })}</p>
                 </>
               ) : (
-                <p className="text-xs text-slate-400">No mentors assigned</p>
+                <p className="text-xs text-slate-400">{tr('classDetail.noMentorsAssigned')}</p>
               )}
             </div>
           </div>
@@ -1002,7 +1004,7 @@ export default function ClassDetail() {
               onClick={() => runFeatureAction(classFeatureFlags.mentorAssignment, 'Mentor assignment', () => setShowAssignMentors(true))}
               className="shrink-0 cursor-pointer rounded-md border border-primary-100 bg-primary-50 px-2 py-1 text-caption font-semibold text-primary-700 transition-colors hover:border-primary-200 hover:bg-primary-100"
             >
-              Manage
+              {tr('classDetail.manage')}
             </button>
           )}
         </div>
@@ -1013,9 +1015,9 @@ export default function ClassDetail() {
             <Users className="h-4.5 w-4.5 text-secondary" />
           </div>
           <div>
-            <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">Students</p>
+            <p className="text-overline text-slate-400 uppercase font-semibold tracking-wider">{tr('studentAssignmentModal.students')}</p>
             <p className="mt-0.5 text-xl font-bold leading-none text-slate-900">{rosterLoadError ? '—' : (cls.studentCount ?? rosterMeta.totalCount)}</p>
-            <p className="mt-1 text-caption text-slate-400">{rosterLoadError ? 'Unable to load roster' : `${unassignedCount} unassigned`}</p>
+            <p className="mt-1 text-caption text-slate-400">{rosterLoadError ? tr('classDetail.unableToLoadRoster') : `${unassignedCount} unassigned`}</p>
           </div>
         </div>
       </div>
@@ -1051,7 +1053,7 @@ export default function ClassDetail() {
               tab === t ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:bg-white/60 hover:text-slate-700'
             }`}
           >
-            {t === 'students' ? `Students (${rosterLoadError ? '—' : rosterMeta.totalCount})` : `Teams (${safeTeams.length})`}
+            {t === 'students' ? tr('classDetail.students', { v1: rosterLoadError ? '—' : rosterMeta.totalCount }) : tr('classDetail.teams', { length: safeTeams.length })}
           </button>
         ))}
       </div>
@@ -1061,14 +1063,14 @@ export default function ClassDetail() {
         {tab === 'students' && rosterLoadError ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
             <AlertTriangle className="mx-auto h-6 w-6 text-red-500" />
-            <p className="mt-2 text-sm font-semibold text-red-800">The class roster could not be loaded</p>
+            <p className="mt-2 text-sm font-semibold text-red-800">{tr('classDetail.theClassRosterCouldNotBe')}</p>
             <p className="mt-1 text-sm text-red-600">{rosterLoadError}</p>
             <button
               type="button"
               onClick={() => void fetchData()}
               className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
             >
-              Retry
+              {tr('assignMentorsModal.retry')}
             </button>
           </div>
         ) : tab === 'students' ? (
@@ -1102,16 +1104,15 @@ export default function ClassDetail() {
                   onClick={startInlineTeamCreation}
                   className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-600"
                 >
-                  <UserPlus className="h-3.5 w-3.5" /> Create team
+                  <UserPlus className="h-3.5 w-3.5" /> {tr('studentTeamGeneratePanel.createTeam')}
                 </button>
-                <TeamSuggestionTooltip label="View team creation guidance">
+                <TeamSuggestionTooltip label={tr('classDetail.viewTeamCreationGuidance')}>
                   <div className="space-y-2">
                     <p className="font-semibold text-white">
-                      {unassignedCount} students are not assigned to a team
+                      {tr('classDetail.studentsAreNotAssignedToA', { unassignedCount })}
                     </p>
                     <p className="text-slate-200">
-                      Select yourself and the other members in the table to start a team proposal.
-                      A team requires 4–6 members, including at least one BBA student and one BIT student.
+                      {tr('classDetail.selectYourselfAndTheOtherMembers')}
                     </p>
                   </div>
                 </TeamSuggestionTooltip>
@@ -1267,10 +1268,10 @@ export default function ClassDetail() {
         onClose={() => setTeamToDelete(null)}
         onConfirm={confirmDeleteTeam}
         isSubmitting={deletingTeam}
-        title={`Delete ${teamToDelete?.teamName || 'this team'}?`}
-        description="Permanently delete this team and its project, submissions, evaluations, tasks and team chat. This cannot be undone. Student accounts and class enrollments will remain. Teams with externally stored files require storage cleanup support before deletion."
-        confirmText="Permanently dissolve team"
-        cancelText="Cancel"
+        title={tr('classDetail.deleteTeamTitle', { name: teamToDelete?.teamName || tr('classDetail.thisTeam') })}
+        description={tr('classDetail.permanentlyDeleteThisTeamAndIts')}
+        confirmText={tr('classDetail.permanentlyDissolveTeam')}
+        cancelText={tr('common:actions.cancel')}
         size="lg"
         actionLayout="confirmWide"
       />
@@ -1280,14 +1281,14 @@ export default function ClassDetail() {
         onClose={() => setStudentToDelete(null)}
         onConfirm={confirmRemoveStudent}
         isSubmitting={removingStudent}
-        title="Drop this enrollment?"
+        title={tr('classDetail.dropThisEnrollment')}
         description={
           studentToDelete
-            ? `"${studentToDelete.fullName}" will move to Dropped history. This does not delete the global student profile.`
+            ? tr('classDetail.willMoveToDroppedHistoryThis', { fullName: studentToDelete.fullName })
             : ''
         }
-        confirmText="Drop enrollment"
-        cancelText="Cancel"
+        confirmText={tr('studentTable.dropEnrollment')}
+        cancelText={tr('common:actions.cancel')}
       />
 
       <ConfirmDialog
@@ -1295,10 +1296,10 @@ export default function ClassDetail() {
         onClose={() => setStudentToReEnroll(null)}
         onConfirm={confirmReEnrollStudent}
         isSubmitting={reEnrollingStudent}
-        title="Re-enroll this student?"
-        description={studentToReEnroll ? `Restore "${studentToReEnroll.fullName}" as an Active enrollment in this class.` : ''}
-        confirmText="Re-enroll"
-        cancelText="Cancel"
+        title={tr('classDetail.reEnrollThisStudent')}
+        description={studentToReEnroll ? tr('classDetail.restoreAsAnActiveEnrollmentIn', { fullName: studentToReEnroll.fullName }) : ''}
+        confirmText={tr('classDetail.reEnroll')}
+        cancelText={tr('common:actions.cancel')}
       />
 
       <ConfirmDialog
@@ -1306,10 +1307,10 @@ export default function ClassDetail() {
         onClose={() => setShowDropAllStudents(false)}
         onConfirm={confirmDropAllStudents}
         isSubmitting={droppingAllStudents}
-        title={`Remove all students from ${cls.classCode}?`}
-        description="All active enrollments will move to Dropped history. Global student profiles will not be deleted. This action is blocked while the class has active teams or open team proposals."
-        confirmText="Remove all students"
-        cancelText="Cancel"
+        title={tr('classDetail.removeAllStudentsFrom', { classCode: cls.classCode })}
+        description={tr('classDetail.allActiveEnrollmentsWillMoveTo')}
+        confirmText={tr('classDetail.removeAllStudents')}
+        cancelText={tr('common:actions.cancel')}
         confirmVariant="danger"
       />
 
@@ -1318,13 +1319,13 @@ export default function ClassDetail() {
         onClose={() => { setShowCompletion(false); setCompletionReason(''); setCompletionPreview(null); }}
         onConfirm={confirmCompletion}
         isSubmitting={completionLoading}
-        title={isCompleted ? 'Reopen this class?' : 'Complete this class?'}
+        title={isCompleted ? tr('classDetail.reopenThisClass') : tr('classDetail.completeThisClass')}
         description={isCompleted
-          ? `Class "${cls.classCode}" will return to Active. Completed enrollments become Active again; mentor assignments and proposals are not automatically restored.`
+          ? tr('classDetail.classWillReturnToActiveCompleted', { classCode: cls.classCode })
           : completionPreview?.blockers?.length
-            ? `Completion is currently blocked: ${completionPreview.blockers.join(' ')}`
-            : `All Active enrollments in "${cls.classCode}" will become Completed. Chat becomes read-only, active mentor assignments end, and open team proposals are cancelled.${completionPreview?.warnings?.length ? ` ${completionPreview.warnings.join(' ')}` : ''}`}
-        confirmText={isCompleted ? 'Reopen class' : 'Complete class'}
+            ? tr('classDetail.completionIsCurrentlyBlocked', { v1: completionPreview.blockers.join(' ') })
+            : tr('classDetail.allActiveEnrollmentsInWillBecome', { classCode: cls.classCode, v2: completionPreview?.warnings?.length ? ` ${completionPreview.warnings.join(' ')}` : '' })}
+        confirmText={isCompleted ? tr('classDetail.reopenClass2') : tr('classDetail.completeClass2')}
         confirmVariant="primary"
         reason={completionReason}
         onReasonChange={setCompletionReason}
@@ -1337,12 +1338,12 @@ export default function ClassDetail() {
         onClose={() => setShowDeleteClass(false)}
         onConfirm={confirmDeleteClass}
         isSubmitting={deletingClass}
-        title={isArchived ? 'Restore this class?' : 'Archive this class?'}
+        title={isArchived ? tr('classDetail.restoreThisClass') : tr('classDetail.archiveThisClass')}
         description={isArchived
-          ? `Class "${cls.classCode}" will be validated again for subject, semester, lecturer, schedule, and conflicts before becoming editable.`
-          : `Class "${cls.classCode}" will become read-only and leave active lists. Roster, teams, chats, and history are retained.`}
+          ? tr('classDetail.classWillBeValidatedAgainFor', { classCode: cls.classCode })
+          : tr('classDetail.classWillBecomeReadOnlyAnd', { classCode: cls.classCode })}
         confirmText={lifecyclePresentation.confirmLabel}
-        cancelText="Cancel"
+        cancelText={tr('common:actions.cancel')}
         confirmVariant={isArchived ? 'primary' : 'danger'}
         reason={lifecycleReason}
         onReasonChange={setLifecycleReason}

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { cn } from '../../utils/cn';
 
 const colors = {
@@ -29,13 +30,14 @@ interface ProgressBarProps {
 }
 
 const ProgressBar = ({ value = 0, max = 100, color = 'primary', size = 'md', showLabel = false, className }: ProgressBarProps) => {
+  const { t } = useTranslation();
   const percent = Math.min(Math.max((value / max) * 100, 0), 100);
 
   return (
     <div className={cn('w-full', className)}>
       {showLabel && (
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-caption text-slate-600">Progress</span>
+          <span className="text-caption text-slate-600">{t('misc.progress')}</span>
           <span className="text-caption font-semibold text-secondary font-mono">{Math.round(percent)}%</span>
         </div>
       )}

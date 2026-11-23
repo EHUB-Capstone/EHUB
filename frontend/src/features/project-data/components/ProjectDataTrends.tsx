@@ -17,6 +17,8 @@ import ProjectDataTrendsTable from './trends/ProjectDataTrendsTable';
 import TrendKpiTiles from './trends/TrendKpiTiles';
 import TrendOutcomeChart, { OUTCOME_SERIES } from './trends/TrendOutcomeChart';
 import TrendScoreChart from './trends/TrendScoreChart';
+import { useTranslation } from 'react-i18next';
+import { achievementLabel } from '../../../i18n/labels';
 
 interface ProjectDataTrendsProps {
   trends: ProjectDataTrendsData | undefined;
@@ -31,8 +33,9 @@ interface ProjectDataTrendsProps {
 type TrendView = 'chart' | 'table';
 
 function Legend({ items }: { items: { label: string; color: string }[] }) {
+  const { t } = useTranslation('projectData');
   return (
-    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-caption text-slate-500" aria-label="Legend">
+    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-caption text-slate-500" aria-label={t('projectDataTrends.legend')}>
       {items.map(item => (
         <li key={item.label} className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: item.color }} aria-hidden="true" />
@@ -90,6 +93,7 @@ export default function ProjectDataTrends({
   onRetry,
   subjectOrder = NO_SUBJECT_ORDER,
 }: ProjectDataTrendsProps) {
+  const { t } = useTranslation('projectData');
   const [level, setLevel] = useState<TrendLevel>('semester');
   const [view, setView] = useState<TrendView>('chart');
 
@@ -102,7 +106,7 @@ export default function ProjectDataTrends({
 
   if (isLoading) {
     return (
-      <div className="mb-4" role="status" aria-label="Loading semester trends">
+      <div className="mb-4" role="status" aria-label={t('projectDataTrends.loadingSemesterTrends')}>
         <LoadingSkeleton variant="table" lines={5} />
       </div>
     );
@@ -111,8 +115,8 @@ export default function ProjectDataTrends({
   if (!trends || !scoreModel) {
     return isError ? (
       <p role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-danger">
-        The semester trends could not be loaded.
-        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">Retry</button>
+        {t('projectDataTrends.theSemesterTrendsCouldNotBe')}
+        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
       </p>
     ) : null;
   }
@@ -125,34 +129,33 @@ export default function ProjectDataTrends({
     : [];
 
   return (
-    <section aria-label="Semester trends" aria-busy={isRefreshing} className={cn('mb-4 transition-opacity', isRefreshing && 'opacity-60')}>
+    <section aria-label={t('projectDataTrends.semesterTrends')} aria-busy={isRefreshing} className={cn('mb-4 transition-opacity', isRefreshing && 'opacity-60')}>
       <Card hover={false} padding="p-4" className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-subheading text-secondary">Semester trends</h3>
+            <h3 className="text-subheading text-secondary">{t('projectDataTrends.semesterTrends')}</h3>
             <p className="text-caption text-slate-500">
-              Average course score (0-10) of groups whose every component is published, with the change since the previous
-              semester of the same {level === 'class' ? 'class code' : 'subject'}. Semester and Year filters do not apply here.
+              {t(level === 'class' ? 'projectDataTrends.scoreExplainerClass' : 'projectDataTrends.scoreExplainerSubject')}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <ToggleGroup<TrendLevel>
-              label="Trend level"
+              label={t('projectDataTrends.trendLevel')}
               value={level}
               options={TREND_LEVELS.map(item => ({ value: item, label: TREND_LEVEL_LABELS[item] }))}
               onChange={setLevel}
             />
             <ToggleGroup<TrendView>
-              label="Trend view"
+              label={t('projectDataTrends.trendView')}
               value={view}
-              options={[{ value: 'chart', label: 'Chart' }, { value: 'table', label: 'Table' }]}
+              options={[{ value: 'chart', label: t('projectDataTrends.chart') }, { value: 'table', label: t('projectDataTrends.table') }]}
               onChange={setView}
             />
           </div>
         </div>
 
         {rows.length === 0 ? (
-          <p className="mt-3 text-body-sm text-slate-500" role="status">No projects match the current filters.</p>
+          <p className="mt-3 text-body-sm text-slate-500" role="status">{t('projectDataTrends.noProjectsMatchTheCurrentFilters')}</p>
         ) : (
           <>
             {summary && <TrendKpiTiles summary={summary} />}
@@ -160,25 +163,25 @@ export default function ProjectDataTrends({
             {showCharts ? (
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <figure className="min-w-0">
-                  <figcaption className="text-body font-semibold text-secondary">Average course score (0-10)</figcaption>
+                  <figcaption className="text-body font-semibold text-secondary">{t('projectDataTrends.averageCourseScore010')}</figcaption>
                   <TrendScoreChart model={scoreModel} />
                   {scoreLegend.length > 0 && <Legend items={scoreLegend} />}
                   {scoreModel.hiddenSubjects > 0 && (
                     <p className="mt-1 text-caption text-slate-500">
-                      {scoreModel.hiddenSubjects} more {scoreModel.hiddenSubjects === 1 ? 'subject is' : 'subjects are'} in the table view.
+                      {t('projectDataTrends.hiddenSubjects', { count: scoreModel.hiddenSubjects })}
                     </p>
                   )}
                 </figure>
                 <figure className="min-w-0">
-                  <figcaption className="text-body font-semibold text-secondary">Project outcomes</figcaption>
+                  <figcaption className="text-body font-semibold text-secondary">{t('projectDataTrends.projectOutcomes')}</figcaption>
                   <TrendOutcomeChart data={outcomeData} />
-                  <Legend items={OUTCOME_SERIES.map(item => ({ label: item.key, color: item.color }))} />
+                  <Legend items={OUTCOME_SERIES.map(item => ({ label: achievementLabel(item.key), color: item.color }))} />
                 </figure>
               </div>
             ) : (
               <>
                 {level === 'class' && view === 'chart' && (
-                  <p className="mt-3 text-caption text-slate-500">Classes are shown as a table because there are too many for a chart.</p>
+                  <p className="mt-3 text-caption text-slate-500">{t('projectDataTrends.classesAreShownAsATable')}</p>
                 )}
                 <ProjectDataTrendsTable rows={rows} level={level} />
               </>

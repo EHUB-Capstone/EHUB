@@ -16,6 +16,8 @@ import {
 import { PRIORITY_CFG, STATUSES, STATUS_CFG, WORKFLOW_STATUSES } from '../constants';
 import { taskProgress } from '../../../utils/taskProgress';
 import TruncatedText from '../../../components/ui/TruncatedText';
+import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 const SWIPE_THRESHOLD = 72;
 const SWIPE_LIMIT = 120;
@@ -39,6 +41,7 @@ function TaskCard({
   enableSwipe = false,
   isOverlay = false,
 }) {
+  const { t } = useTranslation('workspace');
   const [statusOpen, setStatusOpen] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -85,7 +88,7 @@ function TaskCard({
 
   const dueDate = useMemo(() => {
     if (!task.dueDate) return null;
-    return new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    return fmtDate(task.dueDate, { day: '2-digit', month: 'short' });
   }, [task.dueDate]);
 
   useEffect(() => {
@@ -254,8 +257,8 @@ function TaskCard({
                 {...attributes}
                 {...listeners}
                 className="inline-flex touch-none cursor-grab items-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary/30 active:cursor-grabbing"
-                aria-label={`Drag ${task.title}`}
-                title="Drag this task to another status"
+                aria-label={t('taskCard.drag', { title: task.title })}
+                title={t('taskCard.dragThisTaskToAnotherStatus')}
               >
                 <GripVertical className="h-3.5 w-3.5" />
               </button>
@@ -265,7 +268,7 @@ function TaskCard({
                 type="button"
                 onClick={() => onEdit(task)}
                 className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                aria-label={`Edit ${task.title}`}
+                aria-label={t('taskCard.edit', { title: task.title })}
               >
                 <Edit className="h-3.5 w-3.5" />
               </button>
@@ -275,7 +278,7 @@ function TaskCard({
                 type="button"
                 onClick={() => onDelete(task)}
                 className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                aria-label={`Delete ${task.title}`}
+                aria-label={t('taskCard.delete', { title: task.title })}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -293,13 +296,13 @@ function TaskCard({
             className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           />
         </h4>
-        <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</p>
+        <p className="mb-2 text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? t('taskCard.courseRoadmap') : task.taskType === 'CLASS_TASK' ? t('taskCard.classRequirement') : t('taskCard.teamTask')}</p>
         {task.description && <TruncatedText text={task.description} className="mb-2 text-xs leading-relaxed text-slate-500" />}
 
         {checklist.length > 0 && (
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between text-overline font-medium text-slate-400">
-              <span>Checklist</span>
+              <span>{t('taskCard.checklist')}</span>
               <span>{checklistDone}/{checklist.length}</span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-slate-100">
@@ -314,7 +317,7 @@ function TaskCard({
         {checklist.length === 0 && (
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between text-overline font-medium text-slate-400">
-              <span>Progress</span>
+              <span>{t('taskCard.progress')}</span>
               <span>{taskProgress(task)}%</span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-slate-100">
@@ -324,7 +327,7 @@ function TaskCard({
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-slate-400">
-          <span className="rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700">W{task.weekNumber}</span>
+          <span className="rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700">{t('taskCard.w', { weekNumber: task.weekNumber })}</span>
           {assigneeName && <span className="flex items-center gap-1"><User className="h-3 w-3" />{assigneeName}</span>}
           {dueDate && <span className={`flex items-center gap-1 ${isOverdue ? 'font-semibold text-red-500' : ''}`}><Clock className="h-3 w-3" />{dueDate}</span>}
         </div>
@@ -340,7 +343,7 @@ function TaskCard({
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Complete
+              {t('taskCard.complete')}
             </button>
 
             <div ref={menuRef} className="relative ml-auto">
@@ -351,7 +354,7 @@ function TaskCard({
                 aria-expanded={statusOpen}
                 className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-caption font-medium text-slate-500 transition-colors hover:text-slate-800"
               >
-                Move <ChevronDown className="h-3 w-3" />
+                {t('taskCard.move')} <ChevronDown className="h-3 w-3" />
               </button>
 
               {statusOpen && (

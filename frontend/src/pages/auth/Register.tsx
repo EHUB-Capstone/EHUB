@@ -10,6 +10,8 @@ import {
 import toast from 'react-hot-toast';
 import { resendRegistrationOtp } from '../../api/authApi';
 import { useTheme } from '../../context/ThemeContext';
+import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
+import { localizeValidationErrors } from '../../i18n/messages';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
@@ -24,6 +26,10 @@ import {
 } from '../../utils/authValidation';
 import type { AuthFieldErrors, RegisterField } from '../../utils/authValidation';
 import logo from '../../assets/logo.png';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+
+const localizeAuthErrors = <E extends { field: string; message: string; code: string }>(errors: readonly E[]) => localizeValidationErrors('auth', errors);
 
 const OTP_EXPIRE_SECONDS = 5 * 60;
 const RESEND_COOLDOWN    = 60;
@@ -45,13 +51,14 @@ const secondsUntil = (value: string | null | undefined, fallback = 0) => {
 };
 
 const BACKEND_ROLE_BY_FORM_ROLE: Record<Role, string> = {
-  STUDENT: 'Student',
-  LECTURER: 'Lecturer',
-  MENTOR: 'Mentor',
+  get STUDENT() { return i18n.t('auth:register.student'); },
+  get LECTURER() { return i18n.t('auth:register.lecturer'); },
+  get MENTOR() { return i18n.t('auth:register.mentor'); },
 };
 
 // Approval pending screen shown to LECTURER/MENTOR after register
 const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = ({ email, onBack }) => {
+  const { t: tr } = useTranslation('auth');
   const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,24 +79,24 @@ const PendingApprovalScreen: React.FC<{ email: string; onBack: () => void }> = (
       <div className="w-[72px] h-[72px] rounded-[24px] bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-6">
         <ShieldCheck size={34} className="text-blue-400" />
       </div>
-      <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">Account Pending Approval</h1>
-      <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">Your registration was submitted successfully.</p>
+      <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">{tr('register.accountPendingApproval')}</h1>
+      <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-2">{tr('register.yourRegistrationWasSubmittedSuccessfully')}</p>
       <p className="text-blue-400 text-[14px] font-bold mb-6">{email}</p>
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left">
         <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.7]">
-          An admin will review and approve your <strong>Mentor / Lecturer</strong> account shortly.
-          You will be able to sign in once approved.
+          {tr('register.anAdminWillReviewAndApprove')} <strong>{tr('register.mentorLecturer')}</strong> {tr('register.accountShortlyYouWillBeAble')}
         </p>
       </div>
       <button onClick={onBack}
         className="w-full h-12 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-[14px] cursor-pointer hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
-        ← Back to Register
+        {tr('register.backToRegister')}
       </button>
     </motion.div>
   );
 };
 
 const Register: React.FC = () => {
+  const { t: tr } = useTranslation('auth');
   const { isDark, toggleTheme } = useTheme();
   const { register, verifyRegistrationOtp } = useAuth();
 
@@ -177,7 +184,7 @@ const Register: React.FC = () => {
   };
 
   const validateField = (field: RegisterField) => {
-    const error = validateRegisterPayload(currentRegisterPayload()).find(item => item.field === field);
+    const error = localizeAuthErrors(validateRegisterPayload(currentRegisterPayload())).find(item => item.field === field);
     setFieldErrors(current => {
       const next = { ...current };
       if (error) next[field] = error.message;
@@ -204,7 +211,7 @@ const Register: React.FC = () => {
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     const payload = currentRegisterPayload();
-    const nextFieldErrors = toFieldErrorMap(validateRegisterPayload(payload));
+    const nextFieldErrors = toFieldErrorMap(localizeAuthErrors(validateRegisterPayload(payload)));
     setFieldErrors(nextFieldErrors);
     setFormError('');
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -237,7 +244,7 @@ const Register: React.FC = () => {
       toast.success(result.message);
       requestAnimationFrame(() => otpRefs.current[0]?.focus());
     } catch (err: unknown) {
-      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, tr('register.registrationFailed'));
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
 
       if (code === AUTH_ERROR_CODES.REGISTRATION_FAILED) {
@@ -278,9 +285,9 @@ const Register: React.FC = () => {
   const handleVerifyOtp = async (e: FormEvent) => {
     e.preventDefault();
     const otp = otpValues.join('');
-    if (!registrationId) return void toast.error('Registration session not found. Please register again.');
-    if (otp.length !== 6) return void toast.error('Enter all 6 digits.');
-    if (countdown <= 0)   return void toast.error('OTP expired. Request a new one.');
+    if (!registrationId) return void toast.error(tr('register.registrationSessionNotFoundPleaseRegister'));
+    if (otp.length !== 6) return void toast.error(tr('register.enterAll6Digits'));
+    if (countdown <= 0)   return void toast.error(tr('register.otpExpiredRequestANewOne'));
     setOtpLoading(true);
     try {
       const result = await verifyRegistrationOtp({ registrationId, otp });
@@ -292,7 +299,7 @@ const Register: React.FC = () => {
         navigate('/student');
       }
     } catch (err: unknown) {
-      const { code, message } = parseApiError(err, 'Verification failed.');
+      const { code, message } = parseApiError(err, tr('register.verificationFailed'));
       if (code === AUTH_ERROR_CODES.VERIFICATION_CODE_EXPIRED) setCountdown(0);
       toast.error(message);
       setOtpValues(['','','','','','']); otpRefs.current[0]?.focus();
@@ -316,7 +323,7 @@ const Register: React.FC = () => {
       } satisfies StoredOtpSession));
       otpRefs.current[0]?.focus();
     } catch (err: unknown) {
-      toast.error(parseApiError(err, 'Failed to resend OTP.').message);
+      toast.error(parseApiError(err, tr('register.failedToResendOtp')).message);
     } finally { setResendLoading(false); }
   };
 
@@ -330,20 +337,20 @@ const Register: React.FC = () => {
 
         <div className="relative z-10">
           <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
-            <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
+            <img src={logo} alt={tr('login.ehub')} className="w-10 h-10 object-contain" />
             <span className="text-[20px] font-extrabold tracking-tight">
-              <span className="text-primary-300">E</span>
-              <span className="text-secondary-300">HUB</span>
+              <span className="text-primary-300">{tr('login.e')}</span>
+              <span className="text-secondary-300">{tr('login.hub')}</span>
             </span>
           </Link>
         </div>
 
         <div className="relative z-10">
           <h2 className="text-[32px] font-extrabold text-white leading-[1.2] mb-4 tracking-tight">
-            Join the future of <span className="text-primary-600">student startups</span>
+            {tr('register.joinTheFutureOf')} <span className="text-primary-600">{tr('register.studentStartups')}</span>
           </h2>
           <p className="text-white/50 text-[15px] leading-[1.7] mb-9">
-            Create your account and start managing your startup journey with mentors, evaluations, and AI-powered insights.
+            {tr('register.createYourAccountAndStartManaging')}
           </p>
           
           <div className="flex flex-col gap-3.5">
@@ -362,10 +369,12 @@ const Register: React.FC = () => {
       {/* ── RIGHT PANEL ── */}
       <div className="flex-1 flex flex-col items-center justify-center p-[32px_24px] overflow-y-auto relative">
 
+        <LanguageSwitcher variant="outline" size="lg" className="absolute top-6 right-20" />
+
         {/* Theme toggle */}
         <button onClick={toggleTheme}
           className="absolute top-6 right-6 w-10 h-10 rounded-[14px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all hover:bg-slate-50 dark:hover:bg-white/10"
-          aria-label="Toggle theme"
+          aria-label={tr('login.toggleTheme')}
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -397,15 +406,15 @@ const Register: React.FC = () => {
               {/* Mobile logo */}
               <div className="lg:hidden text-center mb-7">
                 <Link to="/" className="inline-flex items-center gap-2.5 no-underline">
-                  <img src={logo} alt="EHub" className="w-[36px] h-[36px] object-contain" />
+                  <img src={logo} alt={tr('login.ehub')} className="w-[36px] h-[36px] object-contain" />
                   <span className="text-[18px] font-extrabold tracking-tight">
-                    <span className="text-primary-400">E</span><span className="text-secondary dark:text-secondary-300">HUB</span>
+                    <span className="text-primary-400">{tr('login.e')}</span><span className="text-secondary dark:text-secondary-300">{tr('login.hub')}</span>
                   </span>
                 </Link>
               </div>
 
-              <h1 className="text-[26px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">Create your account</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-6">Join EHub and start your startup journey</p>
+              <h1 className="text-[26px] font-extrabold text-secondary dark:text-slate-50 mb-1.5 tracking-tight">{tr('register.createYourAccount')}</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-6">{tr('register.joinEhubAndStartYourStartup')}</p>
 
               {/* Email taken banner */}
               <AnimatePresence>
@@ -414,11 +423,11 @@ const Register: React.FC = () => {
                     className="bg-red-500/10 border border-red-500/30 rounded-xl p-3.5 flex gap-3 mb-4.5">
                     <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[13px] font-semibold text-red-400 mb-1">Unable to create account</p>
-                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">Please try signing in or resetting your password.</p>
+                      <p className="text-[13px] font-semibold text-red-400 mb-1">{tr('register.unableToCreateAccount')}</p>
+                      <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">{tr('register.pleaseTrySigningInOrResetting')}</p>
                       <div className="flex gap-3">
-                        <Link to="/login" state={{ prefillEmail: email }} className="text-[12px] font-semibold text-red-400 underline">Sign in →</Link>
-                        <Link to="/forgot-password" className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 underline">Forgot password?</Link>
+                        <Link to="/login" state={{ prefillEmail: email }} className="text-[12px] font-semibold text-red-400 underline">{tr('register.signIn')}</Link>
+                        <Link to="/forgot-password" className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 underline">{tr('login.forgotPassword')}</Link>
                       </div>
                     </div>
                   </motion.div>
@@ -436,13 +445,13 @@ const Register: React.FC = () => {
               <form onSubmit={handleRegister} className="flex flex-col gap-3.5" noValidate aria-describedby={formError ? 'register-form-error' : undefined}>
                 {/* Name */}
                 <div>
-                  <label htmlFor="reg-name" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Full Name</label>
+                  <label htmlFor="reg-name" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{tr('register.fullName')}</label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-name" type="text" value={name}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setName(e.target.value); clearFieldError('fullName'); }}
                       onBlur={() => validateField('fullName')}
-                      placeholder="Nguyen Van A" autoComplete="name" required maxLength={AUTH_FIELD_LIMITS.fullNameMax}
+                      placeholder={tr('register.nguyenVanA')} autoComplete="name" required maxLength={AUTH_FIELD_LIMITS.fullNameMax}
                       aria-invalid={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'reg-name-error' : undefined}
                       className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
@@ -452,12 +461,12 @@ const Register: React.FC = () => {
 
                 {/* Email */}
                 <div>
-                  <label htmlFor="reg-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Email</label>
+                  <label htmlFor="reg-email" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{tr('login.email')}</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-email" type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setRegistrationFailed(false); clearFieldError('email'); }}
                       onBlur={() => validateField('email')}
-                      placeholder="you@example.com" autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
+                      placeholder={tr('login.youExampleCom')} autoComplete="email" required maxLength={AUTH_FIELD_LIMITS.emailMax}
                       aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
                       className={`w-full py-2.5 pr-3.5 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.email ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
@@ -467,42 +476,42 @@ const Register: React.FC = () => {
 
                 {/* Password */}
                 <div>
-                  <label htmlFor="reg-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Password</label>
+                  <label htmlFor="reg-password" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{tr('login.password')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-password" type={showPass ? 'text' : 'password'} value={password}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); clearFieldError('password'); clearFieldError('confirmPassword'); }}
                       onBlur={() => { validateField('password'); if (confirmPassword) validateField('confirmPassword'); }}
-                      placeholder="6–100 characters" autoComplete="new-password" required
+                      placeholder={tr('register.6100Characters')} autoComplete="new-password" required
                       minLength={AUTH_FIELD_LIMITS.passwordMin} maxLength={AUTH_FIELD_LIMITS.passwordMax}
                       aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-help'}
                       className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                     <button type="button" onClick={() => setShowPass(p => !p)}
-                      aria-label={showPass ? 'Hide password' : 'Show password'}
+                      aria-label={showPass ? tr('login.hidePassword') : tr('login.showPassword')}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                       {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
                   {fieldErrors.password
                     ? <p id="reg-password-error" role="alert" className="mt-1.5 text-[12px] text-red-500 dark:text-red-400">{fieldErrors.password}</p>
-                    : <p id="reg-password-help" className="mt-1.5 text-caption text-slate-500 dark:text-slate-400">Use 6–100 characters.</p>}
+                    : <p id="reg-password-help" className="mt-1.5 text-caption text-slate-500 dark:text-slate-400">{tr('register.use6100Characters')}</p>}
                 </div>
 
                 {/* Confirm Password */}
                 <div>
-                  <label htmlFor="reg-confirm" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Confirm Password</label>
+                  <label htmlFor="reg-confirm" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{tr('register.confirmPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     <input id="reg-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => { setConfirmPassword(e.target.value); clearFieldError('confirmPassword'); }}
                       onBlur={() => validateField('confirmPassword')}
-                      placeholder="Re-enter password" autoComplete="new-password" required
+                      placeholder={tr('register.reEnterPassword')} autoComplete="new-password" required
                       aria-invalid={Boolean(fieldErrors.confirmPassword)} aria-describedby={fieldErrors.confirmPassword ? 'reg-confirm-error' : undefined}
                       className={`w-full py-2.5 pr-11 pl-10 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-slate-100 text-[14px] outline-none transition-colors ${fieldErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     />
                     <button type="button" onClick={() => setShowConfirm(p => !p)}
-                      aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
+                      aria-label={showConfirm ? tr('register.hideConfirmPassword') : tr('register.showConfirmPassword')}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-400 p-0">
                       {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -512,7 +521,7 @@ const Register: React.FC = () => {
 
                 {/* Role */}
                 <div>
-                  <span id="reg-role-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Role</span>
+                  <span id="reg-role-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">{tr('register.role')}</span>
                   <div role="radiogroup" aria-labelledby="reg-role-label" aria-invalid={Boolean(fieldErrors.role)} aria-describedby={fieldErrors.role ? 'reg-role-error' : undefined}
                     className={`grid grid-cols-3 gap-2 p-1 rounded-[14px] border bg-slate-50 dark:bg-white/5 ${fieldErrors.role ? 'border-red-500' : 'border-slate-200 dark:border-white/10'}`}>
                     {(['STUDENT','LECTURER','MENTOR'] as Role[]).map(r => (
@@ -536,13 +545,13 @@ const Register: React.FC = () => {
                 {/* Major (STUDENT only) */}
                 {role === 'STUDENT' && (
                   <div>
-                    <label htmlFor="reg-major" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">Major</label>
+                    <label htmlFor="reg-major" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-1.5">{tr('register.major')}</label>
                     <select id="reg-major" value={major} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setMajor(e.target.value); clearFieldError('majorCode'); }}
                       onBlur={() => validateField('majorCode')} required
                       aria-invalid={Boolean(fieldErrors.majorCode)} aria-describedby={fieldErrors.majorCode ? 'reg-major-error' : undefined}
                       className={`w-full py-2.5 px-3.5 rounded-[14px] border bg-slate-50 dark:bg-white/5 text-[14px] outline-none transition-colors text-slate-900 dark:text-slate-100 ${fieldErrors.majorCode ? 'border-red-500 focus:border-red-500' : 'border-slate-200 dark:border-white/10 focus:border-primary dark:focus:border-primary'}`}
                     >
-                      <option value="" className="text-slate-500">-- Select Major --</option>
+                      <option value="" className="text-slate-500">{tr('register.selectMajor')}</option>
                       {TEAM_MAJOR_GROUPS.map(g => (
                         <optgroup key={g.key} label={g.label} className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800">
                           {g.majors.map(m => <option key={m.code} value={m.code}>{m.code} - {m.name}</option>)}
@@ -556,7 +565,7 @@ const Register: React.FC = () => {
                 {/* Mentor type (MENTOR only) */}
                 {role === 'MENTOR' && (
                   <div>
-                    <span id="reg-mentor-type-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">Mentor type</span>
+                    <span id="reg-mentor-type-label" className="block text-[13px] font-semibold text-slate-900 dark:text-slate-50 mb-2">{tr('register.mentorType')}</span>
                     <div role="radiogroup" aria-labelledby="reg-mentor-type-label" aria-invalid={Boolean(fieldErrors.mentorType)} aria-describedby={fieldErrors.mentorType ? 'reg-mentor-type-error' : undefined}
                       className={`grid grid-cols-2 gap-2 p-1 rounded-[14px] border bg-slate-50 dark:bg-white/5 ${fieldErrors.mentorType ? 'border-red-500' : 'border-slate-200 dark:border-white/10'}`}>
                       {([['Enterprise', 'Enterprise mentor', 'Works at a company or startup'], ['Academic', 'Lecturer mentor', 'IT lecturer or academic']] as const).map(([value, label, hint]) => (
@@ -585,14 +594,14 @@ const Register: React.FC = () => {
                 >
                   {loading
                     ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
-                    : <><span>Create Account</span><ArrowRight size={17} /></>
+                    : <><span>{tr('register.createAccount')}</span><ArrowRight size={17} /></>
                   }
                 </button>
               </form>
 
               <p className="text-center mt-5 text-[14px] text-slate-500 dark:text-slate-400">
-                Already have an account?{' '}
-                <Link to="/login" className="text-primary-600 font-bold no-underline">Sign in</Link>
+                {tr('register.alreadyHaveAnAccount')}{' '}
+                <Link to="/login" className="text-primary-600 font-bold no-underline">{tr('register.signIn2')}</Link>
               </p>
             </motion.div>
           )}
@@ -609,14 +618,14 @@ const Register: React.FC = () => {
                 <ShieldCheck size={34} color="#fff" />
               </div>
 
-              <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">Verify your email</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">OTP code sent to</p>
+              <h1 className="text-[24px] font-extrabold text-secondary dark:text-slate-50 mb-2">{tr('register.verifyYourEmail')}</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-[14px] mb-1">{tr('register.otpCodeSentTo')}</p>
               <p className="text-primary-600 text-[14px] font-bold mb-6">{maskedEmail || email}</p>
 
               {/* Countdown */}
               <div className={`inline-flex items-center gap-2 px-4.5 py-2 rounded-full mb-7 text-[13px] font-bold border ${countdown > 60 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : countdown > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
                 <Clock size={14} />
-                {countdown > 0 ? `Expires in ${fmt(countdown)}` : 'OTP expired — request a new one'}
+                {countdown > 0 ? tr('register.expiresIn', { v1: fmt(countdown) }) : tr('register.otpExpiredRequestANewOne2')}
               </div>
 
               {/* OTP inputs */}
@@ -646,14 +655,14 @@ const Register: React.FC = () => {
                 >
                   {otpLoading
                     ? <div className="w-[18px] h-[18px] rounded-full border-2 border-white/50 border-t-white animate-spin" />
-                    : 'Verify OTP'
+                    : tr('register.verifyOtp')
                   }
                 </button>
               </form>
 
               {/* Resend */}
               <div className="mt-5">
-                <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-2">Didn't receive the email?</p>
+                <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-2">{tr('register.didnTReceiveTheEmail')}</p>
                 <button onClick={handleResend} disabled={resendCooldown > 0 || resendLoading}
                   className={`bg-transparent border-none inline-flex items-center gap-1.5 text-[13px] font-bold ${
                     (resendCooldown > 0 || resendLoading) 
@@ -661,7 +670,7 @@ const Register: React.FC = () => {
                       : 'cursor-pointer text-primary-600'
                   }`}>
                   <RefreshCw size={14} className={resendLoading ? 'animate-spin' : ''} />
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : resendLoading ? 'Sending...' : 'Resend OTP'}
+                  {resendCooldown > 0 ? tr('register.resendInS', { resendCooldown }) : resendLoading ? tr('register.sending') : tr('register.resendOtp')}
                 </button>
               </div>
 
@@ -673,7 +682,7 @@ const Register: React.FC = () => {
                 sessionStorage.removeItem(PENDING_OTP_STORAGE_KEY);
               }}
                 className="mt-4 bg-transparent border-none cursor-pointer text-[13px] text-slate-500 dark:text-slate-400 w-full hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
-                ← Use a different email address
+                {tr('register.useADifferentEmailAddress')}
               </button>
             </motion.div>
           )}

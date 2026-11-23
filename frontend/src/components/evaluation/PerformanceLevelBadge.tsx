@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 // @ts-nocheck
 // frontend/src/components/evaluation/PerformanceLevelBadge.jsx
 /**
@@ -69,7 +71,7 @@ const SIZE_CLASSES = {
 const PerformanceLevelBadge = ({
   level = 'Unscored',
   label = '',
-  color,       // optional override — color is derived from level by default
+  color = undefined,       // optional override — color is derived from level by default
   size = 'md',
   showLabel = true,
   className = '',
@@ -116,13 +118,15 @@ const PerformanceLevelBadge = ({
  * Shows: criterion name, weight badge, performance level badge, and comment.
  * Hides: score, weightedScore.
  */
-export const MentorRubricRow = ({ criterionName, weight, level, label, comment }) => (
+export const MentorRubricRow = ({ criterionName, weight, level, label, comment }) => {
+                                 const { t } = useTranslation('evaluation');
+                                 return (
   <div className="flex flex-col sm:flex-row sm:items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
     {/* Left — criterion info */}
     <div className="flex-1 min-w-0">
       <p className="font-semibold text-slate-900 text-sm">{criterionName}</p>
       <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-caption font-bold text-slate-600 mt-1">
-        Weight: {weight}%
+        {t('evaluationHistoryPage.weight', { weight })}
       </span>
     </div>
 
@@ -135,13 +139,14 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
     {comment && (
       <div className="flex-1 min-w-0">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">
-          Comment
+          {t('performanceLevelBadge.comment')}
         </p>
         <p className="text-sm text-slate-700 whitespace-pre-wrap">{comment}</p>
       </div>
     )}
   </div>
 );
+                               };
 
 /**
  * MentorEvaluationCard — Full evaluation card shown to Mentors.
@@ -149,6 +154,7 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
  * No numeric score is rendered anywhere.
  */
 export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }) => {
+  const { t } = useTranslation('evaluation');
   const rubricScores = evaluation?.rubricScores || [];
   const overallLevel = evaluation?.overallLevel || 'Unscored';
   const overallLabel = evaluation?.overallLabel || '';
@@ -159,10 +165,10 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
       {/* Card header */}
       <div className="flex items-center justify-between gap-4 p-4 bg-white border-b border-slate-200">
         <div>
-          <p className="font-semibold text-slate-900">{evaluation?.lecturerId?.name || 'Evaluator'}</p>
+          <p className="font-semibold text-slate-900">{evaluation?.lecturerId?.name || t('evaluationSummary.evaluator')}</p>
           <p className="text-xs text-slate-400 mt-0.5">
             {evaluation?.evaluatorRole} ·{' '}
-            {evaluation?.updatedAt ? new Date(evaluation.updatedAt).toLocaleString() : ''}
+            {evaluation?.updatedAt ? fmtDateTime(evaluation.updatedAt) : ''}
           </p>
         </div>
 
@@ -184,9 +190,9 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
       {showIndividualScore && <div className="grid gap-2 border-b border-slate-200 p-4">
         {showIndividualScore && (
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-            <p className="text-overline font-bold uppercase tracking-wider text-blue-500">My score</p>
+            <p className="text-overline font-bold uppercase tracking-wider text-blue-500">{t('performanceLevelBadge.myScore')}</p>
             <p className={`mt-1 font-black ${ownScore !== null && ownScore !== undefined ? 'text-xl text-blue-700' : 'text-sm text-slate-400'}`}>
-              {ownScore !== null && ownScore !== undefined ? `${Number(ownScore).toFixed(2)} / 10` : 'Pending publication'}
+              {ownScore !== null && ownScore !== undefined ? `${Number(ownScore).toFixed(2)} / 10` : t('performanceLevelBadge.pendingPublication')}
             </p>
           </div>
         )}
@@ -196,7 +202,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
       {rubricScores.length > 0 && (
         <div className="p-4 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Criteria Performance
+            {t('performanceLevelBadge.criteriaPerformance')}
           </p>
           <div className="space-y-2">
             {rubricScores.map((item) => (
@@ -217,7 +223,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
       {evaluation?.overallFeedback && (
         <div className="p-4 border-t border-slate-200 space-y-2 text-sm">
           <p className="text-slate-600 whitespace-pre-wrap">
-            <span className="font-semibold text-slate-700">Overall: </span>
+            <span className="font-semibold text-slate-700">{t('performanceLevelBadge.overall')} </span>
             {evaluation.overallFeedback}
           </p>
         </div>

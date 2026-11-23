@@ -1,4 +1,5 @@
 import type { TeamContinuationItem, TeamContinuationOutcome, TeamContinuationSummary } from '../types/classes';
+import i18n from '../i18n/index.ts';
 
 const OUTCOME_LABELS: Record<TeamContinuationOutcome, string> = {
   Created: 'Continued',
@@ -34,7 +35,7 @@ export function continuationHeadline(summary: TeamContinuationSummary, applied: 
   if (summary.notEligibleCount > 0) {
     parts.push(`${summary.notEligibleCount} not eligible yet`);
   }
-  return parts.length > 0 ? parts.join(', ') : `No team${source} can be continued`;
+  return parts.length > 0 ? parts.join(', ') : i18n.t('utils:teamContinuity.noTeamCanBeContinued', { source });
 }
 
 export function semesterTermLabel(semesterCode: string, classCode: string): string {

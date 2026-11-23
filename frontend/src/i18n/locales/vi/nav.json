@@ -1,0 +1,67 @@
+{
+  "brand": {
+    "subtitle": "Cổng khởi nghiệp",
+    "logoAlt": "EHub"
+  },
+  "sidebar": {
+    "navigation": "Điều hướng",
+    "open": "Mở menu bên",
+    "close": "Đóng menu bên",
+    "newIdea": "Ý tưởng mới"
+  },
+  "items": {
+    "overview": "Tổng quan",
+    "dashboard": "Bảng điều khiển",
+    "subjectManagement": "Quản lý môn học",
+    "users": "Người dùng",
+    "accountApprovals": "Duyệt tài khoản",
+    "classes": "Lớp học",
+    "myClasses": "Lớp của tôi",
+    "myTeam": "Nhóm của tôi",
+    "mentorDirectory": "Danh bạ Mentor",
+    "mentorOverview": "Tổng quan Mentor",
+    "mentoringSessions": "Buổi cố vấn",
+    "startupWorkspace": "Không gian khởi nghiệp",
+    "projectData": "Dữ liệu dự án",
+    "projectShowcase": "Trưng bày dự án",
+    "showcaseModeration": "Kiểm duyệt trưng bày",
+    "myShowcase": "Trưng bày của tôi",
+    "feedbackInbox": "Hộp phản hồi",
+    "sendFeedback": "Gửi phản hồi",
+    "executionBoard": "Bảng thực thi",
+    "evaluationGrading": "Đánh giá & chấm điểm"
+  },
+  "header": {
+    "settings": "Cài đặt",
+    "profile": "Hồ sơ",
+    "user": "Người dùng",
+    "avatarAlt": "Ảnh đại diện",
+    "classCodeAlert": {
+      "title": "Vui lòng xác nhận mã lớp của bạn",
+      "dismiss": "Bỏ qua",
+      "checkClasses": "Kiểm tra lớp học"
+    }
+  },
+  "notifications": {
+    "title": "Thông báo",
+    "titleUnread": "Thông báo, {{count}} chưa đọc",
+    "newCount": "{{count}} mới",
+    "markAllRead": "Đánh dấu đã đọc tất cả",
+    "markedAllRead": "Đã đánh dấu đã đọc tất cả",
+    "markAllReadFailed": "Không thể đánh dấu đã đọc tất cả",
+    "empty": "Chưa có thông báo nào",
+    "at": "{{date}} lúc {{time}}"
+  },
+  "errorPages": {
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "description": "Trang bạn đang tìm không tồn tại hoặc đã được di chuyển.",
+      "dashboard": "Bảng điều khiển"
+    },
+    "forbidden": {
+      "title": "Truy cập bị từ chối",
+      "description": "Bạn không có quyền xem trang này. Nếu bạn cho rằng đây là nhầm lẫn, vui lòng liên hệ quản trị viên.",
+      "backToDashboard": "Quay về bảng điều khiển"
+    }
+  }
+}

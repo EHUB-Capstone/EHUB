@@ -1,12 +1,13 @@
 import type { MentorTagSet } from '../types/mentorProfile';
+import i18n from '../i18n/index.ts';
 
 export type TagCategory = keyof MentorTagSet;
 
 export const TAG_CATEGORIES: ReadonlyArray<{ key: TagCategory; label: string }> = [
-  { key: 'expertise', label: 'Expertise' },
-  { key: 'startupDomains', label: 'Startup domain' },
-  { key: 'technologySkills', label: 'Technology' },
-  { key: 'mentorTags', label: 'Tag' },
+  { key: 'expertise', get label() { return i18n.t('utils:mentorTags.expertise'); } },
+  { key: 'startupDomains', get label() { return i18n.t('utils:mentorTags.startupDomain'); } },
+  { key: 'technologySkills', get label() { return i18n.t('utils:mentorTags.technology'); } },
+  { key: 'mentorTags', get label() { return i18n.t('utils:mentorTags.tag'); } },
 ];
 
 export interface TagOption {

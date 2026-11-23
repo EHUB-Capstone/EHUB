@@ -8,10 +8,12 @@ import { forgotPassword } from '../../api/authApi';
 import { parseApiError } from '../../utils/apiError';
 import toast from 'react-hot-toast';
 import logo from '../../assets/logo.png';
+import { useTranslation } from 'react-i18next';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ForgotPassword = (): React.ReactElement => {
+  const { t } = useTranslation('auth');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,12 +24,12 @@ const ForgotPassword = (): React.ReactElement => {
     const normalizedEmail = email.trim();
 
     if (!normalizedEmail) {
-      setEmailError('Email is required.');
+      setEmailError(t('forgotPassword.emailIsRequired'));
       return;
     }
 
     if (!EMAIL_PATTERN.test(normalizedEmail)) {
-      setEmailError('Enter a valid email address.');
+      setEmailError(t('forgotPassword.enterAValidEmailAddress'));
       return;
     }
 
@@ -38,7 +40,7 @@ const ForgotPassword = (): React.ReactElement => {
       setEmail(normalizedEmail);
       setIsSuccess(true);
     } catch (error: unknown) {
-      const apiError = parseApiError(error, 'Unable to send the reset link. Please try again.');
+      const apiError = parseApiError(error, t('forgotPassword.unableToSendTheResetLink'));
       if (apiError.fieldErrors.email) {
         setEmailError(apiError.fieldErrors.email);
       } else {
@@ -61,14 +63,14 @@ const ForgotPassword = (): React.ReactElement => {
           {/* Logo */}
           <div className="text-center mb-8">
             <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
-              <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
+              <img src={logo} alt={t('login.ehub')} className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-primary-400">E</span>
-                <span className="text-secondary">HUB</span>
+                <span className="text-primary-400">{t('login.e')}</span>
+                <span className="text-secondary">{t('login.hub')}</span>
               </span>
             </Link>
-            <h1 className="text-heading font-bold text-secondary">Forgot Password</h1>
-            <p className="text-body text-slate-500 mt-1">Enter your email and we'll send you instructions to reset your password.</p>
+            <h1 className="text-heading font-bold text-secondary">{t('forgotPassword.forgotPassword')}</h1>
+            <p className="text-body text-slate-500 mt-1">{t('forgotPassword.enterYourEmailAndWeLl')}</p>
           </div>
 
           {isSuccess ? (
@@ -76,12 +78,12 @@ const ForgotPassword = (): React.ReactElement => {
               <div className="w-16 h-16 bg-success-50 rounded-2xl flex items-center justify-center">
                 <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Check your inbox</h3>
+              <h3 className="text-xl font-bold text-slate-900">{t('forgotPassword.checkYourInbox')}</h3>
               <p className="text-slate-500 text-body leading-relaxed">
-                If an account exists for this email, we have sent a password reset link.
+                {t('forgotPassword.ifAnAccountExistsForThis')}
               </p>
               <Link to="/login" className="w-full mt-4">
-                <Button variant="outline" className="w-full">Return to login</Button>
+                <Button variant="outline" className="w-full">{t('forgotPassword.returnToLogin')}</Button>
               </Link>
             </div>
           ) : (
@@ -90,7 +92,7 @@ const ForgotPassword = (): React.ReactElement => {
                 <Input
                   id="forgot-email"
                   type="email"
-                  label="Email Address"
+                  label={t('forgotPassword.emailAddress')}
                   icon={Mail}
                   autoComplete="email"
                   required
@@ -105,7 +107,7 @@ const ForgotPassword = (): React.ReactElement => {
               </div>
 
               <Button type="submit" variant="primary" className="w-full" size="lg" isLoading={isLoading}>
-                Send Reset Link
+                {t('forgotPassword.sendResetLink')}
               </Button>
             </form>
           )}
@@ -113,7 +115,7 @@ const ForgotPassword = (): React.ReactElement => {
 
         <div className="mt-8 text-center">
           <Link to="/login" className="inline-flex items-center gap-2 text-body font-medium text-slate-500 hover:text-slate-900 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to login
+            <ArrowLeft className="w-4 h-4" /> {t('forgotPassword.backToLogin')}
           </Link>
         </div>
       </div>

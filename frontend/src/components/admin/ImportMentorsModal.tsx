@@ -33,6 +33,8 @@ import {
 } from '../../utils/mentorImportStatus';
 import Badge, { badgeTones } from '../ui/Badge';
 import Button from '../ui/Button';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 interface ImportMentorsModalProps {
   onClose: () => void;
@@ -42,12 +44,13 @@ interface ImportMentorsModalProps {
 type ImportPhase = 'upload' | 'review' | 'result';
 
 const steps = [
-  { key: 'upload', label: 'Select file' },
-  { key: 'review', label: 'Review data' },
-  { key: 'result', label: 'Import result' },
+  { key: 'upload', get label() { return i18n.t('admin:importLecturersModal.selectFile'); } },
+  { key: 'review', get label() { return i18n.t('admin:importLecturersModal.reviewData'); } },
+  { key: 'result', get label() { return i18n.t('admin:importLecturersModal.importResult'); } },
 ] as const;
 
 export default function ImportMentorsModal({ onClose, onImported }: ImportMentorsModalProps) {
+  const { t } = useTranslation('admin');
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<ImportPhase>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -95,7 +98,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (requestError: unknown) {
-      toast.error(parseApiError(requestError, 'Failed to download mentor template').message);
+      toast.error(parseApiError(requestError, t('importMentorsModal.failedToDownloadMentorTemplate')).message);
     } finally {
       setDownloading(false);
     }
@@ -119,7 +122,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       setPreview(response.data);
       setPhase('review');
     } catch (requestError: unknown) {
-      setError(parseApiError(requestError, 'The mentor file could not be analyzed.').message);
+      setError(parseApiError(requestError, t('importMentorsModal.theMentorFileCouldNotBe')).message);
     } finally {
       setAnalyzing(false);
     }
@@ -135,7 +138,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       onImported();
       toast.success(describeMasterImportResult(response.data));
     } catch (requestError: unknown) {
-      toast.error(parseApiError(requestError, 'Failed to import mentors.').message);
+      toast.error(parseApiError(requestError, t('importMentorsModal.failedToImportMentors')).message);
     } finally {
       setImporting(false);
     }
@@ -143,11 +146,11 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
 
   const currentStep = steps.findIndex((step) => step.key === phase);
   const changeCount = preview ? countMasterImportChanges(preview) : 0;
-  const action = preview ? describeImportAction(preview) : { label: 'Import', breakdown: '' };
+  const action = preview ? describeImportAction(preview) : { label: t('common:actions.import'), breakdown: '' };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-mentors-title">
-      <button type="button" className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm" onClick={importing ? undefined : onClose} aria-label="Close import dialog" />
+      <button type="button" className="absolute inset-0 cursor-default bg-slate-900/45 backdrop-blur-sm" onClick={importing ? undefined : onClose} aria-label={t('importLecturersModal.closeImportDialog')} />
 
       <div className="relative flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/60 bg-white shadow-float animate-scale-in sm:max-h-[90vh] sm:rounded-2xl">
         <header className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-6">
@@ -155,14 +158,14 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><FileSpreadsheet className="h-5 w-5" /></div>
               <div>
-                <h2 id="import-mentors-title" className="text-lg font-bold text-slate-900">Import Mentor accounts</h2>
-                <p className="text-sm text-slate-500">Add mentors to the master list. Missing information is allowed and can be completed later.</p>
+                <h2 id="import-mentors-title" className="text-lg font-bold text-slate-900">{t('importMentorsModal.importMentorAccounts')}</h2>
+                <p className="text-sm text-slate-500">{t('importMentorsModal.addMentorsToTheMasterList')}</p>
               </div>
             </div>
-            <button type="button" onClick={onClose} disabled={importing} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50" aria-label="Close"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} disabled={importing} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50" aria-label={t('common:actions.close')}><X className="h-5 w-5" /></button>
           </div>
 
-          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="Import progress">
+          <ol className="mt-4 grid grid-cols-3 gap-2" aria-label={t('importLecturersModal.importProgress')}>
             {steps.map((step, index) => (
               <li key={step.key} className="flex min-w-0 items-center gap-2">
                 <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index <= currentStep ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
@@ -181,12 +184,12 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
               <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs leading-5 text-slate-700">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                 <div className="space-y-1">
-                  <p><strong>Use the mentor workbook template.</strong> Required sheets: DS Mentor_FA26 (enterprise mentors) and Mentor IT_FA26 (lecturer mentors).</p>
-                  <p>Only the mentor name is required. Mentors without an email are saved as <strong>incomplete</strong>; import a file with their email later to create the account. Existing mentors with the same email are updated.</p>
-                  <p>Nobody is added to a semester here — use Add mentors in Subject Management.</p>
-                  <p>Limits: Excel .xlsx · maximum 5 MB.</p>
+                  <p><strong>{t('importMentorsModal.useTheMentorWorkbookTemplate')}</strong> {t('importMentorsModal.requiredSheetsDsMentorFa26Enterprise')}</p>
+                  <p>{t('importMentorsModal.onlyTheMentorNameIsRequired')} <strong>{t('importMentorsModal.incomplete')}</strong>{t('importMentorsModal.importAFileWithTheirEmail')}</p>
+                  <p>{t('importMentorsModal.nobodyIsAddedToASemester')}</p>
+                  <p>{t('importMentorsModal.limitsExcelXlsxMaximum5Mb')}</p>
                   <button type="button" onClick={() => void downloadTemplate()} disabled={downloading} className="mt-1 inline-flex items-center gap-1.5 font-semibold text-primary-700 disabled:opacity-60">
-                    {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download template
+                    {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} {t('importMentorsModal.downloadTemplate')}
                   </button>
                 </div>
               </div>
@@ -198,13 +201,13 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
                 onDrop={(event) => { event.preventDefault(); setDragActive(false); void inspectFile(event.dataTransfer.files?.[0]); }}
                 className={`rounded-2xl border-2 border-dashed px-5 py-10 text-center transition-colors ${error ? 'border-red-300 bg-red-50/60' : dragActive || file ? 'border-primary bg-primary-50' : 'border-slate-300 hover:border-primary hover:bg-primary-50/40'}`}
               >
-                <input ref={inputRef} type="file" accept=".xlsx" className="hidden" aria-label="Mentor workbook" onChange={(event) => { void inspectFile(event.target.files?.[0]); event.target.value = ''; }} />
+                <input ref={inputRef} type="file" accept=".xlsx" className="hidden" aria-label={t('importMentorsModal.mentorWorkbook')} onChange={(event) => { void inspectFile(event.target.files?.[0]); event.target.value = ''; }} />
                 <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${error ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary-700'}`}>
                   {analyzing ? <Loader2 className="h-6 w-6 animate-spin" /> : error ? <AlertCircle className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
                 </div>
-                <p className="mt-4 text-sm font-semibold text-slate-800">{analyzing ? `Analyzing ${file?.name}` : error ? 'This file cannot be used' : 'Drop the mentor workbook here'}</p>
-                <p className={`mx-auto mt-1 max-w-xl text-xs ${error ? 'text-red-600' : 'text-slate-500'}`}>{error || 'The file is inspected safely before any account is created.'}</p>
-                {!analyzing && <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>{error ? 'Choose another file' : 'Browse files'}</Button>}
+                <p className="mt-4 text-sm font-semibold text-slate-800">{analyzing ? t('importLecturersModal.analyzing', { name: file?.name }) : error ? t('importLecturersModal.thisFileCannotBeUsed') : t('importMentorsModal.dropTheMentorWorkbookHere')}</p>
+                <p className={`mx-auto mt-1 max-w-xl text-xs ${error ? 'text-red-600' : 'text-slate-500'}`}>{error || t('importLecturersModal.theFileIsInspectedSafelyBefore')}</p>
+                {!analyzing && <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>{error ? t('importLecturersModal.chooseAnotherFile') : t('importLecturersModal.browseFiles')}</Button>}
               </div>
             </div>
           )}
@@ -212,24 +215,24 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
           {phase === 'review' && preview && (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p><p className="text-xs text-slate-500">{preview.totalRows} mentor row(s)</p></div>
-                <button type="button" onClick={reset} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700"><RotateCcw className="h-3.5 w-3.5" /> Choose another file</button>
+                <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{file?.name}</p><p className="text-xs text-slate-500">{t('importMentorsModal.mentorRowS', { totalRows: preview.totalRows })}</p></div>
+                <button type="button" onClick={reset} className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary-700"><RotateCcw className="h-3.5 w-3.5" /> {t('importLecturersModal.chooseAnotherFile')}</button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-6">
-                <SummaryCard label="Total" value={preview.totalRows} tone="neutral" />
+                <SummaryCard label={t('importLecturersModal.total')} value={preview.totalRows} tone="neutral" />
                 <SummaryCard label={IMPORT_STATUS_META.create.label} value={preview.createCount} tone={IMPORT_STATUS_META.create.tone} />
                 <SummaryCard label={IMPORT_STATUS_META.complete.label} value={preview.completeDraftCount} tone={IMPORT_STATUS_META.complete.tone} />
                 <SummaryCard label={IMPORT_STATUS_META.update.label} value={preview.updateCount} tone={IMPORT_STATUS_META.update.tone} />
                 <SummaryCard label={IMPORT_STATUS_META.incomplete.label} value={preview.needsCompletionCount} tone={IMPORT_STATUS_META.incomplete.tone} />
-                <SummaryCard label="Errors" value={preview.errorCount} tone={IMPORT_STATUS_META.invalid.tone} />
+                <SummaryCard label={t('importLecturersModal.errors')} value={preview.errorCount} tone={IMPORT_STATUS_META.invalid.tone} />
               </div>
 
-              {preview.canCommit && changeCount > 0 && action.breakdown && <p role="status" className="text-xs font-semibold text-slate-600">When you confirm: {action.breakdown}.</p>}
+              {preview.canCommit && changeCount > 0 && action.breakdown && <p role="status" className="text-xs font-semibold text-slate-600">{t('importMentorsModal.whenYouConfirm', { breakdown: action.breakdown })}</p>}
               {(preview.warnings ?? []).map(warning => <Notice key={warning} text={warning} />)}
-              {preview.needsCompletionCount > 0 && <Notice text={`${preview.needsCompletionCount} mentor(s) have no login email yet. They will be saved as incomplete and no account is created until an email is provided.`} />}
-              {preview.errorCount > 0 && <Notice text="Resolve every invalid row in the source file, then preview again. No account has been changed." />}
-              {!preview.canCommit && preview.errorCount === 0 && <Notice text="There is nothing to import from this file." />}
+              {preview.needsCompletionCount > 0 && <Notice text={t('importMentorsModal.mentorSHaveNoLoginEmail', { needsCompletionCount: preview.needsCompletionCount })} />}
+              {preview.errorCount > 0 && <Notice text={t('importMentorsModal.resolveEveryInvalidRowInThe')} />}
+              {!preview.canCommit && preview.errorCount === 0 && <Notice text={t('importMentorsModal.thereIsNothingToImportFrom')} />}
               <StatusFilter rows={preview.rows} value={statusFilter} onChange={setStatusFilter} />
               <MentorRowsTable rows={filterImportRows(preview.rows, statusFilter)} totalRows={preview.rows.length} />
             </div>
@@ -238,18 +241,18 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
           {phase === 'result' && result && (
             <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600"><CheckCircle2 className="h-6 w-6" /></div>
-              <h3 className="mt-3 text-lg font-bold text-slate-900">Mentor import completed</h3>
-              <p className="mt-1 text-sm text-slate-600">Created {result.createdCount}, updated {result.updatedCount}, saved as incomplete {result.draftSavedCount}, completed {result.draftCompletedCount}.</p>
-              {result.draftSavedCount > 0 && <p className="mt-2 text-xs text-slate-500">Incomplete mentors are listed in the Needs information tab of User Management. Import a file with their email to create their accounts.</p>}
-              {result.createdCount > 0 && <p className="mt-2 text-xs text-slate-500">New accounts can use Forgot Password to set their first password. Add them to a semester from Subject Management.</p>}
+              <h3 className="mt-3 text-lg font-bold text-slate-900">{t('importMentorsModal.mentorImportCompleted')}</h3>
+              <p className="mt-1 text-sm text-slate-600">{t('importMentorsModal.createdUpdatedSavedAsIncompleteCompleted', { createdCount: result.createdCount, updatedCount: result.updatedCount, draftSavedCount: result.draftSavedCount, draftCompletedCount: result.draftCompletedCount })}</p>
+              {result.draftSavedCount > 0 && <p className="mt-2 text-xs text-slate-500">{t('importMentorsModal.incompleteMentorsAreListedInThe')}</p>}
+              {result.createdCount > 0 && <p className="mt-2 text-xs text-slate-500">{t('importMentorsModal.newAccountsCanUseForgotPassword')}</p>}
             </div>
           )}
         </main>
 
         <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-          {phase === 'upload' && <Button variant="outline" onClick={onClose}>Cancel</Button>}
-          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>Back</Button><Button variant="primary" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>{importing ? `Applying ${changeCount} changes...` : action.label}</Button></>}
-          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>Done</Button>}
+          {phase === 'upload' && <Button variant="outline" onClick={onClose}>{t('common:actions.cancel')}</Button>}
+          {phase === 'review' && <><Button variant="outline" icon={ArrowLeft} onClick={reset} disabled={importing}>{t('common:actions.back')}</Button><Button variant="primary" icon={Upload} isLoading={importing} disabled={!preview?.canCommit} onClick={() => void commit()}>{importing ? t('importMentorsModal.applyingChanges', { changeCount }) : action.label}</Button></>}
+          {phase === 'result' && <Button variant="primary" icon={Check} onClick={onClose}>{t('importLecturersModal.done')}</Button>}
         </footer>
       </div>
     </div>
@@ -262,13 +265,14 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 
 /** Filter chips: only statuses that occur in the file are offered, each with its count and the same colour as its tile. */
 function StatusFilter({ rows, value, onChange }: { rows: MentorImportPreview['rows']; value: ImportStatusFilter; onChange: (value: ImportStatusFilter) => void }) {
+  const { t } = useTranslation('admin');
   const counts = countImportRows(rows);
   const options: { key: ImportStatusFilter; label: string; tone: 'neutral' | 'success' | 'info' | 'warning' | 'danger' }[] = [
-    { key: 'all', label: 'All', tone: 'neutral' },
-    ...IMPORT_FILTER_ORDER.filter(key => counts[key] > 0).map(key => ({ key, label: key === 'invalid' ? 'Errors' : IMPORT_STATUS_META[key].label, tone: IMPORT_STATUS_META[key].tone })),
+    { key: 'all', label: t('classManagement.all'), tone: 'neutral' },
+    ...IMPORT_FILTER_ORDER.filter(key => counts[key] > 0).map(key => ({ key, label: key === 'invalid' ? t('importLecturersModal.errors') : IMPORT_STATUS_META[key].label, tone: IMPORT_STATUS_META[key].tone })),
   ];
   return (
-    <div role="group" aria-label="Filter rows by status" className="flex flex-wrap items-center gap-1.5">
+    <div role="group" aria-label={t('importMentorsModal.filterRowsByStatus')} className="flex flex-wrap items-center gap-1.5">
       {options.map(option => (
         <button
           key={option.key}
@@ -289,22 +293,23 @@ function Notice({ text }: { text: string }) {
 }
 
 function MentorRowsTable({ rows, totalRows }: { rows: MentorImportPreview['rows']; totalRows: number }) {
+  const { t } = useTranslation('admin');
   if (rows.length === 0) {
-    return <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">No row has this status.</p>;
+    return <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{t('importMentorsModal.noRowHasThisStatus')}</p>;
   }
   return (
     <div className="space-y-1.5">
-      {rows.length !== totalRows && <p className="text-xs text-slate-500" aria-live="polite">Showing {rows.length} of {totalRows} rows.</p>}
+      {rows.length !== totalRows && <p className="text-xs text-slate-500" aria-live="polite">{t('importMentorsModal.showingOfRows', { length: rows.length, totalRows })}</p>}
       <div className="overflow-hidden rounded-xl border border-slate-200"><div className="max-h-80 overflow-auto">
         <table className="w-full min-w-[680px] text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5">Sheet / row</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Mentor</th><th className="px-3 py-2.5">Result</th></tr></thead>
+          <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5">{t('importMentorsModal.sheetRow')}</th><th className="px-3 py-2.5">{t('importMentorsModal.type')}</th><th className="px-3 py-2.5">{t('subjectManagement.mentor')}</th><th className="px-3 py-2.5">{t('importLecturersModal.result')}</th></tr></thead>
           <tbody className="divide-y divide-slate-100 bg-white">{rows.map((row) => {
             const meta = IMPORT_STATUS_META[importRowCategory(row)];
             return (
               <tr key={`${row.sheetName}-${row.rowNumber}`} className={!row.isValid ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
                 <td className="px-3 py-3 text-slate-600">{row.sheetName} · {row.rowNumber}</td>
-                <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? 'Enterprise' : 'Lecturer'}</td>
-                <td className="px-3 py-3"><span className="block font-semibold text-slate-700">{row.fullName || '—'}</span><span className={emailCellText(row.email).provided ? 'text-slate-400' : 'font-medium text-amber-600'}>{emailCellText(row.email).text}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-caption text-slate-400">Missing: {row.missingFields.join(', ')}</span>}</td>
+                <td className="px-3 py-3 text-slate-600">{row.mentorType === 'Enterprise' ? t('importMentorsModal.enterprise') : t('classManagement.lecturer')}</td>
+                <td className="px-3 py-3"><span className="block font-semibold text-slate-700">{row.fullName || '—'}</span><span className={emailCellText(row.email).provided ? 'text-slate-400' : 'font-medium text-amber-600'}>{emailCellText(row.email).text}</span>{row.missingFields.length > 0 && <span className="mt-1 block max-w-sm text-caption text-slate-400">{t('subjectManagement.missing', { v1: row.missingFields.join(', ') })}</span>}</td>
                 <td className="px-3 py-3"><Badge variant={meta.tone}>{meta.label}</Badge>{row.message && <span className="mt-1 block max-w-xs text-caption leading-4 text-slate-500">{row.message}</span>}</td>
               </tr>
             );

@@ -4,6 +4,9 @@ import StatCard from '../../../components/ui/StatCard';
 import LoadingSkeleton from '../../../components/ui/LoadingSkeleton';
 import type { ProjectAchievement, ProjectDataSummary } from '../../../types/projectData';
 import { cn } from '../../../utils/cn';
+import { useTranslation } from 'react-i18next';
+import { achievementLabel } from '../../../i18n/labels';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 interface ProjectDataSummaryCardsProps {
   summary: ProjectDataSummary | undefined;
@@ -20,7 +23,7 @@ interface ProjectDataSummaryCardsProps {
   onClearFilters: () => void;
 }
 
-const formatCount = (value: number) => value.toLocaleString();
+const formatCount = (value: number) => fmtNumber(value);
 
 const achievementCards = [
   { achievement: 'Potential', field: 'potentialGroups', icon: Sparkles, color: 'primary' },
@@ -52,9 +55,10 @@ export default function ProjectDataSummaryCards({
   onToggleAchievement,
   onClearFilters,
 }: ProjectDataSummaryCardsProps) {
+  const { t } = useTranslation('projectData');
   if (isLoading) {
     return (
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7" role="status" aria-label="Loading summary">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7" role="status" aria-label={t('projectDataSummaryCards.loadingSummary')}>
         {[0, 1, 2, 3, 4, 5, 6].map(index => <LoadingSkeleton key={index} variant="card" />)}
       </div>
     );
@@ -63,20 +67,20 @@ export default function ProjectDataSummaryCards({
   if (!summary) {
     return isError ? (
       <p role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-danger">
-        The summary could not be loaded.
-        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">Retry</button>
+        {t('projectDataSummaryCards.theSummaryCouldNotBeLoaded')}
+        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
       </p>
     ) : null;
   }
 
   return (
     <section
-      aria-label="Project data summary"
+      aria-label={t('projectDataSummaryCards.projectDataSummary')}
       aria-busy={isRefreshing}
       className={cn('mb-4 grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7', isRefreshing && 'opacity-60')}
     >
       <StatCard
-        title="Total Groups"
+        title={t('projectDataSummaryCards.totalGroups')}
         value={formatCount(summary.totalGroups)}
         icon={Users}
         color="indigo"
@@ -86,7 +90,7 @@ export default function ProjectDataSummaryCards({
       {achievementCards.map(card => (
         <StatCard
           key={card.achievement}
-          title={card.achievement}
+          title={achievementLabel(card.achievement)}
           value={formatCount(summary[card.field])}
           icon={card.icon}
           color={card.color}

@@ -6,6 +6,7 @@ import { parseApiError } from '../../utils/apiError';
 import { toFormValues, toPayload, validateFormValues, type IncompleteMentorFormValues } from '../../utils/incompleteMentorForm';
 import Modal from '../ui/Modal';
 import MentorKindTag from './MentorKindTag';
+import { useTranslation } from 'react-i18next';
 
 interface IncompleteMentorEditModalProps {
   mentor: IncompleteMentor;
@@ -27,6 +28,7 @@ function Field({ id, label, children, hint }: { id: string; label: string; child
 
 /** Edits what is known about a mentor who has no account yet. The login email arrives through an import. */
 export default function IncompleteMentorEditModal({ mentor, onClose, onSaved }: IncompleteMentorEditModalProps) {
+  const { t } = useTranslation('admin');
   const [values, setValues] = useState<IncompleteMentorFormValues>(() => toFormValues(mentor));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -50,52 +52,52 @@ export default function IncompleteMentorEditModal({ mentor, onClose, onSaved }: 
         const teams = result.teamsSwitched ?? 0;
         const semesters = result.semestersMoved ?? 0;
         const carried = [teams > 0 ? `${teams} team${teams === 1 ? '' : 's'} switched` : '', semesters > 0 ? `${semesters} semester${semesters === 1 ? '' : 's'} moved` : ''].filter(Boolean).join(', ');
-        toast.success(`${values.fullName.trim()} now has an account${carried ? ` (${carried})` : ''}. They can set a password with Forgot Password.`, { duration: 6000 });
+        toast.success(t('incompleteMentorEditModal.nowHasAnAccount', { v1: values.fullName.trim(), carried: carried ? ` (${carried})` : '' }), { duration: 6000 });
       } else {
         toast.success(`${values.fullName.trim()} updated.`);
       }
       onSaved();
     } catch (requestError: unknown) {
       // The form stays open with every value kept so the admin can fix it and try again.
-      setError(parseApiError(requestError, 'Failed to update the mentor').message);
+      setError(parseApiError(requestError, t('incompleteMentorEditModal.failedToUpdateTheMentor')).message);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal isOpen onClose={saving ? () => undefined : onClose} title="Edit mentor information" size="lg" submitText={values.email.trim() ? 'Save and create account' : 'Save changes'} isSubmitting={saving} onSubmit={save}>
+    <Modal isOpen onClose={saving ? () => undefined : onClose} title={t('incompleteMentorEditModal.editMentorInformation')} size="lg" submitText={values.email.trim() ? t('incompleteMentorEditModal.saveAndCreateAccount') : t('incompleteMentorEditModal.saveChanges')} isSubmitting={saving} onSubmit={save}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <MentorKindTag type={mentor.mentorType} />
-          <p className="text-xs text-slate-500">No login account yet. Add the login email below to create the account now.</p>
+          <p className="text-xs text-slate-500">{t('incompleteMentorEditModal.noLoginAccountYetAddThe')}</p>
         </div>
 
-        <Field id="incomplete-email" label={isEnterprise ? 'Login email' : 'Login email (work email)'} hint="Adding it creates the mentor's account, switches their teams to it and moves them to Accounts. They set a password with Forgot Password.">
+        <Field id="incomplete-email" label={isEnterprise ? t('incompleteMentorEditModal.loginEmail') : t('incompleteMentorEditModal.loginEmailWorkEmail')} hint={t('incompleteMentorEditModal.addingItCreatesTheMentorS')}>
           <input id="incomplete-email" type="email" className={inputClass} value={values.email} onChange={set('email')} disabled={saving} autoComplete="off" />
         </Field>
 
-        <Field id="incomplete-name" label="Full name *">
+        <Field id="incomplete-name" label={t('incompleteMentorEditModal.fullName')}>
           <input id="incomplete-name" className={inputClass} value={values.fullName} onChange={set('fullName')} disabled={saving} maxLength={100} />
         </Field>
 
         {isEnterprise ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field id="incomplete-fpt" label="Fpt Email" hint="Optional. Not the login email.">
+            <Field id="incomplete-fpt" label={t('incompleteMentorEditModal.fptEmail')} hint={t('incompleteMentorEditModal.optionalNotTheLoginEmail')}>
               <input id="incomplete-fpt" type="email" className={inputClass} value={values.fptEmail} onChange={set('fptEmail')} disabled={saving} />
             </Field>
-            <Field id="incomplete-phone" label="Phone"><input id="incomplete-phone" className={inputClass} value={values.phone} onChange={set('phone')} disabled={saving} maxLength={30} /></Field>
-            <Field id="incomplete-dob" label="Date of birth"><input id="incomplete-dob" type="date" className={inputClass} value={values.dateOfBirth} onChange={set('dateOfBirth')} disabled={saving} /></Field>
-            <Field id="incomplete-contract" label="Contract type"><input id="incomplete-contract" className={inputClass} value={values.contractType} onChange={set('contractType')} disabled={saving} maxLength={100} /></Field>
-            <Field id="incomplete-education" label="Education level"><input id="incomplete-education" className={inputClass} value={values.educationLevel} onChange={set('educationLevel')} disabled={saving} maxLength={200} /></Field>
-            <Field id="incomplete-company" label="Company"><input id="incomplete-company" className={inputClass} value={values.organization} onChange={set('organization')} disabled={saving} maxLength={200} /></Field>
-            <Field id="incomplete-title" label="Job title"><input id="incomplete-title" className={inputClass} value={values.jobTitle} onChange={set('jobTitle')} disabled={saving} maxLength={200} /></Field>
-            <Field id="incomplete-address" label="Current address"><input id="incomplete-address" className={inputClass} value={values.currentAddress} onChange={set('currentAddress')} disabled={saving} maxLength={500} /></Field>
+            <Field id="incomplete-phone" label={t('accountApprovalBoard.phone')}><input id="incomplete-phone" className={inputClass} value={values.phone} onChange={set('phone')} disabled={saving} maxLength={30} /></Field>
+            <Field id="incomplete-dob" label={t('mentorProfileDetail.dateOfBirth')}><input id="incomplete-dob" type="date" className={inputClass} value={values.dateOfBirth} onChange={set('dateOfBirth')} disabled={saving} /></Field>
+            <Field id="incomplete-contract" label={t('mentorProfileDetail.contractType')}><input id="incomplete-contract" className={inputClass} value={values.contractType} onChange={set('contractType')} disabled={saving} maxLength={100} /></Field>
+            <Field id="incomplete-education" label={t('mentorProfileDetail.educationLevel')}><input id="incomplete-education" className={inputClass} value={values.educationLevel} onChange={set('educationLevel')} disabled={saving} maxLength={200} /></Field>
+            <Field id="incomplete-company" label={t('incompleteMentorEditModal.company')}><input id="incomplete-company" className={inputClass} value={values.organization} onChange={set('organization')} disabled={saving} maxLength={200} /></Field>
+            <Field id="incomplete-title" label={t('mentorProfileDetail.jobTitle')}><input id="incomplete-title" className={inputClass} value={values.jobTitle} onChange={set('jobTitle')} disabled={saving} maxLength={200} /></Field>
+            <Field id="incomplete-address" label={t('incompleteMentorEditModal.currentAddress')}><input id="incomplete-address" className={inputClass} value={values.currentAddress} onChange={set('currentAddress')} disabled={saving} maxLength={500} /></Field>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field id="incomplete-department" label="Department"><input id="incomplete-department" className={inputClass} value={values.department} onChange={set('department')} disabled={saving} maxLength={200} /></Field>
-            <Field id="incomplete-title" label="Job title"><input id="incomplete-title" className={inputClass} value={values.jobTitle} onChange={set('jobTitle')} disabled={saving} maxLength={200} /></Field>
+            <Field id="incomplete-department" label={t('mentorProfileDetail.department')}><input id="incomplete-department" className={inputClass} value={values.department} onChange={set('department')} disabled={saving} maxLength={200} /></Field>
+            <Field id="incomplete-title" label={t('mentorProfileDetail.jobTitle')}><input id="incomplete-title" className={inputClass} value={values.jobTitle} onChange={set('jobTitle')} disabled={saving} maxLength={200} /></Field>
           </div>
         )}
 

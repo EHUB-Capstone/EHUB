@@ -36,6 +36,7 @@ import CheckpointFilePreviewModal from '../workspace/checkpoints/CheckpointFileP
 import { isCheckpointFilePreviewable } from '../../utils/checkpointUpload';
 import { warmUpPdfPreview } from '../../utils/pdfPreviewRuntime';
 import CheckpointGradingDialog, { type CheckpointGradingDialogHandle } from '../evaluation/CheckpointGradingDialog';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   semester: string;
@@ -85,6 +86,7 @@ export default function LecturerCheckpointManagement({
   initialCheckpointNumber,
   onSelectionChange,
 }: Props) {
+  const { t } = useTranslation('class');
   const [overview, setOverview] = useState<LecturerCheckpointOverview>(emptyOverview);
   const [selectedClassId, setSelectedClassId] = useState(initialClassId);
   const [selectedCheckpointNumber, setSelectedCheckpointNumber] = useState<number | null>(
@@ -136,7 +138,7 @@ export default function LecturerCheckpointManagement({
       });
       setOverview(unwrapApiData<LecturerCheckpointOverview>(response));
     } catch (requestError) {
-      setError(parseApiError(requestError, 'Unable to load checkpoint management data.').message);
+      setError(parseApiError(requestError, t('lecturerCheckpointManagement.unableToLoadCheckpointManagementData')).message);
     } finally {
       setLoading(false);
     }
@@ -168,7 +170,7 @@ export default function LecturerCheckpointManagement({
     const start = parseCheckpointLocalDateTime(startDate);
     const end = parseCheckpointLocalDateTime(endDate);
     if (!editing || !start || !end || rangeError || reopenError) {
-      toast.error(rangeError || reopenError || 'Enter valid start and end dates with 24-hour times.');
+      toast.error(rangeError || reopenError || t('lecturerCheckpointManagement.enterValidStartAndEndDates'));
       return;
     }
 
@@ -198,13 +200,13 @@ export default function LecturerCheckpointManagement({
         });
       }
       toast.success(selectedClassId
-        ? editing.allClosed ? 'Checkpoint reopened successfully.' : 'Checkpoint schedule saved.'
-        : `Schedule applied to ${editing.schedules.length} ${editing.schedules.length === 1 ? 'class' : 'classes'}.`);
+        ? editing.allClosed ? t('lecturerCheckpointManagement.checkpointReopenedSuccessfully') : t('lecturerCheckpointManagement.checkpointScheduleSaved')
+        : t('lecturerCheckpointManagement.scheduleAppliedToClasses', { count: editing.schedules.length }));
       setEditing(null);
       setConfirmingBulk(false);
       await load();
     } catch (requestError) {
-      toast.error(parseApiError(requestError, 'Unable to save checkpoint schedule.').message);
+      toast.error(parseApiError(requestError, t('lecturerCheckpointManagement.unableToSaveCheckpointSchedule')).message);
     } finally {
       setSaving(false);
     }
@@ -220,7 +222,7 @@ export default function LecturerCheckpointManagement({
     try {
       await checkpointApi.downloadFile(teamId, checkpointNumber, fileId, fileName);
     } catch (requestError) {
-      toast.error(parseApiError(requestError, 'Unable to download the submitted file.').message);
+      toast.error(parseApiError(requestError, t('lecturerCheckpointManagement.unableToDownloadTheSubmittedFile')).message);
     } finally {
       setDownloadingId(null);
     }
@@ -234,9 +236,9 @@ export default function LecturerCheckpointManagement({
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
         <AlertCircle className="mx-auto h-7 w-7 text-red-500" />
-        <p className="mt-2 text-sm font-semibold text-red-800">Unable to load checkpoints</p>
+        <p className="mt-2 text-sm font-semibold text-red-800">{t('lecturerCheckpointManagement.unableToLoadCheckpoints')}</p>
         <p className="mt-1 text-sm text-red-600">{error}</p>
-        <button type="button" onClick={() => void load()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700">Retry</button>
+        <button type="button" onClick={() => void load()} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700">{t('assignMentorsModal.retry')}</button>
       </div>
     );
   }
@@ -246,7 +248,7 @@ export default function LecturerCheckpointManagement({
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1.5 text-sm font-semibold text-slate-700">
-            <span>Class</span>
+            <span>{t('classDirectionOverview.class')}</span>
             <select
               value={selectedClassId}
               onChange={(event) => {
@@ -256,14 +258,14 @@ export default function LecturerCheckpointManagement({
               }}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
-              <option value="">All Classes</option>
+              <option value="">{t('classDirectionOverview.allClasses')}</option>
               {overview.classes.map(item => (
                 <option key={item.id} value={item.id}>{item.classCode} - {item.subjectName}</option>
               ))}
             </select>
           </label>
           <label className="space-y-1.5 text-sm font-semibold text-slate-700">
-            <span>Checkpoint</span>
+            <span>{t('lecturerCheckpointManagement.checkpoint')}</span>
             <select
               value={selectedCheckpointNumber ?? ''}
               onChange={(event) => {
@@ -273,7 +275,7 @@ export default function LecturerCheckpointManagement({
               }}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
-              <option value="">All Checkpoints</option>
+              <option value="">{t('lecturerCheckpointManagement.allCheckpoints')}</option>
               {checkpointOptions.map(number => (
                 <option key={number} value={number}>{formatLecturerCheckpointName(number)}</option>
               ))}
@@ -292,8 +294,8 @@ export default function LecturerCheckpointManagement({
           className={`group flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 ${schedulesExpanded ? 'rounded-t-2xl border-b border-slate-100' : 'rounded-2xl'}`}
         >
           <span className="min-w-0">
-            <span className="block font-bold text-slate-900">Checkpoint schedules</span>
-            <span className="mt-0.5 block text-xs text-slate-500">Set checkpoint deadlines for your classes here.</span>
+            <span className="block font-bold text-slate-900">{t('lecturerCheckpointManagement.checkpointSchedules')}</span>
+            <span className="mt-0.5 block text-xs text-slate-500">{t('lecturerCheckpointManagement.setCheckpointDeadlinesForYourClasses')}</span>
           </span>
           <span className="flex shrink-0 items-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
@@ -305,7 +307,7 @@ export default function LecturerCheckpointManagement({
         </h2>
         <div id="lecturer-checkpoint-schedules" hidden={!schedulesExpanded}>
             {scheduleGroups.length === 0 ? (
-              <p className="p-8 text-center text-sm text-slate-500">No checkpoint definitions match the selected classes.</p>
+              <p className="p-8 text-center text-sm text-slate-500">{t('lecturerCheckpointManagement.noCheckpointDefinitionsMatchTheSelected')}</p>
             ) : (
               <div className="space-y-3 p-4">
             {scheduleGroups.map(group => (
@@ -313,7 +315,7 @@ export default function LecturerCheckpointManagement({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-primary-700">
-                      {selectedClassId ? group.schedules[0].classCode : 'All Classes'}
+                      {selectedClassId ? group.schedules[0].classCode : t('classDirectionOverview.allClasses')}
                     </p>
                     <h3 className="mt-1 font-bold text-slate-900">{formatLecturerCheckpointName(group.checkpointNumber)}</h3>
                   </div>
@@ -323,11 +325,11 @@ export default function LecturerCheckpointManagement({
                 </div>
                 {!selectedClassId && (
                   <div className="mt-3 text-xs text-slate-600">
-                    <p className="font-semibold text-slate-700">Applies to {group.schedules.length} {group.schedules.length === 1 ? 'class' : 'classes'}</p>
+                    <p className="font-semibold text-slate-700">{t('lecturerCheckpointManagement.appliesToClasses', { count: group.schedules.length })}</p>
                     <p className="mt-1">{group.schedules.slice(0, 6).map(item => item.classCode).join(' · ')}{group.schedules.length > 6 ? ' · …' : ''}</p>
                     {group.schedules.length > 6 && (
                       <details className="mt-1">
-                        <summary className="cursor-pointer font-semibold text-primary-700">View all classes</summary>
+                        <summary className="cursor-pointer font-semibold text-primary-700">{t('lecturerCheckpointManagement.viewAllClasses')}</summary>
                         <p className="mt-1 max-h-24 overflow-y-auto">{group.schedules.map(item => item.classCode).join(' · ')}</p>
                       </details>
                     )}
@@ -335,12 +337,12 @@ export default function LecturerCheckpointManagement({
                 )}
                 {group.uniform ? (
                   <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                    <div className="rounded-lg bg-slate-50 p-2.5"><span className="block font-semibold text-slate-400">Starts</span>{formatDateTime(group.startDateUtc)}</div>
-                    <div className="rounded-lg bg-slate-50 p-2.5"><span className="block font-semibold text-slate-400">Ends</span>{formatDateTime(group.endDateUtc)}</div>
+                    <div className="rounded-lg bg-slate-50 p-2.5"><span className="block font-semibold text-slate-400">{t('lecturerCheckpointManagement.starts')}</span>{formatDateTime(group.startDateUtc)}</div>
+                    <div className="rounded-lg bg-slate-50 p-2.5"><span className="block font-semibold text-slate-400">{t('lecturerCheckpointManagement.ends')}</span>{formatDateTime(group.endDateUtc)}</div>
                   </div>
                 ) : (
                   <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
-                    Schedules differ across selected classes. Applying one schedule will replace their current windows.
+                    {t('lecturerCheckpointManagement.schedulesDifferAcrossSelectedClassesApplying')}
                   </p>
                 )}
                 <button
@@ -349,7 +351,7 @@ export default function LecturerCheckpointManagement({
                   className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-primary hover:text-primary-700"
                 >
                   {group.allClosed ? <RotateCcw className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
-                  {group.allClosed ? 'Reopen Checkpoint' : !group.uniform ? 'Apply one schedule to all classes' : group.schedules.some(item => item.id) ? 'Edit schedule' : 'Set schedule'}
+                  {group.allClosed ? t('lecturerCheckpointManagement.reopenCheckpoint') : !group.uniform ? t('lecturerCheckpointManagement.applyOneScheduleToAllClasses') : group.schedules.some(item => item.id) ? t('lecturerCheckpointManagement.editSchedule') : t('lecturerCheckpointManagement.setSchedule')}
                 </button>
               </article>
             ))}
@@ -360,17 +362,17 @@ export default function LecturerCheckpointManagement({
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="font-bold text-slate-900">Team submissions</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Submitted files and links for each team and checkpoint.</p>
+          <h2 className="font-bold text-slate-900">{t('lecturerCheckpointManagement.teamSubmissions')}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">{t('lecturerCheckpointManagement.submittedFilesAndLinksForEach')}</p>
         </div>
         {overview.submissions.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-500">No teams match the current filters.</p>
+          <p className="p-8 text-center text-sm text-slate-500">{t('lecturerCheckpointManagement.noTeamsMatchTheCurrentFilters')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Class</th><th className="px-4 py-3">Team</th><th className="px-4 py-3">Checkpoint</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Submitted File</th><th className="px-4 py-3">Submitted Links</th><th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">{t('classDirectionOverview.class')}</th><th className="px-4 py-3">{t('lecturerCheckpointManagement.team')}</th><th className="px-4 py-3">{t('lecturerCheckpointManagement.checkpoint')}</th><th className="px-4 py-3">{t('importSemesterGroupsModal.status')}</th><th className="px-4 py-3">{t('lecturerCheckpointManagement.submittedFile')}</th><th className="px-4 py-3">{t('lecturerCheckpointManagement.submittedLinks')}</th><th className="px-4 py-3">{t('lecturerCheckpointManagement.action')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -383,7 +385,7 @@ export default function LecturerCheckpointManagement({
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">{item.classCode}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {item.teamName}
-                      {newVersionKeys.has(`${item.teamId}:${item.checkpointNumber}`) && <span className="ml-2 align-middle"><Badge variant="info">New version</Badge></span>}
+                      {newVersionKeys.has(`${item.teamId}:${item.checkpointNumber}`) && <span className="ml-2 align-middle"><Badge variant="info">{t('lecturerCheckpointManagement.newVersion')}</Badge></span>}
                     </td>
                     <td className="min-w-52 px-4 py-3 text-slate-700">{formatLecturerCheckpointName(item.checkpointNumber)}</td>
                     <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyles[item.status] || statusStyles.NotScheduled}`}>{item.status}</span></td>
@@ -400,8 +402,8 @@ export default function LecturerCheckpointManagement({
                                 {isCheckpointFilePreviewable(file.originalName) && (
                                   <button
                                     type="button"
-                                    title="Preview file"
-                                    aria-label={`Preview ${file.originalName}`}
+                                    title={t('lecturerCheckpointManagement.previewFile')}
+                                    aria-label={t('lecturerCheckpointManagement.preview', { originalName: file.originalName })}
                                     onMouseEnter={warmUpPdfPreview}
                                     onFocus={warmUpPdfPreview}
                                     onClick={() => setPreviewTarget({
@@ -416,8 +418,8 @@ export default function LecturerCheckpointManagement({
                                 )}
                                 <button
                                   type="button"
-                                  title="Download file"
-                                  aria-label={`Download ${file.originalName}`}
+                                  title={t('lecturerCheckpointManagement.downloadFile')}
+                                  aria-label={t('lecturerCheckpointManagement.download', { originalName: file.originalName })}
                                   disabled={downloadingId === file.id}
                                   onClick={() => void downloadFile(item.teamId, item.checkpointNumber, file.id, file.originalName)}
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
@@ -438,7 +440,7 @@ export default function LecturerCheckpointManagement({
                               <span className="max-w-48 truncate">{link.name}</span><ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                           ))}
-                          {item.submittedLinks.length > 3 && <span className="text-xs text-slate-400">+{item.submittedLinks.length - 3} more in workspace</span>}
+                          {item.submittedLinks.length > 3 && <span className="text-xs text-slate-400">{t('lecturerCheckpointManagement.moreInWorkspace', { v1: item.submittedLinks.length - 3 })}</span>}
                         </div>
                       ) : '—'}
                     </td>
@@ -448,7 +450,7 @@ export default function LecturerCheckpointManagement({
                           to={teamCheckpointPath(item.teamId, item.checkpointNumber)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary-700"
                         >
-                          <ExternalLink className="h-3.5 w-3.5" /> View
+                          <ExternalLink className="h-3.5 w-3.5" /> {t('common:actions.view')}
                         </Link>
                         <button
                           type="button"
@@ -461,7 +463,7 @@ export default function LecturerCheckpointManagement({
                           })}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700 hover:border-primary"
                         >
-                          <Edit3 className="h-3.5 w-3.5" /> Grade
+                          <Edit3 className="h-3.5 w-3.5" /> {t('lecturerCheckpointManagement.grade')}
                         </button>
                       </div>
                     </td>
@@ -477,12 +479,12 @@ export default function LecturerCheckpointManagement({
       <Modal
         isOpen={Boolean(editing)}
         onClose={() => { setEditing(null); setConfirmingBulk(false); }}
-        title={confirmingBulk ? 'Apply Checkpoint Schedule' : editing?.allClosed ? `Reopen ${formatLecturerCheckpointName(editing.checkpointNumber)}` : `Schedule ${editing ? formatLecturerCheckpointName(editing.checkpointNumber) : 'checkpoint'}`}
+        title={confirmingBulk ? t('lecturerCheckpointManagement.applyCheckpointSchedule') : editing?.allClosed ? t('lecturerCheckpointManagement.reopen', { v1: formatLecturerCheckpointName(editing.checkpointNumber) }) : t('lecturerCheckpointManagement.schedule', { v1: editing ? formatLecturerCheckpointName(editing.checkpointNumber) : t('lecturerCheckpointManagement.checkpointFallback') })}
         onSubmit={saveSchedule}
         submitText={confirmingBulk
-          ? `${editing?.allClosed ? 'Reopen' : 'Apply'} to ${editing?.schedules.length || 0} ${(editing?.schedules.length || 0) === 1 ? 'Class' : 'Classes'}`
-          : !selectedClassId ? `Review schedule for ${editing?.schedules.length || 0} ${(editing?.schedules.length || 0) === 1 ? 'class' : 'classes'}`
-            : editing?.allClosed ? 'Reopen Checkpoint' : 'Save schedule'}
+          ? t(editing?.allClosed ? 'lecturerCheckpointManagement.reopenToClasses' : 'lecturerCheckpointManagement.applyToClasses', { count: editing?.schedules.length || 0 })
+          : !selectedClassId ? t('lecturerCheckpointManagement.reviewScheduleForClasses', { count: editing?.schedules.length || 0 })
+            : editing?.allClosed ? t('lecturerCheckpointManagement.reopenCheckpoint') : t('editScheduleModal.saveSchedule')}
         isSubmitting={saving}
         submitDisabled={!datesValid}
       >
@@ -490,16 +492,16 @@ export default function LecturerCheckpointManagement({
           {editing && !selectedClassId && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <p className="font-semibold">{formatLecturerCheckpointName(editing.checkpointNumber)}</p>
-              <p className="mt-1">This schedule will be applied to {editing.schedules.length} {editing.schedules.length === 1 ? 'class' : 'classes'}:</p>
+              <p className="mt-1">{t('lecturerCheckpointManagement.scheduleWillBeAppliedTo', { count: editing.schedules.length })}</p>
               <p className="mt-1 max-h-24 overflow-y-auto text-xs">{editing.schedules.map(item => item.classCode).join(' · ')}</p>
             </div>
           )}
           {editing?.allClosed && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               {editing.uniform
-                ? <p>Current schedule: {formatDateTime(editing.startDateUtc)} → {formatDateTime(editing.endDateUtc)}</p>
-                : <p>Current schedules differ across the selected classes.</p>}
-              <p className="mt-1">Existing submissions and history will be preserved. Only the availability window changes.</p>
+                ? <p>{t('lecturerCheckpointManagement.currentSchedule', { v1: formatDateTime(editing.startDateUtc), v2: formatDateTime(editing.endDateUtc) })}</p>
+                : <p>{t('lecturerCheckpointManagement.currentSchedulesDifferAcrossTheSelected')}</p>}
+              <p className="mt-1">{t('lecturerCheckpointManagement.existingSubmissionsAndHistoryWillBe')}</p>
             </div>
           )}
           {editing && !editing.uniform && (
@@ -511,20 +513,20 @@ export default function LecturerCheckpointManagement({
           )}
           {confirmingBulk ? (
             <div className="space-y-2 text-sm text-slate-700">
-              <p><span className="font-semibold">Start:</span> {formatDateTime(parsedStart)}</p>
-              <p><span className="font-semibold">End:</span> {formatDateTime(parsedEnd)}</p>
-              <button type="button" onClick={() => setConfirmingBulk(false)} className="text-xs font-semibold text-primary-700 hover:underline">Edit dates</button>
+              <p><span className="font-semibold">{t('lecturerCheckpointManagement.start')}</span> {formatDateTime(parsedStart)}</p>
+              <p><span className="font-semibold">{t('lecturerCheckpointManagement.end')}</span> {formatDateTime(parsedEnd)}</p>
+              <button type="button" onClick={() => setConfirmingBulk(false)} className="text-xs font-semibold text-primary-700 hover:underline">{t('lecturerCheckpointManagement.editDates')}</button>
             </div>
           ) : (
             <>
               <CheckpointDateTimeField
-                label={editing?.allClosed ? 'New Start Date & Time' : 'Start Date & Time'}
+                label={editing?.allClosed ? t('lecturerCheckpointManagement.newStartDateTime') : t('lecturerCheckpointManagement.startDateTime')}
                 value={startDate}
                 defaultTime="08:00"
                 onChange={setStartDate}
               />
               <CheckpointDateTimeField
-                label={editing?.allClosed ? 'New End Date & Time' : 'End Date & Time'}
+                label={editing?.allClosed ? t('lecturerCheckpointManagement.newEndDateTime') : t('lecturerCheckpointManagement.endDateTime')}
                 value={endDate}
                 defaultTime="23:59"
                 minDate={parsedStart ? startDate.split('T')[0] : undefined}
@@ -532,7 +534,7 @@ export default function LecturerCheckpointManagement({
                 error={rangeError || reopenError || undefined}
               />
               {!rangeError && !reopenError && startDate && endDate && (!parsedStart || !parsedEnd) && (
-                <p role="alert" className="text-xs font-medium text-red-600">Enter a valid date and 24-hour time (HH 00–23, mm 00–59).</p>
+                <p role="alert" className="text-xs font-medium text-red-600">{t('lecturerCheckpointManagement.enterAValidDateAnd24')}</p>
               )}
             </>
           )}

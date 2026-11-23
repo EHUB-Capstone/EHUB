@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { getMajorName, TEAM_MAJOR_GROUPS } from '../../constants/majors';
 import { isMissingTeamMajor, isVerifiedEnrollmentMajor } from '../../utils/teamManagement';
+import { useTranslation } from 'react-i18next';
 
 export type StudentMajorNextAction = {
   label: string;
@@ -42,6 +43,7 @@ export default function StudentMajorActionCard({
   nextAction,
   onSave,
 }: Props) {
+  const { t } = useTranslation('class');
   const [editing, setEditing] = useState(false);
   const [draftMajor, setDraftMajor] = useState('');
   const isMissing = isMissingTeamMajor(currentMajor);
@@ -80,13 +82,13 @@ export default function StudentMajorActionCard({
             </div>
             <div className="min-w-0">
               <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-orange-700">
-                <AlertTriangle className="h-3 w-3" /> Action Required
+                <AlertTriangle className="h-3 w-3" /> {t('studentMajorActionCard.actionRequired')}
               </span>
               <h2 id="major-action-title" className="mt-2 text-base font-bold text-slate-900 sm:text-lg">
-                Select your major to get started
+                {t('studentMajorActionCard.selectYourMajorToGetStarted')}
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
-                E-HUB uses your major when forming teams and keeps it synchronized with your profile and active classes. Select it before creating or joining a team.
+                {t('studentMajorActionCard.eHubUsesYourMajorWhen')}
               </p>
             </div>
           </div>
@@ -100,7 +102,7 @@ export default function StudentMajorActionCard({
                   onClick={openEditor}
                   className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-bold text-orange-800 shadow-sm transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/20"
                 >
-                  Select Your Major <ChevronDown className="h-4 w-4" />
+                  {t('studentMajorActionCard.selectYourMajor')} <ChevronDown className="h-4 w-4" />
                 </button>
               )}
               {nextAction?.kind === 'workspace' && (
@@ -124,7 +126,7 @@ export default function StudentMajorActionCard({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
                 <label htmlFor="student-major-select" className="mb-1.5 block text-xs font-bold text-slate-700">
-                  Your major <span className="text-red-500">*</span>
+                  {t('studentMajorActionCard.yourMajor')} <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="student-major-select"
@@ -133,7 +135,7 @@ export default function StudentMajorActionCard({
                   onChange={event => setDraftMajor(event.target.value)}
                   className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <option value="">Choose your major</option>
+                  <option value="">{t('studentMajorActionCard.chooseYourMajor')}</option>
                   {TEAM_MAJOR_GROUPS.map(group => (
                     <optgroup key={group.key} label={group.label}>
                       {group.majors.map(major => (
@@ -142,7 +144,7 @@ export default function StudentMajorActionCard({
                     </optgroup>
                   ))}
                 </select>
-                <p className="mt-1.5 text-xs text-slate-500">This updates your profile and active class enrollments together.</p>
+                <p className="mt-1.5 text-xs text-slate-500">{t('studentMajorActionCard.thisUpdatesYourProfileAndActive')}</p>
               </div>
               <div className="flex shrink-0 gap-2">
                 <button
@@ -151,7 +153,7 @@ export default function StudentMajorActionCard({
                   disabled={updating}
                   className="min-h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Cancel
+                  {t('common:actions.cancel')}
                 </button>
                 <button
                   type="button"
@@ -160,7 +162,7 @@ export default function StudentMajorActionCard({
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {updating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {updating ? 'Saving...' : 'Save Major'}
+                  {updating ? t('assignLectureModal.saving') : t('studentMajorActionCard.saveMajor')}
                 </button>
               </div>
             </div>
@@ -172,8 +174,8 @@ export default function StudentMajorActionCard({
             <Lock className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
               {isLocked
-                ? `Major selection is locked in an active class. Contact ${lecturerName || 'your lecturer'} if this information needs to be corrected.`
-                : 'Major selection is unavailable while this class is read-only.'}
+                ? t('studentMajorActionCard.lockedContact', { name: lecturerName || t('studentMajorActionCard.yourLecturer') })
+                : t('studentMajorActionCard.majorSelectionIsUnavailableWhileThis')}
             </p>
           </div>
         )}
@@ -203,17 +205,17 @@ export default function StudentMajorActionCard({
             </div>
             <div className="min-w-0">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-emerald-700">
-                <CheckCircle2 className="h-3 w-3" /> Verified
+                <CheckCircle2 className="h-3 w-3" /> {t('studentMajorActionCard.verified')}
               </span>
-              <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">Your Major</h2>
+              <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">{t('studentMajorActionCard.yourMajor2')}</h2>
               <p className="mt-0.5 text-sm text-slate-700">
                 <span className="font-bold">{normalizedMajor}</span>{majorName ? ` — ${majorName}` : ''}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">Matches the latest official class record.</p>
+              <p className="mt-0.5 text-xs text-slate-500">{t('studentMajorActionCard.matchesTheLatestOfficialClassRecord')}</p>
               {isLocked && (
                 <p data-testid="major-locked-notice" className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
                   <Lock className="h-3 w-3" />
-                  Your major is verified and updates are locked. Contact {lecturerName || 'your lecturer'} if it needs to be corrected.
+                  {t('studentMajorActionCard.yourMajorIsVerifiedAndUpdates')} {lecturerName || t('studentMajorActionCard.yourLecturer')} {t('studentMajorActionCard.ifItNeedsToBeCorrected')}
                 </p>
               )}
             </div>
@@ -259,14 +261,14 @@ export default function StudentMajorActionCard({
             <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-amber-800">
               {statusLabel}
             </span>
-            <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">Your Major</h2>
+            <h2 id="major-status-title" className="mt-2 text-sm font-bold text-slate-900">{t('studentMajorActionCard.yourMajor2')}</h2>
             <p className="mt-0.5 text-sm text-slate-700">
               <span className="font-bold">{normalizedMajor}</span>{majorName ? ` — ${majorName}` : ''}
             </p>
             <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-600">{statusDescription}</p>
             {isLocked && (
               <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-                <Lock className="h-3 w-3" /> Changes are locked by an active class.
+                <Lock className="h-3 w-3" /> {t('studentMajorActionCard.changesAreLockedByAnActive')}
               </p>
             )}
           </div>
@@ -280,7 +282,7 @@ export default function StudentMajorActionCard({
                 onClick={openEditor}
                 className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/20"
               >
-                Change Major
+                {t('studentMajorActionCard.changeMajor')}
               </button>
             )}
             {nextAction?.kind === 'workspace' && (
@@ -303,7 +305,7 @@ export default function StudentMajorActionCard({
         <div className="border-t border-amber-200/80 bg-white/70 px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
-              <label htmlFor="student-major-change" className="mb-1.5 block text-xs font-bold text-slate-700">Choose a new major</label>
+              <label htmlFor="student-major-change" className="mb-1.5 block text-xs font-bold text-slate-700">{t('studentMajorActionCard.chooseANewMajor')}</label>
               <select
                 id="student-major-change"
                 value={draftMajor}
@@ -319,11 +321,11 @@ export default function StudentMajorActionCard({
                   </optgroup>
                 ))}
               </select>
-              <p className="mt-1.5 text-xs text-slate-500">Changing this updates your profile and active class enrollments.</p>
+              <p className="mt-1.5 text-xs text-slate-500">{t('studentMajorActionCard.changingThisUpdatesYourProfileAnd')}</p>
             </div>
             <div className="flex shrink-0 gap-2">
               <button type="button" onClick={closeEditor} disabled={updating} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">
-                Cancel
+                {t('common:actions.cancel')}
               </button>
               <button
                 type="button"
@@ -332,7 +334,7 @@ export default function StudentMajorActionCard({
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {updating && <Loader2 className="h-4 w-4 animate-spin" />}
-                {updating ? 'Saving...' : 'Save Changes'}
+                {updating ? t('assignLectureModal.saving') : t('studentMajorActionCard.saveChanges')}
               </button>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { classApi } from '../../api/classApi';
 import type { SemesterGroupImportResponse, SemesterGroupImportRow } from '../../types/classes';
 import { parseApiError } from '../../utils/apiError';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { useTranslation } from 'react-i18next';
 
 interface ImportSemesterGroupsModalProps {
   classId: string;
@@ -32,6 +33,7 @@ export default function ImportSemesterGroupsModal({
   onClose,
   onImported,
 }: ImportSemesterGroupsModalProps) {
+  const { t } = useTranslation('class');
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<SemesterGroupImportResponse | null>(null);
@@ -43,7 +45,7 @@ export default function ImportSemesterGroupsModal({
   const selectFile = (selectedFile?: File) => {
     if (!selectedFile) return;
     if (!/\.(xlsx|xls)$/i.test(selectedFile.name)) {
-      toast.error('Only .xlsx or .xls files are supported.');
+      toast.error(t('importSemesterGroupsModal.onlyXlsxOrXlsFilesAre'));
       return;
     }
     setFile(selectedFile);
@@ -54,7 +56,7 @@ export default function ImportSemesterGroupsModal({
 
   const preview = async () => {
     if (!file) {
-      toast.error('Please select an Excel file.');
+      toast.error(t('importSemesterGroupsModal.pleaseSelectAnExcelFile'));
       return;
     }
 
@@ -64,9 +66,9 @@ export default function ImportSemesterGroupsModal({
       formData.append('file', file);
       const response = await classApi.previewSemesterGroups(classId, formData);
       setReport(unwrapResponse(response));
-      toast.success('Preview ready. No semester groups have been changed.');
+      toast.success(t('importSemesterGroupsModal.previewReadyNoSemesterGroupsHave'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to preview semester groups.').message);
+      toast.error(parseApiError(error, t('importSemesterGroupsModal.unableToPreviewSemesterGroups')).message);
     } finally {
       setLoading(false);
     }
@@ -84,10 +86,10 @@ export default function ImportSemesterGroupsModal({
       setReport(result);
       setApplied(true);
       setShowConfirm(false);
-      toast.success(`Imported ${result.updatedCount} semester group value(s).`);
+      toast.success(t('importSemesterGroupsModal.importedSemesterGroupValueS', { updatedCount: result.updatedCount }));
       onImported?.();
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to import semester groups.').message);
+      toast.error(parseApiError(error, t('importSemesterGroupsModal.unableToImportSemesterGroups')).message);
     } finally {
       setImporting(false);
     }
@@ -96,13 +98,13 @@ export default function ImportSemesterGroupsModal({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <button type="button" aria-label="Close" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+        <button type="button" aria-label={t('common:actions.close')} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
         <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-float">
           <div className="flex items-start justify-between border-b border-slate-100 p-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">Import semester groups</h2>
+              <h2 className="text-xl font-bold text-slate-900">{t('importSemesterGroupsModal.importSemesterGroups')}</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Match students by RollNumber, preview the semester group values, then confirm the import.
+                {t('importSemesterGroupsModal.matchStudentsByRollnumberPreviewThe')}
               </p>
             </div>
             <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -112,9 +114,8 @@ export default function ImportSemesterGroupsModal({
 
           <div className="flex-1 space-y-5 overflow-y-auto p-6">
             <div className="rounded-xl border border-secondary-100 bg-secondary-50 p-3 text-sm text-secondary">
-              Required columns: <strong>RollNumber</strong> and the exact semester column
-              {report ? <> <strong>{report.expectedColumnName}</strong></> : <> such as <strong>Group FA26</strong> or <strong>Group SP27</strong></>}.
-              The semester column is detected from this class&apos;s semester; GroupName and Team Name are ignored.
+              {t('importSemesterGroupsModal.requiredColumns')} <strong>{t('importSemesterGroupsModal.rollnumber')}</strong> {t('importSemesterGroupsModal.andTheExactSemesterColumn')}
+              {report ? <> <strong>{report.expectedColumnName}</strong></> : <> {t('importSemesterGroupsModal.suchAs')} <strong>{t('importSemesterGroupsModal.groupFa26')}</strong> {t('importSemesterGroupsModal.or')} <strong>{t('importSemesterGroupsModal.groupSp27')}</strong></>}{t('importSemesterGroupsModal.theSemesterColumnIsDetectedFrom')}
             </div>
 
             <div
@@ -137,18 +138,18 @@ export default function ImportSemesterGroupsModal({
                 onChange={(event) => selectFile(event.target.files?.[0])}
               />
               <FileSpreadsheet className={`mx-auto mb-3 h-10 w-10 ${file ? 'text-primary-700' : 'text-slate-300'}`} />
-              <p className="font-semibold text-slate-700">{file?.name || 'Drop an Excel file here or click to select'}</p>
-              {file && <p className="mt-1 text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB · Click to choose another file</p>}
+              <p className="font-semibold text-slate-700">{file?.name || t('importSemesterGroupsModal.dropAnExcelFileHereOr')}</p>
+              {file && <p className="mt-1 text-xs text-slate-400">{t('importSemesterGroupsModal.kbClickToChooseAnotherFile', { v1: (file.size / 1024).toFixed(1) })}</p>}
             </div>
 
             {report && (
               <div className="space-y-4">
                 <div className={`rounded-xl border p-3 text-sm ${report.errorRowsCount > 0 ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'}`}>
                   {applied
-                    ? `Import completed: ${report.updatedCount} value(s) updated.`
+                    ? t('importSemesterGroupsModal.importCompletedValueSUpdated', { updatedCount: report.updatedCount })
                     : report.errorRowsCount > 0
-                      ? `Preview found ${report.errorRowsCount} error row(s). Fix the file and preview again before importing.`
-                      : `Preview only — ${report.changedRowsCount} value(s) will change and ${report.unchangedRowsCount} are already current.`}
+                      ? t('importSemesterGroupsModal.previewFoundErrorRowSFix', { errorRowsCount: report.errorRowsCount })
+                      : t('importSemesterGroupsModal.previewOnlyValueSWillChange', { changedRowsCount: report.changedRowsCount, unchangedRowsCount: report.unchangedRowsCount })}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -169,12 +170,12 @@ export default function ImportSemesterGroupsModal({
                   <table className="w-full text-sm">
                     <thead className="border-b border-slate-200 bg-slate-50">
                       <tr>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Row</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">RollNumber</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Student</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Current</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">From {report.expectedColumnName}</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Status</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.row')}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.rollnumber')}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.student')}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.current')}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.from', { expectedColumnName: report.expectedColumnName })}</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">{t('importSemesterGroupsModal.status')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -202,7 +203,7 @@ export default function ImportSemesterGroupsModal({
 
           <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-5">
             <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-              {applied ? 'Close' : 'Cancel'}
+              {applied ? t('common:actions.close') : t('common:actions.cancel')}
             </button>
             <div className="flex items-center gap-2">
               {!applied && (
@@ -213,7 +214,7 @@ export default function ImportSemesterGroupsModal({
                   className="inline-flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Preview
+                  {t('importSemesterGroupsModal.preview')}
                 </button>
               )}
               {!applied && report && (
@@ -224,7 +225,7 @@ export default function ImportSemesterGroupsModal({
                   className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600 disabled:opacity-50"
                 >
                   {report.errorRowsCount > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Confirm import
+                  {t('importSemesterGroupsModal.confirmImport')}
                 </button>
               )}
             </div>
@@ -237,10 +238,10 @@ export default function ImportSemesterGroupsModal({
         onClose={() => setShowConfirm(false)}
         onConfirm={confirmImport}
         isSubmitting={importing}
-        title="Import semester group values?"
-        description={`Update ${report?.changedRowsCount || 0} active enrollment(s) using RollNumber and ${report?.expectedColumnName || 'the semester group column'}?`}
-        confirmText="Import groups"
-        cancelText="Back to preview"
+        title={t('importSemesterGroupsModal.importSemesterGroupValues')}
+        description={t('importSemesterGroupsModal.confirmUpdate', { count: report?.changedRowsCount || 0, column: report?.expectedColumnName || t('importSemesterGroupsModal.semesterGroupColumn') })}
+        confirmText={t('importSemesterGroupsModal.importGroups')}
+        cancelText={t('importSemesterGroupsModal.backToPreview')}
       />
     </>
   );

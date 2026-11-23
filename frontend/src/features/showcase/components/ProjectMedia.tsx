@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { VIDEO_IFRAME_SANDBOX, showcaseVideoEmbedUrl, type ShowcaseVideo } from '../../../utils/showcaseVideo';
 import { useFeedVideoLeader } from '../hooks/useFeedVideoLeader';
+import { useTranslation } from 'react-i18next';
 
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 /** A post must stay the most visible one this long before its video loads, so scrolling past never starts a download. */
@@ -22,6 +23,7 @@ interface ProjectMediaProps {
  * away, and at most one video plays at a time. With neither video nor image nothing is rendered.
  */
 export default function ProjectMedia({ id, name, video, coverUrl, active }: ProjectMediaProps): React.ReactElement | null {
+  const { t } = useTranslation('showcase');
   const area = useRef<HTMLDivElement>(null);
   const isLeader = useFeedVideoLeader(id, area, video !== null);
   const [settled, setSettled] = useState(false);
@@ -41,7 +43,7 @@ export default function ProjectMedia({ id, name, video, coverUrl, active }: Proj
       {video && playing && (
         <iframe
           src={showcaseVideoEmbedUrl(video, 'preview')}
-          title={`${name} video preview`}
+          title={t('projectMedia.videoPreview', { name })}
           sandbox={VIDEO_IFRAME_SANDBOX}
           allow="autoplay; encrypted-media"
           referrerPolicy="strict-origin-when-cross-origin"

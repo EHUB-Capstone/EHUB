@@ -23,12 +23,14 @@ import {
   hasEvidenceGrades,
   projectEvidenceKey,
 } from '../../../utils/projectData';
+import { useTranslation } from 'react-i18next';
 
 function SectionTitle({ id, children }: { id: string; children: string }) {
   return <h3 id={id} className="text-subheading font-semibold text-secondary">{children}</h3>;
 }
 
 function ComponentRow({ component }: { component: ProjectEvidenceComponent }) {
+  const { t } = useTranslation('projectData');
   const status = describeEvidenceStatus(component.status);
   return (
     <li className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
@@ -55,19 +57,20 @@ function ComponentRow({ component }: { component: ProjectEvidenceComponent }) {
         </blockquote>
       )}
       {component.publishedAtUtc && (
-        <p className="mt-1 text-xs text-slate-400">Published on {formatEvidenceDate(component.publishedAtUtc)}</p>
+        <p className="mt-1 text-xs text-slate-400">{t('projectEvidenceSection.publishedOn', { v1: formatEvidenceDate(component.publishedAtUtc) })}</p>
       )}
     </li>
   );
 }
 
 function EvaluationBlock({ evaluation }: { evaluation: ProjectEvidenceEvaluation }) {
+  const { t } = useTranslation('projectData');
   if (!hasEvidenceGrades(evaluation)) {
     return (
       <p className="text-sm text-slate-400">
         {evaluation.components.length === 0
-          ? 'The course has no weighted checkpoints yet.'
-          : 'No evaluation results yet.'}
+          ? t('projectEvidenceSection.theCourseHasNoWeightedCheckpoints')
+          : t('projectEvidenceSection.noEvaluationResultsYet')}
       </p>
     );
   }
@@ -75,16 +78,16 @@ function EvaluationBlock({ evaluation }: { evaluation: ProjectEvidenceEvaluation
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
-        <span className="font-medium text-slate-500">Course score </span>
+        <span className="font-medium text-slate-500">{t('projectEvidenceSection.courseScore')} </span>
         {evaluation.courseScore === null ? (
-          <span className="text-slate-400">not available until every part is published</span>
+          <span className="text-slate-400">{t('projectEvidenceSection.notAvailableUntilEveryPartIs')}</span>
         ) : (
           <span className="text-body-lg font-semibold text-slate-700">
             {formatEvidenceScore(evaluation.courseScore)}<span className="text-sm font-normal text-slate-400"> / 10</span>
           </span>
         )}
       </p>
-      <ul aria-label="Graded parts of the course" className="space-y-2">
+      <ul aria-label={t('projectEvidenceSection.gradedPartsOfTheCourse')} className="space-y-2">
         {evaluation.components.map(component => (
           <ComponentRow key={`${component.kind}-${component.checkpointNumber ?? component.name}`} component={component} />
         ))}
@@ -94,6 +97,7 @@ function EvaluationBlock({ evaluation }: { evaluation: ProjectEvidenceEvaluation
 }
 
 function MentorRow({ mentor }: { mentor: ProjectEvidenceMentor }) {
+  const { t } = useTranslation('projectData');
   return (
     <li className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
@@ -104,14 +108,14 @@ function MentorRow({ mentor }: { mentor: ProjectEvidenceMentor }) {
           </p>
         </div>
         <Badge variant={mentor.isCurrent ? 'success' : 'neutral'} size="sm">
-          {mentor.isCurrent ? 'Current' : 'Earlier'}
+          {mentor.isCurrent ? t('projectEvidenceSection.current') : t('projectEvidenceSection.earlier')}
         </Badge>
       </div>
       <p className="mt-1 text-xs text-slate-500">
         {describeEvidenceMentorPeriod(mentor)} · {evidenceSessionsLabel(mentor.completedSessions)}
       </p>
       {mentor.expertise.length > 0 && (
-        <ul aria-label={`Expertise of ${mentor.fullName}`} className="mt-1.5 flex flex-wrap gap-1.5">
+        <ul aria-label={t('projectEvidenceSection.expertiseOf', { fullName: mentor.fullName })} className="mt-1.5 flex flex-wrap gap-1.5">
           {mentor.expertise.map(tag => (
             <li key={tag} className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{tag}</li>
           ))}
@@ -122,14 +126,15 @@ function MentorRow({ mentor }: { mentor: ProjectEvidenceMentor }) {
 }
 
 function MentoringBlock({ mentoring }: { mentoring: ProjectEvidenceMentoring }) {
+  const { t } = useTranslation('projectData');
   if (mentoring.mentors.length === 0) {
-    return <p className="text-sm text-slate-400">No mentor has been assigned to this team.</p>;
+    return <p className="text-sm text-slate-400">{t('projectEvidenceSection.noMentorHasBeenAssignedTo')}</p>;
   }
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">{describeEvidenceMentoring(mentoring)}</p>
-      <ul aria-label="Mentors of the team" className="space-y-2">
+      <ul aria-label={t('projectEvidenceSection.mentorsOfTheTeam')} className="space-y-2">
         {mentoring.mentors.map(mentor => <MentorRow key={mentor.assignmentId} mentor={mentor} />)}
       </ul>
     </div>
@@ -145,6 +150,7 @@ interface ProjectEvidenceViewProps {
 
 /** The two blocks themselves, without any data fetching. */
 export function ProjectEvidenceView({ isLoading, isError, evidence, onRetry }: ProjectEvidenceViewProps) {
+  const { t } = useTranslation('projectData');
   const evaluationId = useId();
   const mentoringId = useId();
 
@@ -153,8 +159,8 @@ export function ProjectEvidenceView({ isLoading, isError, evidence, onRetry }: P
   if (isError || !evidence) {
     return (
       <p role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
-        The evaluation and mentoring details could not be loaded.
-        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">Retry</button>
+        {t('projectEvidenceSection.theEvaluationAndMentoringDetailsCould')}
+        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
       </p>
     );
   }
@@ -162,11 +168,11 @@ export function ProjectEvidenceView({ isLoading, isError, evidence, onRetry }: P
   return (
     <div className="space-y-6">
       <section aria-labelledby={evaluationId} className="space-y-3">
-        <SectionTitle id={evaluationId}>Evaluation</SectionTitle>
+        <SectionTitle id={evaluationId}>{t('projectEvidenceSection.evaluation')}</SectionTitle>
         <EvaluationBlock evaluation={evidence.evaluation} />
       </section>
       <section aria-labelledby={mentoringId} className="space-y-3">
-        <SectionTitle id={mentoringId}>Mentoring</SectionTitle>
+        <SectionTitle id={mentoringId}>{t('projectEvidenceSection.mentoring')}</SectionTitle>
         <MentoringBlock mentoring={evidence.mentoring} />
       </section>
     </div>

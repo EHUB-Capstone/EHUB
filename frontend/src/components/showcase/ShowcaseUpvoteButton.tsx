@@ -8,6 +8,8 @@ import { cn } from '../../utils/cn';
 import { optimisticShowcaseUpvote } from '../../utils/showcase';
 import { updateShowcaseDiscoveryUpvote } from '../../utils/showcaseDiscovery';
 import Button from '../ui/Button';
+import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface ShowcaseUpvoteButtonProps extends ShowcaseUpvoteDto {
   showcaseId: string;
@@ -29,6 +31,7 @@ export default function ShowcaseUpvoteButton({
   tile = false,
   className,
 }: ShowcaseUpvoteButtonProps) {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const { user } = useAuthContext();
   const mutationKey = ['showcase', 'upvote', user?.id, user?.role, showcaseId];
@@ -52,7 +55,7 @@ export default function ShowcaseUpvoteButton({
         showcase: { ...detail.showcase, likeCount: saved.likeCount },
       }));
     },
-    onError: () => toast.error('Could not update your upvote. Try again.'),
+    onError: () => toast.error(t('showcaseUpvoteButton.couldNotUpdateYourUpvoteTry')),
     onSettled: () => {
       // A confirmed vote can change the rank, so refresh the feed after updating its counters.
       void queryClient.invalidateQueries(discovery);
@@ -75,7 +78,7 @@ export default function ShowcaseUpvoteButton({
       aria-busy={Boolean(pendingVote)}
       aria-disabled={Boolean(disabledReason || pendingVote)}
       aria-pressed={current.hasUpvoted}
-      aria-label={`${disabledReason ?? 'Upvote showcase'} ${current.likeCount} interested`}
+      aria-label={t('showcaseUpvoteButton.ariaLabel', { label: disabledReason ?? t('showcaseUpvoteButton.upvoteShowcase'), count: current.likeCount })}
       title={disabledReason ?? action}
       className={cn(
         'min-h-9 min-w-9 text-body-sm focus-visible:ring-inset focus-visible:ring-offset-0 disabled:pointer-events-auto dark:text-slate-300 dark:hover:bg-slate-800',
@@ -90,17 +93,17 @@ export default function ShowcaseUpvoteButton({
     >
       {tile ? (
         <>
-          <span className="text-heading text-secondary">{current.likeCount.toLocaleString()}</span>
+          <span className="text-heading text-secondary">{fmtNumber(current.likeCount)}</span>
           <span className="inline-flex items-center gap-1 text-caption font-medium text-primary-700">
             {!pendingVote && <Flame className={cn('h-3.5 w-3.5 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
-            Interested
+            {t('showcaseInsights.interested')}
           </span>
         </>
       ) : (
         <>
           {!pendingVote && <Flame className={cn('h-4 w-4 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
-          {current.likeCount.toLocaleString()}
-          {showLabel && <span>interested</span>}
+          {fmtNumber(current.likeCount)}
+          {showLabel && <span>{t('showcaseUpvoteButton.interested')}</span>}
         </>
       )}
     </Button>

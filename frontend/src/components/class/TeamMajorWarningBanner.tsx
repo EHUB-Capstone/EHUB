@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import type { ManagedTeam } from '../../types/teamManagement';
 import { getTeamsWithMajorWarning } from '../../utils/teamManagement';
+import { useTranslation } from 'react-i18next';
 
 interface TeamMajorWarningBannerProps {
   teams: ManagedTeam[];
@@ -9,6 +10,7 @@ interface TeamMajorWarningBannerProps {
 
 /** Class-level notice listing every team that does not meet the GROUP_1 + GROUP_2 major requirement. */
 export default function TeamMajorWarningBanner({ teams, onViewTeams }: TeamMajorWarningBannerProps) {
+  const { t } = useTranslation('class');
   const warnings = getTeamsWithMajorWarning(teams);
   if (warnings.length === 0) return null;
 
@@ -17,11 +19,11 @@ export default function TeamMajorWarningBanner({ teams, onViewTeams }: TeamMajor
       <div className="flex items-start justify-between gap-3">
         <p className="flex items-center gap-2 font-semibold">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
-          {warnings.length} team{warnings.length === 1 ? '' : 's'} in this class {warnings.length === 1 ? 'does' : 'do'} not meet the major requirement
+          {warnings.length} {t('teamMajorWarningBanner.team')}{warnings.length === 1 ? '' : 's'} {t('teamMajorWarningBanner.inThisClass')} {warnings.length === 1 ? 'does' : 'do'} {t('teamMajorWarningBanner.notMeetTheMajorRequirement')}
         </p>
         {onViewTeams && (
           <button type="button" onClick={onViewTeams} className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200 hover:bg-amber-100">
-            View teams
+            {t('teamMajorWarningBanner.viewTeams')}
           </button>
         )}
       </div>

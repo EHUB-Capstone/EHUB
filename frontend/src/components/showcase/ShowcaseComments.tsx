@@ -19,6 +19,8 @@ import { cn } from '../../utils/cn';
 import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_LIMITS, timeAgo } from '../../utils/showcase';
 import ShowcaseReportButton from './ShowcaseReportButton';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime, formatNumber as fmtNumber } from '../../i18n/format';
 
 const PAGE_SIZE = 10;
 const REPLY_PAGE_SIZE = 20;
@@ -58,6 +60,7 @@ interface ComposerProps {
 }
 
 function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, submitLabel, iconOnly = false, autoFocus, small, onPosted, onCancel }: ComposerProps) {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const { user } = useAuthContext();
   const [text, setText] = useState(initialText);
@@ -66,7 +69,7 @@ function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, 
     onSuccess: async () => {
       setText('');
       await refreshComments(queryClient, showcaseId);
-      toast.success(parentCommentId ? 'Reply posted.' : 'Comment posted.');
+      toast.success(parentCommentId ? t('showcaseComments.replyPosted') : t('showcaseComments.commentPosted'));
       onPosted?.();
     },
     // The text stays in the box so nothing typed is lost.
@@ -92,7 +95,7 @@ function Composer({ showcaseId, parentCommentId, initialText = '', placeholder, 
         <div className="mt-1 flex items-center justify-between gap-3">
           <CharacterCounter value={text} max={SHOWCASE_LIMITS.comment} />
           <div className="flex items-center gap-2">
-            {onCancel && <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={post.isPending}>Cancel</Button>}
+            {onCancel && <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={post.isPending}>{t('common:actions.cancel')}</Button>}
             <Button type="submit" size="sm" isLoading={post.isPending} disabled={!canPost} aria-label={submitLabel} title={submitLabel} className={cn(iconOnly && 'h-8 w-8 rounded-full bg-primary-200 p-0 text-white hover:bg-primary-300')}>
               {iconOnly ? <Send className="h-4 w-4" aria-hidden="true" /> : submitLabel}
             </Button>
@@ -114,6 +117,7 @@ const foldedFade = { maskImage: FADE_OUT, WebkitMaskImage: FADE_OUT } as const;
 
 /** Comment text that folds to a few lines when it is long, with a toggle to read it all. */
 function ExpandableText({ text }: { text: string }) {
+  const { t } = useTranslation('showcase');
   const ref = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -145,7 +149,7 @@ function ExpandableText({ text }: { text: string }) {
           onClick={() => setExpanded((value) => !value)}
           className="mt-0.5 rounded text-body-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? t('showcaseComments.showLess') : t('showcaseComments.showMore')}
         </button>
       )}
     </>
@@ -160,20 +164,21 @@ function CommentBody({ showcaseId, comment, canReport, small = false, onReply, o
   onReply: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('showcase');
   return (
     <div id={`comment-${comment.id}`} className="flex scroll-mt-6 gap-3">
       <Avatar name={comment.authorName} url={comment.authorAvatarUrl} small={small} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-body font-semibold text-secondary">{comment.authorName}</span>
-          {comment.isTeamReply && <Badge variant="brand" size="sm">Team</Badge>}
-          <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()} className="text-caption text-slate-500">{timeAgo(comment.createdAt)}</time>
+          {comment.isTeamReply && <Badge variant="brand" size="sm">{t('showcaseComments.team')}</Badge>}
+          <time dateTime={comment.createdAt} title={fmtDateTime(comment.createdAt)} className="text-caption text-slate-500">{timeAgo(comment.createdAt)}</time>
         </div>
         <ExpandableText text={comment.content} />
         <div className="mt-1 flex gap-4 text-body-sm font-semibold text-slate-500">
-          <button type="button" onClick={onReply} className="rounded hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">Reply</button>
+          <button type="button" onClick={onReply} className="rounded hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">{t('showcaseComments.reply')}</button>
           {comment.canDelete && (
-            <button type="button" onClick={onDelete} className="rounded hover:text-danger-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">Delete</button>
+            <button type="button" onClick={onDelete} className="rounded hover:text-danger-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">{t('common:actions.delete')}</button>
           )}
           {!comment.canDelete && canReport && <ShowcaseReportButton showcaseId={showcaseId} commentId={comment.id} />}
         </div>
@@ -183,6 +188,7 @@ function CommentBody({ showcaseId, comment, canReport, small = false, onReply, o
 }
 
 function Thread({ showcaseId, comment, canReport, onDelete }: { showcaseId: string; comment: ShowcaseCommentDto; canReport: boolean; onDelete: (comment: ShowcaseCommentDto) => void }) {
+  const { t } = useTranslation('showcase');
   const [expanded, setExpanded] = useState(false);
   const [replyTo, setReplyTo] = useState<ShowcaseCommentDto | null>(null);
   const hasHiddenReplies = comment.replyCount > comment.replies.length;
@@ -213,19 +219,19 @@ function Thread({ showcaseId, comment, canReport, onDelete }: { showcaseId: stri
 
           {replies.isError && (
             <p role="alert" className="text-body-sm text-slate-600">
-              Could not load the replies.{' '}
-              <button type="button" className="font-semibold text-primary-700 hover:underline" onClick={() => { void replies.refetch(); }}>Retry</button>
+              {t('showcaseComments.couldNotLoadTheReplies')}{' '}
+              <button type="button" className="font-semibold text-primary-700 hover:underline" onClick={() => { void replies.refetch(); }}>{t('showcaseComments.retry')}</button>
             </p>
           )}
 
           {!expanded && hasHiddenReplies && (
             <button type="button" onClick={() => setExpanded(true)} className="rounded text-body-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
-              View {comment.replyCount - comment.replies.length} more {comment.replyCount - comment.replies.length === 1 ? 'reply' : 'replies'}
+              {t('showcaseComments.viewMoreReplies', { count: comment.replyCount - comment.replies.length })}
             </button>
           )}
-          {expanded && replies.isFetching && !replies.isFetchingNextPage && !loaded && <p className="text-body-sm text-slate-500" role="status">Loading replies…</p>}
+          {expanded && replies.isFetching && !replies.isFetchingNextPage && !loaded && <p className="text-body-sm text-slate-500" role="status">{t('showcaseComments.loadingReplies')}</p>}
           {expanded && replies.hasNextPage && (
-            <Button variant="ghost-primary" size="sm" isLoading={replies.isFetchingNextPage} onClick={() => { void replies.fetchNextPage(); }}>Load more replies</Button>
+            <Button variant="ghost-primary" size="sm" isLoading={replies.isFetchingNextPage} onClick={() => { void replies.fetchNextPage(); }}>{t('showcaseComments.loadMoreReplies')}</Button>
           )}
 
           {replyTo && (
@@ -234,7 +240,7 @@ function Thread({ showcaseId, comment, canReport, onDelete }: { showcaseId: stri
               showcaseId={showcaseId}
               parentCommentId={replyTo.id}
               initialText={`@${replyTo.authorName} `}
-              placeholder={`Reply to ${replyTo.authorName}`}
+              placeholder={t('showcaseComments.replyTo', { authorName: replyTo.authorName })}
               submitLabel="Reply"
               autoFocus
               small
@@ -255,6 +261,7 @@ interface ShowcaseCommentsProps {
 
 /** Community comments of a published page: newest first, replies one level deep, loaded in small pages. */
 export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseCommentsProps) {
+  const { t } = useTranslation('showcase');
   const { user } = useAuthContext();
   const canReport = user?.role !== 'LECTURER' && user?.role !== 'ADMIN';
   const location = useLocation();
@@ -271,7 +278,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
     mutationFn: (comment: ShowcaseCommentDto) => showcaseApi.deleteComment(showcaseId, comment.id),
     onSuccess: async () => {
       await refreshComments(queryClient, showcaseId);
-      toast.success('Comment removed.');
+      toast.success(t('showcaseComments.commentRemoved'));
       setTarget(null);
     },
     onError: (error) => toast.error(failureMessage(error, 'Could not remove the comment. Try again.')),
@@ -288,20 +295,20 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
     <Card hover={false} padding="p-5 sm:p-6" aria-labelledby="showcase-comments-heading">
       <Card.Header className="mb-4">
         <Card.Title icon={MessageSquare}>
-          <span id="showcase-comments-heading">Comments</span>
-          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-semibold text-slate-700">{commentCount.toLocaleString()}</span>
+          <span id="showcase-comments-heading">{t('showcaseComments.comments')}</span>
+          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-semibold text-slate-700">{fmtNumber(commentCount)}</span>
         </Card.Title>
       </Card.Header>
 
-      <Composer showcaseId={showcaseId} placeholder="Share feedback or ask the team a question…" submitLabel="Post comment" iconOnly />
+      <Composer showcaseId={showcaseId} placeholder={t('showcaseComments.shareFeedbackOrAskTheTeam')} submitLabel="Post comment" iconOnly />
 
       <div className="mt-6">
-        {comments.isPending && <div role="status" aria-label="Loading comments" className="space-y-3"><LoadingSkeleton lines={3} /></div>}
+        {comments.isPending && <div role="status" aria-label={t('showcaseComments.loadingComments')} className="space-y-3"><LoadingSkeleton lines={3} /></div>}
         {comments.isError && (
-          <ErrorState title="Could not load comments" message={parseApiError(comments.error, 'Failed to load comments.').message} onRetry={() => { void comments.refetch(); }} />
+          <ErrorState title={t('showcaseComments.couldNotLoadComments')} message={parseApiError(comments.error, t('showcaseComments.failedToLoadComments')).message} onRetry={() => { void comments.refetch(); }} />
         )}
         {comments.isSuccess && items.length === 0 && (
-          <EmptyState icon={MessageSquare} title="No comments yet" description="Be the first to share what you think about this project." size="sm" />
+          <EmptyState icon={MessageSquare} title={t('showcaseComments.noCommentsYet')} description={t('showcaseComments.beTheFirstToShareWhat')} size="sm" />
         )}
         {items.length > 0 && (
           <ul className="space-y-6">
@@ -310,7 +317,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
         )}
         {comments.hasNextPage && (
           <div className="mt-6 text-center">
-            <Button variant="outline" isLoading={comments.isFetchingNextPage} onClick={() => { void comments.fetchNextPage(); }}>Load more comments</Button>
+            <Button variant="outline" isLoading={comments.isFetchingNextPage} onClick={() => { void comments.fetchNextPage(); }}>{t('showcaseComments.loadMoreComments')}</Button>
           </div>
         )}
       </div>
@@ -319,11 +326,11 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
         isOpen={target !== null}
         onClose={() => { if (!remove.isPending) setTarget(null); }}
         onConfirm={() => { if (target) remove.mutate(target); }}
-        title="Delete this comment?"
+        title={t('showcaseComments.deleteThisComment')}
         description={target && target.replyCount > 0
-          ? `Its ${target.replyCount} ${target.replyCount === 1 ? 'reply' : 'replies'} will be removed with it.`
-          : 'This cannot be undone.'}
-        confirmText="Delete comment"
+          ? t('showcaseComments.itsRepliesWillBeRemoved', { count: target.replyCount })
+          : t('showcaseComments.thisCannotBeUndone')}
+        confirmText={t('showcaseComments.deleteComment')}
         isSubmitting={remove.isPending}
       />
     </Card>

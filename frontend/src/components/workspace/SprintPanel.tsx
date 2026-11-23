@@ -20,8 +20,10 @@ import MilestoneTimeline from './MilestoneTimeline';
 import KanbanBoard from './KanbanBoard';
 import TaskModal from './TaskModal';
 import MilestoneModal from './MilestoneModal';
+import { useTranslation } from 'react-i18next';
 
 export default function SprintPanel({ teamId, members = [], isEditable = false }) {
+  const { t } = useTranslation('workspace');
   const { user } = useAuth();
 
   // ── Data state ───────────────────────────────────────────
@@ -83,16 +85,16 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
       setActionLoading(true);
       if (editingMilestone) {
         await updateMilestone(editingMilestone._id, data);
-        toast.success('Milestone updated');
+        toast.success(t('sprintPanel.milestoneUpdated'));
       } else {
         await createMilestone(teamId, data);
-        toast.success('Milestone created');
+        toast.success(t('sprintPanel.milestoneCreated'));
       }
       setMilestoneModalOpen(false);
       setEditingMilestone(null);
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to save milestone');
+      toast.error(err?.response?.data?.error || t('milestoneModal.failedToSaveMilestone'));
     } finally {
       setActionLoading(false);
     }
@@ -100,14 +102,14 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
 
   const handleDeleteMilestone = async (milestoneId) => {
     if (!milestoneId) return;
-    if (!window.confirm('Are you sure you want to delete this milestone?')) return;
+    if (!window.confirm(t('sprintPanel.areYouSureYouWantTo'))) return;
     try {
       setActionLoading(true);
       await deleteMilestone(milestoneId);
-      toast.success('Milestone deleted');
+      toast.success(t('sprintPanel.milestoneDeleted'));
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to delete milestone');
+      toast.error(err?.response?.data?.error || t('sprintPanel.failedToDeleteMilestone'));
     } finally {
       setActionLoading(false);
     }
@@ -129,16 +131,16 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
       setActionLoading(true);
       if (editingTask) {
         await updateTask(editingTask._id, data);
-        toast.success('Task updated');
+        toast.success(t('sprintPanel.taskUpdated'));
       } else {
         await createTask(teamId, data);
-        toast.success('Task created');
+        toast.success(t('sprintPanel.taskCreated'));
       }
       setTaskModalOpen(false);
       setEditingTask(null);
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to save task');
+      toast.error(err?.response?.data?.error || t('sprintPanel.failedToSaveTask'));
     } finally {
       setActionLoading(false);
     }
@@ -146,14 +148,14 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
 
   const handleDeleteTask = async (taskId) => {
     if (!taskId) return;
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!window.confirm(t('sprintPanel.areYouSureYouWantTo2'))) return;
     try {
       setActionLoading(true);
       await deleteTask(taskId);
-      toast.success('Task deleted');
+      toast.success(t('sprintPanel.taskDeleted'));
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to delete task');
+      toast.error(err?.response?.data?.error || t('sprintPanel.failedToDeleteTask'));
     } finally {
       setActionLoading(false);
     }
@@ -164,10 +166,10 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
     try {
       setActionLoading(true);
       await updateTaskStatus(taskId, { status: newStatus });
-      toast.success('Task status updated');
+      toast.success(t('sprintPanel.taskStatusUpdated'));
       await fetchData();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Failed to update task status');
+      toast.error(err?.response?.data?.error || t('sprintPanel.failedToUpdateTaskStatus'));
     } finally {
       setActionLoading(false);
     }
@@ -178,7 +180,7 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
-        <span className="text-gray-500 text-sm">Loading sprint data…</span>
+        <span className="text-gray-500 text-sm">{t('sprintPanel.loadingSprintData')}</span>
       </div>
     );
   }
@@ -192,7 +194,7 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
           onClick={() => { setLoading(true); fetchData(); }}
           className="text-sm text-red-600 hover:text-red-800 font-medium underline"
         >
-          Try again
+          {t('startupWorkspaceHub.tryAgain')}
         </button>
       </div>
     );
@@ -208,8 +210,8 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-medium text-gray-900">Milestones</h2>
-            <p className="text-sm text-gray-500">Track project milestones and deadlines.</p>
+            <h2 className="text-lg font-medium text-gray-900">{t('sprintPanel.milestones')}</h2>
+            <p className="text-sm text-gray-500">{t('sprintPanel.trackProjectMilestonesAndDeadlines')}</p>
           </div>
           {isEditable && (
             <button
@@ -218,7 +220,7 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Add Milestone
+              {t('sprintPanel.addMilestone')}
             </button>
           )}
         </div>
@@ -234,8 +236,8 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-medium text-gray-900">Task Board</h2>
-            <p className="text-sm text-gray-500">Manage and track team tasks.</p>
+            <h2 className="text-lg font-medium text-gray-900">{t('sprintPanel.taskBoard')}</h2>
+            <p className="text-sm text-gray-500">{t('sprintPanel.manageAndTrackTeamTasks')}</p>
           </div>
           {isEditable && (
             <button
@@ -244,7 +246,7 @@ export default function SprintPanel({ teamId, members = [], isEditable = false }
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Add Task
+              {t('boardHeader.addTask')}
             </button>
           )}
         </div>

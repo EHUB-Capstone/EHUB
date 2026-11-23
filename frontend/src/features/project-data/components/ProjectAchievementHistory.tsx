@@ -16,6 +16,8 @@ import {
   projectDataHistoryKey,
 } from '../../../utils/projectData';
 import { ACHIEVEMENT_STYLES } from '../achievementStyles';
+import { useTranslation } from 'react-i18next';
+import { achievementLabel } from '../../../i18n/labels';
 
 interface ProjectAchievementHistoryViewProps {
   isLoading: boolean;
@@ -26,25 +28,26 @@ interface ProjectAchievementHistoryViewProps {
 
 /** The list itself. It scrolls inside its own box, so many entries never make the dialog taller. */
 export function ProjectAchievementHistoryView({ isLoading, isError, history, onRetry }: ProjectAchievementHistoryViewProps) {
+  const { t } = useTranslation('projectData');
   if (isLoading) return <LoadingSkeleton lines={3} />;
 
   if (isError || !history) {
     return (
       <p role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
-        The update history could not be loaded.
-        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">Retry</button>
+        {t('projectAchievementHistory.theUpdateHistoryCouldNotBe')}
+        <button type="button" onClick={onRetry} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
       </p>
     );
   }
 
-  if (history.items.length === 0) return <p className="text-sm text-slate-400">No updates recorded yet.</p>;
+  if (history.items.length === 0) return <p className="text-sm text-slate-400">{t('projectAchievementHistory.noUpdatesRecordedYet')}</p>;
 
   const notice = historyTruncationNotice(history);
   return (
     <>
       <ol
         tabIndex={0}
-        aria-label="Update history entries"
+        aria-label={t('projectAchievementHistory.updateHistoryEntries')}
         className="max-h-64 space-y-2 overflow-y-auto pr-1 focus-visible:outline-2 focus-visible:outline-primary"
       >
         {history.items.map(entry => <HistoryEntry key={entry.id} entry={entry} />)}
@@ -55,11 +58,12 @@ export function ProjectAchievementHistoryView({ isLoading, isError, history, onR
 }
 
 function HistoryEntry({ entry }: { entry: ProjectAchievementHistoryItem }) {
+  const { t } = useTranslation('projectData');
   const view = describeHistoryEntry(entry);
   return (
     <li className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 truncate text-sm font-semibold text-slate-700">{entry.actorName ?? 'Unknown user'}</span>
+        <span className="min-w-0 truncate text-sm font-semibold text-slate-700">{entry.actorName ?? t('projectAchievementHistory.unknownUser')}</span>
         <time dateTime={entry.occurredAtUtc} className="shrink-0 text-xs text-slate-400">{formatHistoryDate(entry.occurredAtUtc)}</time>
       </div>
 
@@ -67,19 +71,19 @@ function HistoryEntry({ entry }: { entry: ProjectAchievementHistoryItem }) {
         <>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {view.isCarriedOver && (
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">Carried over</span>
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-caption font-semibold text-slate-500">{t('projectAchievementHistory.carriedOver')}</span>
             )}
             {entry.added.map(label => (
               <span key={`add-${label}`} className={cn('rounded-full border px-2 py-0.5 text-caption font-semibold', ACHIEVEMENT_STYLES[label].className)}>
-                <span className="sr-only">Added </span>+ {label}
+                <span className="sr-only">{t('projectAchievementHistory.added')} </span>+ {achievementLabel(label)}
               </span>
             ))}
             {entry.removed.map(label => (
               <span key={`remove-${label}`} className="rounded-full border border-danger-light bg-danger-50 px-2 py-0.5 text-caption font-semibold text-danger line-through">
-                <span className="sr-only">Removed </span>− {label}
+                <span className="sr-only">{t('projectAchievementHistory.removed')} </span>− {achievementLabel(label)}
               </span>
             ))}
-            {entry.kept.length > 0 && <span className="text-xs text-slate-400">Kept {entry.kept.join(', ')}</span>}
+            {entry.kept.length > 0 && <span className="text-xs text-slate-400">{t('projectAchievementHistory.kept', { v1: entry.kept.map(achievementLabel).join(', ') })}</span>}
             {view.noteTag && <span className="text-xs font-medium text-slate-500">{view.noteTag}</span>}
           </div>
           {entry.noteChanged && entry.note && (
@@ -103,6 +107,7 @@ interface ProjectAchievementHistoryProps {
 
 /** Collapsed by default; the history is only requested once the section is opened. */
 export default function ProjectAchievementHistory({ projectId, rowVersion }: ProjectAchievementHistoryProps) {
+  const { t } = useTranslation('projectData');
   const { user } = useAuth();
   const panelId = useId();
   const [open, setOpen] = useState(false);
@@ -124,7 +129,7 @@ export default function ProjectAchievementHistory({ projectId, rowVersion }: Pro
         className="flex w-full items-center gap-2 rounded-lg py-1 text-left text-xs font-medium uppercase tracking-wider text-slate-400 hover:text-slate-600 focus-visible:outline-2 focus-visible:outline-primary"
       >
         <History className="h-3.5 w-3.5" aria-hidden="true" />
-        Update history
+        {t('projectAchievementHistory.updateHistory')}
         <ChevronDown className={cn('ml-auto h-4 w-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
       </button>
       <div id={panelId} hidden={!open} className="mt-2">

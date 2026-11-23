@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import i18n from './i18n';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { queryClient } from './lib/queryClient';
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -60,7 +61,7 @@ const ShowcaseDetail = lazy(() => import('./pages/showcase/ShowcaseDetail'));
 const ShowcaseModeration = lazy(() => import('./pages/showcase/ShowcaseModeration'));
 
 const PageFallback = () => (
-  <div className="flex min-h-56 items-center justify-center" role="status" aria-label="Loading page">
+  <div className="flex min-h-56 items-center justify-center" role="status" aria-label={i18n.t('states.loadingPage')}>
     <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
   </div>
 );

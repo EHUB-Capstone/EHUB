@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Loader2, RefreshCw, X } from 'lucide-react';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   industries: StartupIndustryDto[];
@@ -42,6 +43,7 @@ export default function StartupIndustryPicker({
   invalid = false,
   errorMessage,
 }: Props) {
+  const { t } = useTranslation('workspace');
   const [open, setOpen] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const tooltipId = useId();
@@ -61,7 +63,7 @@ export default function StartupIndustryPicker({
     const placement = roomBelow >= 120 || roomBelow >= rect.top
       ? { top: rect.bottom + TOOLTIP_GAP }
       : { bottom: window.innerHeight - rect.top + TOOLTIP_GAP };
-    setTooltip({ id: industry.id, text: industry.description?.trim() || 'No description', left, ...placement });
+    setTooltip({ id: industry.id, text: industry.description?.trim() || t('startupIndustryPicker.noDescription'), left, ...placement });
   };
 
   useEffect(() => {
@@ -102,7 +104,7 @@ export default function StartupIndustryPicker({
                     type="button"
                     onClick={() => toggleIndustry(industry.id)}
                     disabled={disabled}
-                    aria-label={`Remove ${industry.name}`}
+                    aria-label={t('startupIndustryPicker.remove', { name: industry.name })}
                     className="text-primary-400 hover:text-red-500 disabled:opacity-50"
                   >
                     <X className="h-3 w-3" />
@@ -120,13 +122,13 @@ export default function StartupIndustryPicker({
             onClick={() => { setTooltip(null); setOpen((current) => !current); }}
             className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left text-sm text-slate-500 outline-none disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span>{loading ? 'Loading industries…' : limitReached ? `Maximum ${max} industries selected` : 'Select startup industries'}</span>
+            <span>{loading ? t('startupIndustryPicker.loadingIndustries') : limitReached ? t('startupIndustryPicker.maximumIndustriesSelected', { max }) : t('startupIndustryPicker.selectStartupIndustries')}</span>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className={`h-4 w-4 transition ${open ? 'rotate-180' : ''}`} />}
           </button>
         </div>
         {open && (
           <div className="mt-2 w-full rounded-xl border border-slate-200 bg-white" onClick={(event) => event.stopPropagation()}>
-            <p className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">Hover a card to see its description · {selectedIds.length}/{max} selected</p>
+            <p className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">{t('startupIndustryPicker.hoverACardToSeeIts', { length: selectedIds.length, max })}</p>
             <div
               role="listbox"
               aria-multiselectable="true"
@@ -165,18 +167,18 @@ export default function StartupIndustryPicker({
       </div>
       <div className="mt-1 flex items-center justify-between gap-3 text-xs">
         <span className="text-red-600">{errorMessage}</span>
-        <span className="text-slate-400">{selectedIds.length}/{max} selected</span>
+        <span className="text-slate-400">{t('startupIndustryPicker.selected', { length: selectedIds.length, max })}</span>
       </div>
       {error && (
         <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
           <span>{error}</span>
           <button type="button" onClick={onRetry} className="inline-flex shrink-0 items-center gap-1 font-semibold hover:text-red-900">
-            <RefreshCw className="h-3.5 w-3.5" /> Retry
+            <RefreshCw className="h-3.5 w-3.5" /> {t('teamLineageHistory.retry')}
           </button>
         </div>
       )}
       {!loading && !error && industries.length === 0 && (
-        <p className="mt-2 text-xs text-amber-700">No active startup industries are available. Ask an administrator to create or activate one.</p>
+        <p className="mt-2 text-xs text-amber-700">{t('startupIndustryPicker.noActiveStartupIndustriesAreAvailable')}</p>
       )}
       {tooltip && createPortal(
         <div

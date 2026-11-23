@@ -2,15 +2,17 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
 
 const STATUS_LABELS = {
-  TODO: 'To Do',
-  IN_PROGRESS: 'In Progress',
-  REVIEW: 'Review',
-  DONE: 'Done',
+  get TODO() { return i18n.t('workspace:taskStatus.TODO'); },
+  get IN_PROGRESS() { return i18n.t('workspace:taskStatus.IN_PROGRESS'); },
+  get REVIEW() { return i18n.t('workspace:taskStatus.REVIEW'); },
+  get DONE() { return i18n.t('workspace:taskStatus.DONE'); },
 };
 
 function toDateInputValue(dateStr) {
@@ -36,6 +38,7 @@ const INITIAL_FORM = {
 };
 
 export default function TaskModal({ isOpen, onClose, onSubmit, initialData, milestones, members }) {
+  const { t } = useTranslation('workspace');
   const isEdit = !!initialData;
 
   const [form, setForm] = useState(INITIAL_FORM);
@@ -101,7 +104,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
       await onSubmit?.(payload);
       onClose?.();
     } catch (err) {
-      toast.error(err?.message || 'Failed to save task');
+      toast.error(err?.message || t('sprintPanel.failedToSaveTask'));
     } finally {
       setSubmitting(false);
     }
@@ -128,7 +131,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">
-            {isEdit ? 'Edit Task' : 'Create Task'}
+            {isEdit ? t('taskModal.editTask') : t('taskModal.createTask')}
           </h2>
           <button
             onClick={onClose}
@@ -143,7 +146,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           {/* Title */}
           <div>
             <label htmlFor="task-title" className={labelClass}>
-              Title <span className="text-red-500">*</span>
+              {t('mentoringPanel.title')} <span className="text-red-500">*</span>
             </label>
             <input
               id="task-title"
@@ -151,7 +154,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               name="title"
               value={form.title}
               onChange={handleChange}
-              placeholder="Enter task title"
+              placeholder={t('taskModal.enterTaskTitle')}
               className={`${inputClass} ${errors.title ? 'border-red-400 focus:ring-red-400' : ''}`}
             />
             {errors.title && <p className={errorClass}>{errors.title}</p>}
@@ -160,7 +163,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           {/* Description */}
           <div>
             <label htmlFor="task-desc" className={labelClass}>
-              Description
+              {t('taskModal.description')}
             </label>
             <textarea
               id="task-desc"
@@ -168,7 +171,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               value={form.description}
               onChange={handleChange}
               rows={3}
-              placeholder="Describe the task..."
+              placeholder={t('taskModal.describeTheTask')}
               className={`${inputClass} resize-none`}
             />
           </div>
@@ -176,7 +179,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           {/* Milestone */}
           <div>
             <label htmlFor="task-milestone" className={labelClass}>
-              Milestone
+              {t('taskModal.milestone')}
             </label>
             <select
               id="task-milestone"
@@ -185,7 +188,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               onChange={handleChange}
               className={inputClass}
             >
-              <option value="">— No Milestone —</option>
+              <option value="">{t('taskModal.noMilestone')}</option>
               {safeMilestones.map((m) => (
                 <option key={m._id} value={m._id}>
                   {m.title}
@@ -197,7 +200,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           {/* Assignee */}
           <div>
             <label htmlFor="task-assignee" className={labelClass}>
-              Assignee
+              {t('taskModal.assignee')}
             </label>
             <select
               id="task-assignee"
@@ -206,13 +209,13 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               onChange={handleChange}
               className={inputClass}
             >
-              <option value="">Unassigned</option>
+              <option value="">{t('taskModal.unassigned')}</option>
               {safeMembers.map((m) => {
                 const student = m?.studentId;
                 if (!student?._id) return null;
                 return (
                   <option key={student._id} value={student._id}>
-                    {student.fullName || 'Unknown'} - {student.rollNumber || ''}
+                    {student.fullName || t('versionHistory.unknown')} - {student.rollNumber || ''}
                   </option>
                 );
               })}
@@ -223,7 +226,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="task-priority" className={labelClass}>
-                Priority
+                {t('taskModal.priority')}
               </label>
               <select
                 id="task-priority"
@@ -243,7 +246,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
             {isEdit && (
               <div>
                 <label htmlFor="task-status" className={labelClass}>
-                  Status
+                  {t('taskTableView.status')}
                 </label>
                 <select
                   id="task-status"
@@ -266,7 +269,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="task-start" className={labelClass}>
-                Start Date
+                {t('taskModal.startDate')}
               </label>
               <input
                 id="task-start"
@@ -279,7 +282,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
             </div>
             <div>
               <label htmlFor="task-due" className={labelClass}>
-                Due Date
+                {t('taskModal.dueDate')}
               </label>
               <input
                 id="task-due"
@@ -301,7 +304,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               disabled={submitting}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
@@ -311,7 +314,7 @@ export default function TaskModal({ isOpen, onClose, onSubmit, initialData, mile
               {submitting && (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               )}
-              {isEdit ? 'Update Task' : 'Create Task'}
+              {isEdit ? t('taskModal.updateTask') : t('taskModal.createTask')}
             </button>
           </div>
         </form>

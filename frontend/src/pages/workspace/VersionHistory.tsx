@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate, formatDateTime as fmtDateTime } from '../../i18n/format';
 
 // Zero-dependency pure JS Word-level LCS Diffing Component
 function DiffText({ oldText = '', newText = '' }) {
@@ -86,6 +88,7 @@ function DiffText({ oldText = '', newText = '' }) {
 }
 
 export default function VersionHistory({ proposalId, versions, isEditable, onRefresh }) {
+  const { t } = useTranslation('workspace');
   const [selectedVer, setSelectedVer] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -99,15 +102,15 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
 
   const handleRestore = async (versionId, versionNumber) => {
     if (!proposalId) return;
-    if (!window.confirm(`Are you sure you want to restore the proposal to Version ${versionNumber}? This will create a new draft.`)) return;
+    if (!window.confirm(t('versionHistory.areYouSureYouWantTo', { versionNumber }))) return;
     setRestoring(true);
     try {
       await workspaceApi.restoreProposalVersion(proposalId, versionId);
-      toast.success(`Proposal successfully restored to Version ${versionNumber}!`);
+      toast.success(t('versionHistory.proposalSuccessfullyRestoredToVersion', { versionNumber }));
       onRefresh();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Restore failed');
+      toast.error(err.response?.data?.error || err.message || t('versionHistory.restoreFailed'));
     } finally {
       setRestoring(false);
     }
@@ -133,10 +136,10 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-primary" />
-          <h3 className="font-bold text-slate-800">Version History</h3>
+          <h3 className="font-bold text-slate-800">{t('versionHistory.versionHistory')}</h3>
         </div>
         <span className="text-xs bg-slate-100 text-slate-500 font-semibold px-2 py-0.5 rounded">
-          {versions ? versions.length : 0} saves
+          {t('versionHistory.saves', { v1: versions ? versions.length : 0 })}
         </span>
       </div>
 
@@ -149,16 +152,16 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
             >
               <div className="min-w-0 flex-1 pr-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-primary-700">v{ver.versionNumber}</span>
+                  <span className="text-xs font-bold text-primary-700">{t('versionHistory.v', { versionNumber: ver.versionNumber })}</span>
                   <span className="text-overline text-slate-400 font-semibold flex items-center gap-0.5">
-                    <Calendar className="w-3 h-3" /> {new Date(ver.createdAt).toLocaleDateString()}
+                    <Calendar className="w-3 h-3" /> {fmtDate(ver.createdAt)}
                   </span>
                 </div>
                 <p className="text-xs font-medium text-slate-700 mt-1 truncate" title={ver.changeNote}>
-                  {ver.changeNote || 'No change note'}
+                  {ver.changeNote || t('versionHistory.noChangeNote')}
                 </p>
                 <p className="text-overline text-slate-400 mt-0.5 flex items-center gap-0.5">
-                  <User className="w-2.5 h-2.5" /> {ver.changedBy?.name || 'Unknown'}
+                  <User className="w-2.5 h-2.5" /> {ver.changedBy?.name || t('versionHistory.unknown')}
                 </p>
                 {getWorkspaceLabel(ver.teamId) && (
                   <p className="text-overline text-slate-500 mt-1 font-semibold">
@@ -171,7 +174,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                 <button
                   onClick={() => showDetail(ver)}
                   className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary-700 transition-all"
-                  title="View Snapshot"
+                  title={t('versionHistory.viewSnapshot')}
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>
@@ -180,7 +183,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                     disabled={restoring}
                     onClick={() => handleRestore(ver._id, ver.versionNumber)}
                     className="p-1.5 border border-slate-200/50 bg-white text-slate-500 rounded-lg hover:text-primary-700 transition-all disabled:opacity-50"
-                    title="Restore Version"
+                    title={t('versionHistory.restoreVersion')}
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
@@ -191,7 +194,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
         </div>
       ) : (
         <div className="text-center py-4 text-slate-400 text-sm italic">
-          No version history yet.
+          {t('versionHistory.noVersionHistoryYet')}
         </div>
       )}
 
@@ -199,17 +202,17 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
       <Modal
         isOpen={selectedVer !== null}
         onClose={() => setSelectedVer(null)}
-        title={selectedVer ? `Proposal Snapshot v${selectedVer.versionNumber}` : ''}
+        title={selectedVer ? t('versionHistory.proposalSnapshotV', { versionNumber: selectedVer.versionNumber }) : ''}
         size="lg"
       >
         {selectedVer && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
-                <p className="text-xs text-slate-400">Created by <span className="font-semibold text-slate-700">{selectedVer.changedBy?.name}</span> ({selectedVer.changedBy?.email})</p>
-                <p className="text-xs text-slate-400 mt-0.5">Date: {new Date(selectedVer.createdAt).toLocaleString()}</p>
+                <p className="text-xs text-slate-400">{t('versionHistory.createdBy')} <span className="font-semibold text-slate-700">{selectedVer.changedBy?.name}</span> ({selectedVer.changedBy?.email})</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('versionHistory.date', { v1: fmtDateTime(selectedVer.createdAt) })}</p>
                 {getWorkspaceLabel(selectedVer.teamId) && (
-                  <p className="text-xs text-slate-400 mt-0.5">Workspace: {getWorkspaceLabel(selectedVer.teamId)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{t('versionHistory.workspace', { v1: getWorkspaceLabel(selectedVer.teamId) })}</p>
                 )}
               </div>
 
@@ -225,18 +228,18 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                     }`}
                   >
                     <div className={`w-2 h-2 rounded-full ${compareMode ? 'bg-primary animate-pulse' : 'bg-slate-300'}`} />
-                    Compare with v{prevVersion.versionNumber}
+                    {t('versionHistory.compareWithV')}{prevVersion.versionNumber}
                   </button>
                 )}
                 <span className="text-xs bg-slate-50 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-xl font-bold">
-                  Note: {selectedVer.changeNote || 'No change note'}
+                  {t('versionHistory.note', { note: selectedVer.changeNote || t('versionHistory.noChangeNote') })}
                 </span>
               </div>
             </div>
 
             <div className="space-y-4 text-slate-700 text-sm max-h-[55vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Startup Name</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('versionHistory.startupName')}</h4>
                 <p className="font-bold text-slate-900 mt-0.5 text-base">
                   {showDiff ? (
                     <DiffText oldText={prevVersion.snapshot.startupName} newText={selectedVer.snapshot.startupName} />
@@ -246,7 +249,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                 </p>
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tagline</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('proposalEditor.tagline')}</h4>
                 <p className="italic text-slate-600 mt-0.5">
                   {showDiff ? (
                     <DiffText oldText={prevVersion.snapshot.tagline} newText={selectedVer.snapshot.tagline} />
@@ -257,19 +260,19 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
               </div>
               <hr className="border-slate-100" />
               {[
-                { key: 'problem', label: 'Problem' },
-                { key: 'solution', label: 'Solution' },
-                { key: 'targetCustomers', label: 'Target Customers' },
-                { key: 'valueProposition', label: 'Value Proposition' },
-                { key: 'marketSize', label: 'Market Size' },
-                { key: 'competitors', label: 'Competitors' },
-                { key: 'businessModel', label: 'Business Model' },
-                { key: 'revenueModel', label: 'Revenue Model' },
-                { key: 'marketingStrategy', label: 'Marketing Strategy' },
-                { key: 'technology', label: 'Technology Stack' },
-                { key: 'financialPlan', label: 'Financial Plan' },
-                { key: 'roadmap', label: 'Roadmap' },
-                { key: 'teamIntroduction', label: 'Team Introduction' },
+                { key: 'problem', label: t('versionHistory.problem') },
+                { key: 'solution', label: t('versionHistory.solution') },
+                { key: 'targetCustomers', label: t('proposalEditor.targetCustomers') },
+                { key: 'valueProposition', label: t('proposalEditor.valueProposition') },
+                { key: 'marketSize', label: t('versionHistory.marketSize') },
+                { key: 'competitors', label: t('versionHistory.competitors') },
+                { key: 'businessModel', label: t('proposalEditor.businessModel') },
+                { key: 'revenueModel', label: t('proposalEditor.revenueModel') },
+                { key: 'marketingStrategy', label: t('versionHistory.marketingStrategy') },
+                { key: 'technology', label: t('proposalEditor.technologyStack') },
+                { key: 'financialPlan', label: t('proposalEditor.financialPlan') },
+                { key: 'roadmap', label: t('versionHistory.roadmap') },
+                { key: 'teamIntroduction', label: t('versionHistory.teamIntroduction') },
               ].map(({ key, label }) => {
                 const curVal = selectedVer.snapshot[key];
                 const oldVal = prevVersion ? prevVersion.snapshot[key] : '';
@@ -290,7 +293,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
 
             <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setSelectedVer(null)}>
-                Close
+                {t('common:actions.close')}
               </Button>
               {isEditable && proposalId && (
                 <Button 
@@ -303,7 +306,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                     handleRestore(verId, verNum);
                   }}
                 >
-                  Restore this version
+                  {t('versionHistory.restoreThisVersion')}
                 </Button>
               )}
             </div>

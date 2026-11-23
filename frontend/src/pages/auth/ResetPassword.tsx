@@ -9,6 +9,7 @@ import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
 import toast from 'react-hot-toast';
 import logo from '../../assets/logo.png';
+import { useTranslation } from 'react-i18next';
 
 interface ResetPasswordErrors {
   password?: string;
@@ -16,6 +17,7 @@ interface ResetPasswordErrors {
 }
 
 const ResetPassword = (): React.ReactElement => {
+  const { t } = useTranslation('auth');
   const { token: pathToken } = useParams<{ token?: string }>();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token')?.trim() || pathToken?.trim() || '';
@@ -52,16 +54,16 @@ const ResetPassword = (): React.ReactElement => {
     try {
       await resetPassword({ token, newPassword: password, confirmPassword });
       setIsSuccess(true);
-      toast.success('Password reset successfully');
+      toast.success(t('resetPassword.passwordResetSuccessfully'));
     } catch (error: unknown) {
-      const apiError = parseApiError(error, 'Unable to reset your password. Please try again.');
+      const apiError = parseApiError(error, t('resetPassword.unableToResetYourPasswordPlease'));
       setErrors({
         password: apiError.fieldErrors.newPassword,
         confirmPassword: apiError.fieldErrors.confirmPassword,
       });
 
       if (apiError.code === AUTH_ERROR_CODES.PASSWORD_RESET_TOKEN_INVALID) {
-        setFormError('This password reset link is invalid or has expired. Request a new link.');
+        setFormError(t('resetPassword.thisPasswordResetLinkIsInvalid'));
       } else if (!apiError.fieldErrors.newPassword && !apiError.fieldErrors.confirmPassword) {
         setFormError(apiError.message);
       }
@@ -82,14 +84,14 @@ const ResetPassword = (): React.ReactElement => {
           {/* Logo */}
           <div className="text-center mb-8">
             <Link to="/" className="mb-5 inline-flex items-center gap-2.5 no-underline">
-              <img src={logo} alt="EHub" className="w-[38px] h-[38px] object-contain" />
+              <img src={logo} alt={t('login.ehub')} className="w-[38px] h-[38px] object-contain" />
               <span className="text-[20px] font-extrabold tracking-tight">
-                <span className="text-primary-400">E</span>
-                <span className="text-secondary">HUB</span>
+                <span className="text-primary-400">{t('login.e')}</span>
+                <span className="text-secondary">{t('login.hub')}</span>
               </span>
             </Link>
-            <h1 className="text-heading font-bold text-secondary">Create New Password</h1>
-            <p className="text-body text-slate-500 mt-1">Your new password must be different from previously used passwords.</p>
+            <h1 className="text-heading font-bold text-secondary">{t('resetPassword.createNewPassword')}</h1>
+            <p className="text-body text-slate-500 mt-1">{t('resetPassword.yourNewPasswordMustBeDifferent')}</p>
           </div>
 
           {!token ? (
@@ -97,12 +99,12 @@ const ResetPassword = (): React.ReactElement => {
               <div className="w-16 h-16 bg-danger/10 rounded-2xl flex items-center justify-center">
                 <AlertCircle className="w-8 h-8 text-danger" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Invalid reset link</h3>
+              <h3 className="text-xl font-bold text-slate-900">{t('resetPassword.invalidResetLink')}</h3>
               <p className="text-slate-500 text-body leading-relaxed">
-                This link does not contain a reset token. Request a new password reset email.
+                {t('resetPassword.thisLinkDoesNotContainA')}
               </p>
               <Link to="/forgot-password" className="w-full mt-4">
-                <Button variant="primary" className="w-full">Request New Link</Button>
+                <Button variant="primary" className="w-full">{t('resetPassword.requestNewLink')}</Button>
               </Link>
             </div>
           ) : isSuccess ? (
@@ -110,12 +112,12 @@ const ResetPassword = (): React.ReactElement => {
               <div className="w-16 h-16 bg-success-50 rounded-2xl flex items-center justify-center">
                 <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Password reset!</h3>
+              <h3 className="text-xl font-bold text-slate-900">{t('resetPassword.passwordReset')}</h3>
               <p className="text-slate-500 text-body leading-relaxed">
-                Your password has been successfully reset. Redirecting to login...
+                {t('resetPassword.yourPasswordHasBeenSuccessfullyReset')}
               </p>
               <Link to="/login" className="w-full mt-4">
-                <Button variant="primary" className="w-full" iconRight={ArrowRight}>Go to Login</Button>
+                <Button variant="primary" className="w-full" iconRight={ArrowRight}>{t('resetPassword.goToLogin')}</Button>
               </Link>
             </div>
           ) : (
@@ -127,7 +129,7 @@ const ResetPassword = (): React.ReactElement => {
                     <p className="text-body-sm text-slate-700">{formError}</p>
                     {formError.includes('expired') && (
                       <Link to="/forgot-password" className="mt-1 inline-block text-body-sm font-medium text-primary-700 hover:underline">
-                        Request a new reset link
+                        {t('resetPassword.requestANewResetLink')}
                       </Link>
                     )}
                   </div>
@@ -138,7 +140,7 @@ const ResetPassword = (): React.ReactElement => {
                 <Input
                   id="new-password"
                   type="password"
-                  label="New Password"
+                  label={t('resetPassword.newPassword')}
                   icon={Key}
                   autoComplete="new-password"
                   required
@@ -159,7 +161,7 @@ const ResetPassword = (): React.ReactElement => {
                 <Input
                   id="confirm-password"
                   type="password"
-                  label="Confirm Password"
+                  label={t('register.confirmPassword')}
                   icon={Key}
                   autoComplete="new-password"
                   required
@@ -177,7 +179,7 @@ const ResetPassword = (): React.ReactElement => {
               </div>
 
               <Button type="submit" variant="primary" className="w-full" size="lg" isLoading={isLoading}>
-                Reset Password
+                {t('resetPassword.resetPassword')}
               </Button>
             </form>
           )}

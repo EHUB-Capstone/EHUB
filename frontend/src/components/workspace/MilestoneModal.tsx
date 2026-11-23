@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 function toDateInputValue(dateStr) {
   if (!dateStr) return '';
@@ -22,6 +23,7 @@ const INITIAL_FORM = {
 };
 
 export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData }) {
+  const { t } = useTranslation('workspace');
   const isEdit = !!initialData;
 
   const [form, setForm] = useState(INITIAL_FORM);
@@ -66,7 +68,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
       const today = new Date().toISOString().split('T')[0];
       if (new Date(form.dueDate) < new Date(today)) {
         newErrors.dueDate = 'Due date cannot be in the past';
-        toast.error('Due date cannot be in the past');
+        toast.error(t('taskModal.dueDateCannotBeInThe'));
       }
     }
     if (form.startDate && form.dueDate && form.dueDate < form.startDate) {
@@ -88,7 +90,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
       await onSubmit?.(payload);
       onClose?.();
     } catch (err) {
-      toast.error(err?.message || 'Failed to save milestone');
+      toast.error(err?.message || t('milestoneModal.failedToSaveMilestone'));
     } finally {
       setSubmitting(false);
     }
@@ -112,7 +114,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">
-            {isEdit ? 'Edit Milestone' : 'Create Milestone'}
+            {isEdit ? t('milestoneModal.editMilestone') : t('milestoneModal.createMilestone')}
           </h2>
           <button
             onClick={onClose}
@@ -127,7 +129,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
           {/* Title */}
           <div>
             <label htmlFor="ms-title" className={labelClass}>
-              Title <span className="text-red-500">*</span>
+              {t('mentoringPanel.title')} <span className="text-red-500">*</span>
             </label>
             <input
               id="ms-title"
@@ -135,7 +137,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
               name="title"
               value={form.title}
               onChange={handleChange}
-              placeholder="Enter milestone title"
+              placeholder={t('milestoneModal.enterMilestoneTitle')}
               className={`${inputClass} ${errors.title ? 'border-red-400 focus:ring-red-400' : ''}`}
             />
             {errors.title && <p className={errorClass}>{errors.title}</p>}
@@ -144,7 +146,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
           {/* Description */}
           <div>
             <label htmlFor="ms-desc" className={labelClass}>
-              Description
+              {t('taskModal.description')}
             </label>
             <textarea
               id="ms-desc"
@@ -152,7 +154,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
               value={form.description}
               onChange={handleChange}
               rows={3}
-              placeholder="Describe the milestone..."
+              placeholder={t('milestoneModal.describeTheMilestone')}
               className={`${inputClass} resize-none`}
             />
           </div>
@@ -161,7 +163,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="ms-start" className={labelClass}>
-                Start Date
+                {t('taskModal.startDate')}
               </label>
               <input
                 id="ms-start"
@@ -174,7 +176,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
             </div>
             <div>
               <label htmlFor="ms-due" className={labelClass}>
-                Due Date <span className="text-red-500">*</span>
+                {t('taskModal.dueDate')} <span className="text-red-500">*</span>
               </label>
               <input
                 id="ms-due"
@@ -197,7 +199,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
               disabled={submitting}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
@@ -207,7 +209,7 @@ export default function MilestoneModal({ isOpen, onClose, onSubmit, initialData 
               {submitting && (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               )}
-              {isEdit ? 'Update Milestone' : 'Create Milestone'}
+              {isEdit ? t('milestoneModal.updateMilestone') : t('milestoneModal.createMilestone')}
             </button>
           </div>
         </form>

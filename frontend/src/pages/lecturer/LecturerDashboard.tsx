@@ -45,6 +45,9 @@ import {
   resolveOverviewErrorMessage,
   semesterScopeNotice,
 } from '../../utils/academicDashboard';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface MetricPresentation {
   icon: LucideIcon;
@@ -56,43 +59,43 @@ interface MetricPresentation {
 const metricPresentation: Record<string, MetricPresentation> = {
   classes: {
     icon: GraduationCap,
-    description: 'Assigned academic scope',
+    get description() { return i18n.t('dashboard:lecturerDashboard.assignedAcademicScope'); },
     iconClass: 'bg-blue-50 text-blue-600',
     accentClass: 'bg-info',
   },
   teams: {
     icon: Users,
-    description: 'Active teams',
+    get description() { return i18n.t('dashboard:lecturerDashboard.activeTeams'); },
     iconClass: 'bg-info-50 text-info-dark',
     accentClass: 'bg-info',
   },
   projects: {
     icon: FolderKanban,
-    description: 'Non-archived projects',
+    get description() { return i18n.t('dashboard:lecturerDashboard.nonArchivedProjects'); },
     iconClass: 'bg-secondary-50 text-secondary',
     accentClass: 'bg-secondary',
   },
   submissions: {
     icon: ClipboardCheck,
-    description: 'Unique team–checkpoints',
+    get description() { return i18n.t('dashboard:lecturerDashboard.uniqueTeamCheckpoints'); },
     iconClass: 'bg-emerald-50 text-emerald-600',
     accentClass: 'bg-success',
   },
   evaluations: {
     icon: BadgeCheck,
-    description: 'Finalized evaluations',
+    get description() { return i18n.t('dashboard:lecturerDashboard.finalizedEvaluations'); },
     iconClass: 'bg-secondary-50 text-secondary',
     accentClass: 'bg-secondary',
   },
   'potential-projects': {
     icon: Star,
-    description: 'High-potential projects',
+    get description() { return i18n.t('dashboard:lecturerDashboard.highPotentialProjects'); },
     iconClass: 'bg-amber-50 text-amber-600',
     accentClass: 'bg-warning',
   },
 };
 
-const number = (value: number): string => value.toLocaleString();
+const number = (value: number): string => fmtNumber(value);
 
 function MetricCard({
   title,
@@ -129,6 +132,7 @@ function MetricCard({
 }
 
 const LecturerDashboard = () => {
+  const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
   const [overview, setOverview] = useState<AcademicOverviewResponse | null>(null);
   const [filters, setFilters] = useState<AcademicOverviewFilters>({});
@@ -210,7 +214,7 @@ const LecturerDashboard = () => {
   if (viewState === 'error') {
     return (
       <ErrorState
-        title="Academic overview unavailable"
+        title={t('lecturerDashboard.academicOverviewUnavailable')}
         message={errorMessage}
         onRetry={() => void loadOverview(filters)}
       />
@@ -264,13 +268,13 @@ const LecturerDashboard = () => {
         <div className="rounded-2xl border border-slate-200/60 bg-white shadow-sm">
           <EmptyState
             icon={GraduationCap}
-            title={filteredEmpty ? 'No classes match these filters' : 'No classes assigned'}
+            title={filteredEmpty ? t('lecturerDashboard.noClassesMatchTheseFilters') : t('lecturerDashboard.noClassesAssigned')}
             description={filteredEmpty
-              ? 'Try another semester, subject, or class to view academic overview data.'
-              : 'You do not have any non-archived classes assigned yet.'}
+              ? t('lecturerDashboard.tryAnotherSemesterSubjectOrClass')
+              : t('lecturerDashboard.youDoNotHaveAnyNon')}
             action={filteredEmpty
-              ? { label: 'Reset Filters', onClick: resetFilters }
-              : { label: 'View My Classes', onClick: () => navigate('/lecturer/classes') }}
+              ? { label: t('lecturerDashboard.resetFilters'), onClick: resetFilters }
+              : { label: t('lecturerDashboard.viewMyClasses'), onClick: () => navigate('/lecturer/classes') }}
           />
         </div>
       </div>
@@ -302,7 +306,7 @@ const LecturerDashboard = () => {
       <ReviewInboxCard />
 
       <div className={`space-y-6 ${updating ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`} aria-busy={updating}>
-      <section aria-label="Academic overview metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section aria-label={t('lecturerDashboard.academicOverviewMetrics')} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {academicOverviewMetricEntries(overview.metrics).map((metric, index) => (
           <MetricCard
             key={metric.key}
@@ -318,29 +322,29 @@ const LecturerDashboard = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
           <div className="mb-5">
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-              <BarChart3 className="h-5 w-5 text-primary" /> Checkpoint Progress
+              <BarChart3 className="h-5 w-5 text-primary" /> {t('lecturerDashboard.checkpointProgress')}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">Progress for the nearest scheduled checkpoint</p>
+            <p className="mt-1 text-sm text-slate-500">{t('lecturerDashboard.progressForTheNearestScheduledCheckpoint')}</p>
           </div>
           {overview.checkpointProgress.length === 0 ? (
-            <EmptyState icon={ClipboardCheck} title="No checkpoint deadline configured" description="Checkpoint progress will appear after a deadline is set for a checkpoint." size="sm" />
+            <EmptyState icon={ClipboardCheck} title={t('lecturerDashboard.noCheckpointDeadlineConfigured')} description={t('lecturerDashboard.checkpointProgressWillAppearAfterA')} size="sm" />
           ) : (
             <div className="space-y-4">
               {overview.checkpointProgress.map((checkpoint) => (
                 <div key={checkpoint.checkpointId} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-slate-900">{checkpoint.courseCode} · CP{checkpoint.checkpointNumber}</p>
+                      <p className="font-semibold text-slate-900">{t('lecturerDashboard.cp', { courseCode: checkpoint.courseCode, checkpointNumber: checkpoint.checkpointNumber })}</p>
                       <p className="text-sm text-slate-500">{checkpoint.title}</p>
                     </div>
                     {checkpoint.missedDeadlineTeams > 0 && (
                       <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">
-                        {checkpoint.missedDeadlineTeams} {checkpoint.missedDeadlineTeams === 1 ? 'team' : 'teams'} missed deadline
+                        {t('lecturerDashboard.missedDeadline', { count: checkpoint.missedDeadlineTeams })}
                       </span>
                     )}
                   </div>
-                  <ProgressRow label="Submitted" value={checkpoint.submittedTeams} total={checkpoint.expectedTeams} color="bg-emerald-500" />
-                  <ProgressRow label="Evaluated" value={checkpoint.evaluatedProjects} total={checkpoint.expectedTeams} color="bg-secondary" />
+                  <ProgressRow label={t('lecturerDashboard.submitted')} value={checkpoint.submittedTeams} total={checkpoint.expectedTeams} color="bg-emerald-500" />
+                  <ProgressRow label={t('lecturerDashboard.evaluated')} value={checkpoint.evaluatedProjects} total={checkpoint.expectedTeams} color="bg-secondary" />
                 </div>
               ))}
             </div>
@@ -351,20 +355,20 @@ const LecturerDashboard = () => {
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-5 bg-amber-50">
               <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-                <AlertTriangle className="h-5 w-5 text-amber-500" /> Attention Required
+                <AlertTriangle className="h-5 w-5 text-amber-500" /> {t('lecturerDashboard.attentionRequired')}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">Items that may need lecturer action</p>
+              <p className="mt-1 text-sm text-slate-500">{t('lecturerDashboard.itemsThatMayNeedLecturerAction')}</p>
             </div>
             <div className="divide-y divide-slate-100 p-5">
               <AttentionItem
                 icon={Clock3}
-                label="Missed deadlines"
+                label={t('lecturerDashboard.missedDeadlines')}
                 value={overview.attention.missedDeadlines}
                 tone="red"
               />
               <AttentionItem
                 icon={BadgeCheck}
-                label="Awaiting evaluation"
+                label={t('lecturerDashboard.awaitingEvaluation')}
                 value={overview.attention.pendingEvaluations}
                 tone="amber"
               />
@@ -373,9 +377,9 @@ const LecturerDashboard = () => {
           <div className="relative overflow-hidden rounded-2xl border border-amber-100 p-5 shadow-sm bg-white">
             <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-amber-200/30 blur-2xl" />
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-              <Sparkles className="h-5 w-5 text-amber-500" /> Project Portfolio
+              <Sparkles className="h-5 w-5 text-amber-500" /> {t('lecturerDashboard.projectPortfolio')}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">High-potential projects in your scope</p>
+            <p className="mt-1 text-sm text-slate-500">{t('lecturerDashboard.highPotentialProjectsInYourScope')}</p>
             {overview.metrics.totalProjects > 0 ? (
               <div className="relative mt-3">
                 <ResponsiveContainer width="100%" height={190}>
@@ -388,11 +392,11 @@ const LecturerDashboard = () => {
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-1">
                   <span className="text-3xl font-bold text-slate-900">{number(overview.metrics.totalPotentialProjects)}</span>
-                  <span className="text-xs font-medium text-slate-500">Potential</span>
+                  <span className="text-xs font-medium text-slate-500">{t('lecturerDashboard.potential')}</span>
                 </div>
               </div>
             ) : (
-              <EmptyState icon={Rocket} title="No projects yet" description="Projects will appear once teams create them." size="sm" />
+              <EmptyState icon={Rocket} title={t('lecturerDashboard.noProjectsYet')} description={t('lecturerDashboard.projectsWillAppearOnceTeamsCreate')} size="sm" />
             )}
             {overview.metrics.totalProjects > 0 && (
               <div className="flex items-center justify-center gap-4 text-xs text-slate-600">
@@ -411,9 +415,9 @@ const LecturerDashboard = () => {
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-5">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-            <GraduationCap className="h-5 w-5 text-primary" /> Class Breakdown
+            <GraduationCap className="h-5 w-5 text-primary" /> {t('lecturerDashboard.classBreakdown')}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">Academic activity by assigned class</p>
+          <p className="mt-1 text-sm text-slate-500">{t('lecturerDashboard.academicActivityByAssignedClass')}</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
@@ -448,16 +452,16 @@ const LecturerDashboard = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-              <Star className="h-5 w-5 text-amber-500" /> Top Performing Teams
+              <Star className="h-5 w-5 text-amber-500" /> {t('lecturerDashboard.topPerformingTeams')}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">Top five teams by current course total</p>
+            <p className="mt-1 text-sm text-slate-500">{t('lecturerDashboard.topFiveTeamsByCurrentCourse')}</p>
           </div>
           <Button variant="ghost-primary" size="sm" iconRight={ArrowRight} onClick={() => navigate('/evaluation-grading?tab=rankings')}>
-            View Rankings
+            {t('adminDashboard.viewRankings')}
           </Button>
         </div>
         {overview.topTeams.length === 0 ? (
-          <EmptyState icon={Star} title="No evaluated teams yet" description="Team rankings will appear after evaluations are finalized." size="sm" />
+          <EmptyState icon={Star} title={t('lecturerDashboard.noEvaluatedTeamsYet')} description={t('lecturerDashboard.teamRankingsWillAppearAfterEvaluations')} size="sm" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
@@ -526,13 +530,14 @@ function DashboardFilters({
   onClassChange: (classId: string) => void;
   onReset: () => void;
 }) {
+  const { t } = useTranslation('dashboard');
   const selectClassName = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
 
   return (
-    <section aria-label="Dashboard filters" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section aria-label={t('lecturerDashboard.dashboardFilters')} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
         <label className="space-y-1.5 text-sm font-semibold text-slate-700">
-          <span>Semester</span>
+          <span>{t('lecturerDashboard.semester')}</span>
           <select
             value={selectedSemesterId}
             onChange={(event) => onSemesterChange(event.target.value)}
@@ -547,28 +552,28 @@ function DashboardFilters({
           </select>
         </label>
         <label className="space-y-1.5 text-sm font-semibold text-slate-700">
-          <span>Subject</span>
+          <span>{t('lecturerDashboard.subject')}</span>
           <select
             value={selectedCourseId}
             onChange={(event) => onSubjectChange(event.target.value)}
             disabled={busy || options.subjects.length === 0}
             className={selectClassName}
           >
-            <option value="">All Subjects</option>
+            <option value="">{t('lecturerDashboard.allSubjects')}</option>
             {options.subjects.map((subject) => (
               <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>
             ))}
           </select>
         </label>
         <label className="space-y-1.5 text-sm font-semibold text-slate-700">
-          <span>Class</span>
+          <span>{t('lecturerDashboard.class')}</span>
           <select
             value={selectedClassId}
             onChange={(event) => onClassChange(event.target.value)}
             disabled={busy || options.classes.length === 0}
             className={selectClassName}
           >
-            <option value="">All Classes</option>
+            <option value="">{t('lecturerDashboard.allClasses')}</option>
             {options.classes.map((item) => (
               <option key={item.id} value={item.id}>{item.code}</option>
             ))}
@@ -581,10 +586,10 @@ function DashboardFilters({
           onClick={onReset}
           className="w-full border-slate-200 text-slate-700 lg:w-auto"
         >
-          Reset
+          {t('common:actions.reset')}
         </Button>
       </div>
-      {busy && <p className="mt-3 text-xs font-medium text-primary-700" role="status">Updating dashboard…</p>}
+      {busy && <p className="mt-3 text-xs font-medium text-primary-700" role="status">{t('lecturerDashboard.updatingDashboard')}</p>}
     </section>
   );
 }
@@ -600,6 +605,7 @@ function DashboardHero({
   refreshing: boolean;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation('dashboard');
   return (
     <header
       className="overflow-hidden rounded-2xl border border-orange-100 p-5 shadow-sm sm:min-h-[132px] sm:p-6 bg-white"
@@ -611,12 +617,12 @@ function DashboardHero({
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-heading sm:text-display text-secondary tracking-tight">Academic Overview</h1>
+              <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('lecturerDashboard.academicOverview')}</h1>
               <span className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-overline font-bold uppercase tracking-wider text-primary-700">
                 {semesterLabel}
               </span>
             </div>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">Track academic delivery, checkpoint progress, and promising projects across your assigned classes.</p>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">{t('lecturerDashboard.trackAcademicDeliveryCheckpointProgressAnd')}</p>
             {notice && <p role="status" className="mt-2 inline-block rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">{notice}</p>}
           </div>
         </div>
@@ -627,7 +633,7 @@ function DashboardHero({
           onClick={onRefresh}
           className="shrink-0 border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
         >
-          Refresh
+          {t('common:actions.refresh')}
         </Button>
       </div>
     </header>

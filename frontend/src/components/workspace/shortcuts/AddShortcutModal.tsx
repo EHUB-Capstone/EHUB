@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import type { ProjectShortcut, SaveShortcutPayload } from '../../../types/workspaceTools';
+import { useTranslation } from 'react-i18next';
 
 const DANGEROUS_PROTOCOLS = ['javascript:', 'data:', 'file:', 'vbscript:'];
 const normalizeUrl = (raw: string) => /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`;
@@ -24,6 +25,7 @@ interface AddShortcutModalProps {
 }
 
 export default function AddShortcutModal({ isOpen, onClose, onSubmit, initialData = null, isSaving }: AddShortcutModalProps) {
+  const { t } = useTranslation('workspace');
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -42,20 +44,20 @@ export default function AddShortcutModal({ isOpen, onClose, onSubmit, initialDat
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? 'Edit shortcut' : 'Add shortcut'}>
+    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? t('addShortcutModal.editShortcut') : t('addShortcutModal.addShortcut')}>
       <form onSubmit={submit} className="space-y-5">
         <label className="block space-y-1.5 text-sm font-medium text-slate-700">
-          <span>Web address / URL <span className="text-danger">*</span></span>
-          <input autoFocus value={url} onChange={event => { setUrl(event.target.value); setUrlError(''); }} onBlur={() => setUrlError(url.trim() && !isValidUrl(url) ? 'Enter a valid HTTP or HTTPS URL.' : '')} placeholder="github.com/org/project" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" aria-invalid={Boolean(urlError)} />
+          <span>{t('addShortcutModal.webAddressUrl')} <span className="text-danger">*</span></span>
+          <input autoFocus value={url} onChange={event => { setUrl(event.target.value); setUrlError(''); }} onBlur={() => setUrlError(url.trim() && !isValidUrl(url) ? t('addShortcutModal.enterAValidHttpOrHttps') : '')} placeholder="github.com/org/project" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" aria-invalid={Boolean(urlError)} />
           {urlError && <span className="block text-xs text-danger">{urlError}</span>}
         </label>
         <label className="block space-y-1.5 text-sm font-medium text-slate-700">
-          <span>Name <span className="text-danger">*</span></span>
-          <input value={name} onChange={event => setName(event.target.value)} maxLength={100} placeholder="GitHub Repository" className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
+          <span>{t('addShortcutModal.name')} <span className="text-danger">*</span></span>
+          <input value={name} onChange={event => setName(event.target.value)} maxLength={100} placeholder={t('addShortcutModal.githubRepository')} className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
         </label>
         <div className="flex justify-end gap-3 pt-1">
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
-          <Button type="submit" isLoading={isSaving} disabled={!canSubmit}>{initialData ? 'Save' : 'Add'}</Button>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>{t('common:actions.cancel')}</Button>
+          <Button type="submit" isLoading={isSaving} disabled={!canSubmit}>{initialData ? t('common:actions.save') : t('common:actions.add')}</Button>
         </div>
       </form>
     </Modal>

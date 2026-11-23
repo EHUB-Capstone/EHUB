@@ -9,6 +9,8 @@ import { MentorEvaluationCard } from '../evaluation/PerformanceLevelBadge';
 import PerformanceLevelBadge from '../evaluation/PerformanceLevelBadge';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { createRequestGate } from '../../utils/requestGate';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const CHECKPOINTS = [1, 2, 3, 4];
 const EMPTY_EVALUATION = {};
@@ -29,14 +31,16 @@ const historyCategoryStyle = {
 };
 
 function HistoryValue({ value }) {
+  const { t } = useTranslation('workspace');
   return value === null || value === undefined || value === ''
-    ? <span className="italic text-slate-400">Not set</span>
+    ? <span className="italic text-slate-400">{t('evaluationPanel.notSet')}</span>
     : <span className="whitespace-pre-wrap break-words text-slate-700">{value}</span>;
 }
 
 function EvaluationHistoryEntries({ history, compact = false }) {
+  const { t } = useTranslation('workspace');
   if (history.length === 0) {
-    return <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">No history available yet.</p>;
+    return <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">{t('evaluationPanel.noHistoryAvailableYet')}</p>;
   }
 
   return (
@@ -48,13 +52,13 @@ function EvaluationHistoryEntries({ history, compact = false }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-bold uppercase tracking-wider text-slate-600">{item.action}</span>
-                  <span className="rounded-md bg-white px-1.5 py-0.5 text-overline font-bold text-slate-400 ring-1 ring-slate-200">v{item.version}</span>
+                  <span className="rounded-md bg-white px-1.5 py-0.5 text-overline font-bold text-slate-400 ring-1 ring-slate-200">{t('evaluationPanel.v', { version: item.version })}</span>
                 </div>
-                <p className="mt-1 truncate font-semibold text-slate-900">{item.changedBy?.name || 'System'}</p>
-                <p className="text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+                <p className="mt-1 truncate font-semibold text-slate-900">{item.changedBy?.name || t('evaluationPanel.system')}</p>
+                <p className="text-slate-500">{fmtDateTime(item.createdAt)}</p>
               </div>
-              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary-700 group-open:hidden">View details</span>
-              <span className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 group-open:inline">Hide details</span>
+              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary-700 group-open:hidden">{t('evaluationPanel.viewDetails')}</span>
+              <span className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 group-open:inline">{t('evaluationPanel.hideDetails')}</span>
             </div>
           </summary>
           <div className={`border-t border-slate-200 ${compact ? 'p-3' : 'p-4'}`}>
@@ -68,15 +72,15 @@ function EvaluationHistoryEntries({ history, compact = false }) {
                       <span className="font-bold text-slate-800">{change.label}</span>
                     </div>
                     <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-start">
-                      <div className="min-w-0 rounded-md bg-slate-50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">Before</p><HistoryValue value={change.previousValue} /></div>
+                      <div className="min-w-0 rounded-md bg-slate-50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">{t('evaluationPanel.before')}</p><HistoryValue value={change.previousValue} /></div>
                       <span className="hidden pt-7 text-slate-300 sm:block">→</span>
-                      <div className="min-w-0 rounded-md bg-blue-50/50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-blue-400">After</p><HistoryValue value={change.currentValue} /></div>
+                      <div className="min-w-0 rounded-md bg-blue-50/50 px-2.5 py-2"><p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-blue-400">{t('evaluationPanel.after')}</p><HistoryValue value={change.currentValue} /></div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">No score or feedback changes are visible for this version.</p>
+              <p className="text-sm text-slate-500">{t('evaluationPanel.noScoreOrFeedbackChangesAre')}</p>
             )}
           </div>
         </details>
@@ -87,6 +91,7 @@ function EvaluationHistoryEntries({ history, compact = false }) {
 
 // History is long and rarely needed while grading, so it starts collapsed. The whole title row is the toggle.
 function CollapsibleHistory({ history, compact = false }) {
+  const { t } = useTranslation('workspace');
   const [open, setOpen] = useState(false);
   const contentId = useId();
   return (
@@ -102,7 +107,7 @@ function CollapsibleHistory({ history, compact = false }) {
       >
         <span className="flex items-center gap-2">
           <History className="h-4 w-4 text-primary" />
-          <span className="font-bold text-slate-900">Evaluation history ({history.length})</span>
+          <span className="font-bold text-slate-900">{t('evaluationPanel.evaluationHistory', { length: history.length })}</span>
         </span>
         {open ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />}
       </button>
@@ -123,6 +128,7 @@ export default function EvaluationPanel({
   checkpointNumber,
   embedded = false,
 }) {
+  const { t } = useTranslation('workspace');
   const { user } = useAuth();
   const [selectedCheckpoint, setSelectedCheckpoint] = useState(() => Number(checkpointNumber) || 1);
   const [checkpointData, setCheckpointData] = useState(null);
@@ -237,10 +243,10 @@ export default function EvaluationPanel({
       if (res.success) {
         const wasAlreadySubmitted = activeEvaluation?.status === 'SUBMITTED' || activeEvaluation?.status === 'PUBLISHED';
         toast.success(wasAlreadySubmitted
-          ? 'Evaluation updated.'
+          ? t('evaluationPanel.evaluationUpdated')
           : formData.status === 'SUBMITTED'
-            ? 'Official evaluation submitted.'
-            : 'Draft saved.');
+            ? t('evaluationPanel.officialEvaluationSubmitted')
+            : t('evaluationPanel.draftSaved'));
         await fetchCheckpointData({ silent: true });
         return true;
       }
@@ -258,7 +264,7 @@ export default function EvaluationPanel({
     return (
       <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-3">
         <Loader2 className="w-5 h-5 animate-spin text-primary" />
-        Loading evaluations...
+        {t('evaluationPanel.loadingEvaluations')}
       </div>
     );
   }
@@ -297,15 +303,15 @@ export default function EvaluationPanel({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-caption font-bold uppercase tracking-wider text-primary-700">
-                <ClipboardCheck className="h-4 w-4" /> Checkpoint evaluation
+                <ClipboardCheck className="h-4 w-4" /> {t('evaluationPanel.checkpointEvaluation')}
               </div>
               <h2 className="mt-1 truncate text-lg font-black text-slate-900">{checkpointTitle}</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
                 {canEdit
-                  ? 'Score this submission without leaving the workspace.'
+                  ? t('evaluationPanel.scoreThisSubmissionWithoutLeavingThe')
                   : isMentor || isStudent
-                    ? 'Review feedback and any scores that have been published.'
-                    : `${roleLabel(user?.role)} access is read-only.`}
+                    ? t('evaluationPanel.reviewFeedbackAndAnyScoresThat')
+                    : t('evaluationPanel.accessIsReadOnly', { v1: roleLabel(user?.role) })}
               </p>
             </div>
             {activeEvaluation?.status && (
@@ -320,21 +326,21 @@ export default function EvaluationPanel({
 
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Evaluations</p>
+              <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">{t('evaluationPanel.evaluations')}</p>
               <p className="mt-1 text-xl font-black text-slate-900">{summary?.evaluationCount ?? evaluations.length}</p>
             </div>
             {(isMentor || isStudent) ? (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">Performance</p>
+                <p className="text-overline font-semibold uppercase tracking-wider text-slate-400">{t('evaluationPanel.performance')}</p>
                 <div className="mt-1">
                   {summary?.overallPerformance?.level && summary.overallPerformance.level !== 'Unscored'
                     ? <PerformanceLevelBadge level={summary.overallPerformance.level} label={summary.overallPerformance.label} size="sm" />
-                    : <span className="text-sm font-semibold text-slate-400">Not scored</span>}
+                    : <span className="text-sm font-semibold text-slate-400">{t('teamLineageHistory.notScored')}</span>}
                 </div>
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                <p className="text-overline font-semibold uppercase tracking-wider text-emerald-500">Average score</p>
+                <p className="text-overline font-semibold uppercase tracking-wider text-emerald-500">{t('evaluationPanel.averageScore')}</p>
                 <p className="mt-1 text-xl font-black text-emerald-700">{Number(latestScore || 0).toFixed(2)} / 10</p>
               </div>
             )}
@@ -357,12 +363,12 @@ export default function EvaluationPanel({
         ) : (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="font-bold text-slate-900">Evaluation summary</h3>
+              <h3 className="font-bold text-slate-900">{t('evaluationPanel.evaluationSummary')}</h3>
               <History className="h-4 w-4 text-slate-400" />
             </div>
             {evaluations.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-500">
-                No evaluation recorded for this checkpoint yet.
+                {t('evaluationPanel.noEvaluationRecordedForThisCheckpoint')}
               </p>
             ) : (isMentor || isStudent) ? (
               <div className="space-y-3">
@@ -376,7 +382,7 @@ export default function EvaluationPanel({
                   <article key={evaluation._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{evaluation.lecturerId?.name || 'Evaluator'}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900">{evaluation.lecturerId?.name || t('evaluationPanel.evaluator')}</p>
                         <p className="text-xs text-slate-400">{evaluation.status || 'DRAFT'}</p>
                       </div>
                       <p className="text-xl font-black text-primary-700">{Number(evaluation.checkpointTotal || evaluation.weightedScore || 0).toFixed(2)}</p>
@@ -400,17 +406,17 @@ export default function EvaluationPanel({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary-700">
-              <ClipboardCheck className="w-4 h-4" /> Rubric evaluation workflow
+              <ClipboardCheck className="w-4 h-4" /> {t('evaluationPanel.rubricEvaluationWorkflow')}
             </div>
             <h2 className="mt-2 text-2xl font-black text-slate-900">{checkpointTitle}</h2>
             <p className="mt-1 text-sm text-slate-500">
               {isStudent
-                ? 'View your published personal score and feedback for each checkpoint.'
+                ? t('evaluationPanel.viewYourPublishedPersonalScoreAnd')
                 : canEdit
-                  ? 'Score the startup team, save drafts, and submit the official evaluation.'
+                  ? t('evaluationPanel.scoreTheStartupTeamSaveDrafts')
                   : isMentor
-                    ? 'Track team progress and performance direction. Exact scores are not shown.'
-                    : 'View evaluation summary and history.'}
+                    ? t('evaluationPanel.trackTeamProgressAndPerformanceDirection')
+                    : t('evaluationPanel.viewEvaluationSummaryAndHistory')}
             </p>
           </div>
 
@@ -424,7 +430,7 @@ export default function EvaluationPanel({
                   : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
               >
-                CP {num}
+                {t('evaluationPanel.cp', { num })}
               </button>
             ))}
           </div>
@@ -432,18 +438,18 @@ export default function EvaluationPanel({
 
         <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Evaluations</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t('evaluationPanel.evaluations')}</p>
             <p className="mt-1 text-2xl font-black text-slate-900">{summary?.evaluationCount ?? evaluations.length}</p>
           </div>
           <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Submitted</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">{t('proposalPreview.submitted')}</p>
             <p className="mt-1 text-2xl font-black text-blue-700">{summary?.submittedCount ?? evaluations.filter((ev) => ev.status === 'SUBMITTED' || ev.status === 'PUBLISHED').length}</p>
           </div>
           {/* Average score hidden for Mentor/Student — show overall performance level instead */}
           {(isMentor || isStudent) ? (
             summary?.overallPerformance && summary.overallPerformance.level !== 'Unscored' ? (
               <div className="rounded-2xl bg-white border border-slate-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Overall Performance</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t('evaluationPanel.overallPerformance')}</p>
                 <div className="mt-2">
                   <PerformanceLevelBadge
                     level={summary.overallPerformance.level}
@@ -455,7 +461,7 @@ export default function EvaluationPanel({
             ) : null
           ) : (
             <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-500">Average score</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-500">{t('evaluationPanel.averageScore')}</p>
               <p className="mt-1 text-2xl font-black text-emerald-700">{Number(latestScore || 0).toFixed(2)} / 10</p>
             </div>
           )}
@@ -469,8 +475,8 @@ export default function EvaluationPanel({
               <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Rubric scoring form</h3>
-                    <p className="text-sm text-slate-500">Enter a score for each criterion.</p>
+                    <h3 className="text-lg font-bold text-slate-900">{t('evaluationPanel.rubricScoringForm')}</h3>
+                    <p className="text-sm text-slate-500">{t('evaluationPanel.enterAScoreForEachCriterion')}</p>
                   </div>
                   {activeEvaluation?.status && (
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${activeEvaluation.status === 'SUBMITTED'
@@ -499,21 +505,21 @@ export default function EvaluationPanel({
             <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Evaluation summary</h3>
+                  <h3 className="text-lg font-bold text-slate-900">{t('evaluationPanel.evaluationSummary')}</h3>
                   <p className="text-sm text-slate-500">
                     {(isMentor || isStudent)
-                      ? 'Feedback is available after submit; numeric scores appear only after publication.'
-                      : `${roleLabel(user?.role)} access is read-only.`}
+                      ? t('evaluationPanel.feedbackIsAvailableAfterSubmitNumeric')
+                      : t('evaluationPanel.accessIsReadOnly', { v1: roleLabel(user?.role) })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                  <History className="w-4 h-4" /> History preserved
+                  <History className="w-4 h-4" /> {t('evaluationPanel.historyPreserved')}
                 </div>
               </div>
 
               {evaluations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-slate-500">
-                  No evaluations recorded for this checkpoint yet.
+                  {t('evaluationPanel.noEvaluationsRecordedForThisCheckpoint')}
                 </div>
               ) : (isMentor || isStudent) ? (
                 /* ── MENTOR / STUDENT VIEW: badges only, no numeric scores ── */
@@ -529,8 +535,8 @@ export default function EvaluationPanel({
                     <div key={ev._id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex items-center justify-between gap-4 mb-3">
                         <div>
-                          <p className="font-semibold text-slate-900">{ev.lecturerId?.name || 'Evaluator'}</p>
-                          <p className="text-xs text-slate-400">{ev.evaluatorRole} · {new Date(ev.updatedAt).toLocaleString()}</p>
+                          <p className="font-semibold text-slate-900">{ev.lecturerId?.name || t('evaluationPanel.evaluator')}</p>
+                          <p className="text-xs text-slate-400">{ev.evaluatorRole} · {fmtDateTime(ev.updatedAt)}</p>
                         </div>
                         <div className="text-right">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-caption font-bold mb-1 ${ev.status === 'SUBMITTED' || ev.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
@@ -551,7 +557,7 @@ export default function EvaluationPanel({
                       </div>
                       {ev.overallFeedback && (
                         <div className="space-y-2 text-sm">
-                          {ev.overallFeedback && <p className="text-slate-600 whitespace-pre-wrap"><span className="font-semibold text-slate-700">Overall:</span> {ev.overallFeedback}</p>}
+                          {ev.overallFeedback && <p className="text-slate-600 whitespace-pre-wrap"><span className="font-semibold text-slate-700">{t('evaluationPanel.overall')}</span> {ev.overallFeedback}</p>}
                         </div>
                       )}
                     </div>
@@ -566,29 +572,29 @@ export default function EvaluationPanel({
           <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Layers3 className="w-4 h-4 text-primary" />
-              <h3 className="font-bold text-slate-900">Current checkpoint summary</h3>
+              <h3 className="font-bold text-slate-900">{t('evaluationPanel.currentCheckpointSummary')}</h3>
             </div>
             {checkpointData ? (
               <div className="space-y-3 text-sm text-slate-600">
                 <p>{checkpointData.shortDescription}</p>
                 <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                  <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Criteria count</p>
-                  <p className="mt-1 font-bold text-slate-900">{checkpointData.rubrics?.length || 0} criteria</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">{t('evaluationPanel.criteriaCount')}</p>
+                  <p className="mt-1 font-bold text-slate-900">{t('evaluationPanel.criteria', { v1: checkpointData.rubrics?.length || 0 })}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                  <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Submission window</p>
-                  <p className="mt-1 font-bold text-slate-900">Weight total: 100%</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">{t('evaluationPanel.submissionWindow')}</p>
+                  <p className="mt-1 font-bold text-slate-900">{t('evaluationPanel.weightTotal100')}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Rubric configuration unavailable.</p>
+              <p className="text-sm text-slate-500">{t('evaluationPanel.rubricConfigurationUnavailable')}</p>
             )}
           </div>
 
           {canViewHistory && <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <History className="w-4 h-4 text-primary" />
-              <h3 className="font-bold text-slate-900">Evaluation history</h3>
+              <h3 className="font-bold text-slate-900">{t('evaluationPanel.evaluationHistory2')}</h3>
             </div>
             {history.length === 0 ? (
               <EvaluationHistoryEntries history={history} />
@@ -600,12 +606,12 @@ export default function EvaluationPanel({
           <div className="rounded-2xl bg-white border border-slate-200/70 shadow-sm p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="w-4 h-4 text-primary" />
-              <h3 className="font-bold text-slate-900">Access and workflow</h3>
+              <h3 className="font-bold text-slate-900">{t('evaluationPanel.accessAndWorkflow')}</h3>
             </div>
             <div className="space-y-3 text-sm text-slate-600">
-              <p>Lecturers can create drafts, score rubric criteria, and submit the official evaluation.</p>
-              <p>Mentors can review and comment, but cannot finalize the score.</p>
-              <p>Students can view their published personal scores and written feedback.</p>
+              <p>{t('evaluationPanel.lecturersCanCreateDraftsScoreRubric')}</p>
+              <p>{t('evaluationPanel.mentorsCanReviewAndCommentBut')}</p>
+              <p>{t('evaluationPanel.studentsCanViewTheirPublishedPersonal')}</p>
             </div>
           </div>
         </div>

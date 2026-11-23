@@ -1,12 +1,13 @@
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '../../../../utils/cn';
 import { formatCountChange, formatScoreChange, trendDirection } from '../../../../utils/projectTrends';
+import i18n from '../../../../i18n';
 
 const DIRECTION_STYLE = {
-  up: { icon: TrendingUp, className: 'text-success', label: 'Up' },
-  down: { icon: TrendingDown, className: 'text-danger', label: 'Down' },
-  flat: { icon: Minus, className: 'text-slate-500', label: 'No change' },
-  none: { icon: Minus, className: 'text-slate-500', label: 'No earlier semester' },
+  up: { icon: TrendingUp, className: 'text-success', get label() { return i18n.t('projectData:trendDelta.up'); } },
+  down: { icon: TrendingDown, className: 'text-danger', get label() { return i18n.t('projectData:trendDelta.down'); } },
+  flat: { icon: Minus, className: 'text-slate-500', get label() { return i18n.t('projectData:trendDelta.noChange'); } },
+  none: { icon: Minus, className: 'text-slate-500', get label() { return i18n.t('projectData:trendDelta.noEarlierSemester'); } },
 } as const;
 
 /** A change since the previous semester: sign, icon and words together, so it never relies on color alone. */

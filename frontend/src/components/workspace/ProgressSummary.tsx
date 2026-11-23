@@ -1,11 +1,13 @@
 // @ts-nocheck
 import { CheckCircle2, ListTodo, BarChart3, Eye, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const STATUS_CONFIG = {
-  TODO: { label: 'To Do', color: 'bg-gray-400', text: 'text-gray-600' },
-  IN_PROGRESS: { label: 'In Progress', color: 'bg-blue-500', text: 'text-blue-600' },
-  REVIEW: { label: 'Review', color: 'bg-yellow-400', text: 'text-yellow-600' },
-  DONE: { label: 'Done', color: 'bg-green-500', text: 'text-green-600' },
+  TODO: { get label() { return i18n.t('workspace:kanbanBoard.toDo'); }, color: 'bg-gray-400', text: 'text-gray-600' },
+  IN_PROGRESS: { get label() { return i18n.t('workspace:boardSummary.inProgress'); }, color: 'bg-blue-500', text: 'text-blue-600' },
+  REVIEW: { get label() { return i18n.t('workspace:kanbanBoard.review'); }, color: 'bg-yellow-400', text: 'text-yellow-600' },
+  DONE: { get label() { return i18n.t('workspace:kanbanBoard.done'); }, color: 'bg-green-500', text: 'text-green-600' },
 };
 
 function StatCard({ icon: Icon, label, value, accent }) {
@@ -39,6 +41,7 @@ function SkeletonCard() {
 }
 
 export default function ProgressSummary({ progressData, loading }) {
+  const { t } = useTranslation('workspace');
   // Loading state
   if (loading) {
     return (
@@ -67,9 +70,9 @@ export default function ProgressSummary({ progressData, loading }) {
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
         <ListTodo size={40} className="mx-auto text-gray-300 mb-3" />
-        <p className="text-gray-500 font-medium">No tasks yet</p>
+        <p className="text-gray-500 font-medium">{t('progressSummary.noTasksYet')}</p>
         <p className="text-xs text-gray-400 mt-1">
-          Create tasks and milestones to start tracking progress.
+          {t('progressSummary.createTasksAndMilestonesToStart')}
         </p>
       </div>
     );
@@ -91,25 +94,25 @@ export default function ProgressSummary({ progressData, loading }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={ListTodo}
-          label="Total Tasks"
+          label={t('progressSummary.totalTasks')}
           value={totalTasks}
           accent="bg-secondary"
         />
         <StatCard
           icon={CheckCircle2}
-          label="Done"
+          label={t('kanbanBoard.done')}
           value={doneTasks}
           accent="bg-green-500"
         />
         <StatCard
           icon={BarChart3}
-          label="Progress"
+          label={t('taskCard.progress')}
           value={`${progressPct}%`}
           accent="bg-blue-500"
         />
         <StatCard
           icon={Eye}
-          label="In Review"
+          label={t('progressSummary.inReview')}
           value={reviewTasks}
           accent="bg-yellow-500"
         />
@@ -120,7 +123,7 @@ export default function ProgressSummary({ progressData, loading }) {
         {/* Overall progress */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-700">Overall Progress</h3>
+            <h3 className="text-sm font-semibold text-gray-700">{t('progressSummary.overallProgress')}</h3>
             <span className="text-sm font-bold text-gray-900">{progressPct}%</span>
           </div>
           <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -133,7 +136,7 @@ export default function ProgressSummary({ progressData, loading }) {
 
         {/* Tasks by status */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Tasks by Status</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('progressSummary.tasksByStatus')}</h3>
           <div className="space-y-2.5">
             {Object.entries(STATUS_CONFIG).map(([status, cfg]) => {
               const count = tasksByStatus[status] ?? 0;

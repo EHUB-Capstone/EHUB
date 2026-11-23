@@ -16,13 +16,17 @@ import {
   Rocket, Users, Brain, Star, CheckSquare, Calendar, Plus,
   Clock, Zap, MapPin, BookOpen, TrendingUp, AlertTriangle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 
 const statusColor = { DRAFT: 'Draft', SUBMITTED: 'Submitted', REVIEWED: 'Reviewed', APPROVED: 'Approved', NEEDSREVISION: 'Improving', NEEDS_REVISION: 'Improving' };
-const statusLabel = { NEEDSREVISION: 'Needs revision', NEEDS_REVISION: 'Needs revision' };
+const statusLabel = { get NEEDSREVISION() { return i18n.t('dashboard:studentDashboard.needsRevision'); }, get NEEDS_REVISION() { return i18n.t('dashboard:studentDashboard.needsRevision'); } };
 const milestoneStatus = { TODO: 'bg-slate-100 text-slate-500', IN_PROGRESS: 'bg-blue-100 text-blue-600', DONE: 'bg-green-100 text-green-600', OVERDUE: 'bg-red-100 text-red-600' };
 
 const StudentDashboard = () => {
+  const { t } = useTranslation('dashboard');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -71,22 +75,22 @@ const StudentDashboard = () => {
   }, []);
 
   const handleAnalyzeAI = async () => {
-    if (!data?.startupIdea?._id) { toast.error('Submit your startup idea first'); return; }
+    if (!data?.startupIdea?._id) { toast.error(t('studentDashboard.submitYourStartupIdeaFirst')); return; }
     setAnalyzing(true);
     try {
       await aiApi.analyze(data.startupIdea._id);
-      toast.success('AI Analysis started! Refreshing...');
+      toast.success(t('studentDashboard.aiAnalysisStartedRefreshing'));
       const res = await dashboardApi.getStudent();
       setData(res.data || res);
     } catch (err) {
-      toast.error(err.message || 'AI Analysis failed');
+      toast.error(err.message || t('studentDashboard.aiAnalysisFailed'));
     } finally {
       setAnalyzing(false);
     }
   };
 
   if (loading) return <LoadingSkeleton />;
-  if (!data) return <EmptyState icon={Rocket} title="Dashboard unavailable" />;
+  if (!data) return <EmptyState icon={Rocket} title={t('adminDashboard.dashboardUnavailable')} />;
 
   const { hasTeam, team = {}, myClass = {}, startupIdea, aiAnalysis, latestEvaluation, milestones = [], mentoringSessions = [], milestoneProgress = {}, roleInTeam } = data;
 
@@ -95,24 +99,24 @@ const StudentDashboard = () => {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">Welcome, {user?.name?.split(' ')[0] || 'Student'} 🚀</h1>
-          <p className="text-slate-500 mt-1">{myClass ? `${myClass.name} • ${myClass.semester}` : 'No class assigned yet'}</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('studentDashboard.welcome', { v1: user?.name?.split(' ')[0] || 'Student' })}</h1>
+          <p className="text-slate-500 mt-1">{myClass ? `${myClass.name} • ${myClass.semester}` : t('studentDashboard.noClassAssignedYet')}</p>
         </div>
         {!startupIdea && hasTeam && (
-          <Button variant="primary" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>Submit Idea</Button>
+          <Button variant="primary" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>{t('studentDashboard.submitIdea')}</Button>
         )}
       </motion.div>
 
       {!hasTeam ? (
-        <EmptyState icon={Users} title="You're not in a team yet" description="Ask your lecturer to add you to a team" />
+        <EmptyState icon={Users} title={t('studentDashboard.youReNotInATeam')} description={t('studentDashboard.askYourLecturerToAddYou')} />
       ) : (
         <>
           {/* Stats */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <StatCard title="AI Score" value={aiAnalysis?.aiScore ? `${aiAnalysis.aiScore}/100` : 'N/A'} icon={Brain} color="primary" change={aiAnalysis ? 'Analyzed' : 'Not analyzed'} trend={aiAnalysis?.aiScore >= 70 ? 'up' : 'flat'} />
-            <StatCard title="Lecturer Score" value={latestEvaluation?.totalScore != null ? `${latestEvaluation.totalScore.toFixed(1)}/100` : 'N/A'} icon={Star} color="secondary" change={latestEvaluation?.totalScore != null ? 'Published' : latestEvaluation ? 'Pending publication' : 'Pending'} trend={latestEvaluation?.totalScore != null ? 'up' : 'flat'} />
-            <StatCard title="Milestones" value={`${milestoneProgress?.done || 0}/${milestoneProgress?.total || 0}`} icon={CheckSquare} color="success" change={`${milestoneProgress?.percentage || 0}% complete`} trend="up" />
-            <StatCard title="Sessions" value={mentoringSessions.length || 0} icon={Calendar} color="cyan" change="Mentoring done" trend="flat" />
+            <StatCard title={t('studentDashboard.aiScore')} value={aiAnalysis?.aiScore ? `${aiAnalysis.aiScore}/100` : 'N/A'} icon={Brain} color="primary" change={aiAnalysis ? 'Analyzed' : 'Not analyzed'} trend={aiAnalysis?.aiScore >= 70 ? 'up' : 'flat'} />
+            <StatCard title={t('studentDashboard.lecturerScore')} value={latestEvaluation?.totalScore != null ? `${latestEvaluation.totalScore.toFixed(1)}/100` : 'N/A'} icon={Star} color="secondary" change={latestEvaluation?.totalScore != null ? 'Published' : latestEvaluation ? 'Pending publication' : 'Pending'} trend={latestEvaluation?.totalScore != null ? 'up' : 'flat'} />
+            <StatCard title={t('studentDashboard.milestones')} value={`${milestoneProgress?.done || 0}/${milestoneProgress?.total || 0}`} icon={CheckSquare} color="success" change={`${milestoneProgress?.percentage || 0}% complete`} trend="up" />
+            <StatCard title={t('studentDashboard.sessions')} value={mentoringSessions.length || 0} icon={Calendar} color="cyan" change="Mentoring done" trend="flat" />
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -121,23 +125,23 @@ const StudentDashboard = () => {
               {/* Startup Idea Card */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" />My Startup Idea</h3>
+                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" />{t('studentDashboard.myStartupIdea')}</h3>
                   {startupIdea && <Badge variant={statusColor[startupIdea.status]} size="sm">{statusLabel[startupIdea.status] || startupIdea.status}</Badge>}
                 </div>
 
                 {!startupIdea ? (
                   <div className="text-center py-6">
                     <Rocket className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                    <p className="text-slate-500 mb-3">No startup idea submitted yet</p>
-                    <Button variant="primary" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>Submit Your Idea</Button>
+                    <p className="text-slate-500 mb-3">{t('studentDashboard.noStartupIdeaSubmittedYet')}</p>
+                    <Button variant="primary" size="sm" icon={Plus} onClick={() => navigate('/student/idea/new')}>{t('studentDashboard.submitYourIdea')}</Button>
                   </div>
                 ) : (
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">{startupIdea.startupName}</h2>
                     <p className="text-slate-500 mt-1 text-sm leading-relaxed line-clamp-3">{startupIdea.problem}</p>
                     <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/student/idea/${startupIdea._id}`)}>View Details</Button>
-                      <Button variant="primary" size="sm" onClick={() => navigate('/student/idea/new')}>Edit Idea</Button>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/student/idea/${startupIdea._id}`)}>{t('studentDashboard.viewDetails')}</Button>
+                      <Button variant="primary" size="sm" onClick={() => navigate('/student/idea/new')}>{t('studentDashboard.editIdea')}</Button>
                       <Button
                         variant="primary"
                         size="sm"
@@ -145,7 +149,7 @@ const StudentDashboard = () => {
                         isLoading={analyzing}
                         onClick={handleAnalyzeAI}
                       >
-                        {aiAnalysis ? 'Re-Analyze AI' : 'Analyze with AI'}
+                        {aiAnalysis ? t('studentDashboard.reAnalyzeAi') : t('studentDashboard.analyzeWithAi')}
                       </Button>
                     </div>
                   </div>
@@ -155,14 +159,14 @@ const StudentDashboard = () => {
               {/* Milestones */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CheckSquare className="w-5 h-5 text-green-500" />Milestones</h3>
-                  <Button variant="ghost-primary" size="xs" onClick={() => navigate('/executionboard')}>View Kanban</Button>
+                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CheckSquare className="w-5 h-5 text-green-500" />{t('studentDashboard.milestones')}</h3>
+                  <Button variant="ghost-primary" size="xs" onClick={() => navigate('/executionboard')}>{t('studentDashboard.viewKanban')}</Button>
                 </div>
                 <div className="mb-4">
                   <ProgressBar value={milestoneProgress?.percentage || 0} showLabel />
                 </div>
                 {milestones.length === 0 ? (
-                  <EmptyState icon={CheckSquare} title="No milestones" size="sm" />
+                  <EmptyState icon={CheckSquare} title={t('studentDashboard.noMilestones')} size="sm" />
                 ) : (
                   <div className="space-y-2">
                     {milestones.slice(0, 5).map(m => (
@@ -170,7 +174,7 @@ const StudentDashboard = () => {
                         <div className={`w-2 h-2 rounded-full shrink-0 ${m.status === 'DONE' ? 'bg-green-500' : m.status === 'OVERDUE' ? 'bg-red-500' : m.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300'}`} />
                         <span className="flex-1 text-sm text-slate-700 truncate">{m.title}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${milestoneStatus[m.status]}`}>{m.status}</span>
-                        {m.dueDate && <span className="text-xs text-slate-400">{new Date(m.dueDate).toLocaleDateString()}</span>}
+                        {m.dueDate && <span className="text-xs text-slate-400">{fmtDate(m.dueDate)}</span>}
                       </div>
                     ))}
                   </div>
@@ -182,10 +186,10 @@ const StudentDashboard = () => {
             <div className="space-y-5">
               {/* Team Card */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-secondary" />My Team</h3>
+                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-secondary" />{t('studentDashboard.myTeam')}</h3>
                 <div className="mb-3">
                   <p className="text-xl font-bold text-slate-900">{team.name}</p>
-                  <p className="text-sm text-slate-500">Your role: <span className="font-semibold text-primary-700">{roleInTeam || 'Member'}</span></p>
+                  <p className="text-sm text-slate-500">{t('studentDashboard.yourRole')} <span className="font-semibold text-primary-700">{roleInTeam || t('studentDashboard.member')}</span></p>
                 </div>
                 <div className="space-y-2.5">
                   {team.members?.map(m => (
@@ -195,7 +199,7 @@ const StudentDashboard = () => {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-900 truncate">{m.userId?.name}</p>
-                        <p className="text-xs text-slate-400">{m.roleInTeam || 'Member'}</p>
+                        <p className="text-xs text-slate-400">{m.roleInTeam || t('studentDashboard.member')}</p>
                       </div>
                     </div>
                   ))}
@@ -207,12 +211,12 @@ const StudentDashboard = () => {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-2xl p-5 text-white bg-primary">
                   <div className="flex items-center gap-2 mb-3">
                     <Brain className="w-5 h-5" />
-                    <h3 className="font-semibold">AI Analysis</h3>
+                    <h3 className="font-semibold">{t('studentDashboard.aiAnalysis')}</h3>
                   </div>
                   <div className="text-5xl font-black mb-1">{aiAnalysis.aiScore}<span className="text-lg font-normal opacity-70">/100</span></div>
-                  <p className="text-white/70 text-sm mb-3">AI Feasibility Score</p>
+                  <p className="text-white/70 text-sm mb-3">{t('studentDashboard.aiFeasibilityScore')}</p>
                   <Button variant="outline" size="sm" className="w-full border-white/30 text-white hover:bg-white/10 hover:border-white/50" onClick={() => navigate(`/student/ai-analysis/${startupIdea?._id}`)}>
-                    View Full Analysis
+                    {t('studentDashboard.viewFullAnalysis')}
                   </Button>
                 </motion.div>
               )}
@@ -220,10 +224,10 @@ const StudentDashboard = () => {
               {/* Feedback Preview */}
               {latestEvaluation && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-                  <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Star className="w-4 h-4 text-amber-500" />Latest Feedback</h3>
+                  <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Star className="w-4 h-4 text-amber-500" />{t('studentDashboard.latestFeedback')}</h3>
                   {latestEvaluation.totalScore != null && <div className="flex items-center gap-2 mb-2"><span className="text-3xl font-black text-slate-900">{latestEvaluation.totalScore.toFixed(1)}</span><span className="text-slate-400">/100</span></div>}
                   <p className="text-sm text-slate-500 line-clamp-3">{latestEvaluation.comment}</p>
-                  <Button variant="ghost-primary" size="xs" className="mt-2 w-full" onClick={() => navigate('/student/feedback')}>View Full Feedback →</Button>
+                  <Button variant="ghost-primary" size="xs" className="mt-2 w-full" onClick={() => navigate('/student/feedback')}>{t('studentDashboard.viewFullFeedback')}</Button>
                 </motion.div>
               )}
 
@@ -233,7 +237,7 @@ const StudentDashboard = () => {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-slate-900 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-blue-500" />
-                    Weekly Roadmap
+                    {t('studentDashboard.weeklyRoadmap')}
                   </h3>
                   {/* Week picker */}
                   <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
@@ -244,7 +248,7 @@ const StudentDashboard = () => {
                       className="text-xs font-semibold text-slate-600 bg-transparent focus:outline-none cursor-pointer"
                     >
                       {Array.from({ length: 10 }, (_, i) => i + 1).map(w => (
-                        <option key={w} value={w}>Week {w}</option>
+                        <option key={w} value={w}>{t('studentDashboard.week', { w })}</option>
                       ))}
                     </select>
                   </div>
@@ -261,25 +265,25 @@ const StudentDashboard = () => {
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-blue-50 rounded-xl p-2.5 text-center">
                         <p className="text-lg font-black text-blue-600">{weeklyStats.pending ?? 0}</p>
-                        <p className="text-overline text-blue-400 font-semibold">Pending</p>
+                        <p className="text-overline text-blue-400 font-semibold">{t('studentDashboard.pending')}</p>
                       </div>
                       <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
                         <p className="text-lg font-black text-emerald-600">{weeklyStats.completed ?? 0}</p>
-                        <p className="text-overline text-emerald-400 font-semibold">Done</p>
+                        <p className="text-overline text-emerald-400 font-semibold">{t('studentDashboard.done')}</p>
                       </div>
                       <div className={`rounded-xl p-2.5 text-center ${weeklyStats.overdue > 0 ? 'bg-red-50' : 'bg-slate-50'}`}>
                         <p className={`text-lg font-black ${weeklyStats.overdue > 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {weeklyStats.overdue ?? 0}
                         </p>
-                        <p className={`text-overline font-semibold ${weeklyStats.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>Overdue</p>
+                        <p className={`text-overline font-semibold ${weeklyStats.overdue > 0 ? 'text-red-400' : 'text-slate-400'}`}>{t('studentDashboard.overdue')}</p>
                       </div>
                     </div>
 
                     {weeklyStats.nextDeadline && (
                       <div className="flex items-center gap-2 text-xs text-slate-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        <span>Next deadline: <span className="font-semibold text-amber-700">
-                          {new Date(weeklyStats.nextDeadline).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        <span>{t('studentDashboard.nextDeadline')} <span className="font-semibold text-amber-700">
+                          {fmtDate(weeklyStats.nextDeadline, { day: '2-digit', month: 'short' })}
                         </span></span>
                       </div>
                     )}
@@ -291,15 +295,15 @@ const StudentDashboard = () => {
                       onClick={() => navigate('/student/workspace?tab=roadmap')}
                     >
                       <TrendingUp className="w-3.5 h-3.5" />
-                      View Weekly Roadmap →
+                      {t('studentDashboard.viewWeeklyRoadmap')}
                     </Button>
                   </div>
                 ) : (
                   <div className="text-center py-4">
-                    <p className="text-xs text-slate-400">No roadmap data for Week {selectedRoadmapWeek}</p>
+                    <p className="text-xs text-slate-400">{t('studentDashboard.noRoadmapDataForWeek', { selectedRoadmapWeek })}</p>
                     <Button variant="ghost-primary" size="xs" className="mt-2"
                       onClick={() => navigate('/student/workspace?tab=roadmap')}>
-                      Go to Workspace →
+                      {t('studentDashboard.goToWorkspace')}
                     </Button>
                   </div>
                 )}
@@ -307,9 +311,9 @@ const StudentDashboard = () => {
 
               {/* Sessions */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.49 }} className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-info-dark" />Mentoring Sessions</h3>
+                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-info-dark" />{t('studentDashboard.mentoringSessions')}</h3>
                 {mentoringSessions.length === 0 ? (
-                  <p className="text-sm text-slate-400">No sessions scheduled</p>
+                  <p className="text-sm text-slate-400">{t('studentDashboard.noSessionsScheduled')}</p>
                 ) : (
                   <div className="space-y-2">
                     {mentoringSessions.slice(0, 3).map(s => (
@@ -317,7 +321,7 @@ const StudentDashboard = () => {
                         <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{s.title}</p>
-                          <p className="text-xs text-slate-400">{s.meetingDate ? new Date(s.meetingDate).toLocaleDateString() : '—'}</p>
+                          <p className="text-xs text-slate-400">{s.meetingDate ? fmtDate(s.meetingDate) : '—'}</p>
                         </div>
                       </div>
                     ))}

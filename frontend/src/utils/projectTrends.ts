@@ -1,12 +1,13 @@
 import type { ProjectDataTrendRow, ProjectDataTrends } from '../types/projectData';
+import i18n from '../i18n/index.ts';
 
 export const TREND_LEVELS = ['semester', 'subject', 'class'] as const;
 export type TrendLevel = (typeof TREND_LEVELS)[number];
 
 export const TREND_LEVEL_LABELS: Record<TrendLevel, string> = {
-  semester: 'Semester',
-  subject: 'Subject',
-  class: 'Class',
+  get semester() { return i18n.t('utils:projectData.semester'); },
+  get subject() { return i18n.t('utils:projectData.subject'); },
+  get class() { return i18n.t('utils:projectTrends.class'); },
 };
 
 export const TREND_SCORE_SCALE = 10;
@@ -120,7 +121,7 @@ export function toScoreChartData(
   if (level !== 'subject') {
     return {
       data: pivot(trends.semesters, () => 'score'),
-      series: [{ key: 'score', label: 'Average score', slot: null }],
+      series: [{ key: 'score', label: i18n.t('utils:projectTrends.averageScore'), slot: null }],
       hiddenSubjects: 0,
     };
   }

@@ -5,6 +5,8 @@ import { PRIORITY_CFG, STATUSES, STATUS_CFG } from '../constants';
 import { getTaskStatus } from '../boardUtils';
 import { taskProgress as getProgress } from '../../../utils/taskProgress';
 import TruncatedText from '../../../components/ui/TruncatedText';
+import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 function Badge({ children, className = '' }) {
   return (
@@ -16,7 +18,7 @@ function Badge({ children, className = '' }) {
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-GB', {
+  return fmtDate(value, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -38,13 +40,14 @@ function getMeetingNote(task) {
 }
 
 function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusChange }) {
+  const { t } = useTranslation('workspace');
   const rows = useMemo(() => tasks, [tasks]);
 
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-12 text-center">
-        <p className="text-sm font-semibold text-slate-700">No tasks match the current filters.</p>
-        <p className="mt-1 text-sm text-slate-500">Adjust search or filters to see more tasks.</p>
+        <p className="text-sm font-semibold text-slate-700">{t('taskTableView.noTasksMatchTheCurrentFilters')}</p>
+        <p className="mt-1 text-sm text-slate-500">{t('taskTableView.adjustSearchOrFiltersToSee')}</p>
       </div>
     );
   }
@@ -55,18 +58,18 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
         <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
             <tr>
-              <th className="w-16 px-3 py-3">No.</th>
-              <th className="min-w-[220px] px-3 py-3">Task Name</th>
-              <th className="min-w-[260px] px-3 py-3">Description</th>
-              <th className="min-w-[150px] px-3 py-3">Assignee</th>
-              <th className="min-w-[120px] px-3 py-3">Start Date</th>
-              <th className="min-w-[120px] px-3 py-3">Deadline</th>
-              <th className="min-w-[130px] px-3 py-3">Status</th>
-              <th className="min-w-[110px] px-3 py-3">Priority</th>
-              <th className="min-w-[150px] px-3 py-3">Progress</th>
-              <th className="min-w-[140px] px-3 py-3">Dependency</th>
-              <th className="min-w-[180px] px-3 py-3">Meeting Note</th>
-              <th className="w-24 px-3 py-3 text-right">Actions</th>
+              <th className="w-16 px-3 py-3">{t('taskTableView.no')}</th>
+              <th className="min-w-[220px] px-3 py-3">{t('taskTableView.taskName')}</th>
+              <th className="min-w-[260px] px-3 py-3">{t('taskModal.description')}</th>
+              <th className="min-w-[150px] px-3 py-3">{t('taskModal.assignee')}</th>
+              <th className="min-w-[120px] px-3 py-3">{t('taskModal.startDate')}</th>
+              <th className="min-w-[120px] px-3 py-3">{t('taskTableView.deadline')}</th>
+              <th className="min-w-[130px] px-3 py-3">{t('taskTableView.status')}</th>
+              <th className="min-w-[110px] px-3 py-3">{t('taskModal.priority')}</th>
+              <th className="min-w-[150px] px-3 py-3">{t('taskCard.progress')}</th>
+              <th className="min-w-[140px] px-3 py-3">{t('taskTableView.dependency')}</th>
+              <th className="min-w-[180px] px-3 py-3">{t('taskTableView.meetingNote')}</th>
+              <th className="w-24 px-3 py-3 text-right">{t('taskTableView.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -82,9 +85,9 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                 <tr key={task._id} className="group transition-colors hover:bg-slate-50">
                   <td className="px-3 py-3 font-mono text-xs text-slate-400">{index + 1}</td>
                   <td className="px-3 py-3">
-                    <TruncatedText as="div" text={task.title || 'Untitled Task'} className="font-semibold text-slate-900" />
-                    <div className="mt-1 text-xs text-slate-400">W{task.weekNumber || '—'}</div>
-                    <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? 'Course Roadmap' : task.taskType === 'CLASS_TASK' ? 'Class Requirement' : 'Team Task'}</div>
+                    <TruncatedText as="div" text={task.title || t('taskTableView.untitledTask')} className="font-semibold text-slate-900" />
+                    <div className="mt-1 text-xs text-slate-400">{t('taskTableView.w', { v1: task.weekNumber || '—' })}</div>
+                    <div className="text-xs text-slate-500">{task.taskType === 'COURSE_TEMPLATE' ? t('taskCard.courseRoadmap') : task.taskType === 'CLASS_TASK' ? t('taskCard.classRequirement') : t('taskCard.teamTask')}</div>
                   </td>
                   <td className="px-3 py-3 text-slate-600">
                     <TruncatedText as="div" text={task.description || '—'} />
@@ -95,7 +98,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                   <td className="px-3 py-3">
                     {permissions.canUpdateTaskStatus(task) ? (
                       <label className="relative inline-flex items-center">
-                        <span className="sr-only">Change status for {task.title}</span>
+                        <span className="sr-only">{t('taskTableView.changeStatusFor', { title: task.title })}</span>
                         <select
                           value={status}
                           onChange={(event) => onStatusChange(task._id, event.target.value)}
@@ -138,7 +141,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                           type="button"
                           onClick={() => onEditTask(task)}
                           className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                          aria-label={`Edit ${task.title}`}
+                          aria-label={t('taskCard.edit', { title: task.title })}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
@@ -148,7 +151,7 @@ function TaskTableView({ tasks, permissions, onEditTask, onDeleteTask, onStatusC
                           type="button"
                           onClick={() => onDeleteTask(task)}
                           className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                          aria-label={`Delete ${task.title}`}
+                          aria-label={t('taskCard.delete', { title: task.title })}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

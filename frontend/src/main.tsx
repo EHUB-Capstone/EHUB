@@ -1,8 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import './i18n'
 import './index.css'
 import App from './App.tsx'
+import { LanguageProvider } from './context/LanguageContext.tsx'
 
 // VITE_GOOGLE_CLIENT_ID must be set in your .env.local file
 // Example: VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
@@ -17,7 +19,9 @@ async function bootstrap() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <GoogleOAuthProvider clientId={googleClientId}>
-        <App />
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
       </GoogleOAuthProvider>
     </StrictMode>,
   );

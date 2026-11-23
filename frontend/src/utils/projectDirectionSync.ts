@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 export interface ProjectDirectionReviewLike {
   id?: string | null;
   toStatus?: string | null;
@@ -80,11 +81,11 @@ export const getProjectDirectionSubmitGuidance = (
   const hasUnsavedChanges = hasUnsavedProjectDirectionChanges(direction, title, summary, startupIndustries);
   if (direction?.status === 'NeedsRevision') {
     return hasUnsavedChanges
-      ? 'Save your revised project information as a draft to enable Submit.'
-      : 'The lecturer requested changes. Update the Project Name, Project description, or Startup Industry, then select Save draft to enable Submit.';
+      ? i18n.t('utils:projectDirectionSync.saveYourRevisedProjectInformationAs')
+      : i18n.t('utils:projectDirectionSync.theLecturerRequestedChangesUpdateThe');
   }
   if (direction?.status === 'Draft' && hasUnsavedChanges) {
-    return 'Save your changes as a draft before submitting.';
+    return i18n.t('utils:projectDirectionSync.saveYourChangesAsADraft');
   }
   return '';
 };
@@ -147,16 +148,16 @@ export const getProjectDirectionDecisionNotice = (
 ): string => {
   if (current?.status !== 'Submitted') return '';
   if (current.isProjectProfileChangeProposal && incoming?.reviews?.[0]?.toStatus === 'Rejected') {
-    return 'Lecturer rejected your Project Profile changes. The approved profile remains unchanged.';
+    return i18n.t('utils:projectDirectionSync.lecturerRejectedYourProjectProfileChanges');
   }
   if (current.isProjectProfileChangeProposal && incoming?.status === 'Approved') {
-    return 'Lecturer approved your Project Profile changes. The approved profile is now updated.';
+    return i18n.t('utils:projectDirectionSync.lecturerApprovedYourProjectProfileChanges');
   }
   if (current.isProjectProfileChangeProposal && incoming?.status === 'NeedsRevision') {
-    return 'Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.';
+    return i18n.t('utils:projectDirectionSync.lecturerRequestedRevisionsToYourProject');
   }
-  if (incoming?.status === 'Approved') return 'Lecturer approved your project direction.';
-  if (incoming?.status === 'NeedsRevision') return 'Lecturer reviewed your project direction and requested changes.';
+  if (incoming?.status === 'Approved') return i18n.t('utils:projectDirectionSync.lecturerApprovedYourProjectDirection');
+  if (incoming?.status === 'NeedsRevision') return i18n.t('utils:projectDirectionSync.lecturerReviewedYourProjectDirectionAnd');
   return '';
 };
 

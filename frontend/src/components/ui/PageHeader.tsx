@@ -4,6 +4,7 @@ import { cn } from '../../utils/cn';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Button from './Button';
 import type { ButtonSize, ButtonVariant } from './Button';
 
@@ -53,6 +54,7 @@ const PageHeader = ({
   className,
   children,
 }: PageHeaderProps) => {
+  const { t } = useTranslation();
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -62,7 +64,7 @@ const PageHeader = ({
     >
       {/* Breadcrumb */}
       {breadcrumb && breadcrumb.length > 0 && (
-        <nav className="flex items-center gap-1 mb-2" aria-label="Breadcrumb">
+        <nav className="flex items-center gap-1 mb-2" aria-label={t('misc.breadcrumb')}>
           {breadcrumb.map((crumb, i) => {
             const label = typeof crumb === 'string' ? crumb : crumb.label;
             const to = typeof crumb === 'string' ? undefined : crumb.to;

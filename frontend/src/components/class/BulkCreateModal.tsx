@@ -20,6 +20,7 @@ import type {
 } from '../../types/classes';
 import type { ClassCreationSemesterOption } from '../../types/subjects';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 type AssignmentMode = 'assign' | 'unassigned';
 
@@ -53,6 +54,7 @@ export default function BulkCreateModal({
   onClose,
   onCreated,
 }: BulkCreateModalProps) {
+  const { t } = useTranslation('class');
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [semesters, setSemesters] = useState<ClassCreationSemesterOption[]>([]);
   const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
@@ -98,7 +100,7 @@ export default function BulkCreateModal({
         }));
       } catch (error) {
         if (active && !controller.signal.aborted) {
-          toast.error(parseApiError(error, 'Failed to load subjects, semesters, or lecturers.').message);
+          toast.error(parseApiError(error, t('bulkCreateModal.failedToLoadSubjectsSemestersOr')).message);
         }
       } finally {
         if (active) setLoadingOptions(false);
@@ -140,7 +142,7 @@ export default function BulkCreateModal({
     }).catch(error => {
       if (active) {
         setLecturers([]);
-        toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+        toast.error(parseApiError(error, t('bulkAssignLecturerModal.failedToLoadSemesterLecturers')).message);
       }
     }).finally(() => {
       if (active) setLoadingLecturers(false);
@@ -259,15 +261,15 @@ export default function BulkCreateModal({
         const preview = unwrapApiData<BulkClassPreviewResponse>(await classApi.previewBulkCreate(request));
         setServerPreview(preview);
         if (preview.invalidCount > 0) {
-          toast.error(`${preview.invalidCount} class(es) cannot be created. Review the conflicts below.`);
+          toast.error(t('bulkCreateModal.classEsCannotBeCreatedReview', { invalidCount: preview.invalidCount }));
         } else {
-          toast.success('Preview is valid. Review and confirm the creation.');
+          toast.success(t('bulkCreateModal.previewIsValidReviewAndConfirm'));
         }
         return;
       }
 
       if (serverPreview.invalidCount > 0) {
-        toast.error('Change the class indices before creating classes.');
+        toast.error(t('bulkCreateModal.changeTheClassIndicesBeforeCreating'));
         return;
       }
 
@@ -275,13 +277,13 @@ export default function BulkCreateModal({
       const assignedLecturerCount = lecturerAssignments.filter(item => item.classIndices.length > 0).length;
       toast.success(
         assignmentMode === 'assign'
-          ? `${createdClasses.length} class(es) created and assigned across ${assignedLecturerCount} lecturer(s).`
-          : `${createdClasses.length} unassigned Draft class(es) created.`,
+          ? t('bulkCreateModal.classEsCreatedAndAssignedAcross', { length: createdClasses.length, assignedLecturerCount })
+          : t('bulkCreateModal.unassignedDraftClassEsCreated', { length: createdClasses.length }),
       );
       onCreated({ suppressToast: true });
     } catch (error) {
       setServerPreview(null);
-      toast.error(parseApiError(error, 'Failed to create classes.').message);
+      toast.error(parseApiError(error, t('bulkCreateModal.failedToCreateClasses')).message);
     } finally {
       setSubmitting(false);
     }
@@ -289,14 +291,14 @@ export default function BulkCreateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Close create classes dialog" />
+      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label={t('bulkCreateModal.closeCreateClassesDialog')} />
       <div className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-float animate-scale-in" role="dialog" aria-modal="true" aria-labelledby="create-classes-title">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <h2 id="create-classes-title" className="text-xl font-bold text-slate-900">Create Classes</h2>
-            <p className="mt-0.5 text-sm text-slate-400">Create one or more classes and optionally assign their lecturer now</p>
+            <h2 id="create-classes-title" className="text-xl font-bold text-slate-900">{t('bulkCreateModal.createClasses')}</h2>
+            <p className="mt-0.5 text-sm text-slate-400">{t('bulkCreateModal.createOneOrMoreClassesAnd')}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label={t('common:actions.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -310,31 +312,31 @@ export default function BulkCreateModal({
             <>
               <section>
                 <div className="mb-3">
-                  <h3 className="text-sm font-bold text-slate-800">1. Academic information</h3>
-                  <p className="text-xs text-slate-400">Class codes are generated by the server from subject and class index.</p>
+                  <h3 className="text-sm font-bold text-slate-800">{t('bulkCreateModal.1AcademicInformation')}</h3>
+                  <p className="text-xs text-slate-400">{t('bulkCreateModal.classCodesAreGeneratedByThe')}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="create-class-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject *</label>
+                    <label htmlFor="create-class-subject" className="mb-1 block text-xs font-semibold text-slate-600">{t('bulkCreateModal.subject')}</label>
                     <select id="create-class-subject" value={form.subjectCode} onChange={event => updateForm('subjectCode', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-                      {subjects.length === 0 && <option value="">No active subjects</option>}
+                      {subjects.length === 0 && <option value="">{t('bulkCreateModal.noActiveSubjects')}</option>}
                       {subjects.map(subject => <option key={subject.subjectCode} value={subject.subjectCode}>{subject.subjectCode}{subject.subjectName ? ` — ${subject.subjectName}` : ''}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="create-class-semester" className="mb-1 block text-xs font-semibold text-slate-600">Semester *</label>
+                    <label htmlFor="create-class-semester" className="mb-1 block text-xs font-semibold text-slate-600">{t('bulkCreateModal.semester')}</label>
                     <select id="create-class-semester" value={form.semesterId} onChange={event => updateForm('semesterId', event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-                      {semesters.length === 0 && <option value="">No open semesters</option>}
+                      {semesters.length === 0 && <option value="">{t('bulkCreateModal.noOpenSemesters')}</option>}
                       {semesters.map(semester => <option key={semester.id} value={semester.id}>{semester.semester} {semester.year} — {semester.availability} ({semester.status})</option>)}
                     </select>
-                    {semesters.length === 0 && <p className="mt-1 text-caption text-amber-600">Complete expired semesters and configure the current or next semester first.</p>}
+                    {semesters.length === 0 && <p className="mt-1 text-caption text-amber-600">{t('bulkCreateModal.completeExpiredSemestersAndConfigureThe')}</p>}
                   </div>
                   <div>
-                    <label htmlFor="create-class-index" className="mb-1 block text-xs font-semibold text-slate-600">Starting class index *</label>
+                    <label htmlFor="create-class-index" className="mb-1 block text-xs font-semibold text-slate-600">{t('bulkCreateModal.startingClassIndex')}</label>
                     <input id="create-class-index" type="number" min="1" max="999" value={form.startClassIndex} onChange={event => updateForm('startClassIndex', event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
                   </div>
                   <div>
-                    <label htmlFor="create-class-quantity" className="mb-1 block text-xs font-semibold text-slate-600">Number of classes *</label>
+                    <label htmlFor="create-class-quantity" className="mb-1 block text-xs font-semibold text-slate-600">{t('bulkCreateModal.numberOfClasses')}</label>
                     <input id="create-class-quantity" type="number" min="1" max={MAXIMUM_BATCH_SIZE} value={form.quantity} onChange={event => updateForm('quantity', event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
                   </div>
                 </div>
@@ -342,8 +344,8 @@ export default function BulkCreateModal({
                 {clientCodes.length > 0 && (
                   <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-slate-500">Generated class codes</p>
-                      <p className="text-caption text-slate-400">Assign one or more of these classes to each lecturer below.</p>
+                      <p className="text-xs font-semibold text-slate-500">{t('bulkCreateModal.generatedClassCodes')}</p>
+                      <p className="text-caption text-slate-400">{t('bulkCreateModal.assignOneOrMoreOfThese')}</p>
                     </div>
                     <div className="max-h-44 overflow-y-auto pr-1">
                       <div className="flex flex-wrap gap-2">
@@ -362,7 +364,7 @@ export default function BulkCreateModal({
                                     ? color.chip
                                     : 'border-slate-200 bg-white text-slate-600'
                               }`}
-                              title={conflict ? 'Assigned to multiple lecturers' : assignment?.lecturer.name || 'Unassigned'}
+                              title={conflict ? t('bulkCreateModal.assignedToMultipleLecturers') : assignment?.lecturer.name || t('bulkCreateModal.unassigned')}
                             >
                               <div className="flex items-center gap-1.5">
                                 <span className="text-overline font-bold opacity-70">#{classIndex}</span>
@@ -381,20 +383,20 @@ export default function BulkCreateModal({
               </section>
 
               <section className="border-t border-slate-100 pt-5">
-                <h3 className="text-sm font-bold text-slate-800">2. Lecturer assignment</h3>
-                <p className="mb-3 text-xs text-slate-400">Assign now is recommended. Unassigned classes remain Draft and are invisible to lecturers.</p>
+                <h3 className="text-sm font-bold text-slate-800">{t('bulkCreateModal.2LecturerAssignment')}</h3>
+                <p className="mb-3 text-xs text-slate-400">{t('bulkCreateModal.assignNowIsRecommendedUnassignedClasses')}</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button type="button" onClick={() => selectAssignmentMode('assign')} className={`rounded-xl border p-3 text-left transition ${assignmentMode === 'assign' ? 'border-primary bg-primary-50/60 ring-2 ring-primary/10' : 'border-slate-200 hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100"><GraduationCap className="h-4 w-4 text-primary" /></div>
-                      <div><p className="text-sm font-semibold text-slate-800">Assign now</p><p className="text-xs text-slate-400">Create and assign in one operation</p></div>
+                      <div><p className="text-sm font-semibold text-slate-800">{t('bulkCreateModal.assignNow')}</p><p className="text-xs text-slate-400">{t('bulkCreateModal.createAndAssignInOneOperation')}</p></div>
                       {assignmentMode === 'assign' && <CheckCircle2 className="ml-auto h-4 w-4 text-primary" />}
                     </div>
                   </button>
                   <button type="button" onClick={() => selectAssignmentMode('unassigned')} className={`rounded-xl border p-3 text-left transition ${assignmentMode === 'unassigned' ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-100' : 'border-slate-200 hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100"><AlertTriangle className="h-4 w-4 text-amber-600" /></div>
-                      <div><p className="text-sm font-semibold text-slate-800">Create unassigned</p><p className="text-xs text-slate-400">Assign a lecturer later</p></div>
+                      <div><p className="text-sm font-semibold text-slate-800">{t('bulkCreateModal.createUnassigned')}</p><p className="text-xs text-slate-400">{t('bulkCreateModal.assignALecturerLater')}</p></div>
                       {assignmentMode === 'unassigned' && <CheckCircle2 className="ml-auto h-4 w-4 text-amber-600" />}
                     </div>
                   </button>
@@ -403,15 +405,15 @@ export default function BulkCreateModal({
                 {assignmentMode === 'assign' && (
                   <div className="mt-3 rounded-xl border border-slate-200 p-3">
                     <div className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                      To assign multiple classes to one lecturer, first increase <span className="font-semibold">Number of classes</span> above. Then enter the generated class numbers separated by commas (<span className="font-semibold">8, 10, 12</span>), as a range (<span className="font-semibold">8-12</span>), or combine both formats (<span className="font-semibold">8-10, 12</span>).
+                      {t('bulkCreateModal.toAssignMultipleClassesToOne')} <span className="font-semibold">{t('bulkCreateModal.numberOfClasses2')}</span> {t('bulkCreateModal.aboveThenEnterTheGeneratedClass')}<span className="font-semibold">8, 10, 12</span>{t('bulkCreateModal.asARange')}<span className="font-semibold">8-12</span>{t('bulkCreateModal.orCombineBothFormats')}<span className="font-semibold">8-10, 12</span>).
                     </div>
                     <div className="relative mb-2">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <input type="search" value={lecturerSearch} onChange={event => setLecturerSearch(event.target.value)} placeholder="Search lecturer by name or email..." className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                      <input type="search" value={lecturerSearch} onChange={event => setLecturerSearch(event.target.value)} placeholder={t('bulkCreateModal.searchLecturerByNameOrEmail')} className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
                     </div>
                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                       {filteredLecturers.length === 0 ? (
-                        <p className="py-6 text-center text-xs text-slate-400">No active lecturers found</p>
+                        <p className="py-6 text-center text-xs text-slate-400">{t('bulkCreateModal.noActiveLecturersFound')}</p>
                       ) : filteredLecturers.map(lecturer => {
                         const lecturerIndex = lecturers.findIndex(item => item._id === lecturer._id);
                         const color = LECTURER_COLORS[lecturerIndex % LECTURER_COLORS.length];
@@ -428,8 +430,8 @@ export default function BulkCreateModal({
                                 inputMode="numeric"
                                 value={lecturerClassInputs[lecturer._id] || ''}
                                 onChange={event => updateLecturerClasses(lecturer._id, event.target.value)}
-                                placeholder={quantity > 1 ? `e.g. ${startIndex}, ${startIndex + 1}` : `e.g. ${startIndex}`}
-                                aria-label={`Class numbers assigned to ${lecturer.name}`}
+                                placeholder={quantity > 1 ? t('bulkCreateModal.eG', { startIndex, v2: startIndex + 1 }) : t('bulkCreateModal.exampleSingle', { startIndex })}
+                                aria-label={t('bulkCreateModal.classNumbersAssignedTo', { name: lecturer.name })}
                                 aria-invalid={Boolean(parsed.error)}
                                 className={`w-full rounded-lg border bg-white px-3 py-2 text-xs outline-none focus:ring-2 ${parsed.error ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-slate-200 focus:border-primary focus:ring-primary/20'}`}
                               />
@@ -446,14 +448,14 @@ export default function BulkCreateModal({
               {serverPreview && (
                 <section className={`rounded-xl border p-4 ${serverPreview.invalidCount > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
                   <div className="flex items-center justify-between gap-3">
-                    <div><p className="text-sm font-bold text-slate-800">Server validation</p><p className="text-xs text-slate-500">{serverPreview.validCount} of {serverPreview.totalCount} classes are ready</p></div>
+                    <div><p className="text-sm font-bold text-slate-800">{t('bulkCreateModal.serverValidation')}</p><p className="text-xs text-slate-500">{t('bulkCreateModal.ofClassesAreReady', { validCount: serverPreview.validCount, totalCount: serverPreview.totalCount })}</p></div>
                     {serverPreview.invalidCount === 0 ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-red-600" />}
                   </div>
                   <div className="mt-3 max-h-36 space-y-1 overflow-y-auto">
                     {serverPreview.items.map(item => (
                       <div key={`${item.classCode}-${item.classIndex}`} className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-2 text-xs">
                         <span className="font-mono font-semibold text-slate-700">{item.classCode}</span>
-                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>{item.isValid ? (item.primaryLecturerName ? `Assign to ${item.primaryLecturerName}` : 'Create as unassigned Draft') : item.errorMessage}</span>
+                        <span className={item.isValid ? 'text-green-700' : 'text-red-700'}>{item.isValid ? (item.primaryLecturerName ? t('bulkCreateModal.assignTo', { primaryLecturerName: item.primaryLecturerName }) : t('bulkCreateModal.createAsUnassignedDraft')) : item.errorMessage}</span>
                       </div>
                     ))}
                   </div>
@@ -464,9 +466,9 @@ export default function BulkCreateModal({
         </div>
 
         <div className="flex gap-3 border-t border-slate-100 bg-white px-6 py-4">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">{t('common:actions.cancel')}</button>
           <button type="button" onClick={handleSubmit} disabled={loadingOptions || submitting} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50">
-            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : serverPreview ? 'Confirm & Create' : 'Preview Classes'}
+            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('bulkCreateModal.processing')}</> : serverPreview ? t('bulkCreateModal.confirmCreate') : t('bulkCreateModal.previewClasses')}
           </button>
         </div>
       </div>

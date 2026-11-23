@@ -9,8 +9,10 @@ import MentorSemesterAvailability from '../../components/admin/MentorSemesterAva
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import MentorDetailModal from '../../components/mentor/MentorDetailModal';
+import { useTranslation } from 'react-i18next';
 
 export default function MentorDirectory() {
+  const { t } = useTranslation('mentoring');
   const { user } = useAuth();
   const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
   const [editing, setEditing] = useState<MentorProfile | 'new' | null>(null);
@@ -28,7 +30,7 @@ export default function MentorDirectory() {
     const controller = new AbortController(); directoryController.current = controller;
     if (retry) { setLoading(true); setError(''); }
     try { const items = await mentorSupportApi.getDirectory(controller.signal); if (!controller.signal.aborted) setProfiles(items); }
-    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not load mentor directory').message); }
+    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, t('mentorDirectory.couldNotLoadMentorDirectory')).message); }
     finally { if (!controller.signal.aborted) setLoading(false); }
   };
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function MentorDirectory() {
     directoryController.current = controller;
     let active = true;
     mentorSupportApi.getDirectory(controller.signal).then(items => { if (active) setProfiles(items); })
-      .catch(cause => { if (active) setError(parseApiError(cause, 'Could not load mentor directory').message); })
+      .catch(cause => { if (active) setError(parseApiError(cause, t('mentorDirectory.couldNotLoadMentorDirectory')).message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; directoryController.current?.abort(); };
   }, []);
@@ -52,20 +54,20 @@ export default function MentorDirectory() {
       const link = document.createElement('a');
       link.href = url; link.download = kind === 'cv' ? profile.cvFileName ?? 'CV.pdf' : profile.portfolioFileName ?? 'Portfolio.pdf';
       link.click(); URL.revokeObjectURL(url);
-    } catch (cause) { setError(parseApiError(cause, 'Could not download document').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotDownloadDocument')).message); }
   };
   return <main className="mx-auto max-w-6xl space-y-5 p-4 text-body text-slate-700 sm:p-8">
-    <header><h1 className="text-display text-secondary">Mentor directory</h1>
-      <p className="mt-1 text-body text-slate-600">Profiles, expertise and mentoring history across semesters.</p>
-      {isAdmin && <Button className="mt-3" onClick={() => setEditing('new')}>Create mentor</Button>}</header>
+    <header><h1 className="text-display text-secondary">{t('mentorDirectory.mentorDirectory')}</h1>
+      <p className="mt-1 text-body text-slate-600">{t('mentorDirectory.profilesExpertiseAndMentoringHistoryAcross')}</p>
+      {isAdmin && <Button className="mt-3" onClick={() => setEditing('new')}>{t('mentorDirectory.createMentor')}</Button>}</header>
     {notice && <p role="status" className="rounded-lg bg-success-50 p-3 text-body text-success-dark">{notice}</p>}
-    {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error}<button type="button" onClick={() => void load(true)} className="ml-3 underline">Retry</button></p>}
-    <div className="flex flex-wrap gap-3"><input aria-label="Search mentors" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name or expertise" className="min-w-48 flex-1 rounded-lg border p-2" />
-      <select aria-label="Filter mentor type" value={type} onChange={event => setType(event.target.value)} className="rounded-lg border p-2">
-        <option value="All">All types</option><option value="Business">Business</option><option value="IT">IT</option><option value="Unspecified">Unspecified</option></select></div>
-    {loading ? <p>Loading mentors…</p> : filtered.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-card">No mentors match your search.</p> :
+    {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-body text-danger-dark">{error}<button type="button" onClick={() => void load(true)} className="ml-3 underline">{t('mentorProfilePage.retry')}</button></p>}
+    <div className="flex flex-wrap gap-3"><input aria-label={t('mentorDirectory.searchMentors')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('mentorDirectory.searchNameOrExpertise')} className="min-w-48 flex-1 rounded-lg border p-2" />
+      <select aria-label={t('mentorDirectory.filterMentorType')} value={type} onChange={event => setType(event.target.value)} className="rounded-lg border p-2">
+        <option value="All">{t('mentorDirectory.allTypes')}</option><option value="Business">{t('mentorDirectory.business')}</option><option value="IT">{t('mentorDirectory.it')}</option><option value="Unspecified">{t('mentorDirectory.unspecified')}</option></select></div>
+    {loading ? <p>{t('mentorDirectory.loadingMentors')}</p> : filtered.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-card">{t('mentorDirectory.noMentorsMatchYourSearch')}</p> :
       <>
-        <p className="text-body-sm text-slate-500">{filtered.length} mentor{filtered.length === 1 ? '' : 's'}</p>
+        <p className="text-body-sm text-slate-500">{t('mentorDirectory.mentorCount', { count: filtered.length })}</p>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(profile =>
           <li key={profile.id}>
             <button type="button" aria-haspopup="dialog" onClick={() => setSelected(profile)}
@@ -83,7 +85,7 @@ export default function MentorDirectory() {
       onEdit={p => { setSelected(null); setEditing(p); }} onAvailability={p => { setSelected(null); setAvailability(p); }} />}
     {editing && <MentorProfileEditor profile={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSaved={saved => {
       setProfiles(items => items.some(x => x.id === saved.id) ? items.map(x => x.id === saved.id ? { ...x, ...saved, activeTeamCount: x.activeTeamCount, totalAssignments: x.totalAssignments, totalSessions: x.totalSessions, averageFeedbackRating: x.averageFeedbackRating } : x) : [...items, saved]);
-      setEditing(null); setNotice('Mentor profile saved.');
+      setEditing(null); setNotice(t('mentorProfilePage.mentorProfileSaved'));
     }} />}
     {availability && <MentorSemesterAvailability profile={availability} onClose={() => setAvailability(null)} />}
   </main>;

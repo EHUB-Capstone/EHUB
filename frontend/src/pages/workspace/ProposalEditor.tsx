@@ -9,8 +9,10 @@ import { teamWorkspaceApi } from '../../api/teamWorkspaceApi';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/ui/Button';
 import ProposalPreview from './ProposalPreview';
+import { useTranslation } from 'react-i18next';
 
 export default function ProposalEditor() {
+  const { t } = useTranslation('workspace');
   const { teamId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -88,7 +90,7 @@ export default function ProposalEditor() {
       }
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Failed to fetch proposal details');
+      toast.error(err.response?.data?.error || err.message || t('proposalEditor.failedToFetchProposalDetails'));
     } finally {
       setLoading(false);
     }
@@ -112,7 +114,7 @@ export default function ProposalEditor() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading proposal details...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('proposalEditor.loadingProposalDetails')}</p>
       </div>
     );
   }
@@ -132,7 +134,7 @@ export default function ProposalEditor() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.startupName) {
-      toast.error('Startup Name is required.');
+      toast.error(t('proposalEditor.startupNameIsRequired'));
       return;
     }
 
@@ -145,19 +147,19 @@ export default function ProposalEditor() {
           ...form,
           changeNote: form.changeNote || 'Initial proposal draft'
         });
-        toast.success('Proposal draft created!');
+        toast.success(t('proposalEditor.proposalDraftCreated'));
       } else {
         // Update
         await workspaceApi.updateProposal(proposal._id, {
           ...form,
           changeNote: form.changeNote || 'Updated proposal draft'
         });
-        toast.success('Proposal draft saved!');
+        toast.success(t('proposalEditor.proposalDraftSaved'));
       }
       fetchWorkspaceAndProposal();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Failed to save proposal');
+      toast.error(err.response?.data?.error || err.message || t('proposalEditor.failedToSaveProposal'));
     } finally {
       setSaving(false);
     }
@@ -165,43 +167,43 @@ export default function ProposalEditor() {
 
   const handleSubmitProposal = async () => {
     if (!proposal) {
-      toast.error('Please save your proposal draft first before submitting.');
+      toast.error(t('proposalEditor.pleaseSaveYourProposalDraftFirst'));
       return;
     }
 
-    if (!window.confirm('Are you sure you want to submit this proposal? This will lock it into SUBMITTED stage.')) return;
+    if (!window.confirm(t('proposalEditor.areYouSureYouWantTo'))) return;
 
     setSubmitting(true);
     try {
       await workspaceApi.submitProposal(proposal._id, {
         changeNote: form.changeNote || 'Submitted proposal for evaluation'
       });
-      toast.success('Proposal submitted successfully!');
+      toast.success(t('proposalEditor.proposalSubmittedSuccessfully'));
       handleBack();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || err.message || 'Failed to submit proposal');
+      toast.error(err.response?.data?.error || err.message || t('proposalEditor.failedToSubmitProposal'));
     } finally {
       setSubmitting(false);
     }
   };
 
   const fields = [
-    { name: 'startupName', label: 'Startup Name *', type: 'text', placeholder: 'Enter your startup company name' },
-    { name: 'tagline', label: 'Tagline', type: 'text', placeholder: 'A short slogan or description of your idea' },
-    { name: 'problem', label: 'Problem Statement', type: 'textarea', placeholder: 'What problem are you solving?' },
-    { name: 'solution', label: 'Proposed Solution', type: 'textarea', placeholder: 'Describe your product or service and how it resolves the problem.' },
-    { name: 'targetCustomers', label: 'Target Customers', type: 'textarea', placeholder: 'Who are your main target audience and customers?' },
-    { name: 'valueProposition', label: 'Value Proposition', type: 'textarea', placeholder: 'What unique value do you deliver to customers?' },
-    { name: 'marketSize', label: 'Market Size & Potential', type: 'textarea', placeholder: 'TAM, SAM, SOM or general target market size estimation' },
-    { name: 'competitors', label: 'Competitors & Competitive Advantage', type: 'textarea', placeholder: 'Who are your direct/indirect competitors, and why are you better?' },
-    { name: 'businessModel', label: 'Business Model', type: 'textarea', placeholder: 'How does your business function? Partners, activities, etc.' },
-    { name: 'revenueModel', label: 'Revenue Model', type: 'textarea', placeholder: 'How do you plan to make money? Pricing, subscriptions, advertising, etc.' },
-    { name: 'marketingStrategy', label: 'Marketing & Sales Strategy', type: 'textarea', placeholder: 'How will you attract, acquire, and retain customers?' },
-    { name: 'technology', label: 'Technology Stack', type: 'textarea', placeholder: 'What technologies, frameworks, and architecture will you use?' },
-    { name: 'financialPlan', label: 'Financial Plan', type: 'textarea', placeholder: 'Initial costs, break-even analysis, financial predictions' },
-    { name: 'roadmap', label: 'Product Roadmap & Milestones', type: 'textarea', placeholder: 'Phases of implementation, launch schedule, future targets' },
-    { name: 'teamIntroduction', label: 'Team Introduction & Roles', type: 'textarea', placeholder: 'Introduce key members and their roles/expertise.' },
+    { name: 'startupName', label: t('proposalEditor.startupName'), type: 'text', placeholder: t('proposalEditor.enterYourStartupCompanyName') },
+    { name: 'tagline', label: t('proposalEditor.tagline'), type: 'text', placeholder: t('proposalEditor.aShortSloganOrDescriptionOf') },
+    { name: 'problem', label: t('proposalEditor.problemStatement'), type: 'textarea', placeholder: t('proposalEditor.whatProblemAreYouSolving') },
+    { name: 'solution', label: t('proposalEditor.proposedSolution'), type: 'textarea', placeholder: t('proposalEditor.describeYourProductOrServiceAnd') },
+    { name: 'targetCustomers', label: t('proposalEditor.targetCustomers'), type: 'textarea', placeholder: t('proposalEditor.whoAreYourMainTargetAudience') },
+    { name: 'valueProposition', label: t('proposalEditor.valueProposition'), type: 'textarea', placeholder: t('proposalEditor.whatUniqueValueDoYouDeliver') },
+    { name: 'marketSize', label: t('proposalEditor.marketSizePotential'), type: 'textarea', placeholder: t('proposalEditor.tamSamSomOrGeneralTarget') },
+    { name: 'competitors', label: t('proposalEditor.competitorsCompetitiveAdvantage'), type: 'textarea', placeholder: t('proposalEditor.whoAreYourDirectIndirectCompetitors') },
+    { name: 'businessModel', label: t('proposalEditor.businessModel'), type: 'textarea', placeholder: t('proposalEditor.howDoesYourBusinessFunctionPartners') },
+    { name: 'revenueModel', label: t('proposalEditor.revenueModel'), type: 'textarea', placeholder: t('proposalEditor.howDoYouPlanToMake') },
+    { name: 'marketingStrategy', label: t('proposalEditor.marketingSalesStrategy'), type: 'textarea', placeholder: t('proposalEditor.howWillYouAttractAcquireAnd') },
+    { name: 'technology', label: t('proposalEditor.technologyStack'), type: 'textarea', placeholder: t('proposalEditor.whatTechnologiesFrameworksAndArchitectureWill') },
+    { name: 'financialPlan', label: t('proposalEditor.financialPlan'), type: 'textarea', placeholder: t('proposalEditor.initialCostsBreakEvenAnalysisFinancial') },
+    { name: 'roadmap', label: t('proposalEditor.productRoadmapMilestones'), type: 'textarea', placeholder: t('proposalEditor.phasesOfImplementationLaunchScheduleFuture') },
+    { name: 'teamIntroduction', label: t('proposalEditor.teamIntroductionRoles'), type: 'textarea', placeholder: t('proposalEditor.introduceKeyMembersAndTheirRoles') },
   ];
 
   return (
@@ -218,10 +220,10 @@ export default function ProposalEditor() {
           </button>
           <div>
             <h1 className="text-heading sm:text-display text-secondary tracking-tight">
-              {proposal ? `Edit Proposal: ${proposal.startupName}` : 'Create Startup Proposal'}
+              {proposal ? t('proposalEditor.editProposal', { startupName: proposal.startupName }) : t('proposalEditor.createStartupProposal')}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Fill in all sections of your startup proposal below.
+              {t('proposalEditor.fillInAllSectionsOfYour')}
             </p>
           </div>
         </div>
@@ -234,7 +236,7 @@ export default function ProposalEditor() {
             isLoading={saving}
             onClick={handleSave}
           >
-            Save Draft
+            {t('proposalEditor.saveDraft')}
           </Button>
           {proposal && (
             <Button 
@@ -244,7 +246,7 @@ export default function ProposalEditor() {
               isLoading={submitting}
               onClick={handleSubmitProposal}
             >
-              Submit Proposal
+              {t('proposalEditor.submitProposal')}
             </Button>
           )}
         </div>
@@ -285,17 +287,17 @@ export default function ProposalEditor() {
         {/* Change Note */}
         <div className="pt-6 border-t border-slate-100 space-y-1.5">
           <label className="block text-sm font-bold text-slate-700">
-            Version Change Note (Optional)
+            {t('proposalEditor.versionChangeNoteOptional')}
           </label>
           <input 
             type="text"
-            placeholder="e.g., Updated target customer segment and tech stack details"
+            placeholder={t('proposalEditor.eGUpdatedTargetCustomerSegment')}
             className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm bg-white"
             value={form.changeNote}
             onChange={(e) => setForm({ ...form, changeNote: e.target.value })}
           />
           <p className="text-caption text-slate-400">
-            This comment helps your team keep track of what changed in this save version.
+            {t('proposalEditor.thisCommentHelpsYourTeamKeep')}
           </p>
         </div>
 
@@ -305,14 +307,14 @@ export default function ProposalEditor() {
             variant="outline"
             onClick={handleBack}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button 
             variant="primary"
             type="submit"
             isLoading={saving}
           >
-            Save Draft Version
+            {t('proposalEditor.saveDraftVersion')}
           </Button>
         </div>
       </form>

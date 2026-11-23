@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import moment from 'moment';
+import { useTranslation } from 'react-i18next';
 
 /**
  * CommentThread Component
@@ -24,6 +25,7 @@ const CommentThread = ({
   currentUserRole,
   readOnly = false
 }) => {
+  const { t } = useTranslation('evaluation');
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -79,7 +81,7 @@ const CommentThread = ({
         <div className="flex items-center gap-2">
           {comment.resolved && (
             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-semibold">
-              ✓ Resolved
+              {t('commentThread.resolved')}
             </span>
           )}
           
@@ -92,12 +94,12 @@ const CommentThread = ({
                 <>
                   <li>
                     <a onClick={() => setIsEditing(!isEditing)}>
-                      {isEditing ? 'Cancel Edit' : 'Edit'}
+                      {isEditing ? t('commentThread.cancelEdit') : t('common:actions.edit')}
                     </a>
                   </li>
                   <li>
                     <a onClick={() => onDeleteComment?.(comment._id)} className="text-red-600">
-                      Delete
+                      {t('common:actions.delete')}
                     </a>
                   </li>
                 </>
@@ -108,7 +110,7 @@ const CommentThread = ({
                     onClick={() => onResolve?.(comment._id, !comment.resolved)}
                     className={comment.resolved ? 'text-yellow-600' : 'text-green-600'}
                   >
-                    {comment.resolved ? 'Mark Unresolved' : 'Mark Resolved'}
+                    {comment.resolved ? t('commentThread.markUnresolved') : t('commentThread.markResolved')}
                   </a>
                 </li>
               )}
@@ -132,13 +134,13 @@ const CommentThread = ({
                 onClick={handleEditComment}
                 className="btn btn-sm btn-primary"
               >
-                Save
+                {t('common:actions.save')}
               </button>
               <button
                 onClick={() => setIsEditing(false)}
                 className="btn btn-sm btn-ghost"
               >
-                Cancel
+                {t('common:actions.cancel')}
               </button>
             </div>
           </div>
@@ -200,7 +202,7 @@ const CommentThread = ({
                 <textarea
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your reply..."
+                  placeholder={t('commentThread.typeYourReply')}
                   className="flex-1 px-3 py-2 border rounded text-sm"
                   rows="2"
                 />
@@ -210,7 +212,7 @@ const CommentThread = ({
                     disabled={!replyText.trim()}
                     className="btn btn-sm btn-primary"
                   >
-                    Reply
+                    {t('commentThread.reply')}
                   </button>
                   <button
                     onClick={() => {
@@ -219,7 +221,7 @@ const CommentThread = ({
                     }}
                     className="btn btn-sm btn-ghost"
                   >
-                    Cancel
+                    {t('common:actions.cancel')}
                   </button>
                 </div>
               </div>
@@ -228,7 +230,7 @@ const CommentThread = ({
                 onClick={() => setIsReplying(true)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
               >
-                + Reply
+                {t('commentThread.reply2')}
               </button>
             )}
           </div>

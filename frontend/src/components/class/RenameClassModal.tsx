@@ -2,6 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Loader2, Pencil } from 'lucide-react';
 import { classApi } from '../../api/classApi';
+import { useTranslation } from 'react-i18next';
 
 /**
  * RenameClassModal — lets an administrator or assigned lecturer change a class code.
@@ -12,20 +13,21 @@ import { classApi } from '../../api/classApi';
  *   onRenamed     – receives the updated class after a successful rename
  */
 export default function RenameClassModal({ classId, currentCode, onClose, onRenamed }) {
+  const { t } = useTranslation('class');
   const [value,      setValue]      = useState(currentCode || '');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const trimmed = value.trim().toUpperCase();
-    if (!trimmed) { toast.error('Class code is required.'); return; }
+    if (!trimmed) { toast.error(t('renameClassModal.classCodeIsRequired')); return; }
     if (trimmed === currentCode?.toUpperCase()) { onClose(); return; }
 
     setSubmitting(true);
     try {
       const res: any = await classApi.rename(classId, trimmed);
       const updated = res?.data?.class || res?.class;
-      toast.success(`Class code changed to "${trimmed}".`);
+      toast.success(t('renameClassModal.classCodeChangedTo', { trimmed }));
       onRenamed(updated);
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to rename the class.';
@@ -48,8 +50,8 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
               <Pencil className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Rename Class</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Enter the new class code</p>
+              <h2 className="text-lg font-bold text-slate-900">{t('renameClassModal.renameClass')}</h2>
+              <p className="text-xs text-slate-400 mt-0.5">{t('renameClassModal.enterTheNewClassCode')}</p>
             </div>
           </div>
           <button
@@ -64,26 +66,26 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Class code
+              {t('renameClassModal.classCode')}
             </label>
             <input
               id="rename-class-input"
               type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder="VD: EXE101_10"
+              placeholder={t('renameClassModal.vdExe10110')}
               autoFocus
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono uppercase outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
             <p className="text-xs text-slate-400 mt-1.5">
-              The class code is converted to uppercase automatically.
+              {t('renameClassModal.theClassCodeIsConvertedTo')}
             </p>
           </div>
 
           {/* Preview */}
           {value.trim() && value.trim().toUpperCase() !== currentCode?.toUpperCase() && (
             <div className="bg-primary-50 rounded-xl p-3 border border-primary-100">
-              <p className="text-xs text-slate-500 mb-1">Change preview</p>
+              <p className="text-xs text-slate-500 mb-1">{t('renameClassModal.changePreview')}</p>
               <div className="flex items-center gap-2 text-sm font-mono">
                 <span className="text-slate-400 line-through">{currentCode}</span>
                 <span className="text-slate-400">→</span>
@@ -99,7 +101,7 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
               onClick={onClose}
               className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all"
             >
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
@@ -107,9 +109,9 @@ export default function RenameClassModal({ classId, currentCode, onClose, onRena
               className="flex-1 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
             >
               {submitting ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                <><Loader2 className="w-4 h-4 animate-spin" /> {t('assignLectureModal.saving')}</>
               ) : (
-                'Save new code'
+                t('renameClassModal.saveNewCode')
               )}
             </button>
           </div>

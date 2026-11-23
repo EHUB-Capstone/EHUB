@@ -9,6 +9,8 @@ import type {
   ShowcaseStatus,
   ShowcaseUpvoteDto,
 } from '../types/showcase.ts';
+import i18n from '../i18n/index.ts';
+import { formatDate as fmtDate, formatNumber as fmtNumber } from '../i18n/format.ts';
 
 export function optimisticShowcaseUpvote({ likeCount, hasUpvoted }: ShowcaseUpvoteDto): ShowcaseUpvoteDto {
   return {
@@ -39,25 +41,25 @@ export const SHOWCASE_ERROR_CODES = {
 export type ShowcaseTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
 
 export const SHOWCASE_STATUS_META: Record<ShowcaseStatus, { label: string; tone: ShowcaseTone; description: string }> = {
-  Draft: { label: 'Draft', tone: 'neutral', description: 'Only your team can see this page.' },
-  PendingReview: { label: 'Pending review', tone: 'info', description: 'Waiting for a lecturer or administrator to review it.' },
-  Published: { label: 'Published', tone: 'success', description: 'Visible to signed-in E-HUB users.' },
-  Hidden: { label: 'Hidden', tone: 'neutral', description: 'Not visible to the community.' },
+  Draft: { get label() { return i18n.t('utils:showcase.draft'); }, tone: 'neutral', get description() { return i18n.t('utils:showcase.onlyYourTeamCanSeeThis'); } },
+  PendingReview: { get label() { return i18n.t('utils:showcase.pendingReview'); }, tone: 'info', get description() { return i18n.t('utils:showcase.waitingForALecturerOrAdministrator'); } },
+  Published: { get label() { return i18n.t('utils:projectData.published'); }, tone: 'success', get description() { return i18n.t('utils:showcase.visibleToSignedInEHub'); } },
+  Hidden: { get label() { return i18n.t('utils:showcase.hidden'); }, tone: 'neutral', get description() { return i18n.t('utils:showcase.notVisibleToTheCommunity'); } },
 };
 
 export const SHOWCASE_STAGES: ReadonlyArray<{ value: ShowcaseStage; label: string; hint: string }> = [
-  { value: 'Idea', label: 'Idea', hint: 'A concept being validated' },
-  { value: 'Mvp', label: 'MVP', hint: 'A first working version' },
-  { value: 'Beta', label: 'Beta', hint: 'Early users are testing it' },
-  { value: 'Launched', label: 'Launched', hint: 'Available to its customers' },
+  { value: 'Idea', get label() { return i18n.t('utils:showcase.idea'); }, get hint() { return i18n.t('utils:showcase.aConceptBeingValidated'); } },
+  { value: 'Mvp', label: 'MVP', get hint() { return i18n.t('utils:showcase.aFirstWorkingVersion'); } },
+  { value: 'Beta', get label() { return i18n.t('utils:showcase.beta'); }, get hint() { return i18n.t('utils:showcase.earlyUsersAreTestingIt'); } },
+  { value: 'Launched', get label() { return i18n.t('utils:showcase.launched'); }, get hint() { return i18n.t('utils:showcase.availableToItsCustomers'); } },
 ];
 
 export const SHOWCASE_LINK_TYPES: ReadonlyArray<{ value: ShowcaseLinkType; label: string }> = [
-  { value: 'Website', label: 'Website' },
-  { value: 'Demo', label: 'Demo' },
-  { value: 'Video', label: 'Video' },
-  { value: 'Social', label: 'Social' },
-  { value: 'Other', label: 'Other' },
+  { value: 'Website', get label() { return i18n.t('utils:showcase.website'); } },
+  { value: 'Demo', get label() { return i18n.t('utils:showcase.demo'); } },
+  { value: 'Video', get label() { return i18n.t('utils:showcase.video'); } },
+  { value: 'Social', get label() { return i18n.t('utils:showcase.social'); } },
+  { value: 'Other', get label() { return i18n.t('utils:mentorChangeReasons.other'); } },
 ];
 
 export const stageLabel = (stage: ShowcaseStage): string =>
@@ -133,11 +135,11 @@ export const validateShowcaseForm = (values: ShowcaseFormValues): ShowcaseFormEr
   if (values.links.length > SHOWCASE_LIMITS.links) errors.links = `Add at most ${SHOWCASE_LIMITS.links} links.`;
   for (const link of values.links) {
     const row: { label?: string; url?: string } = {};
-    if (link.label.trim() === '') row.label = 'Enter a label.';
+    if (link.label.trim() === '') row.label = i18n.t('utils:showcase.enterALabel');
     else if (link.label.trim().length > SHOWCASE_LIMITS.linkLabel) row.label = `Keep the label within ${SHOWCASE_LIMITS.linkLabel} characters.`;
     if (link.url.trim().length > SHOWCASE_LIMITS.linkUrl) row.url = `Keep the link within ${SHOWCASE_LIMITS.linkUrl} characters.`;
-    else if (!isPublicWebUrl(link.url)) row.url = 'Enter a full link starting with https:// or http://.';
-    else if (link.linkType === 'Video' && !isSupportedShowcaseVideo(link.url)) row.url = 'Use an https link from YouTube or Vimeo for a video.';
+    else if (!isPublicWebUrl(link.url)) row.url = i18n.t('utils:showcase.enterAFullLinkStartingWith');
+    else if (link.linkType === 'Video' && !isSupportedShowcaseVideo(link.url)) row.url = i18n.t('utils:showcase.useAnHttpsLinkFromYoutube');
     if (row.label || row.url) errors.linkRows[link.key] = row;
   }
   return errors;
@@ -190,9 +192,9 @@ export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'] as const;
 /** Returns an error message, or null when the file may be uploaded. */
 export const validateImageFile = (file: { name: string; size: number }): string | null => {
   const lower = file.name.toLowerCase();
-  if (!IMAGE_EXTENSIONS.some((extension) => lower.endsWith(extension))) return 'Only PNG, JPG and WEBP images are accepted.';
-  if (file.size <= 0) return 'This image is empty.';
-  if (file.size > SHOWCASE_LIMITS.imageBytes) return 'Images must be 5 MB or smaller.';
+  if (!IMAGE_EXTENSIONS.some((extension) => lower.endsWith(extension))) return i18n.t('utils:showcase.onlyPngJpgAndWebpImages');
+  if (file.size <= 0) return i18n.t('utils:showcase.thisImageIsEmpty');
+  if (file.size > SHOWCASE_LIMITS.imageBytes) return i18n.t('utils:showcase.imagesMustBe5MbOr');
   return null;
 };
 
@@ -201,15 +203,14 @@ export const timeAgo = (iso: string, now: number = Date.now()): string => {
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return '';
   const seconds = Math.max(0, Math.round((now - then) / 1000));
-  if (seconds < 60) return 'just now';
-  const plural = (value: number, unit: string) => `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+  if (seconds < 60) return i18n.t('utils:showcase.justNow');
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return plural(minutes, 'minute');
+  if (minutes < 60) return i18n.t('utils:showcase.minutesAgo', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return plural(hours, 'hour');
+  if (hours < 24) return i18n.t('utils:showcase.hoursAgo', { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return plural(days, 'day');
-  return new Date(then).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  if (days < 7) return i18n.t('utils:showcase.daysAgo', { count: days });
+  return fmtDate(then, { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 export type InsightsMetric = 'views' | 'upvotes' | 'comments';
@@ -221,8 +222,8 @@ export const insightsTotal = (daily: ReadonlyArray<Record<InsightsMetric, number
 /** Trend label against the previous fourteen days, e.g. "+24", "-3" or "no change". */
 export const insightsDelta = (current: number, previous: number): { label: string; direction: 'up' | 'down' | 'flat' } => {
   const difference = current - previous;
-  if (difference === 0) return { label: 'no change', direction: 'flat' };
+  if (difference === 0) return { label: i18n.t('utils:showcase.noChange'), direction: 'flat' };
   return difference > 0
-    ? { label: `+${difference.toLocaleString()}`, direction: 'up' }
-    : { label: `-${Math.abs(difference).toLocaleString()}`, direction: 'down' };
+    ? { label: `+${fmtNumber(difference)}`, direction: 'up' }
+    : { label: `-${fmtNumber(Math.abs(difference))}`, direction: 'down' };
 };

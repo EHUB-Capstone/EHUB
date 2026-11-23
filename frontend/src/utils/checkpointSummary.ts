@@ -3,6 +3,8 @@ import type {
 } from '../types/checkpointSummary';
 
 import { plural, summaryText } from './summaryText.ts';
+import i18n from '../i18n/index.ts';
+import { formatDateTime as fmtDateTime } from '../i18n/format.ts';
 
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
 
@@ -207,7 +209,7 @@ export function summaryErrorMessage(code: string | null | undefined): string {
 export function formatSummaryTime(value: string | null): string {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? '' : fmtDateTime(date);
 }
 
 /** "slide 7" for a presentation, "page 7" for anything else: where in the file a quoted sentence is. */
@@ -363,7 +365,7 @@ export function summaryAttentionItems(summary: CheckpointSummary | null): Attent
   const items: AttentionItem[] = [];
 
   if (counts.failed > 0) {
-    items.push({ key: 'failed', tone: 'danger', text: `${counts.failed} ${plural(counts.failed, 'file')} could not be summarised. Open ${counts.failed === 1 ? 'it' : 'them'} to see why.` });
+    items.push({ key: 'failed', tone: 'danger', text: i18n.t('utils:checkpointSummary.couldNotBeSummarisedOpenTo', { failed: counts.failed, v2: plural(counts.failed, 'file'), v3: counts.failed === 1 ? 'it' : 'them' }) });
   }
   const stale = files.filter((file) => file.status === 'Ready' && file.needsRefresh).length;
   if (stale > 0) {
@@ -470,7 +472,7 @@ export function buildReviewBrief(summary: CheckpointSummary): string {
     content.keyPoints.slice(0, BRIEF_MAX_KEY_POINTS).forEach((point) => lines.push(`- ${point}`));
     const open = (content.statusItems ?? []).filter((item) => item.status !== 'Done').slice(0, BRIEF_MAX_OPEN_ITEMS);
     if (open.length > 0) {
-      lines.push('Still open in the file:');
+      lines.push(i18n.t('utils:checkpointSummary.stillOpenInTheFile'));
       open.forEach((item) => lines.push(`- ${statusItemView[item.status].label}: ${item.request ? `${item.request} – ` : ''}${item.text}`));
     }
   }
@@ -481,7 +483,7 @@ export function buildReviewBrief(summary: CheckpointSummary): string {
     const titles = (finding: RequirementFinding) => sortByWeight(summary.requirements.filter((item) => item.finding === finding))
       .map((item) => item.title).slice(0, BRIEF_MAX_TITLES);
     const missing = titles('NotFound');
-    if (missing.length > 0) lines.push(`Not found in the files: ${missing.join('; ')}`);
+    if (missing.length > 0) lines.push(i18n.t('utils:checkpointSummary.notFoundInTheFiles', { v1: missing.join('; ') }));
   }
 
   const attention = summaryAttentionItems(summary);
@@ -496,18 +498,18 @@ export function buildReviewBrief(summary: CheckpointSummary): string {
 
 /** How a thing moved since the nearest earlier checkpoint that could tell. Wording says what the files show, not how well the team did. */
 export const progressChangeView: Record<ProgressChange, { label: string; tone: Tone } | null> = {
-  Gained: { label: 'Newly mentioned', tone: 'success' },
-  Dropped: { label: 'No longer mentioned', tone: 'warning' },
-  Held: { label: 'Still mentioned', tone: 'neutral' },
-  Missing: { label: 'Still not mentioned', tone: 'neutral' },
+  Gained: { get label() { return i18n.t('utils:checkpointSummary.newlyMentioned'); }, tone: 'success' },
+  Dropped: { get label() { return i18n.t('utils:checkpointSummary.noLongerMentioned'); }, tone: 'warning' },
+  Held: { get label() { return i18n.t('utils:checkpointSummary.stillMentioned'); }, tone: 'neutral' },
+  Missing: { get label() { return i18n.t('utils:checkpointSummary.stillNotMentioned'); }, tone: 'neutral' },
   None: null,
 };
 
 export const progressStateText: Record<ProgressState, string> = {
-  Found: 'Mentioned',
-  NotMentioned: 'Not mentioned',
-  NotAsked: 'Not in the rubric',
-  NotRead: 'Files not read',
+  get Found() { return i18n.t('utils:checkpointSummary.mentioned'); },
+  get NotMentioned() { return i18n.t('utils:checkpointSummary.notMentioned'); },
+  get NotAsked() { return i18n.t('utils:checkpointSummary.notInTheRubric'); },
+  get NotRead() { return i18n.t('utils:checkpointSummary.filesNotRead'); },
 };
 
 /** True when there is something to show: at least two checkpoints with files and a thing the rubrics asked for. */

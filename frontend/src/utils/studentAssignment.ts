@@ -15,6 +15,7 @@ import {
   TEAM_MEMBER_LIMIT,
   TEAM_MEMBER_MINIMUM,
 } from './teamManagement.ts';
+import i18n from '../i18n/index.ts';
 
 export function studentBelongsToClass(student: AssignableStudent, classId: string): boolean {
   return Boolean(classId) && entityId(student.classId) === classId;
@@ -105,18 +106,18 @@ export function validateStudentAssignment(
   const studentIds = [...new Set(draft.studentIds)];
   const studentMap = new Map(students.map((student) => [student._id, student]));
 
-  if (!draft.classId) errors.classId = 'Select a class before assigning students.';
-  if (studentIds.length === 0) errors.studentIds = 'Select at least one student.';
+  if (!draft.classId) errors.classId = i18n.t('utils:studentAssignment.selectAClassBeforeAssigningStudents');
+  if (studentIds.length === 0) errors.studentIds = i18n.t('utils:studentAssignment.selectAtLeastOneStudent');
   if (studentIds.some((studentId) => !studentMap.has(studentId))) {
-    errors.studentIds = 'One or more selected students could not be found.';
+    errors.studentIds = i18n.t('utils:studentAssignment.oneOrMoreSelectedStudentsCould');
   }
 
   if (draft.mode === 'TEAM') {
     const targetTeam = teams.find((team) => team._id === draft.teamId);
     if (!draft.teamId || !targetTeam) {
-      errors.teamId = 'Select a team in this class.';
+      errors.teamId = i18n.t('utils:studentAssignment.selectATeamInThisClass');
     } else if (entityId(targetTeam.classId) && entityId(targetTeam.classId) !== draft.classId) {
-      errors.teamId = 'The selected team does not belong to this class.';
+      errors.teamId = i18n.t('utils:studentAssignment.theSelectedTeamDoesNotBelong');
     }
 
     studentIds.forEach((studentId) => {
@@ -151,7 +152,7 @@ export function validateStudentAssignment(
           studentMap.get(studentId)?.major ?? existingMembers.get(studentId)?.major);
         if (!resultingMajors.some((major) => getTeamGroupFromMajor(major) === 'GROUP_1') ||
             !resultingMajors.some((major) => getTeamGroupFromMajor(major) === 'GROUP_2')) {
-          errors.studentIds = 'A team must include at least one GROUP_1 major and one GROUP_2 major.';
+          errors.studentIds = i18n.t('utils:studentAssignment.aTeamMustIncludeAtLeast');
         }
       }
     }

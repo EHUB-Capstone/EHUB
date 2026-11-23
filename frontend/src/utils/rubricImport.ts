@@ -5,6 +5,7 @@ import type {
   SubjectRubricLevel,
 } from '../types/subjects.ts';
 import { generateCriterionKey } from './rubricKey.ts';
+import i18n from '../i18n/index.ts';
 
 export const RUBRIC_IMPORT_ACCEPT = '.xlsx,.xls';
 export const RUBRIC_IMPORT_MAX_SIZE = 5 * 1024 * 1024;
@@ -156,7 +157,7 @@ export function parseRubricSheetRows(rows: unknown[][]): ParsedRubricRows {
     { length: Math.max(0, weightColumn - criterionColumn - 1) },
     (_, index) => parseLevelHeader(levelHeaderRow[criterionColumn + 1 + index], index),
   );
-  if (levelHeaders.length === 0) errors.push('At least one performance level column is required.');
+  if (levelHeaders.length === 0) errors.push(i18n.t('utils:rubricImport.atLeastOnePerformanceLevelColumn'));
 
   const checkpointMap = new Map<number, SubjectRubricCriterion[]>();
   const usedKeysByCheckpoint = new Map<number, Set<string>>();
@@ -186,7 +187,7 @@ export function parseRubricSheetRows(rows: unknown[][]): ParsedRubricRows {
 
     criterionCount += 1;
     if (criterionCount > MAX_CRITERIA) {
-      errors.push(`The worksheet contains more than ${MAX_CRITERIA} criteria.`);
+      errors.push(i18n.t('utils:rubricImport.theWorksheetContainsMoreThanCriteria', { MAX_CRITERIA }));
       break;
     }
     if (criterionLabel.length > 200) {
@@ -226,13 +227,13 @@ export function parseRubricSheetRows(rows: unknown[][]): ParsedRubricRows {
     .sort(([left], [right]) => left - right)
     .map(([number, criteria]) => ({ number, criteria }));
 
-  if (checkpoints.length === 0 && errors.length === 0) errors.push('The worksheet does not contain any rubric criteria.');
-  if (checkpoints.length > MAX_CHECKPOINTS) errors.push(`A rubric can contain at most ${MAX_CHECKPOINTS} checkpoints.`);
+  if (checkpoints.length === 0 && errors.length === 0) errors.push(i18n.t('utils:rubricImport.theWorksheetDoesNotContainAny'));
+  if (checkpoints.length > MAX_CHECKPOINTS) errors.push(i18n.t('utils:rubricImport.aRubricCanContainAtMost', { MAX_CHECKPOINTS }));
 
   for (const checkpoint of checkpoints) {
     const total = checkpoint.criteria.reduce((sum, criterion) => sum + Number(criterion.weight), 0);
     if (Math.abs(total - 100) > 0.001) {
-      errors.push(`Checkpoint ${checkpoint.number} criterion weights total ${total.toFixed(1)}%, not 100.0%.`);
+      errors.push(i18n.t('utils:rubricImport.checkpointCriterionWeightsTotalNot100', { number: checkpoint.number, v2: total.toFixed(1) }));
     }
   }
 
@@ -270,7 +271,7 @@ export async function readRubricImportFile(file: File, subjectCode: string): Pro
       `The workbook does not contain a worksheet for ${subjectCode}. Available worksheets: ${workbook.SheetNames.join(', ')}.`,
     ]);
   }
-  if (!matchedSheet) warnings.push(`Worksheet "${sheetName}" was used because the workbook has only one worksheet.`);
+  if (!matchedSheet) warnings.push(i18n.t('utils:rubricImport.worksheetWasUsedBecauseTheWorkbook', { sheetName }));
 
   const worksheet = workbook.Sheets[sheetName];
   if (!worksheet) throw new RubricImportValidationError([`Worksheet "${sheetName}" could not be read.`]);
@@ -322,7 +323,7 @@ export function mergeRubricImport(
     createdCheckpointNumbers.push(imported.number);
     checkpoints.push({
       number: imported.number,
-      title: `Checkpoint ${imported.number}`,
+      title: i18n.t('utils:rubricImport.checkpoint', { number: imported.number }),
       shortDescription: '',
       courseWeight: 0,
       requirements: [],

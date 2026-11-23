@@ -22,6 +22,8 @@ import Card from '../ui/Card';
 import EmptyState from '../ui/EmptyState';
 import ErrorState from '../ui/ErrorState';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
+import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 interface TeamFeedbackOverviewProps {
   teamId: string;
@@ -51,13 +53,14 @@ const evaluationTones: Record<string, string> = {
 const formatDate = (value: string | null) => {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? '' : fmtDateTime(date);
 };
 
 function AuthorLine({ author, date }: { author: TeamFeedbackAuthor; date: string | null }) {
+  const { t } = useTranslation('workspace');
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-body-sm font-semibold text-slate-900">{author.name || 'Unknown user'}</span>
+      <span className="text-body-sm font-semibold text-slate-900">{author.name || t('teamFeedbackOverview.unknownUser')}</span>
       {author.role && <Badge variant={roleTones[author.role] ?? 'neutral'}>{author.role}</Badge>}
       {date && <span className="text-caption text-slate-500">{formatDate(date)}</span>}
     </div>
@@ -65,19 +68,20 @@ function AuthorLine({ author, date }: { author: TeamFeedbackAuthor; date: string
 }
 
 function ThreadItem({ thread }: { thread: TeamFeedbackThread }) {
+  const { t } = useTranslation('workspace');
   const content = thread.isTechnicalReview ? thread.content.replace(/^TECHNICAL REVIEW\n/, '') : thread.content;
   return (
     <li>
       <Card tone="inset" hover={false} padding="p-4" className="space-y-2">
         <AuthorLine author={thread.author} date={thread.createdAt} />
         <div className="flex flex-wrap gap-2">
-          {thread.isTechnicalReview && <Badge variant="info">Technical review</Badge>}
-          {thread.resolved && <Badge variant="success">Resolved</Badge>}
-          <Badge variant="neutral">Submission v{thread.submissionVersion}</Badge>
+          {thread.isTechnicalReview && <Badge variant="info">{t('teamFeedbackOverview.technicalReview')}</Badge>}
+          {thread.resolved && <Badge variant="success">{t('inlineCommentUI.resolved')}</Badge>}
+          <Badge variant="neutral">{t('teamFeedbackOverview.submissionV', { submissionVersion: thread.submissionVersion })}</Badge>
         </div>
         <p className="whitespace-pre-wrap text-body-sm text-slate-700">{content}</p>
         {thread.replies.length > 0 && (
-          <ul className="mt-2 space-y-2 border-l-2 border-slate-200 pl-3" aria-label="Replies">
+          <ul className="mt-2 space-y-2 border-l-2 border-slate-200 pl-3" aria-label={t('teamFeedbackOverview.replies')}>
             {thread.replies.map((reply) => (
               <li key={reply.id} className="space-y-1">
                 <AuthorLine author={reply.author} date={reply.createdAt} />
@@ -102,18 +106,19 @@ function EvaluationField({ label, value }: { label: string; value: string | null
 }
 
 function EvaluationItem({ evaluation }: { evaluation: TeamFeedbackEvaluation }) {
+  const { t } = useTranslation('workspace');
   return (
     <li>
       <Card tone="inset" hover={false} padding="p-4" className="space-y-3">
         <AuthorLine author={evaluation.evaluator} date={evaluation.publishedAt ?? evaluation.submittedAt} />
         <Badge variant={evaluationTones[evaluation.status] ?? 'neutral'}>{evaluation.status}</Badge>
-        <EvaluationField label="Overall feedback" value={evaluation.overallFeedback} />
-        <EvaluationField label="Strengths" value={evaluation.strengths} />
-        <EvaluationField label="Weaknesses" value={evaluation.weaknesses} />
-        <EvaluationField label="Suggestions" value={evaluation.suggestions} />
+        <EvaluationField label={t('teamFeedbackOverview.overallFeedback')} value={evaluation.overallFeedback} />
+        <EvaluationField label={t('teamFeedbackOverview.strengths')} value={evaluation.strengths} />
+        <EvaluationField label={t('teamFeedbackOverview.weaknesses')} value={evaluation.weaknesses} />
+        <EvaluationField label={t('teamFeedbackOverview.suggestions')} value={evaluation.suggestions} />
         {evaluation.criterionComments.length > 0 && (
           <div>
-            <p className="text-overline uppercase text-slate-500">Criteria comments</p>
+            <p className="text-overline uppercase text-slate-500">{t('teamFeedbackOverview.criteriaComments')}</p>
             <ul className="mt-1 space-y-1">
               {evaluation.criterionComments.map((item) => (
                 <li key={item.criterionName} className="text-body-sm text-slate-700">
@@ -140,6 +145,7 @@ function CheckpointBlock({
   onToggle: () => void;
   onOpenCheckpoints?: () => void;
 }) {
+  const { t } = useTranslation('workspace');
   const total = checkpoint.threads.length + checkpoint.evaluations.length;
   return (
     <li>
@@ -152,11 +158,10 @@ function CheckpointBlock({
         >
           <span className="min-w-0">
             <span className="block text-subheading text-secondary">
-              Checkpoint {checkpoint.checkpointNumber}
-              {checkpoint.title ? ` · ${checkpoint.title}` : ''}
+              {t('teamFeedbackOverview.checkpoint', { checkpointNumber: checkpoint.checkpointNumber, v2: checkpoint.title ? ` · ${checkpoint.title}` : '' })}
             </span>
             <span className="text-caption text-slate-500">
-              {total === 0 ? 'No feedback yet' : `${checkpoint.threads.length} comments · ${checkpoint.evaluations.length} evaluations`}
+              {total === 0 ? t('teamFeedbackOverview.noFeedbackYet') : t('teamFeedbackOverview.commentsEvaluations', { length: checkpoint.threads.length, length2: checkpoint.evaluations.length })}
             </span>
           </span>
           {open
@@ -165,11 +170,11 @@ function CheckpointBlock({
         </button>
         {open && (
           <div className="space-y-4 border-t border-slate-100 px-4 py-4">
-            {total === 0 && <p className="text-body-sm text-slate-500">No feedback has been given for this checkpoint.</p>}
+            {total === 0 && <p className="text-body-sm text-slate-500">{t('teamFeedbackOverview.noFeedbackHasBeenGivenFor')}</p>}
             {checkpoint.evaluations.length > 0 && (
-              <section aria-label={`Evaluations of checkpoint ${checkpoint.checkpointNumber}`}>
+              <section aria-label={t('teamFeedbackOverview.evaluationsOfCheckpoint', { checkpointNumber: checkpoint.checkpointNumber })}>
                 <h4 className="mb-2 flex items-center gap-1.5 text-body-sm font-semibold text-slate-700">
-                  <ClipboardCheck className="h-4 w-4" aria-hidden="true" /> Evaluations
+                  <ClipboardCheck className="h-4 w-4" aria-hidden="true" /> {t('evaluationPanel.evaluations')}
                 </h4>
                 <ul className="space-y-2">
                   {checkpoint.evaluations.map((evaluation) => <EvaluationItem key={evaluation.id} evaluation={evaluation} />)}
@@ -177,9 +182,9 @@ function CheckpointBlock({
               </section>
             )}
             {checkpoint.threads.length > 0 && (
-              <section aria-label={`Comments of checkpoint ${checkpoint.checkpointNumber}`}>
+              <section aria-label={t('teamFeedbackOverview.commentsOfCheckpoint', { checkpointNumber: checkpoint.checkpointNumber })}>
                 <h4 className="mb-2 flex items-center gap-1.5 text-body-sm font-semibold text-slate-700">
-                  <MessageSquare className="h-4 w-4" aria-hidden="true" /> Comments
+                  <MessageSquare className="h-4 w-4" aria-hidden="true" /> {t('teamFeedbackOverview.comments')}
                 </h4>
                 <ul className="space-y-2">
                   {checkpoint.threads.map((thread) => <ThreadItem key={thread.id} thread={thread} />)}
@@ -187,7 +192,7 @@ function CheckpointBlock({
               </section>
             )}
             {onOpenCheckpoints && (
-              <Button variant="outline" size="sm" onClick={onOpenCheckpoints}>Open workspace checkpoints</Button>
+              <Button variant="outline" size="sm" onClick={onOpenCheckpoints}>{t('teamFeedbackOverview.openWorkspaceCheckpoints')}</Button>
             )}
           </div>
         )}
@@ -197,6 +202,7 @@ function CheckpointBlock({
 }
 
 export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: TeamFeedbackOverviewProps) {
+  const { t } = useTranslation('workspace');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [filters, setFilters] = useState<TeamFeedbackFilters>(defaultTeamFeedbackFilters);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -213,7 +219,7 @@ export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: Team
       setState({ status: 'ready', data: response.data });
     } catch (error: unknown) {
       if (controller.signal.aborted || (error as { code?: string })?.code === 'ERR_CANCELED') return;
-      setState({ status: 'error', message: parseApiError(error, 'Unable to load the feedback overview.').message });
+      setState({ status: 'error', message: parseApiError(error, t('teamFeedbackOverview.unableToLoadTheFeedbackOverview')).message });
     }
   }, [teamId]);
 
@@ -238,7 +244,7 @@ export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: Team
   }
 
   if (state.status === 'error') {
-    return <ErrorState title="Feedback overview unavailable" message={state.message} onRetry={() => void load()} />;
+    return <ErrorState title={t('teamFeedbackOverview.feedbackOverviewUnavailable')} message={state.message} onRetry={() => void load()} />;
   }
 
   const allCheckpoints = state.data.checkpoints;
@@ -249,8 +255,8 @@ export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: Team
     return (
       <EmptyState
         icon={MessageSquare}
-        title="No feedback yet"
-        description="Feedback from lecturers, mentors and admins on your checkpoints will be collected here."
+        title={t('teamFeedbackOverview.noFeedbackYet')}
+        description={t('teamFeedbackOverview.feedbackFromLecturersMentorsAndAdmins')}
       />
     );
   }
@@ -261,59 +267,59 @@ export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: Team
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-caption font-semibold text-slate-600">
-          Search
+          {t('common:actions.search')}
           <span className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
               type="search"
               value={filters.query}
               onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              placeholder="Search feedback or author"
+              placeholder={t('teamFeedbackOverview.searchFeedbackOrAuthor')}
               className={`${fieldClass} w-full pl-9`}
             />
           </span>
         </label>
         <label className="flex flex-col gap-1 text-caption font-semibold text-slate-600">
-          Checkpoint
+          {t('teamFeedbackOverview.checkpoint2')}
           <select
             value={filters.checkpointId}
             onChange={(event) => setFilters((current) => ({ ...current, checkpointId: event.target.value }))}
             className={fieldClass}
           >
-            <option value="all">All checkpoints</option>
+            <option value="all">{t('teamFeedbackOverview.allCheckpoints')}</option>
             {allCheckpoints.map((checkpoint) => (
               <option key={checkpoint.checkpointId} value={checkpoint.checkpointId}>
-                Checkpoint {checkpoint.checkpointNumber}
+                {t('teamFeedbackOverview.checkpoint3', { checkpointNumber: checkpoint.checkpointNumber })}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-caption font-semibold text-slate-600">
-          Source
+          {t('teamFeedbackOverview.source')}
           <select
             value={filters.source}
             onChange={(event) => setFilters((current) => ({ ...current, source: event.target.value as TeamFeedbackSource }))}
             className={fieldClass}
           >
-            <option value="all">All feedback</option>
-            <option value="comments">Comments</option>
-            <option value="evaluations">Evaluations</option>
+            <option value="all">{t('teamFeedbackOverview.allFeedback')}</option>
+            <option value="comments">{t('teamFeedbackOverview.comments')}</option>
+            <option value="evaluations">{t('evaluationPanel.evaluations')}</option>
           </select>
         </label>
         {filtersActive && (
-          <Button variant="ghost" size="sm" onClick={() => setFilters(defaultTeamFeedbackFilters)}>Clear filters</Button>
+          <Button variant="ghost" size="sm" onClick={() => setFilters(defaultTeamFeedbackFilters)}>{t('teamFeedbackOverview.clearFilters')}</Button>
         )}
       </div>
 
       {visibleCheckpoints.length === 0 ? (
         <EmptyState
           icon={Search}
-          title="No matching feedback"
-          description="Try a different checkpoint, source or search term."
+          title={t('teamFeedbackOverview.noMatchingFeedback')}
+          description={t('teamFeedbackOverview.tryADifferentCheckpointSourceOr')}
           className="py-10"
         />
       ) : (
-        <ol className="space-y-3" aria-label="Feedback by checkpoint">
+        <ol className="space-y-3" aria-label={t('teamFeedbackOverview.feedbackByCheckpoint')}>
           {visibleCheckpoints.map((checkpoint) => (
             <CheckpointBlock
               key={checkpoint.checkpointId}

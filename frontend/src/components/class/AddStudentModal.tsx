@@ -11,6 +11,7 @@ import {
   type AddStudentFormValues,
 } from '../../utils/addStudent';
 import { parseApiError } from '../../utils/apiError';
+import { useTranslation } from 'react-i18next';
 
 interface AddStudentModalProps {
   classId: string;
@@ -19,6 +20,7 @@ interface AddStudentModalProps {
 }
 
 export default function AddStudentModal({ classId, onClose, onAdded }: AddStudentModalProps) {
+  const { t } = useTranslation('class');
   const [form, setForm] = useState<AddStudentFormValues>({
     studentCode: '',
     fullName: '',
@@ -43,17 +45,17 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
     const validationErrors = validateAddStudentForm(form);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      toast.error('Please correct the highlighted fields.');
+      toast.error(t('addStudentModal.pleaseCorrectTheHighlightedFields'));
       return;
     }
 
     setSubmitting(true);
     try {
       await classApi.addStudent(classId, buildAddStudentPayload(form));
-      toast.success('Student added successfully.');
+      toast.success(t('addStudentModal.studentAddedSuccessfully'));
       onAdded();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to add the student.').message);
+      toast.error(parseApiError(error, t('addStudentModal.failedToAddTheStudent')).message);
     } finally {
       setSubmitting(false);
     }
@@ -61,27 +63,27 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Close add student dialog" />
+      <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label={t('addStudentModal.closeAddStudentDialog')} />
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-float animate-scale-in" role="dialog" aria-modal="true" aria-labelledby="add-student-title">
         <div className="flex items-center justify-between border-b border-slate-100 p-6">
           <div>
-            <h2 id="add-student-title" className="text-xl font-bold text-slate-900">Add Student</h2>
-            <p className="mt-0.5 text-sm text-slate-400">Manually enroll one student in this class</p>
+            <h2 id="add-student-title" className="text-xl font-bold text-slate-900">{t('addStudentModal.addStudent')}</h2>
+            <p className="mt-0.5 text-sm text-slate-400">{t('addStudentModal.manuallyEnrollOneStudentInThis')}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-600" aria-label={t('common:actions.close')}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6" noValidate>
           <div>
-            <label htmlFor="add-student-code" className="mb-1 block text-sm font-medium text-slate-700">Student code *</label>
+            <label htmlFor="add-student-code" className="mb-1 block text-sm font-medium text-slate-700">{t('addStudentModal.studentCode')}</label>
             <input
               id="add-student-code"
               type="text"
               value={form.studentCode}
               onChange={event => updateField('studentCode', event.target.value.toUpperCase())}
-              placeholder="Example: SE123456"
+              placeholder={t('addStudentModal.exampleSe123456')}
               maxLength={20}
               aria-invalid={Boolean(errors.studentCode)}
               className={`w-full rounded-xl border px-3 py-2 text-sm uppercase outline-none focus:ring-2 focus:ring-primary/20 ${errors.studentCode ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
@@ -90,13 +92,13 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
           </div>
 
           <div>
-            <label htmlFor="add-student-name" className="mb-1 block text-sm font-medium text-slate-700">Full name *</label>
+            <label htmlFor="add-student-name" className="mb-1 block text-sm font-medium text-slate-700">{t('addStudentModal.fullName')}</label>
             <input
               id="add-student-name"
               type="text"
               value={form.fullName}
               onChange={event => updateField('fullName', event.target.value)}
-              placeholder="Example: Nguyen Van A"
+              placeholder={t('addStudentModal.exampleNguyenVanA')}
               maxLength={150}
               aria-invalid={Boolean(errors.fullName)}
               className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${errors.fullName ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
@@ -105,13 +107,13 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
           </div>
 
           <div>
-            <label htmlFor="add-student-email" className="mb-1 block text-sm font-medium text-slate-700">Email *</label>
+            <label htmlFor="add-student-email" className="mb-1 block text-sm font-medium text-slate-700">{t('addStudentModal.email')}</label>
             <input
               id="add-student-email"
               type="email"
               value={form.email}
               onChange={event => updateField('email', event.target.value)}
-              placeholder="Example: anvse123456@fpt.edu.vn"
+              placeholder={t('addStudentModal.exampleAnvse123456FptEduVn')}
               maxLength={150}
               aria-invalid={Boolean(errors.email)}
               className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${errors.email ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-slate-200 focus:border-primary'}`}
@@ -121,7 +123,7 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
 
           <div>
             <label htmlFor="add-student-major" className="mb-1 block text-sm font-medium text-slate-700">
-              Major <span className="font-normal text-slate-400">(optional for registered students)</span>
+              {t('addStudentModal.major')} <span className="font-normal text-slate-400">{t('addStudentModal.optionalForRegisteredStudents')}</span>
             </label>
             <select
               id="add-student-major"
@@ -129,7 +131,7 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
               onChange={event => updateField('majorCode', event.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             >
-              <option value="">Use the student's registered major</option>
+              <option value="">{t('addStudentModal.useTheStudentSRegisteredMajor')}</option>
               {TEAM_MAJOR_GROUPS.map(group => (
                 <optgroup key={group.key} label={group.label}>
                   {group.majors.map(major => (
@@ -139,20 +141,20 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
               ))}
             </select>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-              Leave this blank to use an existing student's registered major. A major is required for a new profile, and a selected major must match an existing profile.
+              {t('addStudentModal.leaveThisBlankToUseAn')}
             </p>
           </div>
 
           <div className="flex gap-3 border-t border-slate-100 pt-4">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 transition-all hover:bg-slate-50">
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
               disabled={submitting}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-700 disabled:opacity-50"
             >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add student'}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('addStudentModal.addStudent2')}
             </button>
           </div>
         </form>

@@ -20,14 +20,18 @@ import TagInput from '../../components/admin/TagInput';
 import { addExpertiseTag, MENTOR_PROFILE_LIMITS } from '../../utils/mentorProfileForm';
 import { mentorAdminApi } from '../../api/mentorAdminApi';
 import { MENTOR_KIND_OPTIONS, mentorTypeError, toManagedUserPayload } from '../../utils/managedUserForm';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
-const roleLabel = { ADMIN: 'Admin', LECTURER: 'Lecturer', MENTOR: 'Mentor', STUDENT: 'Student' };
+const roleLabel = { get ADMIN() { return i18n.t('admin:userManagement.admin'); }, get LECTURER() { return i18n.t('admin:classManagement.lecturer'); }, get MENTOR() { return i18n.t('admin:subjectManagement.mentor'); }, get STUDENT() { return i18n.t('admin:userManagement.student'); } };
 
 const statusBadge = { PENDING: 'Review', APPROVED: 'Approved', REJECTED: 'Overdue' };
-const statusLabel = { PENDING: 'Pending Approval', APPROVED: 'Approved', REJECTED: 'Rejected' };
+const statusLabel = { get PENDING() { return i18n.t('admin:userManagement.pendingApproval'); }, get APPROVED() { return i18n.t('admin:userManagement.approved'); }, get REJECTED() { return i18n.t('admin:userManagement.rejected'); } };
 
 export default function UserManagement() {
+  const { t } = useTranslation('admin');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -135,7 +139,7 @@ export default function UserManagement() {
       }
     } catch {
       if (requestId === latestRequestId.current) {
-        toast.error('Failed to load users');
+        toast.error(t('userManagement.failedToLoadUsers'));
       }
     } finally {
       if (requestId === latestRequestId.current) {
@@ -166,10 +170,10 @@ export default function UserManagement() {
       } else {
         await userApi.update(userId, { status: newStatus });
       }
-      toast.success(`User marked as ${newStatus}`);
+      toast.success(t('userManagement.userMarkedAs', { newStatus }));
       fetchUsers();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update user status').message);
+      toast.error(parseApiError(error, t('userManagement.failedToUpdateUserStatus')).message);
     } finally {
       setRowActionId(null);
     }
@@ -238,11 +242,11 @@ export default function UserManagement() {
     try {
       await userApi.delete(deleteTarget.id);
       fetchUsers();
-      toast.success('User account deleted successfully!');
+      toast.success(t('userManagement.userAccountDeletedSuccessfully'));
       setDeleteTarget(null);
     } catch (error) {
       // The server names what still depends on the account, so the message is shown in full and the dialog closes.
-      toast.error(parseApiError(error, 'Failed to delete user').message, { duration: 8000 });
+      toast.error(parseApiError(error, t('userManagement.failedToDeleteUser')).message, { duration: 8000 });
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
@@ -251,15 +255,15 @@ export default function UserManagement() {
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      toast.error('Full name is required');
+      toast.error(t('userManagement.fullNameIsRequired'));
       return;
     }
     if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      toast.error('A valid email address is required');
+      toast.error(t('userManagement.aValidEmailAddressIsRequired'));
       return;
     }
     if (!editingUser && (!formData.password || formData.password.length < 6)) {
-      toast.error('Temporary password must contain at least 6 characters');
+      toast.error(t('userManagement.temporaryPasswordMustContainAtLeast'));
       return;
     }
     const mentorError = mentorTypeError(formData.role, formData.mentorType);
@@ -269,11 +273,11 @@ export default function UserManagement() {
     }
     if (formData.role === 'STUDENT') {
       if (!formData.studentId.trim()) {
-        toast.error('Student ID is required for student accounts');
+        toast.error(t('userManagement.studentIdIsRequiredForStudent'));
         return;
       }
       if (!formData.programGroup || !formData.major) {
-        toast.error('Program group and major are required for student accounts');
+        toast.error(t('userManagement.programGroupAndMajorAreRequired'));
         return;
       }
     }
@@ -282,15 +286,15 @@ export default function UserManagement() {
     try {
       if (editingUser) {
         await userApi.update(editingUser.id || editingUser._id, toManagedUserPayload(formData));
-        toast.success('User updated successfully!');
+        toast.success(t('userManagement.userUpdatedSuccessfully'));
       } else {
         await userApi.create(toManagedUserPayload(formData));
-        toast.success('User account created successfully!');
+        toast.success(t('userManagement.userAccountCreatedSuccessfully'));
       }
       setIsModalOpen(false);
       fetchUsers();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to save user').message);
+      toast.error(parseApiError(err, t('userManagement.failedToSaveUser')).message);
     } finally {
       setIsSubmitting(false);
     }
@@ -304,11 +308,11 @@ export default function UserManagement() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="min-w-0">
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">User Management</h1>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('userManagement.userManagement')}</h1>
           <p className="text-slate-500 mt-1">
             {view === 'accounts'
-              ? `${totalItems} user accounts registered on the platform`
-              : `${incompleteCount} mentor${incompleteCount === 1 ? '' : 's'} imported without a login account`}
+              ? t('userManagement.userAccountsRegisteredOnThePlatform', { totalItems })
+              : t('userManagement.mentorImportedWithoutALoginAccount', { count: incompleteCount })}
           </p>
         </div>
         <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
@@ -316,13 +320,13 @@ export default function UserManagement() {
             onImportLecturers={() => setIsImportModalOpen(true)}
             onImportMentors={() => setIsMentorImportOpen(true)}
           />
-          <Button variant="outline" icon={FileText} className="whitespace-nowrap" onClick={() => setIsMentorCvsOpen(true)}>Upload mentor CVs</Button>
-          <Button variant="primary" icon={Plus} className="whitespace-nowrap" onClick={openAddModal}>Create User</Button>
+          <Button variant="outline" icon={FileText} className="whitespace-nowrap" onClick={() => setIsMentorCvsOpen(true)}>{t('userManagement.uploadMentorCvs')}</Button>
+          <Button variant="primary" icon={Plus} className="whitespace-nowrap" onClick={openAddModal}>{t('userManagement.createUser')}</Button>
         </div>
       </div>
 
       {/* ── View tabs ── */}
-      <div role="tablist" aria-label="User list view" className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+      <div role="tablist" aria-label={t('userManagement.userListView')} className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
         {([['accounts', 'Accounts'], ['incomplete', 'Needs information']] as const).map(([key, label]) => (
           <button
             key={key}
@@ -346,7 +350,7 @@ export default function UserManagement() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            placeholder={view === 'accounts' ? 'Search users by name, email, student ID...' : 'Search mentors by name or email...'}
+            placeholder={view === 'accounts' ? t('userManagement.searchUsersByNameEmailStudent') : t('userManagement.searchMentorsByNameOrEmail')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -359,11 +363,11 @@ export default function UserManagement() {
             value={roleFilter}
             onChange={(e) => { setRoleFilter(e.target.value); setMentorTypeFilter('ALL'); setPage(1); }}
           >
-            <option value="ALL">All Roles</option>
-            <option value="STUDENT">Students</option>
-            <option value="LECTURER">Lecturers</option>
-            <option value="MENTOR">Mentors</option>
-            <option value="ADMIN">Admins</option>
+            <option value="ALL">{t('userManagement.allRoles')}</option>
+            <option value="STUDENT">{t('classManagement.students')}</option>
+            <option value="LECTURER">{t('subjectManagement.lecturers')}</option>
+            <option value="MENTOR">{t('subjectManagement.mentors')}</option>
+            <option value="ADMIN">{t('userManagement.admins')}</option>
           </select>
         </div>
         )}
@@ -371,14 +375,14 @@ export default function UserManagement() {
           <div className="relative w-full sm:w-52 shrink-0">
             <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
-              aria-label="Mentor type"
+              aria-label={t('userManagement.mentorType')}
               className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer"
               value={mentorTypeFilter}
               onChange={(e) => { setMentorTypeFilter(e.target.value); setPage(1); }}
             >
-              <option value="ALL">All mentors</option>
-              <option value="Enterprise">Enterprise mentors</option>
-              <option value="Academic">Lecturer mentors</option>
+              <option value="ALL">{t('userManagement.allMentors')}</option>
+              <option value="Enterprise">{t('userManagement.enterpriseMentors')}</option>
+              <option value="Academic">{t('userManagement.lecturerMentors')}</option>
             </select>
           </div>
         )}
@@ -390,10 +394,10 @@ export default function UserManagement() {
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           >
-            <option value="ALL">All Status</option>
-            <option value="APPROVED">Approved</option>
-            <option value="PENDING">Pending Approval</option>
-            <option value="REJECTED">Rejected</option>
+            <option value="ALL">{t('subjectManagement.allStatus')}</option>
+            <option value="APPROVED">{t('userManagement.approved')}</option>
+            <option value="PENDING">{t('userManagement.pendingApproval')}</option>
+            <option value="REJECTED">{t('userManagement.rejected')}</option>
           </select>
         </div>
         )}
@@ -415,7 +419,7 @@ export default function UserManagement() {
         {loading ? (
           <div className="p-6"><LoadingSkeleton lines={6} /></div>
         ) : users.length === 0 ? (
-          <div className="p-12"><EmptyState icon={Users} title="No users found" description="Try adjusting your search or filters" /></div>
+          <div className="p-12"><EmptyState icon={Users} title={t('userManagement.noUsersFound')} description={t('userManagement.tryAdjustingYourSearchOrFilters')} /></div>
         ) : (
           <div className="relative">
             {isRefreshing && (
@@ -424,27 +428,27 @@ export default function UserManagement() {
                 role="status"
                 aria-live="polite"
               >
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Updating users...
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('userManagement.updatingUsers')}
               </div>
             )}
             <div
               className={`overflow-x-auto transition-opacity duration-200 ${isRefreshing ? 'pointer-events-none opacity-60' : 'opacity-100'}`}
-              aria-label="Scrollable user table"
+              aria-label={t('userManagement.scrollableUserTable')}
               aria-busy={isRefreshing}
             >
               <table className="w-full min-w-[1220px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">User</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Role</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Status</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Student ID / Major</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Semester</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Class</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Group Name</th>
-                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">Joined Date</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.user')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.role')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('mentorProfileDetail.status')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.studentIdMajor')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('subjectManagement.semester')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.class')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.groupName')}</th>
+                  <th className="py-3.5 px-6 text-xs text-slate-600 uppercase text-left font-semibold tracking-wider">{t('userManagement.joinedDate')}</th>
                   {/* Stays pinned to the right edge, so Edit and Delete are visible without scrolling the table sideways. */}
-                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">Actions</th>
+                  <th className="sticky right-0 z-[1] bg-slate-50 py-3.5 px-6 text-xs text-slate-600 uppercase text-right font-semibold tracking-wider shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">{t('startupIndustryManagement.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -461,7 +465,7 @@ export default function UserManagement() {
                         )}
                         <div className="min-w-0">
                           {user.role === 'MENTOR' && user.mentorProfileId
-                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary-700 hover:underline" title="Open mentor profile">{user.name}</Link>
+                            ? <Link to={`/admin/mentors/${user.mentorProfileId}`} className="block truncate font-semibold text-slate-900 hover:text-primary-700 hover:underline" title={t('userManagement.openMentorProfile')}>{user.name}</Link>
                             : <div className="font-semibold text-slate-900 truncate">{user.name}</div>}
                           <div className="text-xs text-slate-400 truncate flex items-center gap-1">
                             <Mail className="w-3 h-3 inline" /> {user.email}
@@ -504,7 +508,7 @@ export default function UserManagement() {
                       {user.groupName || '—'}
                     </td>
                     <td className="py-3.5 px-6 text-xs text-slate-400">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                      {user.createdAt ? fmtDate(user.createdAt) : '—'}
                     </td>
                     <td className="sticky right-0 z-[1] bg-white py-3.5 px-6 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
                       <div className="flex items-center justify-end gap-1.5">
@@ -512,8 +516,8 @@ export default function UserManagement() {
                           <>
                             <button
                               type="button"
-                              aria-label={`Approve ${user.name}`}
-                              title="Approve User"
+                              aria-label={t('userManagement.approve', { name: user.name })}
+                              title={t('userManagement.approveUser')}
                               disabled={rowActionId === (user.id || user._id)}
                               className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-all border border-emerald-200"
                               onClick={() => handleStatusUpdate(user.id || user._id, 'APPROVED')}
@@ -522,8 +526,8 @@ export default function UserManagement() {
                             </button>
                             <button
                               type="button"
-                              aria-label={`Reject ${user.name}`}
-                              title="Reject User"
+                              aria-label={t('userManagement.reject', { name: user.name })}
+                              title={t('userManagement.rejectUser')}
                               disabled={rowActionId === (user.id || user._id)}
                               className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-all border border-red-200"
                               onClick={() => handleStatusUpdate(user.id || user._id, 'REJECTED')}
@@ -534,8 +538,8 @@ export default function UserManagement() {
                         )}
                         <button
                           type="button"
-                          aria-label={`Edit ${user.name}`}
-                          title="Edit User"
+                          aria-label={t('startupIndustryManagement.edit', { name: user.name })}
+                          title={t('userManagement.editUser')}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-primary-700 hover:bg-primary-50 transition-all"
                           onClick={() => openEditModal(user)}
                         >
@@ -543,8 +547,8 @@ export default function UserManagement() {
                         </button>
                         <button
                           type="button"
-                          aria-label={`Delete ${user.name}`}
-                          title="Delete User"
+                          aria-label={t('userManagement.delete', { name: user.name })}
+                          title={t('userManagement.deleteUser')}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
                           onClick={() => void handleDelete(user.id || user._id, `${user.name} (${user.email})`)}
                         >
@@ -564,14 +568,14 @@ export default function UserManagement() {
         {totalPages > 1 && (
           <div className="border-t border-slate-100 px-6 py-3.5 bg-slate-50/50 flex items-center justify-between">
             <span className="text-xs text-slate-500">
-              Page <span className="font-semibold text-slate-900">{page}</span> of <span className="font-semibold text-slate-900">{totalPages}</span> ({totalItems} items)
+              {t('classManagement.page')} <span className="font-semibold text-slate-900">{page}</span> {t('classManagement.of')} <span className="font-semibold text-slate-900">{totalPages}</span> ({totalItems} {t('userManagement.items')}
             </span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={isRefreshing || page === 1} onClick={() => changePage(page - 1)}>
-                <ArrowLeft className="w-4 h-4 mr-1" /> Prev
+                <ArrowLeft className="w-4 h-4 mr-1" /> {t('userManagement.prev')}
               </Button>
               <Button variant="outline" size="sm" disabled={isRefreshing || page === totalPages} onClick={() => changePage(page + 1)}>
-                Next <ArrowRight className="w-4 h-4 ml-1" />
+                {t('common:actions.next')} <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </div>
@@ -583,17 +587,17 @@ export default function UserManagement() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingUser ? 'Edit User Profile' : 'Create New User Account'}
-        submitText={editingUser ? 'Save Changes' : 'Create User'}
+        title={editingUser ? t('userManagement.editUserProfile') : t('userManagement.createNewUserAccount')}
+        submitText={editingUser ? t('startupIndustryManagement.saveChanges') : t('userManagement.createUser')}
         isSubmitting={isSubmitting}
         onSubmit={handleSubmit}
       >
         <div className="space-y-4 text-sm">
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Full Name *</label>
+            <label className="block font-medium text-slate-700 mb-1">{t('userManagement.fullName')}</label>
             <input
               type="text"
-              placeholder="e.g. Nguyen Van A"
+              placeholder={t('userManagement.eGNguyenVanA')}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -601,10 +605,10 @@ export default function UserManagement() {
           </div>
 
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Email Address *</label>
+            <label className="block font-medium text-slate-700 mb-1">{t('userManagement.emailAddress')}</label>
             <input
               type="email"
-              placeholder="user@example.edu"
+              placeholder={t('userManagement.userExampleEdu')}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -613,11 +617,11 @@ export default function UserManagement() {
 
           {!editingUser && (
             <div>
-              <label className="block font-medium text-slate-700 mb-1">Temporary Password *</label>
+              <label className="block font-medium text-slate-700 mb-1">{t('userManagement.temporaryPassword')}</label>
               <input
                 type="password"
                 minLength={6}
-                placeholder="At least 6 characters"
+                placeholder={t('userManagement.atLeast6Characters')}
                 className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -627,7 +631,7 @@ export default function UserManagement() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-medium text-slate-700 mb-1">System Role *</label>
+              <label className="block font-medium text-slate-700 mb-1">{t('userManagement.systemRole')}</label>
               <select
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
                 value={formData.role}
@@ -636,30 +640,30 @@ export default function UserManagement() {
                   setFormData({ ...formData, role });
                 }}
               >
-                <option value="STUDENT">Student</option>
-                <option value="LECTURER">Lecturer</option>
-                <option value="MENTOR">Mentor</option>
-                <option value="ADMIN">Admin</option>
+                <option value="STUDENT">{t('userManagement.student')}</option>
+                <option value="LECTURER">{t('classManagement.lecturer')}</option>
+                <option value="MENTOR">{t('subjectManagement.mentor')}</option>
+                <option value="ADMIN">{t('userManagement.admin')}</option>
               </select>
             </div>
 
             <div>
-              <label className="block font-medium text-slate-700 mb-1">Account Status *</label>
+              <label className="block font-medium text-slate-700 mb-1">{t('userManagement.accountStatus')}</label>
               <select
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
               >
-                <option value="APPROVED">Approved</option>
-                <option value="PENDING">Pending Approval</option>
-                <option value="REJECTED">Rejected</option>
+                <option value="APPROVED">{t('userManagement.approved')}</option>
+                <option value="PENDING">{t('userManagement.pendingApproval')}</option>
+                <option value="REJECTED">{t('userManagement.rejected')}</option>
               </select>
             </div>
           </div>
 
           {formData.role === 'MENTOR' && (
             <div>
-              <label htmlFor="user-mentor-type" className="block font-medium text-slate-700 mb-1">Mentor Type *</label>
+              <label htmlFor="user-mentor-type" className="block font-medium text-slate-700 mb-1">{t('userManagement.mentorType2')}</label>
               <select
                 id="user-mentor-type"
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
@@ -667,29 +671,29 @@ export default function UserManagement() {
                 disabled={Boolean(editingUser?.role === 'MENTOR' && editingUser?.mentorType)}
                 onChange={(e) => setFormData({ ...formData, mentorType: e.target.value })}
               >
-                <option value="">Select mentor type…</option>
+                <option value="">{t('userManagement.selectMentorType')}</option>
                 {MENTOR_KIND_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
               <p className="mt-1 text-xs text-slate-500">
                 {editingUser?.role === 'MENTOR' && editingUser?.mentorType
-                  ? 'The type of an existing mentor cannot be changed here.'
-                  : 'Enterprise mentors fill the company slot of a team; lecturer mentors fill the faculty slot.'}
+                  ? t('userManagement.theTypeOfAnExistingMentor')
+                  : t('userManagement.enterpriseMentorsFillTheCompanySlot')}
               </p>
             </div>
           )}
 
           {formData.role === 'MENTOR' && !editingUser && (
             <div className="space-y-3 rounded-xl border border-slate-200/60 bg-slate-50/70 p-3.5">
-              <p className="text-xs text-slate-500">Optional. You can complete the rest on the mentor profile page after the account is created.</p>
+              <p className="text-xs text-slate-500">{t('userManagement.optionalYouCanCompleteTheRest')}</p>
               <TagInput
-                label="Expertise"
+                label={t('mentorProfileDetail.expertise')}
                 value={formData.expertise}
                 onChange={(expertise) => setFormData({ ...formData, expertise })}
                 addTag={addExpertiseTag}
-                placeholder="e.g. Marketing, Fundraising"
+                placeholder={t('userManagement.eGMarketingFundraising')}
               />
               <div>
-                <label htmlFor="user-mentor-bio" className="block font-medium text-slate-700 mb-1">Background</label>
+                <label htmlFor="user-mentor-bio" className="block font-medium text-slate-700 mb-1">{t('mentorProfileDetail.background')}</label>
                 <textarea
                   id="user-mentor-bio"
                   rows={3}
@@ -700,12 +704,12 @@ export default function UserManagement() {
                 />
               </div>
               <div>
-                <label htmlFor="user-mentor-availability" className="block font-medium text-slate-700 mb-1">Availability note</label>
+                <label htmlFor="user-mentor-availability" className="block font-medium text-slate-700 mb-1">{t('mentorProfileDetail.availabilityNote')}</label>
                 <input
                   id="user-mentor-availability"
                   type="text"
                   maxLength={MENTOR_PROFILE_LIMITS.availabilityNote}
-                  placeholder="e.g. Weekday afternoons, online only"
+                  placeholder={t('mentorProfileDetail.eGWeekdayAfternoonsOnlineOnly')}
                   className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   value={formData.availabilityNote}
                   onChange={(e) => setFormData({ ...formData, availabilityNote: e.target.value })}
@@ -716,15 +720,15 @@ export default function UserManagement() {
 
           {formData.role === 'MENTOR' && editingUser?.mentorProfileId && (
             <Link to={`/admin/mentors/${editingUser.mentorProfileId}`} className="inline-flex text-xs font-semibold text-primary-700 hover:underline">
-              Open the full mentor profile (expertise, background, availability)
+              {t('userManagement.openTheFullMentorProfileExpertise')}
             </Link>
           )}
 
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Phone Number (optional)</label>
+            <label className="block font-medium text-slate-700 mb-1">{t('userManagement.phoneNumberOptional')}</label>
             <input
               type="text"
-              placeholder="e.g. 0901234567"
+              placeholder={t('userManagement.eG0901234567')}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -735,14 +739,14 @@ export default function UserManagement() {
           {formData.role === 'STUDENT' && (
             <div className="pt-2 border-t border-slate-100 space-y-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/60">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <GraduationCap className="w-4 h-4 text-primary" /> Student Details
+                <GraduationCap className="w-4 h-4 text-primary" /> {t('userManagement.studentDetails')}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Student ID (RollNumber) *</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">{t('userManagement.studentIdRollnumber')}</label>
                 <input
                   type="text"
-                  placeholder="e.g. SE170001"
+                  placeholder={t('userManagement.eGSe170001')}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono text-sm uppercase"
                   value={formData.studentId}
                   onChange={(e) => setFormData({ ...formData, studentId: e.target.value.toUpperCase() })}
@@ -751,7 +755,7 @@ export default function UserManagement() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Program Group *</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">{t('userManagement.programGroup')}</label>
                   <select
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white text-sm outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                     value={formData.programGroup}
@@ -772,7 +776,7 @@ export default function UserManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Major Specialization *</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">{t('userManagement.majorSpecialization')}</label>
                   <select
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white text-sm outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                     value={formData.major}
@@ -815,21 +819,21 @@ export default function UserManagement() {
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
-        title="Delete User Account"
+        title={t('userManagement.deleteUserAccount')}
         description={deleteCheck.loading
-          ? `Checking whether ${deleteTarget?.name} can be deleted...`
+          ? t('userManagement.checkingWhetherCanBeDeleted', { name: deleteTarget?.name })
           : deleteCheck.canDelete
-            ? `Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`
-            : `${deleteTarget?.name} cannot be deleted right now.`}
+            ? t('userManagement.areYouSureYouWantTo', { name: deleteTarget?.name })
+            : t('userManagement.cannotBeDeletedRightNow', { name: deleteTarget?.name })}
         isSubmitting={isDeleting}
         confirmDisabled={deleteCheck.loading || !deleteCheck.canDelete}
         details={!deleteCheck.loading && !deleteCheck.canDelete ? (
           <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-left text-sm text-red-700">
-            <p className="font-semibold">Why it cannot be deleted</p>
+            <p className="font-semibold">{t('userManagement.whyItCannotBeDeleted')}</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">
               {deleteCheck.reasons.map(reason => <li key={reason}>{reason.charAt(0).toUpperCase() + reason.slice(1)}</li>)}
             </ul>
-            <p className="mt-2 text-xs text-red-600">Remove or reassign these first, or block the account instead so it can no longer sign in.</p>
+            <p className="mt-2 text-xs text-red-600">{t('userManagement.removeOrReassignTheseFirstOr')}</p>
           </div>
         ) : undefined}
       />
@@ -839,6 +843,7 @@ export default function UserManagement() {
 
 /** One "Import" button that opens a small menu, so the header stays compact as import types grow. */
 function ImportMenu({ onImportLecturers, onImportMentors }: { onImportLecturers: () => void; onImportMentors: () => void }) {
+  const { t } = useTranslation('admin');
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
 
@@ -874,17 +879,17 @@ function ImportMenu({ onImportLecturers, onImportMentors }: { onImportLecturers:
         aria-expanded={open}
         onClick={() => setOpen(current => !current)}
       >
-        Import Users
+        {t('userManagement.importUsers')}
       </Button>
       {open && (
         <div role="menu" className="absolute left-0 z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg sm:left-auto sm:right-0">
           <button type="button" role="menuitem" onClick={() => choose(onImportLecturers)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
-            <span className="text-sm font-semibold text-slate-800">Import Lecturers</span>
-            <span className="text-xs text-slate-500">Create lecturer accounts from Excel</span>
+            <span className="text-sm font-semibold text-slate-800">{t('userManagement.importLecturers')}</span>
+            <span className="text-xs text-slate-500">{t('userManagement.createLecturerAccountsFromExcel')}</span>
           </button>
           <button type="button" role="menuitem" onClick={() => choose(onImportMentors)} className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-slate-50">
-            <span className="text-sm font-semibold text-slate-800">Import Mentors</span>
-            <span className="text-xs text-slate-500">Enterprise and lecturer mentors</span>
+            <span className="text-sm font-semibold text-slate-800">{t('userManagement.importMentors')}</span>
+            <span className="text-xs text-slate-500">{t('userManagement.enterpriseAndLecturerMentors')}</span>
           </button>
         </div>
       )}

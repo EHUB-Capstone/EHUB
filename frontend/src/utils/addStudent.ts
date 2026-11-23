@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 export interface AddStudentFormValues {
   studentCode: string;
   fullName: string;
@@ -16,14 +17,14 @@ export function validateAddStudentForm(values: AddStudentFormValues): AddStudent
   const fullName = values.fullName.trim();
   const email = values.email.trim();
 
-  if (!studentCode) errors.studentCode = 'Student code is required.';
-  else if (studentCode.length > 20) errors.studentCode = 'Student code cannot exceed 20 characters.';
+  if (!studentCode) errors.studentCode = i18n.t('utils:addStudent.studentCodeIsRequired');
+  else if (studentCode.length > 20) errors.studentCode = i18n.t('utils:addStudent.studentCodeCannotExceed20Characters');
 
-  if (!fullName) errors.fullName = 'Full name is required.';
-  else if (fullName.length > 150) errors.fullName = 'Full name cannot exceed 150 characters.';
+  if (!fullName) errors.fullName = i18n.t('utils:addStudent.fullNameIsRequired');
+  else if (fullName.length > 150) errors.fullName = i18n.t('utils:addStudent.fullNameCannotExceed150Characters');
 
-  if (!email) errors.email = 'Email is required.';
-  else if (email.length > 150 || !emailPattern.test(email)) errors.email = 'Enter a valid email address.';
+  if (!email) errors.email = i18n.t('utils:addStudent.emailIsRequired');
+  else if (email.length > 150 || !emailPattern.test(email)) errors.email = i18n.t('utils:addStudent.enterAValidEmailAddress');
 
   return errors;
 }

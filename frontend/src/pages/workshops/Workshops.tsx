@@ -11,8 +11,10 @@ import WorkshopCheckInModal from '../../components/workspace/WorkshopCheckInModa
 import WorkshopAttendanceManager from '../../components/workspace/WorkshopAttendanceManager';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 const Workshops = () => {
+  const { t } = useTranslation('community');
   const { user } = useAuth();
   const [workshops, setWorkshops] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +56,7 @@ const Workshops = () => {
       const list = res.data?.workshops || res.workshops || res.data || [];
       setWorkshops(Array.isArray(list) ? list : []);
     } catch {
-      toast.error('Failed to load workshops');
+      toast.error(t('workshops.failedToLoadWorkshops'));
     } finally {
       setLoading(false);
     }
@@ -65,13 +67,13 @@ const Workshops = () => {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+    if (!window.confirm(t('workshops.areYouSureYouWantTo'))) return;
     try {
       await workshopApi.delete(id);
-      toast.success('Event deleted successfully');
+      toast.success(t('workshops.eventDeletedSuccessfully'));
       setWorkshops(prev => prev.filter(w => w._id !== id));
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete event');
+      toast.error(err.response?.data?.message || t('workshops.failedToDeleteEvent'));
     }
   };
 
@@ -122,10 +124,10 @@ const Workshops = () => {
         <div>
           <h1 className="flex items-center gap-2 text-heading sm:text-display text-secondary tracking-tight">
             <Calendar className="w-8 h-8 text-primary" />
-            <span>Workshops & Seminars</span>
+            <span>{t('workshops.workshopsSeminars')}</span>
           </h1>
           <p className="text-slate-500 mt-1">
-            Discover and manage upcoming knowledge-sharing sessions.
+            {t('workshops.discoverAndManageUpcomingKnowledgeSharing')}
           </p>
         </div>
         {canCreate && (
@@ -134,7 +136,7 @@ const Workshops = () => {
             className="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold hover:shadow-glow-primary active:scale-[0.98] transition-all shrink-0"
           >
             <Plus className="w-5 h-5" />
-            Schedule Event
+            {t('workshops.scheduleEvent')}
           </button>
         )}
       </motion.div>
@@ -148,7 +150,7 @@ const Workshops = () => {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full bg-slate-50 border-none rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
-            placeholder="Search events by title or description..."
+            placeholder={t('workshops.searchEventsByTitleOrDescription')}
           />
         </div>
 
@@ -157,7 +159,7 @@ const Workshops = () => {
           onChange={(e) => setFilterSem(e.target.value)}
           className="bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all shrink-0"
         >
-          <option value="">All Semesters</option>
+          <option value="">{t('workshops.allSemesters')}</option>
           {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
@@ -166,7 +168,7 @@ const Workshops = () => {
           onChange={(e) => setFilterYear(e.target.value)}
           className="bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all shrink-0"
         >
-          <option value="">All Years</option>
+          <option value="">{t('workshops.allYears')}</option>
           {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <div className="flex gap-2 p-1 bg-slate-50 border border-slate-100 rounded-xl overflow-x-auto hide-scrollbar">
@@ -179,7 +181,7 @@ const Workshops = () => {
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                 }`}
             >
-              {f === 'ALL' ? 'All Events' : f === 'UPCOMING' ? 'Upcoming' : 'Past'}
+              {f === 'ALL' ? t('workshops.allEvents') : f === 'UPCOMING' ? t('workshops.upcoming') : t('workshops.past')}
             </button>
           ))}
         </div>
@@ -190,8 +192,8 @@ const Workshops = () => {
         {filteredWorkshops.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-12 text-center text-slate-400">
             <Filter className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-            <h3 className="font-semibold text-slate-700 text-sm">No Events Found</h3>
-            <p className="text-xs text-slate-400 mt-1">Try adjusting your filters or search query.</p>
+            <h3 className="font-semibold text-slate-700 text-sm">{t('workshops.noEventsFound')}</h3>
+            <p className="text-xs text-slate-400 mt-1">{t('workshops.tryAdjustingYourFiltersOrSearch')}</p>
           </div>
         ) : (
           <WorkshopList

@@ -5,8 +5,10 @@ import { MessageSquare, Zap, AlertTriangle, Plus, Trash2, Heart, ShieldAlert, Ba
 import toast from 'react-hot-toast';
 import { aiApi } from '../../api/aiApi';
 import Button from '../ui/Button';
+import { useTranslation } from 'react-i18next';
 
 const SentimentAnalysisTab = ({ ideaId }) => {
+  const { t } = useTranslation('ai');
   const [feedbacks, setFeedbacks] = useState([
     { id: 'fb_1', author_type: 'mentor', content: '' }
   ]);
@@ -37,7 +39,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
     // Validation
     const validFeedbacks = feedbacks.filter(fb => fb.content.trim() !== '');
     if (validFeedbacks.length === 0) {
-      toast.error('Vui lòng nhập ít nhất một feedback có nội dung.');
+      toast.error(t('sentimentAnalysisTab.vuiLongNhapItNhatMot'));
       return;
     }
 
@@ -56,15 +58,15 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                          res.data?.summary?.includes("Chưa thể phân tích");
                          
       if (isFallback) {
-        toast.error('AI đang dùng phản hồi dự phòng. Vui lòng kiểm tra cấu hình Gemini API.', { duration: 5000 });
+        toast.error(t('rubricGeneratorTab.aiDangDungPhanHoiDu'), { duration: 5000 });
       } else {
-        toast.success('Phân tích cảm xúc hoàn tất!');
+        toast.success(t('sentimentAnalysisTab.phanTichCamXucHoanTat'));
       }
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
-        toast.error('Phiên đăng nhập đã hết hạn hoặc bạn chưa có quyền sử dụng AI.');
+        toast.error(t('rubricGeneratorTab.phienDangNhapDaHetHan'));
       } else {
-        toast.error(err.response?.data?.error || err.message || 'Có lỗi xảy ra khi gọi AI. Vui lòng thử lại.');
+        toast.error(err.response?.data?.error || err.message || t('rubricGeneratorTab.coLoiXayRaKhiGoi'));
       }
     } finally {
       setLoading(false);
@@ -87,8 +89,8 @@ const SentimentAnalysisTab = ({ ideaId }) => {
       {/* Form Panel */}
       <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-           <h2 className="font-semibold text-slate-800 text-lg">Feedback Input</h2>
-           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-secondary rounded-md">Input</span>
+           <h2 className="font-semibold text-slate-800 text-lg">{t('sentimentAnalysisTab.feedbackInput')}</h2>
+           <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-secondary rounded-md">{t('rubricGeneratorTab.input')}</span>
         </div>
         <div className="p-5 flex-1 overflow-y-auto max-h-[600px] no-scrollbar">
           <form onSubmit={handleAnalyze} className="space-y-4 flex flex-col h-full">
@@ -97,7 +99,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
               {feedbacks.map((fb, index) => (
                 <div key={fb.id} className="p-4 border border-slate-200 rounded-xl relative group bg-slate-50">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Feedback #{index + 1}</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t('sentimentAnalysisTab.feedback', { v1: index + 1 })}</span>
                     {feedbacks.length > 1 && (
                       <button type="button" onClick={() => handleRemoveFeedback(fb.id)} className="text-slate-400 hover:text-red-500 transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -106,16 +108,16 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                   </div>
                   <div className="space-y-3">
                     <select value={fb.author_type} onChange={(e) => handleChange(fb.id, 'author_type', e.target.value)} className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary bg-white">
-                      <option value="mentor">Mentor</option>
-                      <option value="student">Student</option>
-                      <option value="lecturer">Lecturer</option>
+                      <option value="mentor">{t('sentimentAnalysisTab.mentor')}</option>
+                      <option value="student">{t('sentimentAnalysisTab.student')}</option>
+                      <option value="lecturer">{t('sentimentAnalysisTab.lecturer')}</option>
                     </select>
                     <textarea 
                       rows={3} 
                       value={fb.content} 
                       onChange={(e) => handleChange(fb.id, 'content', e.target.value)} 
                       className="w-full text-sm border-slate-200 rounded-lg focus:ring-secondary focus:border-secondary bg-white" 
-                      placeholder="Nhập nội dung feedback (VD: Sản phẩm rất tốt nhưng UX hơi khó dùng...)" 
+                      placeholder={t('sentimentAnalysisTab.nhapNoiDungFeedbackVdSan')} 
                     />
                   </div>
                 </div>
@@ -123,12 +125,12 @@ const SentimentAnalysisTab = ({ ideaId }) => {
             </div>
 
             <button type="button" onClick={handleAddFeedback} className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:text-secondary hover:border-secondary hover:bg-blue-50 transition-colors font-medium text-sm">
-              <Plus className="w-4 h-4" /> Add Feedback
+              <Plus className="w-4 h-4" /> {t('sentimentAnalysisTab.addFeedback')}
             </button>
             
             <div className="pt-4 mt-auto">
               <Button type="submit" className="w-full bg-secondary hover:bg-secondary-700 text-white" isLoading={loading} disabled={loading} icon={Heart}>
-                Analyze Sentiment
+                {t('sentimentAnalysisTab.analyzeSentiment')}
               </Button>
             </div>
           </form>
@@ -140,16 +142,16 @@ const SentimentAnalysisTab = ({ ideaId }) => {
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
              <div className="w-16 h-16 border-4 border-secondary/30 border-t-secondary rounded-full animate-spin mb-4"></div>
-             <h3 className="text-xl font-semibold text-secondary">Analyzing sentiments...</h3>
-             <p className="text-slate-500 mt-2">AI is reading between the lines to gauge user emotions.</p>
+             <h3 className="text-xl font-semibold text-secondary">{t('sentimentAnalysisTab.analyzingSentiments')}</h3>
+             <p className="text-slate-500 mt-2">{t('sentimentAnalysisTab.aiIsReadingBetweenTheLines')}</p>
           </div>
         ) : !result ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[500px]">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
               <MessageSquare className="w-12 h-12 text-slate-300" />
             </div>
-            <h3 className="text-xl font-semibold text-slate-700">Ready for Sentiment Analysis</h3>
-            <p className="text-slate-500 mt-2 max-w-sm text-center">Add user or mentor feedback and let AI detect emotions, concerns, and urgency.</p>
+            <h3 className="text-xl font-semibold text-slate-700">{t('sentimentAnalysisTab.readyForSentimentAnalysis')}</h3>
+            <p className="text-slate-500 mt-2 max-w-sm text-center">{t('sentimentAnalysisTab.addUserOrMentorFeedbackAnd')}</p>
           </div>
         ) : (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -157,35 +159,35 @@ const SentimentAnalysisTab = ({ ideaId }) => {
             {isFallback && (
                <div className="bg-orange-100 text-orange-800 text-sm px-4 py-3 rounded-xl flex items-center gap-2 font-medium border border-orange-200 shadow-sm">
                  <AlertTriangle className="w-5 h-5 shrink-0" />
-                 ⚠ AI đang dùng phản hồi dự phòng. Vui lòng kiểm tra cấu hình Gemini API hoặc thử lại sau.
+                 {t('rubricGeneratorTab.aiDangDungPhanHoiDu2')}
                </div>
             )}
             
             {/* Overview Card */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
                <div className="flex flex-col items-center justify-center min-w-[150px]">
-                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Overall Sentiment</p>
+                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('sentimentAnalysisTab.overallSentiment')}</p>
                  <div className={`px-4 py-2 rounded-xl font-black text-xl border shadow-sm ${getSentimentColor(result.overall_sentiment)}`}>
-                   {typeof result.overall_sentiment === 'string' ? result.overall_sentiment : 'Unknown'}
+                   {typeof result.overall_sentiment === 'string' ? result.overall_sentiment : t('sentimentAnalysisTab.unknown')}
                  </div>
                </div>
                
                <div className="flex-1 space-y-3 w-full">
                  <div className="flex items-center justify-between mb-1">
-                   <span className="text-sm font-semibold text-slate-700 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> AI Confidence Score</span>
-                   <span className="text-sm font-bold text-secondary">{result.sentiment_score !== null && result.sentiment_score !== undefined ? Math.round(result.sentiment_score * 100) : 'N/A'}%</span>
+                   <span className="text-sm font-semibold text-slate-700 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> {t('sentimentAnalysisTab.aiConfidenceScore')}</span>
+                   <span className="text-sm font-bold text-secondary">{result.sentiment_score !== null && result.sentiment_score !== undefined ? Math.round(result.sentiment_score * 100) : t('rubricGeneratorTab.nA')}%</span>
                  </div>
                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                    <div className="h-2.5 rounded-full bg-secondary" style={{ width: `${result.sentiment_score ? Math.round(result.sentiment_score * 100) : 0}%` }}></div>
                  </div>
-                 <p className="text-sm text-slate-600 mt-3 leading-relaxed">{typeof result.summary === 'string' ? result.summary : 'N/A'}</p>
+                 <p className="text-sm text-slate-600 mt-3 leading-relaxed">{typeof result.summary === 'string' ? result.summary : t('rubricGeneratorTab.nA')}</p>
                </div>
             </div>
 
             {/* Warning Card */}
             {result.action_required && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-5 shadow-sm">
-                <h3 className="font-bold text-red-600 mb-3 flex items-center gap-2"><AlertCircle className="w-5 h-5" /> Action Required / Urgent Issues</h3>
+                <h3 className="font-bold text-red-600 mb-3 flex items-center gap-2"><AlertCircle className="w-5 h-5" /> {t('sentimentAnalysisTab.actionRequiredUrgentIssues')}</h3>
                 <ul className="space-y-2">
                    {Array.isArray(result.urgent_issues) && result.urgent_issues.length > 0 ? (
                      result.urgent_issues.map((issue, idx) => (
@@ -195,7 +197,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                        </li>
                      ))
                    ) : (
-                     <li className="text-sm text-red-700 italic">Có vấn đề rủi ro nhưng không có chi tiết cụ thể.</li>
+                     <li className="text-sm text-red-700 italic">{t('sentimentAnalysisTab.coVanDeRuiRoNhung')}</li>
                    )}
                 </ul>
               </div>
@@ -203,16 +205,16 @@ const SentimentAnalysisTab = ({ ideaId }) => {
 
             {/* Feedback Results */}
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-primary-600" /> Individual Breakdown</h3>
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-primary-600" /> {t('sentimentAnalysisTab.individualBreakdown')}</h3>
               {Array.isArray(result.results) && result.results.length > 0 ? (
                  result.results.map((item, idx) => (
                    <div key={idx} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-1 rounded">ID: {typeof item.id === 'string' ? item.id : 'N/A'}</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-1 rounded">{t('sentimentAnalysisTab.id', { id: typeof item.id === 'string' ? item.id : t('sentimentAnalysisTab.na') })}</span>
                         <div className="flex items-center gap-3">
-                           <span className="text-xs font-semibold text-slate-500">Conf: {item.confidence !== null && item.confidence !== undefined ? Math.round(item.confidence * 100) : 'N/A'}%</span>
+                           <span className="text-xs font-semibold text-slate-500">{t('sentimentAnalysisTab.confidence', { value: item.confidence !== null && item.confidence !== undefined ? `${Math.round(item.confidence * 100)}%` : t('sentimentAnalysisTab.na') })}</span>
                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getSentimentColor(item.sentiment)}`}>
-                             {typeof item.sentiment === 'string' ? item.sentiment : 'Unknown'}
+                             {typeof item.sentiment === 'string' ? item.sentiment : t('sentimentAnalysisTab.unknown')}
                            </span>
                         </div>
                      </div>
@@ -220,7 +222,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                      <div className="space-y-4">
                        {Array.isArray(item.key_phrases) && item.key_phrases.length > 0 && (
                          <div>
-                           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Key Phrases</p>
+                           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('sentimentAnalysisTab.keyPhrases')}</p>
                            <div className="flex flex-wrap gap-2">
                              {item.key_phrases.map((phrase, pIdx) => (
                                <span key={pIdx} className="px-2.5 py-1 bg-secondary/10 text-secondary text-xs font-medium rounded-md">
@@ -233,7 +235,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                        
                        {Array.isArray(item.concerns) && item.concerns.length > 0 && (
                          <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
-                           <p className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-2 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> Concerns Detected</p>
+                           <p className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-2 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> {t('sentimentAnalysisTab.concernsDetected')}</p>
                            <ul className="space-y-1.5">
                              {item.concerns.map((concern, cIdx) => (
                                <li key={cIdx} className="text-sm text-slate-700 flex items-start gap-2">
@@ -249,7 +251,7 @@ const SentimentAnalysisTab = ({ ideaId }) => {
                  ))
               ) : (
                 <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-8 text-center text-slate-500">
-                   Chưa có dữ liệu breakdown.
+                   {t('sentimentAnalysisTab.chuaCoDuLieuBreakdown')}
                 </div>
               )}
             </div>

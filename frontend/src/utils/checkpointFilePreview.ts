@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 export const PDF_PREVIEW_MIN_SCALE = 0.25;
 export const PDF_PREVIEW_MAX_SCALE = 3;
 export const PDF_PREVIEW_ZOOM_STEP = 0.1;
@@ -62,7 +63,7 @@ export function getPdfPreviewKeyboardAction(key: string): PdfPreviewKeyboardActi
 }
 
 export function getPdfPreviewTitle(fileName: string): string {
-  return `Preview · ${fileName}`;
+  return i18n.t('utils:checkpointFilePreview.preview', { fileName });
 }
 
 export async function getCheckpointPreviewErrorMessage(error: unknown): Promise<string> {
@@ -83,10 +84,10 @@ export async function getCheckpointPreviewErrorMessage(error: unknown): Promise<
   }
 
   if ((error as { code?: string }).code === 'ECONNABORTED') {
-    return 'Preview preparation timed out. You can still download the original file.';
+    return i18n.t('utils:checkpointFilePreview.previewPreparationTimedOutYouCan');
   }
-  if (response?.status === 403) return 'You do not have permission to preview this file.';
-  if (response?.status === 404) return 'The submitted file could not be found.';
-  if (response?.status === 415) return 'This file format cannot be previewed.';
-  return 'The preview could not be prepared. You can still download the original file.';
+  if (response?.status === 403) return i18n.t('utils:checkpointFilePreview.youDoNotHavePermissionTo');
+  if (response?.status === 404) return i18n.t('utils:checkpointFilePreview.theSubmittedFileCouldNotBe');
+  if (response?.status === 415) return i18n.t('utils:checkpointFilePreview.thisFileFormatCannotBePreviewed');
+  return i18n.t('utils:checkpointFilePreview.thePreviewCouldNotBePrepared');
 }

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { PRIORITY_CFG, WEEKS } from '../constants';
 import CharacterCounter from '../../../components/ui/CharacterCounter';
 import { TASK_DESCRIPTION_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, getTaskTextError } from '../../../utils/taskLimits';
+import { useTranslation } from 'react-i18next';
 
 const blankForm = {
   title: '',
@@ -40,6 +41,7 @@ function toForm(task) {
 }
 
 export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, loading }) {
+  const { t } = useTranslation('workspace');
   const [form, setForm] = useState(blankForm);
   const [newCheckItem, setNewCheckItem] = useState('');
   const titleRef = useRef(null);
@@ -92,7 +94,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
     if (loading) return;
 
     if (!form.title.trim()) {
-      toast.error('Title is required');
+      toast.error(t('taskModal.titleIsRequired'));
       return;
     }
 
@@ -103,15 +105,15 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
     }
 
     if (!isEdit && form.startDate && form.startDate < minDate) {
-      toast.error('Start date cannot be in the past');
+      toast.error(t('taskModal.startDateCannotBeInThe'));
       return;
     }
     if (!isEdit && form.dueDate && form.dueDate < minDate) {
-      toast.error('Due date cannot be in the past');
+      toast.error(t('taskModal.dueDateCannotBeInThe'));
       return;
     }
     if (form.startDate && form.dueDate && form.dueDate < form.startDate) {
-      toast.error('Due date must be on or after start date');
+      toast.error(t('taskModal.dueDateMustBeOnOr'));
       return;
     }
 
@@ -137,14 +139,14 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 id="task-modal-title" className="text-base font-semibold text-slate-950">
-            {isEdit ? 'Edit Team Task' : 'New Team Task'}
+            {isEdit ? t('taskModal.editTeamTask') : t('taskModal.newTeamTask')}
           </h2>
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
             className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-            aria-label="Close task modal"
+            aria-label={t('taskModal.closeTaskModal')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -153,73 +155,73 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
         <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div>
             <label className={`${labelClass} flex items-center justify-between`}>
-              <span>Title *</span>
+              <span>{t('taskModal.title')}</span>
               <CharacterCounter value={form.title} max={TASK_TITLE_MAX_LENGTH} />
             </label>
             <input ref={titleRef} className={`${inputClass} ${titleTooLong ? '!border-red-400' : ''}`} value={form.title} onChange={(event) => setField('title', event.target.value)} aria-invalid={titleTooLong} required />
-            {titleTooLong && <p role="alert" className="mt-1 text-xs text-red-600">Title must be {TASK_TITLE_MAX_LENGTH} characters or fewer.</p>}
+            {titleTooLong && <p role="alert" className="mt-1 text-xs text-red-600">{t('taskModal.titleMustBeCharactersOrFewer', { TASK_TITLE_MAX_LENGTH })}</p>}
           </div>
 
           <div>
             <label className={`${labelClass} flex items-center justify-between`}>
-              <span>Description</span>
+              <span>{t('taskModal.description')}</span>
               <CharacterCounter value={form.description} max={TASK_DESCRIPTION_MAX_LENGTH} />
             </label>
             <textarea className={`${inputClass} resize-none ${descriptionTooLong ? '!border-red-400' : ''}`} rows={3} value={form.description} onChange={(event) => setField('description', event.target.value)} aria-invalid={descriptionTooLong} />
-            {descriptionTooLong && <p role="alert" className="mt-1 text-xs text-red-600">Description must be {TASK_DESCRIPTION_MAX_LENGTH} characters or fewer.</p>}
+            {descriptionTooLong && <p role="alert" className="mt-1 text-xs text-red-600">{t('taskModal.descriptionMustBeCharactersOrFewer', { TASK_DESCRIPTION_MAX_LENGTH })}</p>}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className={labelClass}>Week *</label>
+              <label className={labelClass}>{t('taskModal.week')}</label>
               <select className={inputClass} value={form.weekNumber} onChange={(event) => setField('weekNumber', Number(event.target.value))}>
-                {WEEKS.map((week) => <option key={week} value={week}>Week {week}</option>)}
+                {WEEKS.map((week) => <option key={week} value={week}>{t('boardFilters.week', { week })}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Priority</label>
+              <label className={labelClass}>{t('taskModal.priority')}</label>
               <select className={inputClass} value={form.priority} onChange={(event) => setField('priority', event.target.value)}>
                 {Object.entries(PRIORITY_CFG).map(([priority, cfg]) => <option key={priority} value={priority}>{cfg.label}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Est. Hours</label>
+              <label className={labelClass}>{t('taskModal.estHours')}</label>
               <input type="number" min="0" step="0.5" className={inputClass} value={form.estimatedHours} onChange={(event) => setField('estimatedHours', event.target.value)} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className={labelClass}>Assignee</label>
+              <label className={labelClass}>{t('taskModal.assignee')}</label>
               <select className={inputClass} value={form.assigneeStudentId} onChange={(event) => setField('assigneeStudentId', event.target.value)}>
-                <option value="">Unassigned</option>
+                <option value="">{t('taskModal.unassigned')}</option>
                 {teamMembers.map((member) => <option key={memberId(member)} value={memberId(member)}>{memberName(member)}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Start Date</label>
+              <label className={labelClass}>{t('taskModal.startDate')}</label>
               <input type="date" min={minDate} className={inputClass} value={form.startDate} onChange={(event) => setField('startDate', event.target.value)} />
             </div>
             <div>
-              <label className={labelClass}>Due Date</label>
+              <label className={labelClass}>{t('taskModal.dueDate')}</label>
               <input type="date" min={form.startDate || minDate} className={inputClass} value={form.dueDate} onChange={(event) => setField('dueDate', event.target.value)} />
             </div>
           </div>
 
           <div>
-            <label className={labelClass}>Tags</label>
-            <input className={inputClass} placeholder="pitch, customer, prototype" value={form.tags} onChange={(event) => setField('tags', event.target.value)} />
+            <label className={labelClass}>{t('taskModal.tags')}</label>
+            <input className={inputClass} placeholder={t('taskModal.pitchCustomerPrototype')} value={form.tags} onChange={(event) => setField('tags', event.target.value)} />
           </div>
 
           <div>
-            <label className={labelClass}>Checklist</label>
+            <label className={labelClass}>{t('taskCard.checklist')}</label>
             <div className="mb-2 space-y-2">
               {form.checklist.map((item, index) => (
                 <div key={`${item.text}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
                   <input type="checkbox" checked={item.isCompleted} onChange={() => toggleCheckItem(index)} className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600" />
                   <span className={`flex-1 text-sm ${item.isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{item.text}</span>
-                  <button type="button" onClick={() => removeCheckItem(index)} className="rounded px-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove checklist item ${item.text}`}>
-                    Remove
+                  <button type="button" onClick={() => removeCheckItem(index)} className="rounded px-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={t('taskModal.removeChecklistItem', { text: item.text })}>
+                    {t('common:actions.remove')}
                   </button>
                 </div>
               ))}
@@ -227,7 +229,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
             <div className="flex gap-2">
               <input
                 className={`${inputClass} flex-1`}
-                placeholder="Add checklist item"
+                placeholder={t('taskModal.addChecklistItem')}
                 value={newCheckItem}
                 onChange={(event) => setNewCheckItem(event.target.value)}
                 onKeyDown={(event) => {
@@ -238,7 +240,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
                 }}
               />
               <button type="button" onClick={addCheckItem} className="rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200">
-                Add
+                {t('common:actions.add')}
               </button>
             </div>
           </div>
@@ -246,11 +248,11 @@ export default function TaskModal({ isOpen, onClose, onSave, task, teamMembers, 
 
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
           <button type="button" onClick={onClose} disabled={loading} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50">
-            Cancel
+            {t('common:actions.cancel')}
           </button>
           <button type="button" onClick={handleSubmit} disabled={loading} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEdit ? 'Save Changes' : 'Create Task'}
+            {isEdit ? t('taskModal.saveChanges') : t('taskModal.createTask')}
           </button>
         </div>
       </div>

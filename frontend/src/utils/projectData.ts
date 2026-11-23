@@ -33,6 +33,8 @@ import type {
   ProjectEvidenceStatus,
 } from '../types/projectData.ts';
 import { haveSameIndustrySelection, resolveIndustryIds, validateIndustrySelection } from './projectWorkspace.ts';
+import i18n from '../i18n/index.ts';
+import { formatNumber as fmtNumber, formatDateTime as fmtDateTime, formatDate as fmtDate } from '../i18n/format.ts';
 
 export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
 export const PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH = 500;
@@ -41,7 +43,7 @@ export const PROJECT_DATA_EMPTY_VALUE = '-';
 export const SHOWCASE_METRICS_REFERENCE_NOTE = 'Chỉ mang tính tham khảo, không dùng để xếp hạng hay trao giải.';
 
 export const displayShowcaseMetric = (value: number | null | undefined): string =>
-  value == null ? '—' : value.toLocaleString('en-US');
+  value == null ? '—' : fmtNumber(value);
 
 /** Most values one multi-select filter carries; the API rejects more, and it keeps shared links short. */
 export const PROJECT_DATA_MAX_FILTER_VALUES = 100;
@@ -80,18 +82,18 @@ const MULTI_FILTER_KEYS: readonly MultiFilterKey[] = [
 const FILTER_KEYS: readonly FilterKey[] = [...SCALAR_FILTER_KEYS, ...MULTI_FILTER_KEYS];
 
 export const FILTER_LABELS: Record<FilterKey, string> = {
-  subjectCode: 'Subject',
-  semester: 'Semester',
-  year: 'Year',
-  group: 'Group',
-  startupIndustry: 'Startup industry',
-  major: 'Major',
-  lecturerId: 'Lecturer',
-  mentorId: 'Mentor',
-  achievement: 'Achievement',
-  competition: 'Competition',
-  competitionStage: 'Competition stage',
-  competitionYear: 'Competition year',
+  get subjectCode() { return i18n.t('utils:projectData.subject'); },
+  get semester() { return i18n.t('utils:projectData.semester'); },
+  get year() { return i18n.t('utils:projectData.year'); },
+  get group() { return i18n.t('utils:projectData.group'); },
+  get startupIndustry() { return i18n.t('utils:projectData.startupIndustry'); },
+  get major() { return i18n.t('utils:projectData.major'); },
+  get lecturerId() { return i18n.t('utils:projectData.lecturer'); },
+  get mentorId() { return i18n.t('utils:projectData.mentor'); },
+  get achievement() { return i18n.t('utils:projectData.achievement'); },
+  get competition() { return i18n.t('utils:projectData.competition'); },
+  get competitionStage() { return i18n.t('utils:projectData.competitionStage'); },
+  get competitionYear() { return i18n.t('utils:projectData.competitionYear'); },
 };
 
 const toPositiveInteger = (value: string | null): number | null => {
@@ -306,7 +308,7 @@ export function projectDataHistoryKey(userId: string | undefined, projectId: str
 export function formatHistoryDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
-  return date.toLocaleString('en-GB', {
+  return fmtDateTime(date, {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   });
 }
@@ -333,13 +335,13 @@ export function describeHistoryEntry(entry: ProjectAchievementHistoryItem): Hist
 }
 
 export function historyActionLabel(action: string): string {
-  return action === 'ACHIEVEMENTS_CARRIED_OVER' ? 'Carried over' : 'Changed';
+  return action === 'ACHIEVEMENTS_CARRIED_OVER' ? i18n.t('utils:projectData.carriedOver') : i18n.t('utils:projectData.changed');
 }
 
 /** Says so when the list shows only the latest entries of a longer history. */
 export function historyTruncationNotice(history: { totalCount: number; items: readonly unknown[] }): string | null {
   return history.totalCount > history.items.length
-    ? `Showing the latest ${history.items.length} of ${history.totalCount} updates.`
+    ? i18n.t('utils:projectData.showingTheLatestOfUpdates', { length: history.items.length, totalCount: history.totalCount })
     : null;
 }
 
@@ -446,10 +448,10 @@ export function summarizeList(values: readonly string[] | null | undefined, visi
 }
 
 export function pageSummary(page: { pageIndex: number; pageSize: number; totalItems: number }): string {
-  if (page.totalItems === 0) return 'No projects';
+  if (page.totalItems === 0) return i18n.t('utils:projectData.noProjects');
   const first = (page.pageIndex - 1) * page.pageSize + 1;
   const last = Math.min(page.totalItems, page.pageIndex * page.pageSize);
-  return first > page.totalItems ? `${page.totalItems} projects` : `${first}–${last} of ${page.totalItems} projects`;
+  return first > page.totalItems ? `${page.totalItems} projects` : i18n.t('utils:projectData.ofProjects', { first, last, totalItems: page.totalItems });
 }
 
 /** The Startup Workspace of exactly this team (the route also used by the workspace hub). */
@@ -582,7 +584,7 @@ export function formatEvidenceDate(iso: string | null | undefined): string {
   if (!iso) return PROJECT_DATA_EMPTY_VALUE;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return fmtDate(date, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** A 0-10 score with at most two decimals and no trailing zeros ("7.6", "8", "7.25"). */
@@ -598,9 +600,9 @@ export interface EvidenceStatusView {
 }
 
 const EVIDENCE_STATUS_VIEWS: Record<ProjectEvidenceStatus, EvidenceStatusView> = {
-  Published: { label: 'Published', tone: 'success' },
-  PendingPublication: { label: 'Pending publication', tone: 'warning' },
-  NotGraded: { label: 'Not graded', tone: 'neutral' },
+  Published: { get label() { return i18n.t('utils:projectData.published'); }, tone: 'success' },
+  PendingPublication: { get label() { return i18n.t('utils:projectData.pendingPublication'); }, tone: 'warning' },
+  NotGraded: { get label() { return i18n.t('utils:projectData.notGraded'); }, tone: 'neutral' },
 };
 
 export function describeEvidenceStatus(status: ProjectEvidenceStatus): EvidenceStatusView {
@@ -611,8 +613,8 @@ export function describeEvidenceStatus(status: ProjectEvidenceStatus): EvidenceS
 export function describeEvidenceWeight(component: { kind: string; checkpointNumber: number | null; weightPercent: number }): string {
   const weight = `${Number(component.weightPercent.toFixed(2))}% of the course score`;
   return component.kind === 'Checkpoint' && component.checkpointNumber !== null
-    ? `Checkpoint ${component.checkpointNumber} · ${weight}`
-    : `Assessment · ${weight}`;
+    ? i18n.t('utils:projectData.checkpoint', { checkpointNumber: component.checkpointNumber, weight })
+    : i18n.t('utils:projectData.assessment', { weight });
 }
 
 /** True once at least one part was graded (published or waiting for publication); otherwise the section shows its empty state. */
@@ -622,18 +624,18 @@ export function hasEvidenceGrades(evaluation: ProjectEvidenceEvaluation): boolea
 
 /** The mentor slots use the names staff know from the class mentor board. */
 export function evidenceMentorSlotLabel(slot: ProjectEvidenceMentor['slot']): string {
-  return slot === 'Academic' ? 'Lecturer mentor' : 'Enterprise mentor';
+  return slot === 'Academic' ? i18n.t('utils:managedUserForm.lecturerMentor') : i18n.t('utils:managedUserForm.enterpriseMentor');
 }
 
 export function evidenceSessionsLabel(count: number): string {
-  if (count <= 0) return 'No completed sessions';
-  return count === 1 ? '1 completed session' : `${count} completed sessions`;
+  if (count <= 0) return i18n.t('utils:projectData.noCompletedSessions');
+  return count === 1 ? i18n.t('utils:projectData.1CompletedSession') : i18n.t('utils:projectData.completedSessions', { countValue: count });
 }
 
 /** "Since 4 Oct 2026" for a mentor still on the team, "4 Oct 2026 - 12 Nov 2026" for one who left. */
 export function describeEvidenceMentorPeriod(mentor: Pick<ProjectEvidenceMentor, 'assignedAtUtc' | 'endedAtUtc'>): string {
   const started = formatEvidenceDate(mentor.assignedAtUtc);
-  return mentor.endedAtUtc ? `${started} - ${formatEvidenceDate(mentor.endedAtUtc)}` : `Since ${started}`;
+  return mentor.endedAtUtc ? `${started} - ${formatEvidenceDate(mentor.endedAtUtc)}` : i18n.t('utils:projectData.since', { started });
 }
 
 /** The one-line summary above the mentor list; empty when nobody mentored the team. */
@@ -641,6 +643,6 @@ export function describeEvidenceMentoring(mentoring: ProjectEvidenceMentoring): 
   if (mentoring.mentors.length === 0) return '';
   const sessions = evidenceSessionsLabel(mentoring.totalCompletedSessions);
   return mentoring.lastSessionAtUtc
-    ? `${sessions} in total · last on ${formatEvidenceDate(mentoring.lastSessionAtUtc)}`
+    ? i18n.t('utils:projectData.inTotalLastOn', { sessions, v2: formatEvidenceDate(mentoring.lastSessionAtUtc) })
     : sessions;
 }

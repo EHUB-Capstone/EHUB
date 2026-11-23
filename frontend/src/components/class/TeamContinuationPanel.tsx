@@ -6,6 +6,7 @@ import {
   continuationOutcomeLabel,
   hasContinuationActivity,
 } from '../../utils/teamContinuity';
+import { useTranslation } from 'react-i18next';
 
 interface TeamContinuationPanelProps {
   summary: TeamContinuationSummary | null | undefined;
@@ -23,19 +24,20 @@ const outcomeStyles: Record<TeamContinuationItem['outcome'], string> = {
 };
 
 export default function TeamContinuationPanel({ summary, applied }: TeamContinuationPanelProps) {
+  const { t } = useTranslation('class');
   if (!summary || !hasContinuationActivity(summary)) return null;
 
   const attention = summary.items.some(continuationNeedsAttention);
 
   return (
     <section
-      aria-label="Team continuation from the previous semester"
+      aria-label={t('teamContinuationPanel.teamContinuationFromThePreviousSemester')}
       className={`overflow-hidden rounded-xl border ${attention ? 'border-amber-200' : 'border-blue-200'}`}
     >
       <div className={`flex items-start gap-2.5 px-4 py-3 text-sm ${attention ? 'bg-amber-50 text-amber-900' : 'bg-blue-50 text-blue-900'}`}>
         <History className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <div>
-          <p className="font-semibold">Teams continued from the previous semester</p>
+          <p className="font-semibold">{t('teamContinuationPanel.teamsContinuedFromThePreviousSemester')}</p>
           <p className="mt-0.5 text-xs">{continuationHeadline(summary, applied)}.</p>
         </div>
       </div>
@@ -48,8 +50,8 @@ export default function TeamContinuationPanel({ summary, applied }: TeamContinua
                 {continuationOutcomeLabel(item.outcome)}
               </span>
               <span className="text-slate-500">
-                from {item.sourceClassCode}
-                {item.memberCount > 0 ? ` · ${item.memberCount} member${item.memberCount > 1 ? 's' : ''}` : ''}
+                {t('teamContinuationPanel.fromClass', { classCode: item.sourceClassCode })}
+                {item.memberCount > 0 ? ` · ${t('teamContinuationPanel.members', { count: item.memberCount })}` : ''}
               </span>
             </div>
             {item.reasons.length > 0 && (

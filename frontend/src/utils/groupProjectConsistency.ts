@@ -1,4 +1,5 @@
 import type { GroupProjectConsistency, GroupProjectWarning } from '../types/groupProjectConsistency';
+import i18n from '../i18n/index.ts';
 
 const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
@@ -33,13 +34,13 @@ export function evaluateGroupProjectConsistency(
       type: 'GROUP_HAS_MULTIPLE_PROJECTS' as const,
       subject: item.key,
       related: item.values,
-      message: `Group \`${item.key}\` is assigned to multiple projects: ${quote(item.values)}.`,
+      message: i18n.t('utils:groupProjectConsistency.groupIsAssignedToMultipleProjects', { key: item.key, v2: quote(item.values) }),
     })),
     ...collect(pairs.map((pair) => ({ key: pair.project, value: pair.group }))).map((item) => ({
       type: 'PROJECT_HAS_MULTIPLE_GROUPS' as const,
       subject: item.key,
       related: item.values,
-      message: `Project \`${item.key}\` is assigned to multiple groups: ${quote(item.values)}.`,
+      message: i18n.t('utils:groupProjectConsistency.projectIsAssignedToMultipleGroups', { key: item.key, v2: quote(item.values) }),
     })),
   ];
   return { isConsistent: warnings.length === 0, warnings };

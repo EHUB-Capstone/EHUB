@@ -1,6 +1,7 @@
 import { forwardRef, useId, useImperativeHandle, useState } from 'react';
 import { X } from 'lucide-react';
 import EvaluationPanel from '../workspace/EvaluationPanel';
+import { useTranslation } from 'react-i18next';
 
 export interface GradingTarget {
   teamId: string;
@@ -25,6 +26,7 @@ interface CheckpointGradingDialogProps {
 const CheckpointGradingDialog = forwardRef<CheckpointGradingDialogHandle, CheckpointGradingDialogProps>(({
   titlePrefix = '', onClosed,
 }, ref) => {
+  const { t } = useTranslation('evaluation');
   const [target, setTarget] = useState<GradingTarget | null>(null);
   const titleId = useId();
   useImperativeHandle(ref, () => ({ open: setTarget }), []);
@@ -48,14 +50,14 @@ const CheckpointGradingDialog = forwardRef<CheckpointGradingDialogHandle, Checkp
           <div className="min-w-0">
             <p className="text-overline font-bold uppercase tracking-wider text-primary-700">{target.classCode} · {target.teamName}</p>
             <h2 id={titleId} className="truncate text-lg font-black text-slate-900">
-              {titlePrefix}Checkpoint {target.checkpointNumber}: {target.checkpointTitle}
+              {t('checkpointGradingDialog.checkpoint', { titlePrefix, checkpointNumber: target.checkpointNumber, checkpointTitle: target.checkpointTitle })}
             </h2>
           </div>
           <button
             type="button"
             onClick={close}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Close grading dialog"
+            aria-label={t('checkpointGradingDialog.closeGradingDialog')}
           >
             <X className="h-5 w-5" />
           </button>

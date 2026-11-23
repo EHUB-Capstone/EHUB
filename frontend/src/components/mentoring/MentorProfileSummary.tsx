@@ -3,6 +3,7 @@ import { Building2, Download, FileText, Link2 } from 'lucide-react';
 import Button from '../ui/Button';
 import type { MentorProfile } from '../../types/mentoring';
 import { parseMentorCvFormBio, parseMentorProfessionalExperience } from '../../utils/mentorDirectoryBio';
+import { useTranslation } from 'react-i18next';
 
 interface MentorProfileSummaryProps {
   profile: MentorProfile;
@@ -26,19 +27,20 @@ function ProfileLink({ label, value }: { label: string; value: string | null }) 
 }
 
 export default function MentorProfileSummary({ profile, onDownload, downloading }: MentorProfileSummaryProps) {
+  const { t } = useTranslation('mentoring');
   const [bioExpanded, setBioExpanded] = useState(false);
   const bio = profile.bio?.trim() ?? '';
   const parsedBio = parseMentorCvFormBio(bio);
   const workExperience = parseMentorProfessionalExperience(profile.experience);
   const tagGroups = [
-    { title: 'Expertise', values: profile.expertise },
-    { title: 'Skills', values: profile.technologySkills },
-    { title: 'Startup domains', values: profile.startupDomains },
-    { title: 'Mentor tags', values: profile.tags },
+    { title: t('mentorProfileSummary.expertise'), values: profile.expertise },
+    { title: t('mentorProfileSummary.skills'), values: profile.technologySkills },
+    { title: t('mentorProfileSummary.startupDomains'), values: profile.startupDomains },
+    { title: t('mentorProfileSummary.mentorTags'), values: profile.tags },
   ];
-  return <div className="space-y-6" aria-label="Saved mentor profile">
+  return <div className="space-y-6" aria-label={t('mentorProfileSummary.savedMentorProfile')}>
     <div className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-body">
-      <span className="font-semibold text-slate-900">{profile.mentorType === 'Business' ? 'Business mentor' : profile.mentorType === 'IT' ? 'IT / technical mentor' : 'Mentor type not assigned'}</span>
+      <span className="font-semibold text-slate-900">{profile.mentorType === 'Business' ? t('mentorProfileSummary.businessMentor') : profile.mentorType === 'IT' ? t('mentorProfileSummary.itTechnicalMentor') : t('mentorProfileSummary.mentorTypeNotAssigned')}</span>
       {profile.organization?.trim() && <span className="inline-flex items-center gap-1.5 text-slate-600"><Building2 aria-hidden="true" className="h-4 w-4" />{profile.organization}</span>}
     </div>
 
@@ -46,23 +48,23 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
       <h3 className="text-subheading text-secondary">{group.title}</h3>
       {group.values.length > 0 ? <ul className="mt-2 flex flex-wrap gap-2" aria-label={group.title}>{group.values.map(value =>
         <li key={value} className="max-w-full break-words rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-caption font-medium text-slate-700">{value}</li>)}</ul>
-        : <p className="mt-2 text-body text-slate-500">No skills added yet.</p>}
+        : <p className="mt-2 text-body text-slate-500">{t('mentorProfileSummary.noSkillsAddedYet')}</p>}
     </section>)}
 
     {profile.history && <section className="border-t border-slate-200 pt-5" aria-labelledby="mentor-recorded-history">
-      <h3 id="mentor-recorded-history" className="text-subheading text-secondary">Recorded mentoring history</h3>
+      <h3 id="mentor-recorded-history" className="text-subheading text-secondary">{t('mentorProfileSummary.recordedMentoringHistory')}</h3>
       <dl className="mt-3 grid gap-4 sm:grid-cols-2">
-        <div><dt className="text-caption text-slate-500">Mentored teams</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.mentoredTeamCount}</dd></div>
-        <div><dt className="text-caption text-slate-500">Projects with recorded achievements</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.achievementCount}</dd></div>
+        <div><dt className="text-caption text-slate-500">{t('mentorProfileSummary.mentoredTeams')}</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.mentoredTeamCount}</dd></div>
+        <div><dt className="text-caption text-slate-500">{t('mentorProfileSummary.projectsWithRecordedAchievements')}</dt><dd className="mt-1 text-body font-semibold text-secondary">{profile.history.achievementCount}</dd></div>
       </dl>
-      <p className="mt-3 text-caption text-slate-500">Recorded mentoring evidence identifies coached teams. Project achievements are counted when recorded during this mentor’s assignment.</p>
+      <p className="mt-3 text-caption text-slate-500">{t('mentorProfileSummary.recordedMentoringEvidenceIdentifiesCoachedTeams')}</p>
     </section>}
 
     <section className="border-t border-slate-200 pt-5">
-      <h3 className="text-subheading text-secondary">Professional bio</h3>
+      <h3 className="text-subheading text-secondary">{t('mentorDetailModal.professionalBio')}</h3>
       {parsedBio ? <div className="mt-3 space-y-5">
         {parsedBio.education.length > 0 && <div>
-          <h4 className="text-body font-semibold text-slate-800">Education</h4>
+          <h4 className="text-body font-semibold text-slate-800">{t('mentorDetailModal.education')}</h4>
           <ol className="mt-3 space-y-3 border-l-2 border-primary-100 pl-4">
             {parsedBio.education.map((entry, index) => <li key={`${entry.period}-${index}`} className="relative rounded-xl border border-slate-200 bg-white p-4 before:absolute before:-left-[1.35rem] before:top-5 before:h-2.5 before:w-2.5 before:rounded-full before:bg-primary">
               <p className="text-caption font-semibold text-primary-700">{entry.period}</p>
@@ -74,34 +76,34 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
           </ol>
         </div>}
         {parsedBio.thesis.length > 0 && <div>
-          <h4 className="text-body font-semibold text-slate-800">Thesis topic</h4>
+          <h4 className="text-body font-semibold text-slate-800">{t('mentorDetailModal.thesisTopic')}</h4>
           <ul className="mt-2 space-y-2">{parsedBio.thesis.map((detail, index) => <li key={`${detail}-${index}`} className="rounded-lg bg-slate-50 px-3 py-2 text-body-sm leading-6 text-slate-600">{detail}</li>)}</ul>
         </div>}
         {parsedBio.languagesAndCertificates.length > 0 && <div>
-          <h4 className="text-body font-semibold text-slate-800">Languages & certificates</h4>
+          <h4 className="text-body font-semibold text-slate-800">{t('mentorDetailModal.languagesCertificates')}</h4>
           <ul id="mentor-professional-bio-details" className="mt-2 grid gap-2 sm:grid-cols-2">
             {(bioExpanded ? parsedBio.languagesAndCertificates : parsedBio.languagesAndCertificates.slice(0, 6)).map((detail, index) => <li key={`${detail}-${index}`} className="rounded-lg bg-slate-50 px-3 py-2 text-body-sm leading-6 text-slate-600">{detail}</li>)}
           </ul>
           {parsedBio.languagesAndCertificates.length > 6 && <button type="button" aria-expanded={bioExpanded} aria-controls="mentor-professional-bio-details"
             onClick={() => setBioExpanded(expanded => !expanded)} className="mt-2 text-body-sm font-medium text-primary-700 hover:underline">
-            {bioExpanded ? 'Thu gọn' : `Xem thêm ${parsedBio.languagesAndCertificates.length - 6} mục`}
+            {bioExpanded ? t('mentorProfileSummary.thuGon') : t('mentorProfileSummary.xemThemMuc', { v1: parsedBio.languagesAndCertificates.length - 6 })}
           </button>}
         </div>}
       </div> : <>
         <p id="mentor-professional-bio" className={`mt-2 whitespace-pre-wrap break-words text-body leading-7 text-slate-600 ${bio && !bioExpanded ? 'line-clamp-3' : ''}`}>
-          {bio || 'No bio added yet.'}
+          {bio || t('mentorProfileSummary.noBioAddedYet')}
         </p>
         {bio.length > 180 && <button type="button" aria-expanded={bioExpanded} aria-controls="mentor-professional-bio"
           onClick={() => setBioExpanded(expanded => !expanded)} className="mt-2 text-body-sm font-medium text-primary-700 hover:underline">
-          {bioExpanded ? 'Thu gọn' : 'Xem đầy đủ'}
+          {bioExpanded ? t('mentorProfileSummary.thuGon') : t('mentorProfileSummary.xemDayDu')}
         </button>}
       </>}
     </section>
     <section className="border-t border-slate-200 pt-5">
-      <h3 className="text-subheading text-secondary">Work experience</h3>
+      <h3 className="text-subheading text-secondary">{t('mentorProfileSummary.workExperience')}</h3>
       {workExperience.length > 0 ? <ul className="mt-3 space-y-2">{workExperience.map((entry, index) =>
         <li key={`${entry}-${index}`} className="rounded-lg bg-slate-50 px-3 py-2 text-body leading-6 text-slate-600">{entry}</li>)}</ul>
-        : <p className="mt-2 text-body text-slate-500">No work experience added yet.</p>}
+        : <p className="mt-2 text-body text-slate-500">{t('mentorProfileSummary.noWorkExperienceAddedYet')}</p>}
       {profile.experiences.length > 0 && <ul className="mt-4 space-y-3">{profile.experiences.map(entry =>
         <li key={`${entry.kind}:${entry.area}`} className="rounded-xl bg-slate-50 p-4 text-body">
           <p className="font-medium text-slate-900">{entry.area}</p>
@@ -111,20 +113,20 @@ export default function MentorProfileSummary({ profile, onDownload, downloading 
     </section>
 
     {(profile.linkedInUrl || profile.portfolioUrl) && <dl className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
-      <ProfileLink label="LinkedIn" value={profile.linkedInUrl} />
-      <ProfileLink label="Portfolio website" value={profile.portfolioUrl} />
+      <ProfileLink label={t('mentorDetailModal.linkedin')} value={profile.linkedInUrl} />
+      <ProfileLink label={t('mentorProfileSummary.portfolioWebsite')} value={profile.portfolioUrl} />
     </dl>}
 
     <section className="border-t border-slate-200 pt-5">
-      <h3 className="text-subheading text-secondary">Documents</h3>
+      <h3 className="text-subheading text-secondary">{t('mentorProfileSummary.documents')}</h3>
       <div className="mt-3 space-y-3">{(['cv', 'portfolio'] as const).map(kind => {
         const fileName = kind === 'cv' ? profile.cvFileName : profile.portfolioFileName;
         return <div key={kind} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-4">
           <FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
-          <div className="min-w-0 flex-1"><p className="text-body font-medium text-slate-900">{kind === 'cv' ? 'CV / résumé' : 'Portfolio'}</p>
-            <p className="mt-0.5 break-all text-caption text-slate-500">{fileName || 'No document uploaded'}</p></div>
+          <div className="min-w-0 flex-1"><p className="text-body font-medium text-slate-900">{kind === 'cv' ? t('mentorProfileSummary.cvResume') : t('mentorProfileSummary.portfolio')}</p>
+            <p className="mt-0.5 break-all text-caption text-slate-500">{fileName || t('mentorProfileSummary.noDocumentUploaded')}</p></div>
           {fileName && <Button variant="outline" size="sm" icon={Download} isLoading={downloading === kind} disabled={downloading !== null}
-            aria-label={kind === 'cv' ? 'Download CV' : 'Download portfolio'} onClick={() => onDownload(kind)}>Download</Button>}
+            aria-label={kind === 'cv' ? t('mentorDetailModal.downloadCv') : t('mentorDetailModal.downloadPortfolio')} onClick={() => onDownload(kind)}>{t('common:actions.download')}</Button>}
         </div>;
       })}</div>
     </section>

@@ -1,8 +1,9 @@
+import i18n from '../i18n/index.ts';
 export type MentorKindValue = 'Enterprise' | 'Academic';
 
 export const MENTOR_KIND_OPTIONS: ReadonlyArray<{ value: MentorKindValue; label: string }> = [
-  { value: 'Enterprise', label: 'Enterprise mentor' },
-  { value: 'Academic', label: 'Lecturer mentor' },
+  { value: 'Enterprise', get label() { return i18n.t('utils:managedUserForm.enterpriseMentor'); } },
+  { value: 'Academic', get label() { return i18n.t('utils:managedUserForm.lecturerMentor'); } },
 ];
 
 /** A mentor must be either an enterprise or a lecturer mentor, because that decides which team slot they can fill. */
@@ -10,7 +11,7 @@ export function mentorTypeError(role: string, mentorType: string): string | null
   if (role !== 'MENTOR') return null;
   return MENTOR_KIND_OPTIONS.some(option => option.value === mentorType)
     ? null
-    : 'Choose whether this mentor is an Enterprise mentor or a Lecturer mentor';
+    : i18n.t('utils:managedUserForm.chooseWhetherThisMentorIsAn');
 }
 
 const MENTOR_ONLY_FIELDS = ['mentorType', 'expertise', 'bio', 'availabilityNote'] as const;

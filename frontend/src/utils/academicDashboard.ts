@@ -1,5 +1,6 @@
 import type { AcademicOverviewMetrics, AcademicOverviewScope } from '../types/dashboard';
 import { parseApiError } from './apiError.ts';
+import i18n from '../i18n/index.ts';
 
 export type AcademicOverviewState = 'loading' | 'error' | 'unassigned' | 'filtered-empty' | 'ready';
 
@@ -23,12 +24,12 @@ export const resolveAcademicOverviewState = ({
 };
 
 export const academicOverviewMetricEntries = (metrics: AcademicOverviewMetrics) => [
-  { key: 'classes', title: 'Total Classes', value: metrics.totalClasses },
-  { key: 'teams', title: 'Total Teams', value: metrics.totalTeams },
-  { key: 'projects', title: 'Total Projects', value: metrics.totalProjects },
-  { key: 'submissions', title: 'Total Submissions', value: metrics.totalSubmissions },
-  { key: 'evaluations', title: 'Total Evaluations', value: metrics.totalEvaluations },
-  { key: 'potential-projects', title: 'Potential Projects', value: metrics.totalPotentialProjects },
+  { key: 'classes', title: i18n.t('utils:academicDashboard.totalClasses'), value: metrics.totalClasses },
+  { key: 'teams', title: i18n.t('utils:academicDashboard.totalTeams'), value: metrics.totalTeams },
+  { key: 'projects', title: i18n.t('utils:academicDashboard.totalProjects'), value: metrics.totalProjects },
+  { key: 'submissions', title: i18n.t('utils:academicDashboard.totalSubmissions'), value: metrics.totalSubmissions },
+  { key: 'evaluations', title: i18n.t('utils:academicDashboard.totalEvaluations'), value: metrics.totalEvaluations },
+  { key: 'potential-projects', title: i18n.t('utils:academicDashboard.potentialProjects'), value: metrics.totalPotentialProjects },
 ] as const;
 
 export const percentage = (value: number, total: number): number => {

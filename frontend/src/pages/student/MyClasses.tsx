@@ -5,8 +5,10 @@ import toast from 'react-hot-toast';
 import { classApi } from '../../api/classApi';
 import EmptyState from '../../components/ui/EmptyState';
 import { formatSemesterCode } from '../../utils/semester';
+import { useTranslation } from 'react-i18next';
 
 export default function MyClasses() {
+  const { t } = useTranslation('class');
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<'Current' | 'History'>('Current');
@@ -18,7 +20,7 @@ export default function MyClasses() {
         const data = res?.data?.classes || res?.classes || [];
         setClasses(data);
       } catch (err) {
-        toast.error(err?.message || 'Failed to load your classes');
+        toast.error(err?.message || t('myClasses.failedToLoadYourClasses'));
       } finally {
         setLoading(false);
       }
@@ -30,7 +32,7 @@ export default function MyClasses() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading your classes...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('myClasses.loadingYourClasses')}</p>
       </div>
     );
   }
@@ -40,8 +42,8 @@ export default function MyClasses() {
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-heading sm:text-display text-secondary tracking-tight">My Classes</h1>
-          <p className="text-sm text-slate-500 mt-1">View current enrollments or completed academic history.</p>
+          <h1 className="text-heading sm:text-display text-secondary tracking-tight">{t('myClasses.myClasses')}</h1>
+          <p className="text-sm text-slate-500 mt-1">{t('myClasses.viewCurrentEnrollmentsOrCompletedAcademic')}</p>
         </div>
         <div className="inline-flex self-start rounded-xl border border-slate-200 bg-slate-50 p-1">
           {(['Current', 'History'] as const).map(item => (
@@ -61,10 +63,10 @@ export default function MyClasses() {
         <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
           <EmptyState
             icon={GraduationCap}
-            title={scope === 'Current' ? 'You are not enrolled in any current class' : 'No completed classes yet'}
+            title={scope === 'Current' ? t('myClasses.youAreNotEnrolledInAny') : t('myClasses.noCompletedClassesYet')}
             description={scope === 'Current'
-              ? 'Please contact your lecturer or administrator if you think this is a mistake.'
-              : 'Completed classes will appear here after the lecturer closes the class.'}
+              ? t('myClasses.pleaseContactYourLecturerOrAdministrator')
+              : t('myClasses.completedClassesWillAppearHereAfter')}
           />
         </div>
       ) : (
@@ -107,7 +109,7 @@ export default function MyClasses() {
 
                   {cls.classStatus === 'Completed' && (
                     <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                      Completed
+                      {t('studentTable.completed')}
                     </span>
                   )}
 
@@ -129,7 +131,7 @@ export default function MyClasses() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Lecturer</p>
+                      <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{t('classDetail.lecturer')}</p>
                       <p className="text-sm font-semibold text-slate-800 truncate">{lectName}</p>
                       {lectEmail && (
                         <p className="text-xs text-slate-400 truncate flex items-center gap-1 mt-0.5">
@@ -143,7 +145,7 @@ export default function MyClasses() {
                   {/* Mentors List */}
                   {cls.mentors && cls.mentors.length > 0 && (
                     <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-400 shrink-0">Mentors:</span>
+                      <span className="font-semibold text-slate-400 shrink-0">{t('myClasses.mentors')}</span>
                       <span className="truncate font-medium">{cls.mentors.map(m => m.fullName || 'Unknown').join(', ')}</span>
                     </div>
                   )}
@@ -151,12 +153,12 @@ export default function MyClasses() {
 
                 {/* Footer action */}
                 <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
-                  <span className="text-xs text-slate-400 font-medium">Click to see your team or classmates</span>
+                  <span className="text-xs text-slate-400 font-medium">{t('myClasses.clickToSeeYourTeamOr')}</span>
                   <span
                     aria-hidden="true"
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-xs group-hover:border-primary group-hover:text-primary-700 transition-colors"
                   >
-                    Enter Class <ArrowRight className="w-3.5 h-3.5" />
+                    {t('myClasses.enterClass')} <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
               </div>

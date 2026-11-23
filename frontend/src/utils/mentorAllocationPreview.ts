@@ -7,6 +7,7 @@ import type {
   MentorFitCriterionKey,
   MentorType,
 } from '../types/mentorAdmin';
+import i18n from '../i18n/index.ts';
 
 export type SlotState = 'existing' | 'retained' | 'allocated' | 'manual' | 'unfilled';
 
@@ -291,10 +292,10 @@ export function keepAppliedEdits(edits: MentorAllocationEdit[], preview: MentorA
 }
 
 export const skipReasonLabel: Record<MentorAllocationSkipReason, string> = {
-  MentorNotActiveInSemester: 'Not active this semester · needs a new mentor',
-  MentorUnavailable: 'Unavailable',
-  SlotAlreadyFilled: 'Slot already filled',
-  NoContinuedTeam: 'Team does not continue',
+  get MentorNotActiveInSemester() { return i18n.t('utils:mentorAllocationPreview.notActiveThisSemesterNeedsA'); },
+  get MentorUnavailable() { return i18n.t('utils:mentorProfileForm.unavailable'); },
+  get SlotAlreadyFilled() { return i18n.t('utils:mentorAllocationPreview.slotAlreadyFilled'); },
+  get NoContinuedTeam() { return i18n.t('utils:mentorAllocationPreview.teamDoesNotContinue'); },
 };
 
 export type TeamGridFilter = 'all' | 'attention' | 'changed';

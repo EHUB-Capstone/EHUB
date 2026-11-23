@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { X, Calendar, Clock, MapPin, Link2, Monitor, Globe, Users } from 'lucide-react';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 const WorkshopPreviewModal = ({
   isOpen,
@@ -11,6 +12,7 @@ const WorkshopPreviewModal = ({
   isEditing,
   loading
 }) => {
+  const { t } = useTranslation('workspace');
   if (!isOpen) return null;
 
   const {
@@ -36,9 +38,9 @@ const WorkshopPreviewModal = ({
 
   const getDerivedFormatBadge = () => {
     switch (format) {
-      case 'ONLINE': return <span className="bg-secondary-100 text-secondary px-2 py-0.5 rounded text-xs font-bold">ONLINE</span>;
-      case 'OFFLINE': return <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">OFFLINE</span>;
-      case 'HYBRID': return <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">HYBRID</span>;
+      case 'ONLINE': return <span className="bg-secondary-100 text-secondary px-2 py-0.5 rounded text-xs font-bold">{t('workshopForm.online')}</span>;
+      case 'OFFLINE': return <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">{t('workshopForm.offline')}</span>;
+      case 'HYBRID': return <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">{t('workshopPreviewModal.hybrid')}</span>;
       default: return null;
     }
   };
@@ -50,7 +52,7 @@ const WorkshopPreviewModal = ({
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
           <h2 className="text-xl font-bold text-slate-800">
-            Workshop Summary
+            {t('workshopPreviewModal.workshopSummary')}
           </h2>
           <button
             onClick={onClose}
@@ -79,14 +81,14 @@ const WorkshopPreviewModal = ({
               <div className="flex items-start gap-2">
                 <Calendar className="w-4 h-4 text-slate-400 mt-0.5" />
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase">Date</p>
-                  <p className="text-sm text-slate-800">{startDate} to {endDate}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase">{t('mentoringPanel.date')}</p>
+                  <p className="text-sm text-slate-800">{t('workshopPreviewModal.to', { startDate, endDate })}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
                 <Clock className="w-4 h-4 text-slate-400 mt-0.5" />
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase">Time</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase">{t('workshopPreviewModal.time')}</p>
                   <p className="text-sm text-slate-800">{startTime} - {endTime}</p>
                 </div>
               </div>
@@ -96,9 +98,9 @@ const WorkshopPreviewModal = ({
                 <div className="flex items-start gap-2">
                   <Link2 className="w-4 h-4 text-secondary mt-0.5" />
                   <div>
-                    <p className="text-xs font-semibold text-secondary/80 uppercase">Meeting URL</p>
+                    <p className="text-xs font-semibold text-secondary/80 uppercase">{t('workshopPreviewModal.meetingUrl')}</p>
                     <p className="text-sm text-slate-800 truncate max-w-[200px]" title={meetingLink}>
-                      {meetingLink || 'Not provided'}
+                      {meetingLink || t('projectDirectionCard.notProvided')}
                     </p>
                   </div>
                 </div>
@@ -107,8 +109,8 @@ const WorkshopPreviewModal = ({
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-amber-500 mt-0.5" />
                   <div>
-                    <p className="text-xs font-semibold text-amber-600/80 uppercase">Location</p>
-                    <p className="text-sm text-slate-800">{location || 'Not provided'}</p>
+                    <p className="text-xs font-semibold text-amber-600/80 uppercase">{t('workshopPreviewModal.location')}</p>
+                    <p className="text-sm text-slate-800">{location || t('projectDirectionCard.notProvided')}</p>
                   </div>
                 </div>
               )}
@@ -123,7 +125,7 @@ const WorkshopPreviewModal = ({
               <div className="border border-secondary-100 rounded-xl bg-secondary-50 overflow-hidden flex flex-col">
                 <div className="bg-secondary-50 px-3 py-2 border-b border-secondary-100 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-secondary uppercase">
-                    <Monitor className="w-3.5 h-3.5" /> Online Classes
+                    <Monitor className="w-3.5 h-3.5" /> {t('workshopPreviewModal.onlineClasses')}
                   </div>
                   <span className="bg-secondary-100 text-secondary text-overline px-1.5 py-0.5 rounded-full font-bold">
                     {onlineClassIds.length}
@@ -138,7 +140,7 @@ const WorkshopPreviewModal = ({
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-slate-400 italic text-center py-2">No online classes</p>
+                    <p className="text-xs text-slate-400 italic text-center py-2">{t('workshopPreviewModal.noOnlineClasses')}</p>
                   )}
                 </div>
               </div>
@@ -147,7 +149,7 @@ const WorkshopPreviewModal = ({
               <div className="border border-amber-100 rounded-xl bg-amber-50/30 overflow-hidden flex flex-col">
                 <div className="bg-amber-50 px-3 py-2 border-b border-amber-100 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 uppercase">
-                    <Globe className="w-3.5 h-3.5" /> Offline Classes
+                    <Globe className="w-3.5 h-3.5" /> {t('workshopPreviewModal.offlineClasses')}
                   </div>
                   <span className="bg-amber-200 text-amber-800 text-overline px-1.5 py-0.5 rounded-full font-bold">
                     {offlineClassIds.length}
@@ -162,7 +164,7 @@ const WorkshopPreviewModal = ({
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-slate-400 italic text-center py-2">No offline classes</p>
+                    <p className="text-xs text-slate-400 italic text-center py-2">{t('workshopPreviewModal.noOfflineClasses')}</p>
                   )}
                 </div>
               </div>
@@ -171,7 +173,7 @@ const WorkshopPreviewModal = ({
           ) : (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-2 text-sm text-slate-600">
               <Users className="w-4 h-4" />
-              Audience Scope: <span className="font-semibold">{targetAudience}</span>
+              {t('workshopPreviewModal.audienceScope')} <span className="font-semibold">{targetAudience}</span>
             </div>
           )}
 
@@ -185,7 +187,7 @@ const WorkshopPreviewModal = ({
             disabled={loading}
             className="px-5 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
           >
-            Cancel
+            {t('common:actions.cancel')}
           </button>
           <button
             type="button"
@@ -193,7 +195,7 @@ const WorkshopPreviewModal = ({
             disabled={loading}
             className="bg-primary text-white font-semibold px-6 py-2.5 rounded-xl text-sm hover:shadow-glow-primary active:scale-[0.98] transition-all disabled:opacity-50"
           >
-            {loading ? 'Processing...' : (isEditing ? 'Confirm Update Workshop' : 'Confirm Create Workshop')}
+            {loading ? t('workshopCheckInModal.processing') : (isEditing ? t('workshopPreviewModal.confirmUpdateWorkshop') : t('workshopPreviewModal.confirmCreateWorkshop'))}
           </button>
         </div>
       </div>

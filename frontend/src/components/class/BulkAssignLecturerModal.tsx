@@ -9,6 +9,7 @@ import { subjectApi } from '../../api/subjectApi';
 import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 interface LecturerOption {
   _id: string;
@@ -31,6 +32,7 @@ const BulkAssignLecturerModal = ({
   onClose,
   onAssign,
 }: BulkAssignLecturerModalProps) => {
+  const { t } = useTranslation('class');
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
@@ -77,7 +79,7 @@ const BulkAssignLecturerModal = ({
       .catch(error => {
         if (active) {
           setLecturers([]);
-          toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+          toast.error(parseApiError(error, t('bulkAssignLecturerModal.failedToLoadSemesterLecturers')).message);
         }
       })
       .finally(() => {
@@ -94,10 +96,10 @@ const BulkAssignLecturerModal = ({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Assign Lecturer to Selected Classes" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('bulkAssignLecturerModal.assignLecturerToSelectedClasses')} size="lg">
       <div className="space-y-5">
         <div className="rounded-xl border border-primary-100 bg-primary-50/50 p-3">
-          <p className="text-sm font-semibold text-primary-700">{classes.length} classes will use the same lecturer</p>
+          <p className="text-sm font-semibold text-primary-700">{t('bulkAssignLecturerModal.classesWillUseTheSameLecturer', { length: classes.length })}</p>
           <div className="mt-2 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
             {classes.map((item) => (
               <span key={item._id} className="rounded-md bg-white px-2 py-1 font-mono text-xs font-semibold text-slate-600 shadow-xs">
@@ -106,7 +108,7 @@ const BulkAssignLecturerModal = ({
             ))}
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Each class is validated independently. Schedule conflicts or stale class versions will be reported without reverting successful assignments.
+            {t('bulkAssignLecturerModal.eachClassIsValidatedIndependentlySchedule')}
           </p>
         </div>
 
@@ -115,7 +117,7 @@ const BulkAssignLecturerModal = ({
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search lecturers by name or email..."
+            placeholder={t('bulkAssignLecturerModal.searchLecturersByNameOrEmail')}
             className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
         </div>
@@ -124,7 +126,7 @@ const BulkAssignLecturerModal = ({
           {loadingLecturers ? (
             <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : options.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No active lecturer is listed for every selected semester</p>
+            <p className="py-8 text-center text-sm text-slate-400">{t('bulkAssignLecturerModal.noActiveLecturerIsListedFor')}</p>
           ) : options.map((lecturer) => {
             const selected = lecturer._id === selectedId;
             return (
@@ -148,7 +150,7 @@ const BulkAssignLecturerModal = ({
         </div>
 
         <div className="flex gap-3 border-t border-slate-100 pt-4">
-          <Button variant="outline" className="flex-1" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="outline" className="flex-1" onClick={onClose} disabled={isSubmitting}>{t('common:actions.cancel')}</Button>
           <Button
             variant="primary"
             className="flex-1"
@@ -156,7 +158,7 @@ const BulkAssignLecturerModal = ({
             disabled={!selectedId || isSubmitting || loadingLecturers}
             isLoading={isSubmitting}
           >
-            Assign to {classes.length} classes
+            {t('bulkAssignLecturerModal.assignToClasses', { length: classes.length })}
           </Button>
         </div>
       </div>

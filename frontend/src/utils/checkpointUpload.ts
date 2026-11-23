@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 export const CHECKPOINT_UPLOAD_ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.pptx'] as const;
 export const CHECKPOINT_UPLOAD_MAX_FILE_SIZE_MB = 100;
 /** Active files a team may keep on one checkpoint (enforced by the backend as well). */
@@ -94,12 +95,12 @@ export function checkpointUploadFailureMessage(
   if (stage === 'storage') {
     // Object storage answers in XML (or not at all when CORS/network fails), never with the API envelope.
     if (uploadError.response?.status === 403) {
-      return `The upload link for "${fileName}" expired or was rejected. Retry to get a new link.`;
+      return i18n.t('utils:checkpointUpload.theUploadLinkForExpiredOr', { fileName });
     }
     if (!uploadError.response) {
-      return `Could not send "${fileName}" to file storage. Check your connection and try again.`;
+      return i18n.t('utils:checkpointUpload.couldNotSendToFileStorage', { fileName });
     }
-    return `File storage could not accept "${fileName}" (HTTP ${uploadError.response.status ?? 'error'}). Please try again.`;
+    return i18n.t('utils:checkpointUpload.fileStorageCouldNotAcceptHttp', { fileName, v2: uploadError.response.status ?? 'error' });
   }
 
   if (uploadError.response?.status === 413) {
@@ -113,12 +114,12 @@ export function checkpointUploadFailureMessage(
   }
 
   if (uploadError.code === 'ERR_NETWORK' || !uploadError.response) {
-    return `Could not reach the upload service for "${fileName}". Check that the backend is running and try again.`;
+    return i18n.t('utils:checkpointUpload.couldNotReachTheUploadService', { fileName });
   }
 
   if ((uploadError.response.status ?? 0) >= 500) {
-    return `The server could not process "${fileName}". Please try again or contact support if the problem continues.`;
+    return i18n.t('utils:checkpointUpload.theServerCouldNotProcessPlease', { fileName });
   }
 
-  return `Could not upload "${fileName}" (HTTP ${uploadError.response.status ?? 'error'}). Please try again.`;
+  return i18n.t('utils:checkpointUpload.couldNotUploadHttpPleaseTry', { fileName, v2: uploadError.response.status ?? 'error' });
 }

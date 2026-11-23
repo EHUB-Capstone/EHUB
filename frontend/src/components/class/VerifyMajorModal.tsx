@@ -10,6 +10,8 @@ import { parseApiError } from '../../utils/apiError';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import type { TeamMajorWarning } from '../../types/teamManagement';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const downloadTemplate = async () => {
   const response = await classApi.getMajorVerificationTemplate();
@@ -26,21 +28,23 @@ const downloadTemplate = async () => {
 
 // ─── Status badge ──────────────────────────────────────────────────────────────
 const StatusBadge = ({ status, applied, profileWillChange }) => {
+  const { t: tr } = useTranslation('class');
   if (applied && (status === 'matched' || status === 'mismatched'))
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Verified</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />{tr('studentMajorActionCard.verified')}</span>;
   if (status === 'matched' && profileWillChange)
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Profile will change</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />{tr('verifyMajorModal.profileWillChange')}</span>;
   if (status === 'matched')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />Class matches</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full"><CheckCircle2 className="w-3 h-3" />{tr('verifyMajorModal.classMatches')}</span>;
   if (status === 'mismatched')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600 rounded-full"><AlertTriangle className="w-3 h-3" />Will change</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600 rounded-full"><AlertTriangle className="w-3 h-3" />{tr('verifyMajorModal.willChange')}</span>;
   if (status === 'missing')
-    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />Missing</span>;
-  return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full"><HelpCircle className="w-3 h-3" />Not found</span>;
+    return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full"><AlertTriangle className="w-3 h-3" />{tr('studentTable.missing')}</span>;
+  return <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-500 rounded-full"><HelpCircle className="w-3 h-3" />{tr('verifyMajorModal.notFound')}</span>;
 };
 
 // ─── MajorSelect dropdown for manual correction ────────────────────────────────
 function MajorSelect({ currentMajor, onSave }) {
+  const { t: tr } = useTranslation('class');
   const [open, setOpen]     = useState(false);
   const [value, setValue]   = useState(currentMajor || '');
 
@@ -50,7 +54,7 @@ function MajorSelect({ currentMajor, onSave }) {
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-primary rounded-lg text-primary-700 hover:bg-primary-50 transition-all font-medium"
       >
-        {value || 'Select major'} <ChevronDown className="w-3 h-3" />
+        {value || tr('verifyMajorModal.selectMajor')} <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
         <div className="absolute z-50 right-0 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-lg max-h-60 overflow-y-auto">
@@ -83,10 +87,10 @@ function MajorSelect({ currentMajor, onSave }) {
 
 // ─── Tab labels ────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'mismatched', label: 'Class will change', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-  { key: 'missing',    label: 'Missing',      color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  { key: 'matched',    label: 'Class matches', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-  { key: 'notFound',   label: 'Not found',    color: 'text-slate-500',  bg: 'bg-slate-50',  border: 'border-slate-200' },
+  { key: 'mismatched', get label() { return i18n.t('class:verifyMajorModal.classWillChange'); }, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+  { key: 'missing',    get label() { return i18n.t('class:studentTable.missing'); },      color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200' },
+  { key: 'matched',    get label() { return i18n.t('class:verifyMajorModal.classMatches'); }, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+  { key: 'notFound',   get label() { return i18n.t('class:verifyMajorModal.notFound'); },    color: 'text-slate-500',  bg: 'bg-slate-50',  border: 'border-slate-200' },
 ];
 
 const majorDiffers = (before, after) =>
@@ -94,6 +98,7 @@ const majorDiffers = (before, after) =>
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
+  const { t: tr } = useTranslation('class');
   const inputRef           = useRef(null);
   const [file, setFile]    = useState(null);
   const [loading, setLoading] = useState(false);
@@ -111,7 +116,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
     const dropped = e.dataTransfer?.files[0] || e.target.files[0];
     if (!dropped) return;
     if (!/\.(xlsx|xls)$/i.test(dropped.name)) {
-      toast.error('Only .xlsx or .xls files are supported.');
+      toast.error(tr('importSemesterGroupsModal.onlyXlsxOrXlsFilesAre'));
       return;
     }
     setFile(dropped);
@@ -121,7 +126,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
   };
 
   const handlePreview = async () => {
-    if (!file) { toast.error('Please select a file.'); return; }
+    if (!file) { toast.error(tr('verifyMajorModal.pleaseSelectAFile')); return; }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -133,9 +138,9 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       const firstWithData = TABS.find(t => (data[t.key] || []).length > 0);
       setActiveTab(firstWithData?.key || 'matched');
       setAppliedSummary(null);
-      toast.success('Preview ready. No majors have been changed.');
+      toast.success(tr('verifyMajorModal.previewReadyNoMajorsHaveBeen'));
     } catch (e) {
-      toast.error(parseApiError(e, 'Unable to preview major changes.').message);
+      toast.error(parseApiError(e, tr('verifyMajorModal.unableToPreviewMajorChanges')).message);
     } finally {
       setLoading(false);
     }
@@ -166,16 +171,16 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
         autoLocked,
       });
       setShowApplyConfirm(false);
-      toast.success(`Updated ${data.synchronizedEnrollmentCount || 0} class major(s) and ${data.synchronizedProfileCount || 0} profile major(s).`);
+      toast.success(tr('verifyMajorModal.updatedClassMajorSAndProfile', { v1: data.synchronizedEnrollmentCount || 0, v2: data.synchronizedProfileCount || 0 }));
       if (autoLocked) {
-        toast.success('All students are verified. Major updates have been locked automatically.', { duration: 6000 });
+        toast.success(tr('verifyMajorModal.allStudentsAreVerifiedMajorUpdates'), { duration: 6000 });
       }
       if (teamWarnings.length > 0) {
-        toast(`${teamWarnings.length} team(s) no longer meet the major requirement.`, { icon: '⚠️' });
+        toast(tr('verifyMajorModal.teamSNoLongerMeetThe', { length: teamWarnings.length }), { icon: '⚠️' });
       }
       onUpdated?.();
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to synchronize majors from the file.').message);
+      toast.error(parseApiError(error, tr('verifyMajorModal.unableToSynchronizeMajorsFromThe')).message);
     } finally {
       setApplying(false);
     }
@@ -189,10 +194,10 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       await classApi.updateStudentMajor(classId, studentId, newMajor, reason);
       setReport(null);
       setAppliedSummary(null);
-      toast.success(`Major updated to ${newMajor}. Preview again before applying the file.`);
+      toast.success(tr('verifyMajorModal.majorUpdatedToPreviewAgainBefore', { newMajor }));
       onUpdated?.();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to update the major.').message);
+      toast.error(parseApiError(e, tr('verifyMajorModal.failedToUpdateTheMajor')).message);
     } finally {
       setSavingId(null);
     }
@@ -216,8 +221,8 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Verify / Sync Majors</h2>
-            <p className="text-sm text-slate-400 mt-0.5">Upload the official Excel file to compare majors, then apply them to the class and profiles.</p>
+            <h2 className="text-xl font-bold text-slate-900">{tr('verifyMajorModal.verifySyncMajors')}</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{tr('verifyMajorModal.uploadTheOfficialExcelFileTo')}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
             <X className="w-5 h-5" />
@@ -230,15 +235,15 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-secondary" />
               <div>
-                <p className="text-sm font-medium text-secondary">Download verification template</p>
-                <p className="text-xs text-slate-400">Required columns: StudentCode and MajorCode</p>
+                <p className="text-sm font-medium text-secondary">{tr('verifyMajorModal.downloadVerificationTemplate')}</p>
+                <p className="text-xs text-slate-400">{tr('verifyMajorModal.requiredColumnsStudentcodeAndMajorcode')}</p>
               </div>
             </div>
             <button
-              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, 'Unable to download the template.').message))}
+              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, tr('verifyMajorModal.unableToDownloadTheTemplate')).message))}
               className="text-xs px-3 py-1.5 bg-secondary text-white rounded-lg hover:bg-secondary-700 transition-all font-medium"
             >
-              Download
+              {tr('common:actions.download')}
             </button>
           </div>
 
@@ -256,12 +261,12 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
             {file ? (
               <div>
                 <p className="font-semibold text-slate-800">{file.name}</p>
-                <p className="text-xs text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB · Click to choose another file</p>
+                <p className="text-xs text-slate-400 mt-1">{tr('importSemesterGroupsModal.kbClickToChooseAnotherFile', { v1: (file.size / 1024).toFixed(1) })}</p>
               </div>
             ) : (
               <div>
-                <p className="font-medium text-slate-500">Drop an Excel file here</p>
-                <p className="text-xs text-slate-400 mt-1">or click to select a file</p>
+                <p className="font-medium text-slate-500">{tr('verifyMajorModal.dropAnExcelFileHere')}</p>
+                <p className="text-xs text-slate-400 mt-1">{tr('verifyMajorModal.orClickToSelectAFile')}</p>
               </div>
             )}
           </div>
@@ -270,19 +275,17 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
           {report && (
             <div className="space-y-4">
               <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary">
-                {appliedSummary
+                {tr('verifyMajorModal.otherColumnsIncludingGroupnameAreIgnored', { v1: appliedSummary
                   ? `Verified and updated ${appliedSummary.enrollments} class major(s) and ${appliedSummary.profiles} profile major(s). The table below retains the before/after preview.`
-                  : `Preview only — no data has changed. The official file would change ${classChanges} class major(s) and ${profileChanges} profile major(s). Review before verifying and updating. Manual correction saves immediately and requires a new preview.`}
-                {' '}Other columns, including GroupName, are ignored.
+                  : `Preview only — no data has changed. The official file would change ${classChanges} class major(s) and ${profileChanges} profile major(s). Review before verifying and updating. Manual correction saves immediately and requires a new preview.` })}
               </div>
               {appliedSummary?.autoLocked && (
                 <div role="status" data-testid="verify-major-auto-lock" className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <div>
-                    <p className="font-semibold">Major updates locked automatically</p>
+                    <p className="font-semibold">{tr('verifyMajorModal.majorUpdatesLockedAutomatically')}</p>
                     <p className="mt-0.5 text-xs text-blue-700">
-                      Every student in this class is verified. Students were notified and can no longer change their major.
-                      Use Actions &rarr; Unlock major updates if a correction is needed.
+                      {tr('verifyMajorModal.everyStudentInThisClassIs')}
                     </p>
                   </div>
                 </div>
@@ -291,9 +294,9 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                 <div role="status" data-testid="verify-team-major-warnings" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <p className="flex items-center gap-2 font-semibold">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
-                    {appliedSummary.teamWarnings.length} team(s) do not meet the major requirement
+                    {appliedSummary.teamWarnings.length} {tr('verifyMajorModal.teamSDoNotMeetThe')}
                   </p>
-                  <p className="mt-1 text-xs text-amber-700">No team or member data was changed. Update the affected teams to clear the warning.</p>
+                  <p className="mt-1 text-xs text-amber-700">{tr('verifyMajorModal.noTeamOrMemberDataWas')}</p>
                   <ul className="mt-2 space-y-1.5 text-xs">
                     {appliedSummary.teamWarnings.map(warning => (
                       <li key={warning.teamId}>
@@ -330,7 +333,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search by name, student code, or email..."
+                  placeholder={tr('verifyMajorModal.searchByNameStudentCodeOr')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -340,21 +343,21 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
               {/* Results table */}
               {filteredRows.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm">
-                  {activeRows.length === 0 ? `No students in the "${TABS.find(t=>t.key===activeTab)?.label}" group` : 'No results found'}
+                  {activeRows.length === 0 ? tr('verifyMajorModal.noStudentsInTheGroup', { label: TABS.find(t=>t.key===activeTab)?.label }) : tr('verifyMajorModal.noResultsFound')}
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-slate-100">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Student</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Student code</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Before · Class</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Before · Profile</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">After · Official file (code)</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('importSemesterGroupsModal.student')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('importStudentsModal.studentCode')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('verifyMajorModal.beforeClass')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('verifyMajorModal.beforeProfile')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('verifyMajorModal.afterOfficialFileCode')}</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('importSemesterGroupsModal.status')}</th>
                         {activeTab === 'mismatched' && !appliedSummary && (
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Correct now</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">{tr('verifyMajorModal.correctNow')}</th>
                         )}
                       </tr>
                     </thead>
@@ -385,7 +388,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                                 >
                                   {row.majorInFile}
                                 </abbr>
-                              ) : <span className="text-xs text-amber-500 font-medium">Missing</span>}
+                              ) : <span className="text-xs text-amber-500 font-medium">{tr('studentTable.missing')}</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <StatusBadge status={activeTab} applied={Boolean(appliedSummary)} profileWillChange={majorDiffers(row.majorInProfile, row.majorInFile)} />
@@ -418,7 +421,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
         {/* Footer */}
         <div className="flex gap-3 p-6 pt-0 border-t border-slate-100">
           <button onClick={onClose} disabled={applying} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50">
-            Close
+            {tr('common:actions.close')}
           </button>
           {!report && (
             <button
@@ -426,7 +429,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
               disabled={!file || loading}
               className="flex-1 px-4 py-2.5 bg-secondary text-white rounded-xl text-sm font-medium hover:bg-secondary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing preview...</> : <>Preview changes</>}
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {tr('verifyMajorModal.preparingPreview')}</> : <>{tr('verifyMajorModal.previewChanges')}</>}
             </button>
           )}
           {report && (
@@ -436,14 +439,14 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
                 disabled={applying}
                 className="flex-1 px-4 py-2.5 border border-secondary-200 text-secondary rounded-xl text-sm font-medium hover:bg-secondary-50 disabled:opacity-50"
               >
-                Choose another file
+                {tr('importStudentsModal.chooseAnotherFile')}
               </button>
               <button
                 onClick={() => setShowApplyConfirm(true)}
                 disabled={applying || Boolean(savingId) || Boolean(appliedSummary) || !file || ((report.matched?.length || 0) + (report.mismatched?.length || 0) === 0)}
                 className="flex-1 px-4 py-2.5 bg-secondary text-white rounded-xl text-sm font-medium hover:bg-secondary-700 disabled:opacity-50"
               >
-                {applying ? 'Verifying and updating...' : appliedSummary ? 'Verified' : 'Verify majors & update'}
+                {applying ? tr('verifyMajorModal.verifyingAndUpdating') : appliedSummary ? tr('studentMajorActionCard.verified') : tr('verifyMajorModal.verifyMajorsUpdate')}
               </button>
             </>
           )}
@@ -455,10 +458,10 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       onClose={() => { if (!applying) setShowApplyConfirm(false); }}
       onConfirm={handleApply}
       isSubmitting={applying}
-      title="Verify and update majors?"
-      description={`Apply official majors from this file to ${previewRows.length} active class student(s) and their profiles?${report?.notFound?.length ? ` ${report.notFound.length} unmatched file/class row(s) will not receive a major.` : ''} Existing majors will be replaced.`}
-      confirmText="Verify majors & update"
-      cancelText="Cancel"
+      title={tr('verifyMajorModal.verifyAndUpdateMajors')}
+      description={tr('verifyMajorModal.applyOfficialMajorsFromThisFile', { length: previewRows.length, v2: report?.notFound?.length ? ` ${tr('verifyMajorModal.unmatchedRows', { count: report.notFound.length })}` : '' })}
+      confirmText={tr('verifyMajorModal.verifyMajorsUpdate')}
+      cancelText={tr('common:actions.cancel')}
       confirmVariant="primary"
     />
     </>

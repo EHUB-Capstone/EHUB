@@ -1,11 +1,12 @@
+import i18n from '../i18n/index.ts';
 /** Ready-made reasons for replacing the mentor of a team, so an admin picks one instead of typing. */
 export const MENTOR_CHANGE_REASONS = [
-  { value: 'unavailable', label: 'Mentor is no longer available' },
-  { value: 'overloaded', label: 'Mentor is overloaded' },
-  { value: 'schedule', label: 'Schedule conflict' },
-  { value: 'team-request', label: 'Team requested a change' },
-  { value: 'rebalance', label: 'Rebalance mentor workload' },
-  { value: 'other', label: 'Other' },
+  { value: 'unavailable', get label() { return i18n.t('utils:mentorChangeReasons.mentorIsNoLongerAvailable'); } },
+  { value: 'overloaded', get label() { return i18n.t('utils:mentorChangeReasons.mentorIsOverloaded'); } },
+  { value: 'schedule', get label() { return i18n.t('utils:mentorChangeReasons.scheduleConflict'); } },
+  { value: 'team-request', get label() { return i18n.t('utils:mentorChangeReasons.teamRequestedAChange'); } },
+  { value: 'rebalance', get label() { return i18n.t('utils:mentorChangeReasons.rebalanceMentorWorkload'); } },
+  { value: 'other', get label() { return i18n.t('utils:mentorChangeReasons.other'); } },
 ] as const;
 
 export type MentorChangeReasonCode = (typeof MENTOR_CHANGE_REASONS)[number]['value'];

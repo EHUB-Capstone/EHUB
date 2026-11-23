@@ -1,5 +1,6 @@
 import { mentorAdminApi } from '../api/mentorAdminApi.ts';
 import type { MentorAllocationJob, MentorAllocationPreview } from '../types/mentorAdmin.ts';
+import i18n from '../i18n/index.ts';
 
 export class MentorAllocationJobError extends Error {}
 
@@ -30,7 +31,7 @@ export async function waitForMentorAllocationJob(
     onProgress(job);
     if (job.status === 'Ready') {
       if (job.preview) return job.preview;
-      throw new MentorAllocationJobError('The AI result is unavailable. Please generate the proposal again.');
+      throw new MentorAllocationJobError(i18n.t('utils:mentorAllocationJob.theAiResultIsUnavailablePlease'));
     }
     if (job.status === 'Failed') throw new MentorAllocationJobError(job.message || 'AI allocation could not finish. Please try again.');
     await pause(1000, signal);

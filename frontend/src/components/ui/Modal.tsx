@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import Button from './Button';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const modalSizes = {
   sm: 'max-w-sm',
@@ -23,7 +24,8 @@ interface ModalProps {
   size?: keyof typeof modalSizes;
 }
 
-const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmitting = false, submitDisabled = false, onSubmit, size = 'md' }: ModalProps) => {
+const Modal = ({ isOpen, onClose, title, children, submitText, isSubmitting = false, submitDisabled = false, onSubmit, size = 'md' }: ModalProps) => {
+  const { t } = useTranslation();
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -55,7 +57,7 @@ const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmit
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-              aria-label="Close modal"
+              aria-label={t('dialog.closeModal')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -71,10 +73,10 @@ const Modal = ({ isOpen, onClose, title, children, submitText = 'Save', isSubmit
         {onSubmit && (
           <div className="border-t border-slate-200 px-5 sm:px-6 py-4 flex justify-end gap-3 shrink-0 bg-slate-50">
             <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
-              Cancel
+              {t('actions.cancel')}
             </Button>
             <Button variant="primary" onClick={onSubmit} isLoading={isSubmitting} disabled={submitDisabled}>
-              {submitText}
+              {submitText ?? t('actions.save')}
             </Button>
           </div>
         )}

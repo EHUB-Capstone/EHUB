@@ -19,6 +19,8 @@ import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRea
 import ConfirmDialog from '../ui/ConfirmDialog';
 import StartupIndustryPicker from '../workspace/StartupIndustryPicker';
 import type { StartupIndustryDto } from '../../types/startupIndustries';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 
 const statusStyles = {
   PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -28,10 +30,10 @@ const statusStyles = {
 };
 
 const statusLabels = {
-  PENDING: 'Pending review',
-  APPROVED: 'Approved',
-  CHANGES_REQUESTED: 'Changes requested',
-  NOT_SUBMITTED: 'Not submitted',
+  get PENDING() { return i18n.t('class:classDirectionOverview.status.PENDING'); },
+  get APPROVED() { return i18n.t('class:classDirectionOverview.status.APPROVED'); },
+  get CHANGES_REQUESTED() { return i18n.t('class:classDirectionOverview.status.CHANGES_REQUESTED'); },
+  get NOT_SUBMITTED() { return i18n.t('class:classDirectionOverview.status.NOT_SUBMITTED'); },
 };
 
 const IndustryChips = ({ names }) => (
@@ -43,6 +45,7 @@ const IndustryChips = ({ names }) => (
 );
 
 export default function ClassDirectionOverview({ semester, year, initialClassId = '', focusTeamId = '', onSelectedClassChange }) {
+  const { t } = useTranslation('class');
   const initialClassIdRef = useRef(initialClassId);
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -88,7 +91,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           );
         });
       } catch (error) {
-        if (active) toast.error(error?.message || 'Failed to load classes');
+        if (active) toast.error(error?.message || t('classDirectionOverview.failedToLoadClasses'));
       } finally {
         if (active) setLoadingClasses(false);
       }
@@ -109,7 +112,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       .catch((error) => {
         if (controller.signal.aborted) return;
         setIndustries([]);
-        setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+        setIndustriesError(parseApiError(error, t('classDirectionOverview.failedToLoadStartupIndustries')).message);
       })
       .finally(() => {
         if (!controller.signal.aborted) setIndustriesLoading(false);
@@ -180,7 +183,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       overviewRef.current = nextOverview;
       setOverview(nextOverview);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error?.message || 'Failed to load project directions');
+      toast.error(error?.response?.data?.error || error?.message || t('classDirectionOverview.failedToLoadProjectDirections'));
     } finally {
       if (requestId === overviewRequestIdRef.current) setLoadingTeams(false);
     }
@@ -242,7 +245,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
         overviewRef.current = nextOverview;
         setOverview(nextOverview);
         const teamName = getDisplayTeamName(previousTeam) || 'A team';
-        toast(`${teamName} submitted a project direction for review.`, { id: `project-direction-submitted-${event.direction.rowVersion}` });
+        toast(t('classDirectionOverview.submittedAProjectDirectionForReview', { teamName }), { id: `project-direction-submitted-${event.direction.rowVersion}` });
       },
       () => void synchronizeAfterReconnect(),
     );
@@ -256,11 +259,11 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
     const comment = (comments[teamId] || '').trim();
     const lecturerIndustryIds = lecturerIndustrySelections[teamId];
     if (comment.length > 0 && comment.length < 3) {
-      toast.error('Review comment must be at least 3 characters when provided');
+      toast.error(t('classDirectionOverview.reviewCommentMustBeAtLeast'));
       return false;
     }
     if (decision === 'APPROVED' && lecturerIndustryIds && (lecturerIndustryIds.length < 1 || lecturerIndustryIds.length > 3)) {
-      toast.error('Select between 1 and 3 startup industries, or clear the lecturer selection to keep the team choice.');
+      toast.error(t('classDirectionOverview.selectBetween1And3Startup'));
       return false;
     }
     reviewInFlightRef.current = true;
@@ -288,8 +291,8 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
         return nextOverview;
       });
       toast.success(decision === 'APPROVED'
-        ? lecturerIndustryIds ? 'Project direction approved. Updated startup industries were sent to the team.' : 'Project direction approved'
-        : decision === 'REJECTED' ? 'Project Profile change rejected' : 'Changes requested');
+        ? lecturerIndustryIds ? t('classDirectionOverview.projectDirectionApprovedUpdatedStartupIndustries') : t('classDirectionOverview.projectDirectionApproved')
+        : decision === 'REJECTED' ? t('classDirectionOverview.projectProfileChangeRejected') : t('classDirectionOverview.changesRequested'));
       setComments((current) => ({ ...current, [teamId]: '' }));
       setLecturerIndustrySelections((current) => {
         const next = { ...current };
@@ -305,7 +308,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       }
       return true;
     } catch (error) {
-      toast.error(error?.response?.data?.error || error?.message || 'Review failed');
+      toast.error(error?.response?.data?.error || error?.message || t('classDirectionOverview.reviewFailed'));
       return false;
     } finally {
       reviewInFlightRef.current = false;
@@ -330,7 +333,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 pb-4">
         <div className="min-w-[260px] flex-1">
-          <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-500">Class</label>
+          <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-500">{t('classDirectionOverview.class')}</label>
           <select
             value={selectedClassId}
             onChange={(event) => {
@@ -340,7 +343,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
             disabled={loadingClasses}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           >
-            <option value="">{classes.length === 0 ? 'No classes in this semester' : 'All Classes'}</option>
+            <option value="">{classes.length === 0 ? t('classDirectionOverview.noClassesInThisSemester') : t('classDirectionOverview.allClasses')}</option>
             {classes.map((cls) => (
               <option key={cls._id} value={cls._id}>{cls.classCode}</option>
             ))}
@@ -350,7 +353,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           type="button"
           onClick={() => loadOverview(selectedClassId)}
           disabled={classes.length === 0 || loadingTeams || Boolean(reviewingTeamId)}
-          title="Refresh overview"
+          title={t('classDirectionOverview.refreshOverview')}
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loadingTeams ? 'animate-spin' : ''}`} />
@@ -362,7 +365,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       ) : teams.length === 0 ? (
         <div className="border-y border-slate-200 py-12 text-center">
           <FileText className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-2 text-sm text-slate-500">{selectedClassId ? 'This class has no teams yet.' : 'The assigned classes have no teams yet.'}</p>
+          <p className="mt-2 text-sm text-slate-500">{selectedClassId ? t('classDirectionOverview.thisClassHasNoTeamsYet') : t('classDirectionOverview.theAssignedClassesHaveNoTeams')}</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-200 border-y border-slate-200">
@@ -393,9 +396,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                       {team.projectDirectionTitle || team.projectName || getDisplayTeamName(team)}
                     </h3>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Class: {team.overviewClassCode || '—'} · Team: {team.teamName || 'Unnamed team'} · Leader: {team.leaderName}
+                      {t('classDirectionOverview.classTeamLeader', { classCode: team.overviewClassCode || '—', teamName: team.teamName || t('classDirectionOverview.unnamedTeam'), leader: team.leaderName })}
                     </p>
-                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-bold text-secondary">Project Profile change request</span>}
+                    {isProfileChangeProposal && <span className="mt-2 inline-flex rounded-full border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-bold text-secondary">{t('classDirectionOverview.projectProfileChangeRequest')}</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[status]}`}>
@@ -406,10 +409,10 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                         type="button"
                         onClick={(event) => { event.stopPropagation(); toggleApprovedTeam(team._id); }}
                         aria-expanded={approvedExpanded}
-                        aria-label={`${approvedExpanded ? 'Collapse' : 'Expand'} approved proposal for ${team.teamName || team.projectDirectionTitle || 'team'}`}
+                        aria-label={t(approvedExpanded ? 'classDirectionOverview.collapseApproved' : 'classDirectionOverview.expandApproved', { name: team.teamName || team.projectDirectionTitle || t('classDirectionOverview.team') })}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"
                       >
-                        {approvedExpanded ? 'Collapse' : 'Expand'}
+                        {approvedExpanded ? t('classDirectionOverview.collapse') : t('classDirectionOverview.expand')}
                         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${approvedExpanded ? 'rotate-180' : ''}`} />
                       </button>
                     )}
@@ -421,27 +424,27 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     {isProfileChangeProposal ? (
                       <div className="mt-4 grid gap-3 lg:grid-cols-2">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Current approved profile</p>
-                          <p className="mt-3 text-xs font-semibold text-slate-500">Project name</p>
+                          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('classDirectionOverview.currentApprovedProfile')}</p>
+                          <p className="mt-3 text-xs font-semibold text-slate-500">{t('classDirectionOverview.projectName')}</p>
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionCurrentTitle}</p>
-                          <p className="mt-3 text-xs font-semibold text-slate-500">Description</p>
+                          <p className="mt-3 text-xs font-semibold text-slate-500">{t('classDirectionOverview.description')}</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirectionCurrentSummary}</p>
                           {proposedIndustries && (
                             <>
-                              <p className="mt-3 text-xs font-semibold text-slate-500">Startup industries</p>
+                              <p className="mt-3 text-xs font-semibold text-slate-500">{t('classDirectionOverview.startupIndustries')}</p>
                               <IndustryChips names={startupIndustries} />
                             </>
                           )}
                         </div>
                         <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4">
-                          <p className="text-xs font-bold uppercase tracking-wide text-secondary">Proposed change</p>
-                          <p className="mt-3 text-xs font-semibold text-secondary">Project name</p>
+                          <p className="text-xs font-bold uppercase tracking-wide text-secondary">{t('classDirectionOverview.proposedChange')}</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">{t('classDirectionOverview.projectName')}</p>
                           <p className="mt-1 font-semibold text-slate-900">{team.projectDirectionTitle}</p>
-                          <p className="mt-3 text-xs font-semibold text-secondary">Description</p>
+                          <p className="mt-3 text-xs font-semibold text-secondary">{t('classDirectionOverview.description')}</p>
                           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{team.projectDirection}</p>
                           {proposedIndustries && (
                             <>
-                              <p className="mt-3 text-xs font-semibold text-secondary">Startup industries</p>
+                              <p className="mt-3 text-xs font-semibold text-secondary">{t('classDirectionOverview.startupIndustries')}</p>
                               <IndustryChips names={proposedIndustries} />
                             </>
                           )}
@@ -452,7 +455,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     )}
                     {startupIndustries.length > 0 && !(isProfileChangeProposal && proposedIndustries) && (
                       <div className="mt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Startup Industry</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('classDirectionOverview.startupIndustry')}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {startupIndustries.map((industry) => (
                             <span
@@ -467,13 +470,13 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     )}
                     {team.projectDirectionReviewComment && (
                       <div className="mt-3 border-l-2 border-blue-300 pl-3">
-                        <p className="text-xs font-semibold text-blue-700">Previous lecturer comment</p>
+                        <p className="text-xs font-semibold text-blue-700">{t('classDirectionOverview.previousLecturerComment')}</p>
                         <p className="mt-1 text-sm text-slate-700">{team.projectDirectionReviewComment}</p>
                       </div>
                     )}
                     {status === 'PENDING' && (
                       <div className="mt-4">
-                        <label id={`lecturer-startup-industries-${team._id}`} className="text-sm font-semibold text-slate-700">Startup industries <span className="text-red-500">*</span></label>
+                        <label id={`lecturer-startup-industries-${team._id}`} className="text-sm font-semibold text-slate-700">{t('classDirectionOverview.startupIndustries')} <span className="text-red-500">*</span></label>
                         <div className="mt-1.5">
                           <StartupIndustryPicker
                             industries={industries}
@@ -487,19 +490,19 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                             disabled={busy}
                           />
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">Team selection: {submittedIndustries.length > 0 ? submittedIndustries.join(', ') : 'None'} · Choose 1–3 industries to change it before approving.</p>
+                        <p className="mt-1 text-xs text-slate-500">{t('classDirectionOverview.teamSelection', { industries: submittedIndustries.length > 0 ? submittedIndustries.join(', ') : t('classDirectionOverview.none') })}</p>
                       </div>
                     )}
                     {status === 'PENDING' && <div className="mt-4">
                       <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <MessageSquareText className="h-3.5 w-3.5" /> Review comment <span className="font-normal text-slate-400">(optional)</span>
+                        <MessageSquareText className="h-3.5 w-3.5" /> {t('classDirectionOverview.reviewComment')} <span className="font-normal text-slate-400">{t('classDirectionOverview.optional')}</span>
                       </label>
                       <textarea
                         value={comments[team._id] || ''}
                         onChange={(event) => setComments((current) => ({ ...current, [team._id]: event.target.value }))}
                         rows={3}
                         maxLength={1000}
-                        placeholder="Optional: explain what is approved or what the team should revise..."
+                        placeholder={t('classDirectionOverview.optionalExplainWhatIsApprovedOr')}
                         className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
                       />
                       <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -509,7 +512,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           disabled={busy}
                           className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          <XCircle className="h-4 w-4" /> Request changes
+                          <XCircle className="h-4 w-4" /> {t('classDirectionOverview.requestChanges')}
                         </button>
                         <button
                           type="button"
@@ -518,7 +521,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                           className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                         >
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                          Approve
+                          {t('classDirectionOverview.approve')}
                         </button>
                         {isProfileChangeProposal && (
                           <button
@@ -530,7 +533,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                             disabled={busy}
                             className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                           >
-                            <Ban className="h-4 w-4" /> Reject
+                            <Ban className="h-4 w-4" /> {t('classDirectionOverview.reject')}
                           </button>
                         )}
                       </div>
@@ -538,7 +541,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                   </>
                 ) : (
                   <p className="mt-4 border-l-2 border-slate-200 pl-3 text-sm text-slate-500">
-                    The team leader has not submitted a project direction.
+                    {t('classDirectionOverview.theTeamLeaderHasNotSubmitted')}
                   </p>
                 ))}
               </section>
@@ -556,9 +559,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
           const succeeded = await review(rejectTarget.teamId, 'REJECTED');
           if (succeeded) setRejectTarget(null);
         }}
-        title="Reject Project Profile change?"
-        description={`Reject the proposed changes for “${rejectTarget?.projectName || ''}”? The previously approved Project Profile will remain unchanged.`}
-        confirmText="Reject change"
+        title={t('classDirectionOverview.rejectProjectProfileChange')}
+        description={t('classDirectionOverview.rejectTheProposedChangesForThe', { v1: rejectTarget?.projectName || '' })}
+        confirmText={t('classDirectionOverview.rejectChange')}
         confirmVariant="danger"
         isSubmitting={Boolean(rejectTarget && reviewingTeamId === rejectTarget.teamId)}
       />

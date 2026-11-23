@@ -10,8 +10,10 @@ import { chatApi } from '../../api/chatApi';
 import toast from 'react-hot-toast';
 import WorkshopPreviewModal from './WorkshopPreviewModal';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
+  const { t: tr } = useTranslation('workspace');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('WORKSHOP');
@@ -108,7 +110,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
         const uList = userRes.data?.users || userRes.users || userRes.data || [];
         setAvailableMentors(Array.isArray(uList) ? uList : []);
       } catch (err) {
-        toast.error('Failed to load initial data');
+        toast.error(tr('workshopForm.failedToLoadInitialData'));
       }
     };
     if (isOpen) {
@@ -140,7 +142,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
         });
         setAvailableTeams(allTeams);
       } catch (err) {
-        toast.error('Failed to load teams');
+        toast.error(tr('workshopForm.failedToLoadTeams'));
       }
     };
     fetchTeams();
@@ -296,7 +298,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
   const validateForm = () => {
     if (!title || !startDate || !endDate || !startTime || !endTime) {
-      toast.error('Please fill in all required fields');
+      toast.error(tr('workshopForm.pleaseFillInAllRequiredFields'));
       return false;
     }
 
@@ -320,22 +322,22 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
     const isEndChanged = originalEnd && checkEndDate.getTime() !== originalEnd.getTime();
 
     if ((isNew || isStartChanged) && checkStartDate < today) {
-      toast.error('Start Date cannot be in the past');
+      toast.error(tr('workshopForm.startDateCannotBeInThe'));
       return false;
     }
 
     if ((isNew || isEndChanged) && checkEndDate < today) {
-      toast.error('End Date cannot be in the past');
+      toast.error(tr('workshopForm.endDateCannotBeInThe'));
       return false;
     }
 
     if (checkStartDate > checkEndDate) {
-      toast.error('Start Date must be before or equal to End Date');
+      toast.error(tr('workshopForm.startDateMustBeBeforeOr'));
       return false;
     }
 
     if (startDate === endDate && startTime >= endTime) {
-      toast.error('Start Time must be before End Time when on the same day');
+      toast.error(tr('workshopForm.startTimeMustBeBeforeEnd'));
       return false;
     }
 
@@ -347,44 +349,44 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
       const isDeadlineChanged = !originalDeadline || deadlineDate.getTime() !== originalDeadline.getTime();
 
       if ((isNew || isDeadlineChanged) && deadlineDate < now) {
-        toast.error('Check-in Deadline cannot be in the past');
+        toast.error(tr('workshopForm.checkInDeadlineCannotBeIn'));
         return false;
       }
 
       const workshopEnd = new Date(`${endDate}T${endTime}`);
       if (deadlineDate > workshopEnd) {
-        toast.error('Check-in Deadline cannot be after the Workshop End Time');
+        toast.error(tr('workshopForm.checkInDeadlineCannotBeAfter'));
         return false;
       }
     }
 
     if (targetAudience === 'CLASS' || targetAudience === 'TEAM' || targetAudience === 'LECTURER' || targetAudience === 'MENTOR') {
       if (onlineClassIds.length === 0 && offlineClassIds.length === 0) {
-        toast.error('Please select at least one online or offline class');
+        toast.error(tr('workshopForm.pleaseSelectAtLeastOneOnline'));
         return false;
       }
     }
 
     if (targetAudience === 'TEAM' && teamIds.length === 0) {
-      toast.error('Please select at least one team');
+      toast.error(tr('workshopForm.pleaseSelectAtLeastOneTeam'));
       return false;
     }
 
     if (onlineClassIds.length > 0 && !meetingLink) {
-      toast.error('Meeting Link is required for online classes');
+      toast.error(tr('workshopForm.meetingLinkIsRequiredForOnline'));
       return false;
     }
 
     if (meetingLink) {
       const urlPattern = /^(https?:\/\/)[^\s/$.?#].[^\s]*$/i;
       if (!urlPattern.test(meetingLink)) {
-        toast.error('Please enter a valid URL for Meeting Link (starting with http:// or https://)');
+        toast.error(tr('workshopForm.pleaseEnterAValidUrlFor'));
         return false;
       }
     }
 
     if (offlineClassIds.length > 0 && !location) {
-      toast.error('Location is required for offline classes');
+      toast.error(tr('workshopForm.locationIsRequiredForOfflineClasses'));
       return false;
     }
 
@@ -424,16 +426,16 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
     try {
       if (workshop?._id) {
         await workshopApi.update(workshop._id, payload);
-        toast.success('Workshop updated successfully');
+        toast.success(tr('workshopForm.workshopUpdatedSuccessfully'));
       } else {
         await workshopApi.create(payload);
-        toast.success('Workshop created successfully');
+        toast.success(tr('workshopForm.workshopCreatedSuccessfully'));
       }
       setShowPreview(false);
       onSave();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save workshop');
+      toast.error(err.response?.data?.message || tr('workshopForm.failedToSaveWorkshop'));
     } finally {
       setLoading(false);
     }
@@ -444,7 +446,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be under 10MB');
+      toast.error(tr('workshopForm.fileSizeMustBeUnder10mb'));
       return;
     }
 
@@ -461,7 +463,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
         setAttachments(prev => [...prev, url]);
       }
     } catch (err) {
-      toast.error('Failed to upload file');
+      toast.error(tr('workshopForm.failedToUploadFile'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -506,11 +508,11 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
           <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-primary" />
-              {workshop?._id ? 'Edit Event / Workshop' : 'Schedule Event / Workshop'}
+              {workshop?._id ? tr('workshopForm.editEventWorkshop') : tr('workshopForm.scheduleEventWorkshop')}
             </h2>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 shadow-sm border border-slate-200">
-                Format: {getDerivedFormat()}
+                {tr('workshopForm.format', { v1: getDerivedFormat() })}
               </span>
               <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors">
                 <X className="w-5 h-5" />
@@ -526,11 +528,11 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
                 {/* Basic Info */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Basic Information</h3>
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">{tr('workshopForm.basicInformation')}</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Title *</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{tr('taskModal.title')}</label>
                       <input
                         type="text"
                         value={title}
@@ -540,20 +542,20 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Type</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{tr('workshopForm.type')}</label>
                       <select
                         value={type}
                         onChange={e => setType(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                       >
-                        <option value="WORKSHOP">Workshop</option>
-                        <option value="SEMINAR">Seminar</option>
+                        <option value="WORKSHOP">{tr('workshopForm.workshop')}</option>
+                        <option value="SEMINAR">{tr('workshopForm.seminar')}</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Description</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{tr('taskModal.description')}</label>
                     <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value)}
@@ -565,12 +567,12 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
                 {/* Dates & Times */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Schedule & Location</h3>
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">{tr('workshopForm.scheduleLocation')}</h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" /> Start Date *
+                        <Calendar className="w-3.5 h-3.5" /> {tr('workshopForm.startDate')}
                       </label>
                       <input
                         type="date"
@@ -583,7 +585,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" /> End Date *
+                        <Calendar className="w-3.5 h-3.5" /> {tr('workshopForm.endDate')}
                       </label>
                       <input
                         type="date"
@@ -599,7 +601,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Start Time *
+                        <Clock className="w-3.5 h-3.5" /> {tr('workshopForm.startTime')}
                       </label>
                       <input
                         type="time"
@@ -611,7 +613,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> End Time *
+                        <Clock className="w-3.5 h-3.5" /> {tr('workshopForm.endTime')}
                       </label>
                       <input
                         type="time"
@@ -626,19 +628,19 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" /> Offline Location {offlineClassIds.length > 0 && '*'}
+                        <MapPin className="w-3.5 h-3.5" /> {tr('workshopForm.offlineLocation')} {offlineClassIds.length > 0 && '*'}
                       </label>
                       <input
                         type="text"
                         value={location}
                         onChange={e => setLocation(e.target.value)}
                         className={`w-full bg-slate-50 border ${offlineClassIds.length > 0 && !location ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 focus:border-primary focus:ring-primary/20'} rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 transition-all`}
-                        placeholder="e.g. Room AL-L203"
+                        placeholder={tr('workshopForm.eGRoomAlL203')}
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Link2 className="w-3.5 h-3.5" /> Online Link {onlineClassIds.length > 0 && '*'}
+                        <Link2 className="w-3.5 h-3.5" /> {tr('workshopForm.onlineLink')} {onlineClassIds.length > 0 && '*'}
                       </label>
                       <input
                         type="url"
@@ -653,7 +655,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Check-in Deadline
+                        <Clock className="w-3.5 h-3.5" /> {tr('workshopForm.checkInDeadline')}
                       </label>
                       <input
                         type="datetime-local"
@@ -669,7 +671,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                 {/* Target Audience & Class Groups Selection */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                    <h3 className="text-sm font-bold text-slate-800">Class Participation</h3>
+                    <h3 className="text-sm font-bold text-slate-800">{tr('workshopForm.classParticipation')}</h3>
                     <select
                       value={targetAudience}
                       onChange={e => {
@@ -682,18 +684,18 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       }}
                       className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary font-semibold text-slate-700"
                     >
-                      <option value="CLASS">Class Students</option>
-                      <option value="TEAM">Specific Teams</option>
-                      <option value="LECTURER">Lecturers</option>
-                      <option value="MENTOR">Mentors</option>
-                      <option value="ALL_STUDENTS">All Students</option>
+                      <option value="CLASS">{tr('workshopForm.classStudents')}</option>
+                      <option value="TEAM">{tr('workshopForm.specificTeams')}</option>
+                      <option value="LECTURER">{tr('workshopForm.lecturers')}</option>
+                      <option value="MENTOR">{tr('teamWorkspace.mentors')}</option>
+                      <option value="ALL_STUDENTS">{tr('workshopForm.allStudents')}</option>
                     </select>
                   </div>
 
                   {['CLASS', 'TEAM', 'LECTURER', 'MENTOR'].includes(targetAudience) && (
                     <div className="space-y-6">
                       <p className="text-xs text-slate-500">
-                        Assign classes to either Online or Offline format. Selecting a class in one section will automatically place the remaining classes in the other section.
+                        {tr('workshopForm.assignClassesToEitherOnlineOr')}
                       </p>
 
                       {/* Search Bar for Classes */}
@@ -703,7 +705,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                           type="text"
                           value={classSearch}
                           onChange={(e) => setClassSearch(e.target.value)}
-                          placeholder="Search classes by code or subject..."
+                          placeholder={tr('workshopForm.searchClassesByCodeOrSubject')}
                           className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-slate-800"
                         />
                       </div>
@@ -716,9 +718,9 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                           <div className="bg-secondary-100 px-4 py-3 border-b border-secondary-100 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2 text-sm font-bold text-secondary">
                               <Monitor className="w-4 h-4" />
-                              ONLINE CLASSES
+                              {tr('workshopForm.onlineClasses')}
                               <span className="bg-secondary-100 text-secondary px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
-                                {onlineClassIds.length} Selected
+                                {tr('workshopForm.selected', { length: onlineClassIds.length })}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -733,7 +735,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                 }}
                                 className="px-2.5 py-1 bg-white hover:bg-secondary-50 text-secondary rounded-lg text-xs font-bold transition-all border border-secondary-200 shadow-sm"
                               >
-                                Select All
+                                {tr('workshopForm.selectAll')}
                               </button>
                             </div>
                           </div>
@@ -741,7 +743,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                           {/* Online List */}
                           <div className="p-3 max-h-[340px] overflow-y-auto space-y-2 flex-1">
                             {filteredClasses.length === 0 ? (
-                              <p className="text-xs text-center text-slate-400 py-6 italic">No classes match search</p>
+                              <p className="text-xs text-center text-slate-400 py-6 italic">{tr('workshopForm.noClassesMatchSearch')}</p>
                             ) : (
                               (() => {
                                 const totalPages = Math.ceil(filteredClasses.length / ITEMS_PER_PAGE);
@@ -781,7 +783,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                             </div>
                                             {isOnline && (
                                               <span className="ml-auto bg-secondary-100 text-secondary px-2 py-0.5 rounded text-overline font-bold shadow-sm">
-                                                ONLINE
+                                                {tr('workshopForm.online')}
                                               </span>
                                             )}
                                           </label>
@@ -798,10 +800,10 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                           onClick={() => setOnlinePage(prev => Math.max(prev - 1, 1))}
                                           className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600 font-bold"
                                         >
-                                          Prev
+                                          {tr('workshopForm.prev')}
                                         </button>
                                         <span className="text-slate-500 font-semibold">
-                                          Page {currentPage} of {totalPages}
+                                          {tr('workshopForm.pageOf', { currentPage, totalPages })}
                                         </span>
                                         <button
                                           type="button"
@@ -809,7 +811,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                           onClick={() => setOnlinePage(prev => Math.min(prev + 1, totalPages))}
                                           className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600 font-bold"
                                         >
-                                          Next
+                                          {tr('common:actions.next')}
                                         </button>
                                       </div>
                                     )}
@@ -825,9 +827,9 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                           <div className="bg-amber-100/50 px-4 py-3 border-b border-amber-100 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                               <Globe className="w-4 h-4" />
-                              OFFLINE CLASSES
+                              {tr('workshopForm.offlineClasses')}
                               <span className="bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm">
-                                {offlineClassIds.length} Selected
+                                {tr('workshopForm.selected', { length: offlineClassIds.length })}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -842,7 +844,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                 }}
                                 className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-700 rounded-lg text-xs font-bold transition-all border border-amber-200 shadow-sm"
                               >
-                                Select All
+                                {tr('workshopForm.selectAll')}
                               </button>
                             </div>
                           </div>
@@ -850,7 +852,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                           {/* Offline List */}
                           <div className="p-3 max-h-[340px] overflow-y-auto space-y-2 flex-1">
                             {filteredClasses.length === 0 ? (
-                              <p className="text-xs text-center text-slate-400 py-6 italic">No classes match search</p>
+                              <p className="text-xs text-center text-slate-400 py-6 italic">{tr('workshopForm.noClassesMatchSearch')}</p>
                             ) : (
                               (() => {
                                 const totalPages = Math.ceil(filteredClasses.length / ITEMS_PER_PAGE);
@@ -890,7 +892,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                             </div>
                                             {isOffline && (
                                               <span className="ml-auto bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-overline font-bold shadow-sm">
-                                                OFFLINE
+                                                {tr('workshopForm.offline')}
                                               </span>
                                             )}
                                           </label>
@@ -907,10 +909,10 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                           onClick={() => setOfflinePage(prev => Math.max(prev - 1, 1))}
                                           className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600 font-bold"
                                         >
-                                          Prev
+                                          {tr('workshopForm.prev')}
                                         </button>
                                         <span className="text-slate-500 font-semibold">
-                                          Page {currentPage} of {totalPages}
+                                          {tr('workshopForm.pageOf', { currentPage, totalPages })}
                                         </span>
                                         <button
                                           type="button"
@@ -918,7 +920,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                                           onClick={() => setOfflinePage(prev => Math.min(prev + 1, totalPages))}
                                           className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 text-slate-600 font-bold"
                                         >
-                                          Next
+                                          {tr('common:actions.next')}
                                         </button>
                                       </div>
                                     )}
@@ -938,10 +940,10 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                   {targetAudience === 'TEAM' && (onlineClassIds.length > 0 || offlineClassIds.length > 0) && (
                     <div className="mt-4 pt-4 border-t border-slate-100">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" /> Select Teams
+                        <Users className="w-3.5 h-3.5" /> {tr('workshopForm.selectTeams')}
                       </label>
                       {availableTeams.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">No teams generated yet for selected classes.</p>
+                        <p className="text-xs text-slate-400 italic">{tr('workshopForm.noTeamsGeneratedYetForSelected')}</p>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto p-1">
                           {availableTeams.map(t => (
@@ -964,13 +966,13 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
                 {/* Media & Attachments */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Media & Files</h3>
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">{tr('workshopForm.mediaFiles')}</h3>
 
                   <div className="mb-5">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Banner Image</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{tr('workshopForm.bannerImage')}</label>
                     {bannerUrl ? (
                       <div className="relative rounded-xl overflow-hidden group shadow-sm border border-slate-200">
-                        <img src={bannerUrl} alt="Banner" className="w-full h-32 object-cover" />
+                        <img src={bannerUrl} alt={tr('workshopForm.banner')} className="w-full h-32 object-cover" />
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <button type="button" onClick={() => setBannerUrl('')} className="p-2.5 bg-rose-500 text-white rounded-full hover:bg-rose-600 shadow-lg transform hover:scale-110 transition-all">
                             <Trash2 size={18} />
@@ -982,14 +984,14 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                         <div className="p-3 bg-white rounded-full shadow-sm mb-2 group-hover:shadow-md transition-all">
                           <ImageIcon className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
                         </div>
-                        <span className="text-xs font-bold text-slate-500 group-hover:text-primary-700 transition-colors">Upload Banner</span>
+                        <span className="text-xs font-bold text-slate-500 group-hover:text-primary-700 transition-colors">{tr('workshopForm.uploadBanner')}</span>
                         <input type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'banner')} disabled={uploading} />
                       </label>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Attachments</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{tr('workshopForm.attachments')}</label>
                     <div className="space-y-2 mb-3">
                       {attachments.map((url, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200 group hover:border-slate-300 transition-colors">
@@ -997,7 +999,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                             <div className="p-1.5 bg-white rounded shadow-sm">
                               <FileText className="w-4 h-4 text-primary flex-shrink-0" />
                             </div>
-                            <span className="text-xs font-semibold text-slate-600 truncate">Attachment {idx + 1}</span>
+                            <span className="text-xs font-semibold text-slate-600 truncate">{tr('workshopForm.attachment', { v1: idx + 1 })}</span>
                           </div>
                           <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
                             <X size={16} />
@@ -1006,7 +1008,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                       ))}
                     </div>
                     <label className="flex items-center justify-center gap-2 w-full py-2.5 border border-dashed border-slate-300 bg-slate-50 rounded-xl text-xs font-bold text-slate-600 hover:border-primary hover:text-primary-700 hover:bg-primary/5 cursor-pointer transition-all">
-                      <Upload size={16} /> Add File
+                      <Upload size={16} /> {tr('workshopForm.addFile')}
                       <input type="file" className="hidden" onChange={e => handleFileUpload(e, 'attachment')} disabled={uploading} />
                     </label>
                   </div>
@@ -1014,9 +1016,9 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
 
                 {/* Mentors Selection */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Assign Mentors</h3>
+                  <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">{tr('workshopForm.assignMentors')}</h3>
                   {availableMentors.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No mentors available.</p>
+                    <p className="text-xs text-slate-400 italic">{tr('workshopForm.noMentorsAvailable')}</p>
                   ) : (
                     <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto p-1">
                       {availableMentors.map(m => (
@@ -1043,16 +1045,16 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer group">
                 <input type="radio" name="status" value="PUBLISHED" checked={status === 'PUBLISHED'} onChange={() => setStatus('PUBLISHED')} className="w-4 h-4 text-primary-700 focus:ring-primary" />
-                <span className="group-hover:text-primary-700 transition-colors">Publish</span>
+                <span className="group-hover:text-primary-700 transition-colors">{tr('workshopForm.publish')}</span>
               </label>
               <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer group">
                 <input type="radio" name="status" value="DRAFT" checked={status === 'DRAFT'} onChange={() => setStatus('DRAFT')} className="w-4 h-4 text-primary-700 focus:ring-primary" />
-                <span className="group-hover:text-primary-700 transition-colors">Draft</span>
+                <span className="group-hover:text-primary-700 transition-colors">{tr('projectWorkspaceProfile.draft')}</span>
               </label>
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={onClose} className="px-5 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors shadow-sm">
-                Cancel
+                {tr('common:actions.cancel')}
               </button>
               <button
                 type="button"
@@ -1060,7 +1062,7 @@ const WorkshopForm = ({ isOpen, onClose, workshop, onSave }) => {
                 disabled={loading || uploading}
                 className="bg-primary text-white font-bold px-6 py-2.5 rounded-xl text-sm hover:shadow-glow-primary hover:bg-primary-600 active:scale-[0.98] transition-all disabled:opacity-50 shadow-md"
               >
-                {loading ? 'Processing...' : (workshop?._id ? 'Review Changes' : 'Review & Create')}
+                {loading ? tr('workshopCheckInModal.processing') : (workshop?._id ? tr('workshopForm.reviewChanges') : tr('workshopForm.reviewCreate'))}
               </button>
             </div>
           </div>

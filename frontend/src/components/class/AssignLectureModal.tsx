@@ -6,8 +6,10 @@ import { subjectApi } from '../../api/subjectApi';
 import { parseApiError } from '../../utils/apiError';
 import { unwrapApiData } from '../../utils/classMappers';
 import { matchesSearchQuery } from '../../utils/searchText';
+import { useTranslation } from 'react-i18next';
 
 export default function AssignLectureModal({ classId, semester, year, currentLecture, rowVersion, allowUnassign = false, onClose, onAssigned }) {
+  const { t } = useTranslation('class');
   const [lecturers, setLecturers] = useState([]);
   const [selectedId, setSelectedId] = useState(currentLecture?._id || currentLecture?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +32,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
         if (active) setLecturers(list);
       } catch (error) {
         if (active) {
-          toast.error(parseApiError(error, 'Failed to load lecturers.').message);
+          toast.error(parseApiError(error, t('assignLectureModal.failedToLoadLecturers')).message);
         }
       } finally {
         if (active) setLoading(false);
@@ -44,11 +46,11 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
 
   const handleSubmit = async () => {
     if (!selectedId && !currentLecture) {
-      toast.error('Select an active lecturer before saving.');
+      toast.error(t('assignLectureModal.selectAnActiveLecturerBeforeSaving'));
       return;
     }
     if (!rowVersion) {
-      toast.error('Class data is stale. Reload the page and try again.');
+      toast.error(t('assignLectureModal.classDataIsStaleReloadThe'));
       return;
     }
     setSubmitting(true);
@@ -57,10 +59,10 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
         primaryLecturerId: selectedId || null,
         rowVersion,
       });
-      toast.success(selectedId ? 'Lecturer assigned successfully!' : 'Lecturer unassigned successfully!');
+      toast.success(selectedId ? t('assignLectureModal.lecturerAssignedSuccessfully') : t('assignLectureModal.lecturerUnassignedSuccessfully'));
       await onAssigned();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to assign lecturer').message);
+      toast.error(parseApiError(e, t('assignLectureModal.failedToAssignLecturer')).message);
     } finally {
       setSubmitting(false);
     }
@@ -75,8 +77,8 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Assign Lecturer</h2>
-            <p className="text-xs text-slate-400 mt-0.5 font-medium">Select a lecturer for this class</p>
+            <h2 className="text-lg font-bold text-slate-900">{t('assignLectureModal.assignLecturer')}</h2>
+            <p className="text-xs text-slate-400 mt-0.5 font-medium">{t('assignLectureModal.selectALecturerForThisClass')}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
             <X className="w-5 h-5" />
@@ -89,7 +91,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search lecturers..."
+              placeholder={t('assignLectureModal.searchLecturers')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -110,11 +112,11 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
                     selectedId === '' ? 'bg-primary-50/40 border-primary/20 text-primary-700' : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  Unassigned (Draft classes only)
+                  {t('assignLectureModal.unassignedDraftClassesOnly')}
                 </button>
               )}
               {filtered.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">No active lecturers are listed for this semester</p>
+                <p className="text-xs text-slate-400 text-center py-6">{t('assignLectureModal.noActiveLecturersAreListedFor')}</p>
               ) : (
                 filtered.map(l => {
                   const isSelected = selectedId === l._id;
@@ -153,14 +155,14 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
         {/* Footer */}
         <div className="flex gap-3 p-5 pt-0">
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-all">
-            Cancel
+            {t('common:actions.cancel')}
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || loading}
             className="flex-1 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-primary-700 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shadow-sm"
           >
-            {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</> : 'Save Assignment'}
+            {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('assignLectureModal.saving')}</> : t('assignLectureModal.saveAssignment')}
           </button>
         </div>
       </div>

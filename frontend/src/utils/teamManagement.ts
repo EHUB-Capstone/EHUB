@@ -10,6 +10,7 @@ import type {
   TeamStudent,
 } from '../types/teamManagement';
 import { getTeamGroupFromMajor, TEAM_MAJOR_GROUPS } from '../constants/majors.ts';
+import i18n from '../i18n/index.ts';
 
 export const TEAM_MEMBER_LIMIT = 6;
 export const TEAM_MEMBER_MINIMUM = 4;
@@ -118,21 +119,21 @@ export function validateTeamSelection(
   const warnings: string[] = [];
 
   if (memberCount < TEAM_MEMBER_MINIMUM) {
-    errors.push(`Select at least ${TEAM_MEMBER_MINIMUM} students.`);
+    errors.push(i18n.t('utils:teamManagement.selectAtLeastStudents', { TEAM_MEMBER_MINIMUM }));
   } else if (memberCount > TEAM_MEMBER_LIMIT) {
-    errors.push(`Select no more than ${TEAM_MEMBER_LIMIT} students.`);
+    errors.push(i18n.t('utils:teamManagement.selectNoMoreThanStudents', { TEAM_MEMBER_LIMIT }));
   }
 
   if (!hasGroupOne) {
-    errors.push('Team must include at least one GROUP_1 major.');
+    errors.push(i18n.t('utils:teamManagement.teamMustIncludeAtLeastOne'));
   }
 
   if (!hasGroupTwo) {
-    errors.push('Team must include at least one GROUP_2 major.');
+    errors.push(i18n.t('utils:teamManagement.teamMustIncludeAtLeastOne2'));
   }
 
   if (!isTeamLeaderValid) {
-    errors.push('Team Leader is required.');
+    errors.push(i18n.t('utils:teamManagement.teamLeaderIsRequired'));
   }
 
   if (missingMajorStudents.length > 0) {
@@ -479,26 +480,26 @@ export function validateTeamDraft(
   if (teamName.length === 0 && !currentTeamId) {
     // The backend generates the next sequential name when managers leave this blank.
   } else if (teamName.length < 3 || teamName.length > 60) {
-    errors.teamName = 'Team name must be between 3 and 60 characters.';
+    errors.teamName = i18n.t('utils:teamManagement.teamNameMustBeBetween3');
   } else if (teamName.length > 0) {
     const duplicateName = teams.some((team) => (
       team._id !== currentTeamId
       && (!entityId(team.classId) || entityId(team.classId) === draft.classId)
       && team.teamName.trim().toLowerCase() === teamName.toLowerCase()
     ));
-    if (duplicateName) errors.teamName = 'A team with this name already exists in the class.';
+    if (duplicateName) errors.teamName = i18n.t('utils:teamManagement.aTeamWithThisNameAlready');
   }
 
-  if (!draft.classId) errors.classId = 'A class is required.';
+  if (!draft.classId) errors.classId = i18n.t('utils:teamManagement.aClassIsRequired');
 
   const hasAllowedSize = uniqueMemberIds.length >= TEAM_MEMBER_MINIMUM && uniqueMemberIds.length <= TEAM_MEMBER_LIMIT;
   if (!hasAllowedSize) {
-    errors.memberIds = 'A team must have 4-6 students.';
+    errors.memberIds = i18n.t('utils:teamManagement.aTeamMustHave46');
   }
 
   const knownStudentIds = new Set(students.map((student) => student._id));
   if (uniqueMemberIds.some((studentId) => !knownStudentIds.has(studentId))) {
-    errors.memberIds = 'One or more selected students are not in this class.';
+    errors.memberIds = i18n.t('utils:teamManagement.oneOrMoreSelectedStudentsAre');
   }
 
   const selectedStudents = uniqueMemberIds
@@ -507,7 +508,7 @@ export function validateTeamDraft(
   const hasBusinessMajor = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_1');
   const hasTechnologyMajor = selectedStudents.some((student) => getTeamGroupFromMajor(student.major) === 'GROUP_2');
   if (hasAllowedSize && (!hasBusinessMajor || !hasTechnologyMajor)) {
-    errors.memberIds = 'A team must include at least one GROUP_1 major and one GROUP_2 major.';
+    errors.memberIds = i18n.t('utils:studentAssignment.aTeamMustIncludeAtLeast');
   }
 
   const teamsInClass = teams.filter((team) => !entityId(team.classId) || entityId(team.classId) === draft.classId);
@@ -523,17 +524,17 @@ export function validateTeamDraft(
   }
 
   if (!draft.leaderId) {
-    errors.leaderId = 'Select a team leader.';
+    errors.leaderId = i18n.t('utils:teamManagement.selectATeamLeader');
   } else if (!uniqueMemberIds.includes(draft.leaderId)) {
-    errors.leaderId = 'The team leader must be one of the selected members.';
+    errors.leaderId = i18n.t('utils:teamManagement.theTeamLeaderMustBeOne');
   }
 
   if (draft.projectName.trim() && (draft.projectName.trim().length < 3 || draft.projectName.trim().length > 100)) {
-    errors.projectName = 'Project name must be between 3 and 100 characters.';
+    errors.projectName = i18n.t('utils:teamManagement.projectNameMustBeBetween3');
   }
 
   if (draft.projectDescription.trim().length > 500) {
-    errors.projectDescription = 'Project summary cannot exceed 500 characters.';
+    errors.projectDescription = i18n.t('utils:teamManagement.projectSummaryCannotExceed500Characters');
   }
 
   return { isValid: Object.keys(errors).length === 0, errors, conflicts };

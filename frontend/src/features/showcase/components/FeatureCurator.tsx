@@ -10,6 +10,7 @@ import type { ShowcaseStage } from '../../../types/showcase';
 import { parseApiError } from '../../../utils/apiError';
 import { filterCandidates, groupByClass, splitSelection } from '../../../utils/featureCandidates';
 import { stageLabel } from '../../../utils/showcase';
+import { useTranslation } from 'react-i18next';
 
 const selectClass = 'h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-body-sm text-slate-900 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-dark-surface dark:text-slate-100';
 
@@ -25,6 +26,7 @@ interface FeatureCuratorProps {
  * projects the caller may feature (a lecturer's own classes; everything for an admin), grouped here by class.
  */
 export default function FeatureCurator({ isAdmin, search, stage }: FeatureCuratorProps): React.ReactElement {
+  const { t } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const candidates = useQuery({ queryKey: ['showcase', 'feature-candidates'], queryFn: ({ signal }) => showcaseApi.getFeatureCandidates(signal), staleTime: 0 });
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -54,37 +56,37 @@ export default function FeatureCurator({ isAdmin, search, stage }: FeatureCurato
       toast.success(`${result.updated} ${result.updated === 1 ? 'project' : 'projects'} ${featured ? 'featured' : 'unfeatured'}.${skipped}`);
       setSelected(new Set());
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to update the featured selection. Try again.').message);
+      toast.error(parseApiError(error, t('showcaseFeaturedToggle.unableToUpdateTheFeaturedSelection')).message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (candidates.isPending) return <div className="space-y-3" role="status" aria-label="Loading projects to feature">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} variant="card" className="h-28" />)}</div>;
-  if (candidates.isError) return <ErrorState title="Could not load projects" message={parseApiError(candidates.error, 'Please try again.').message} />;
+  if (candidates.isPending) return <div className="space-y-3" role="status" aria-label={t('featureCurator.loadingProjectsToFeature')}>{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} variant="card" className="h-28" />)}</div>;
+  if (candidates.isError) return <ErrorState title={t('featureCurator.couldNotLoadProjects')} message={parseApiError(candidates.error, t('featureCurator.pleaseTryAgain')).message} />;
 
-  return <section aria-label="Select featured projects" className="space-y-5">
+  return <section aria-label={t('featureCurator.selectFeaturedProjects')} className="space-y-5">
     <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-dark-surface">
-      <p className="mr-auto text-body-sm text-slate-600 dark:text-slate-300">{isAdmin ? 'All published projects.' : 'Published projects of your classes.'} Tick projects, then feature or unfeature them together.</p>
-      {isAdmin && <select aria-label="Lecturer" className={selectClass} value={lecturer} onChange={event => { setLecturer(event.target.value); setClassCode(''); }}><option value="">All lecturers</option>{lecturers.map(name => <option key={name} value={name}>{name}</option>)}</select>}
-      <select aria-label="Class" className={selectClass} value={classCode} onChange={event => setClassCode(event.target.value)}><option value="">{isAdmin ? 'All classes' : 'All my classes'}</option>{classes.map(code => <option key={code} value={code}>{code}</option>)}</select>
+      <p className="mr-auto text-body-sm text-slate-600 dark:text-slate-300">{t(isAdmin ? 'featureCurator.hintAdmin' : 'featureCurator.hintLecturer')}</p>
+      {isAdmin && <select aria-label={t('featureCurator.lecturer')} className={selectClass} value={lecturer} onChange={event => { setLecturer(event.target.value); setClassCode(''); }}><option value="">{t('featureCurator.allLecturers')}</option>{lecturers.map(name => <option key={name} value={name}>{name}</option>)}</select>}
+      <select aria-label={t('showcaseReferenceData.class')} className={selectClass} value={classCode} onChange={event => setClassCode(event.target.value)}><option value="">{isAdmin ? t('featureCurator.allClasses') : t('featureCurator.allMyClasses')}</option>{classes.map(code => <option key={code} value={code}>{code}</option>)}</select>
     </div>
 
     {groups.length === 0
-      ? <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-body-sm text-slate-600 dark:border-slate-600 dark:bg-secondary-800 dark:text-slate-300">No published projects match these filters.</p>
+      ? <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-body-sm text-slate-600 dark:border-slate-600 dark:bg-secondary-800 dark:text-slate-300">{t('featureCurator.noPublishedProjectsMatchTheseFilters')}</p>
       : groups.map(group => {
         const ids = group.items.map(item => item.id);
         const allChecked = ids.every(id => selected.has(id));
         const notFeatured = group.items.filter(item => !item.isFeatured).map(item => item.id);
-        return <section key={group.classCode} aria-label={`Class ${group.classCode}`}>
+        return <section key={group.classCode} aria-label={t('featureCurator.class', { classCode: group.classCode })}>
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-2xl border border-b-0 border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-dark-surface">
             <label className="flex cursor-pointer items-center gap-3 text-subheading font-bold text-secondary dark:text-white">
-              <input type="checkbox" className="h-5 w-5 accent-primary" checked={allChecked} onChange={event => toggle(ids, event.target.checked)} aria-label={`Select all projects of ${group.classCode}`} />
+              <input type="checkbox" className="h-5 w-5 accent-primary" checked={allChecked} onChange={event => toggle(ids, event.target.checked)} aria-label={t('featureCurator.selectAllProjectsOf', { classCode: group.classCode })} />
               {group.classCode}
             </label>
             <div className="flex flex-wrap items-center gap-3 text-body-sm text-slate-500 dark:text-slate-400">
-              <span>{group.lecturerName || 'No lecturer'} · {group.featuredCount}/{group.items.length} featured</span>
-              {notFeatured.length > 0 && <Button variant="outline" size="sm" onClick={() => toggle(notFeatured, true)}>Select not featured</Button>}
+              <span>{group.lecturerName || t('featureCurator.noLecturer')} · {t('featureCurator.featuredCount', { featured: group.featuredCount, total: group.items.length })}</span>
+              {notFeatured.length > 0 && <Button variant="outline" size="sm" onClick={() => toggle(notFeatured, true)}>{t('featureCurator.selectNotFeatured')}</Button>}
             </div>
           </div>
           <ul className="divide-y divide-slate-200 overflow-hidden rounded-b-2xl border border-slate-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-dark-surface">
@@ -98,7 +100,7 @@ export default function FeatureCurator({ isAdmin, search, stage }: FeatureCurato
                   </span>
                   <span className="min-w-0">
                     <span className="flex flex-wrap items-center gap-2 font-semibold text-secondary dark:text-white"><span className="truncate">{item.projectName}</span>
-                      {item.isFeatured && <span className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-800 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-200"><Star className="h-3 w-3" aria-hidden="true" />Featured</span>}
+                      {item.isFeatured && <span className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-caption font-semibold text-primary-800 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-200"><Star className="h-3 w-3" aria-hidden="true" />{t('featureCurator.featured')}</span>}
                     </span>
                     <span className="block truncate text-body-sm text-slate-500 dark:text-slate-400">{item.teamName} · {stageLabel(item.developmentStage)}</span>
                   </span>
@@ -109,12 +111,12 @@ export default function FeatureCurator({ isAdmin, search, stage }: FeatureCurato
         </section>;
       })}
 
-    {selected.size > 0 && <div role="region" aria-label="Selection actions" className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary px-4 py-3 text-white shadow-lg">
-      <span className="text-body-sm"><b>{selected.size}</b> selected</span>
+    {selected.size > 0 && <div role="region" aria-label={t('featureCurator.selectionActions')} className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-secondary px-4 py-3 text-white shadow-lg">
+      <span className="text-body-sm"><b>{selected.size}</b> {t('featureCurator.selected')}</span>
       <span className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" className="!border-white/40 !bg-transparent !text-white hover:!bg-white/10" disabled={isSaving} onClick={() => setSelected(new Set())}>Clear</Button>
-        {toFeature.length > 0 && <Button variant="primary" size="sm" icon={Star} isLoading={isSaving} onClick={() => { void apply(toFeature, true); }}>Feature {toFeature.length}</Button>}
-        {toUnfeature.length > 0 && <Button variant="outline" size="sm" className="!border-white/40 !bg-transparent !text-white hover:!bg-white/10" disabled={isSaving} onClick={() => { void apply(toUnfeature, false); }}>Unfeature {toUnfeature.length}</Button>}
+        <Button variant="outline" size="sm" className="!border-white/40 !bg-transparent !text-white hover:!bg-white/10" disabled={isSaving} onClick={() => setSelected(new Set())}>{t('common:actions.clear')}</Button>
+        {toFeature.length > 0 && <Button variant="primary" size="sm" icon={Star} isLoading={isSaving} onClick={() => { void apply(toFeature, true); }}>{t('featureCurator.feature', { length: toFeature.length })}</Button>}
+        {toUnfeature.length > 0 && <Button variant="outline" size="sm" className="!border-white/40 !bg-transparent !text-white hover:!bg-white/10" disabled={isSaving} onClick={() => { void apply(toUnfeature, false); }}>{t('featureCurator.unfeature', { length: toUnfeature.length })}</Button>}
       </span>
     </div>}
   </section>;

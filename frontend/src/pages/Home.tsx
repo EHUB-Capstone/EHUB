@@ -9,6 +9,9 @@ import {
 import { useState } from 'react';
 import logo from '../assets/logo.png';
 import { useTheme } from '../context/ThemeContext';
+import LanguageSwitcher from '../components/ui/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
 /* ─── Animation variants ─────────────────────────────── */
 const smoothEase: Easing = [0.22, 1, 0.36, 1] as const;
@@ -32,30 +35,31 @@ interface Step    { num: string; title: string; desc: string; }
 
 /* ─── Static data ────────────────────────────────────── */
 const features: Feature[] = [
-  { icon: GraduationCap, title: 'Project Management',    desc: 'Organize and track student startup projects across semesters with structured workflows and milestone management.', accent: '#F56A2A' },
-  { icon: Users,         title: 'Mentor Connection',     desc: 'Bridge the gap between mentors and student teams for focused coaching, feedback, and real-world guidance.', accent: '#F56A2A' },
-  { icon: Brain,         title: 'AI-Powered Evaluation', desc: 'Leverage AI to assess startup viability, feasibility, and market potential — fast, unbiased, and data-driven.', accent: '#F56A2A' },
-  { icon: BarChart3,     title: 'Progress Analytics',    desc: 'Visualize team performance with dashboards, KPI tracking, and detailed reports in real time.', accent: '#F56A2A' },
-  { icon: Shield,        title: 'Secure Data Storage',   desc: 'All project data, documents, and evaluations are securely stored and easily accessible anytime.', accent: '#F56A2A' },
-  { icon: TrendingUp,    title: 'Long-term Development', desc: 'Support startup journeys beyond a single semester — track growth, iterations, and outcomes over time.', accent: '#F56A2A' },
+  { icon: GraduationCap, get title() { return i18n.t('home:home.projectManagement'); },    get desc() { return i18n.t('home:home.organizeAndTrackStudentStartupProjects'); }, accent: '#F56A2A' },
+  { icon: Users,         get title() { return i18n.t('home:home.mentorConnection'); },     get desc() { return i18n.t('home:home.bridgeTheGapBetweenMentorsAnd'); }, accent: '#F56A2A' },
+  { icon: Brain,         get title() { return i18n.t('home:home.aiPoweredEvaluation'); }, get desc() { return i18n.t('home:home.leverageAiToAssessStartupViability'); }, accent: '#F56A2A' },
+  { icon: BarChart3,     get title() { return i18n.t('home:home.progressAnalytics'); },    get desc() { return i18n.t('home:home.visualizeTeamPerformanceWithDashboardsKpi'); }, accent: '#F56A2A' },
+  { icon: Shield,        get title() { return i18n.t('home:home.secureDataStorage'); },   get desc() { return i18n.t('home:home.allProjectDataDocumentsAndEvaluations'); }, accent: '#F56A2A' },
+  { icon: TrendingUp,    get title() { return i18n.t('home:home.longTermDevelopment'); }, get desc() { return i18n.t('home:home.supportStartupJourneysBeyondASingle'); }, accent: '#F56A2A' },
 ];
 
 const stats: Stat[] = [
-  { value: '500+',  label: 'Startup Projects', icon: Rocket },
-  { value: '1,200', label: 'Active Students',  icon: Users },
-  { value: '98%',   label: 'Satisfaction Rate',icon: Star },
-  { value: '50+',   label: 'Expert Mentors',   icon: CheckCircle2 },
+  { value: '500+',  get label() { return i18n.t('home:home.startupProjects'); }, icon: Rocket },
+  { value: '1,200', get label() { return i18n.t('home:home.activeStudents'); },  icon: Users },
+  { value: '98%',   get label() { return i18n.t('home:home.satisfactionRate'); },icon: Star },
+  { value: '50+',   get label() { return i18n.t('home:home.expertMentors'); },   icon: CheckCircle2 },
 ];
 
 const steps: Step[] = [
-  { num: '01', title: 'Register & Join',   desc: 'Students and mentors create accounts and join their respective classes or incubation cohorts.' },
-  { num: '02', title: 'Submit Projects',   desc: 'Teams submit startup proposals and documents through the structured project management system.' },
-  { num: '03', title: 'Get Evaluated',     desc: 'AI and mentors review the projects, providing scores, feedback, and actionable insights.' },
-  { num: '04', title: 'Grow & Succeed',    desc: 'Track progress over time, iterate on ideas, and build toward a real-world startup launch.' },
+  { num: '01', get title() { return i18n.t('home:home.registerJoin'); },   get desc() { return i18n.t('home:home.studentsAndMentorsCreateAccountsAnd'); } },
+  { num: '02', get title() { return i18n.t('home:home.submitProjects'); },   get desc() { return i18n.t('home:home.teamsSubmitStartupProposalsAndDocuments'); } },
+  { num: '03', get title() { return i18n.t('home:home.getEvaluated'); },     get desc() { return i18n.t('home:home.aiAndMentorsReviewTheProjects'); } },
+  { num: '04', get title() { return i18n.t('home:home.growSucceed'); },    get desc() { return i18n.t('home:home.trackProgressOverTimeIterateOn'); } },
 ];
 
 /* ─── Component ──────────────────────────────────────── */
 const Home: React.FC = () => {
+  const { t } = useTranslation('home');
   const { isDark, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
@@ -68,10 +72,10 @@ const Home: React.FC = () => {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="EHub" className="w-10 h-10 object-contain" />
+            <img src={logo} alt={t('home.ehub')} className="w-10 h-10 object-contain" />
             <span className="text-xl font-extrabold tracking-tight">
-              <span className="text-primary-400">E</span>
-              <span className="text-secondary dark:text-secondary-300">HUB</span>
+              <span className="text-primary-400">{t('home.e')}</span>
+              <span className="text-secondary dark:text-secondary-300">{t('home.hub')}</span>
             </span>
           </div>
 
@@ -90,18 +94,20 @@ const Home: React.FC = () => {
               to="/login"
               className="hidden sm:flex items-center px-5 py-2 rounded-[14px] text-sm font-semibold text-white bg-primary shadow-[0_10px_28px_rgba(245,106,42,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(245,106,42,0.22)] transition-all duration-200 ease-out"
             >
-              Sign in
+              {t('home.signIn')}
             </Link>
 
             <Link
               to="/register"
               className="hidden sm:flex items-center gap-1.5 px-5 py-2 rounded-[14px] text-sm font-semibold text-primary-600 border border-primary bg-transparent hover:bg-orange-50 hover:-translate-y-[2px] transition-all duration-200 ease-out"
             >
-              Sign Up <ArrowRight size={14} />
+              {t('common:actions.signUp')} <ArrowRight size={14} />
             </Link>
 
+            <LanguageSwitcher variant="outline" />
+
             {/* Theme Toggle */}
-            <button onClick={toggleTheme} aria-label="Toggle theme"
+            <button onClick={toggleTheme} aria-label={t('home.toggleTheme')}
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors duration-200 border border-slate-200 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 dark:hover:text-white"
             >
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
@@ -127,7 +133,7 @@ const Home: React.FC = () => {
               className="text-sm font-semibold text-white bg-primary text-center px-4 py-2.5 rounded-[14px]"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Sign in
+              {t('home.signIn')}
             </Link>
 
             <Link
@@ -135,7 +141,7 @@ const Home: React.FC = () => {
               className="text-sm font-semibold text-primary-600 border border-primary bg-transparent text-center px-4 py-2.5 rounded-[14px]"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Get Started
+              {t('home.getStarted')}
             </Link>
           </motion.div>
         )}
@@ -164,20 +170,20 @@ const Home: React.FC = () => {
                 <motion.div initial="hidden" animate="visible" variants={fadeIn} custom={0}
                   className="inline-flex items-center gap-2 px-[18px] py-2.5 mb-8 rounded-full border bg-white/80 border-slate-200 shadow-[0_12px_32px_rgba(15,23,42,0.04)] dark:bg-dark-surface/80 dark:border-white/10">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(249,115,22,0.45)]" />
-                  <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-300">Now live — <span className="text-secondary dark:text-blue-300">EHUB Platform v1.0</span></span>
+                  <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-300">{t('home.nowLive')} <span className="text-secondary dark:text-blue-300">{t('home.ehubPlatformV10')}</span></span>
                 </motion.div>
 
                 <motion.h1 initial="hidden" animate="visible" variants={fadeUp} custom={1}
                   className="max-w-[720px] text-[clamp(56px,5vw,80px)] 2xl:text-[clamp(72px,6vw,96px)] font-black leading-[0.94] 2xl:leading-[0.92] tracking-[-0.055em] [word-spacing:-0.06em] mb-9 text-slate-900 dark:text-slate-50">
-                  <span className="block whitespace-nowrap">Entrepreneurship Hub</span>
-                  <span className="block whitespace-nowrap">Management &</span>
-                  <span className="block whitespace-nowrap">Startup Incubation</span>
+                  <span className="block whitespace-nowrap">{t('home.entrepreneurshipHub')}</span>
+                  <span className="block whitespace-nowrap">{t('home.management')}</span>
+                  <span className="block whitespace-nowrap">{t('home.startupIncubation')}</span>
              
                 </motion.h1>
 
                 <motion.p initial="hidden" animate="visible" variants={fadeUp} custom={2}
                   className="text-[22px] leading-[1.7] font-normal mb-11 max-w-[520px] text-slate-500 dark:text-slate-300">
-                  A digital platform designed to support the management, evaluation, storage, and long-term development of student startup projects.
+                  {t('home.aDigitalPlatformDesignedToSupport')}
                 </motion.p>
 
                 <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={3}
@@ -186,14 +192,14 @@ const Home: React.FC = () => {
                     to="/register"
                     className="flex h-14 items-center gap-2 px-8 rounded-[14px] text-[15px] font-semibold text-primary-600 bg-transparent border border-primary hover:bg-orange-50 hover:-translate-y-[2px] transition-all duration-200 ease-out"
                   >
-                    Sign up <ArrowRight size={18} />
+                    {t('home.signUp')} <ArrowRight size={18} />
                   </Link>
 
                   <Link
                     to="/login"
                     className="flex h-14 items-center px-8 rounded-[14px] text-[15px] font-semibold text-white bg-primary shadow-[0_10px_28px_rgba(245,106,42,0.18)] hover:-translate-y-[2px] hover:shadow-[0_14px_36px_rgba(245,106,42,0.22)] transition-all duration-200 ease-out"
                   >
-                    Sign in
+                    {t('home.signIn')}
                   </Link>
                 </motion.div>
 
@@ -218,16 +224,16 @@ const Home: React.FC = () => {
                   <div className="flex items-center gap-1.5 px-4 py-2 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/55 dark:bg-white/[0.04]">
                     {['#CBD5E1','#CBD5E1','#F56A2A'].map((c, i) => <div key={`${c}-${i}`} className="w-2 h-2 rounded-full opacity-70" style={{ background: c }} />)}
                     <div className="flex-1 h-5 ml-3 px-2.5 flex items-center rounded-md bg-white/80 dark:bg-dark-page/70 border border-slate-200/70 dark:border-white/10">
-                      <span className="text-overline text-slate-500/80 dark:text-slate-400">e-hub.com.vn</span>
+                      <span className="text-overline text-slate-500/80 dark:text-slate-400">{t('home.eHubComVn')}</span>
                     </div>
                   </div>
                   <div className="p-5">
                     <div className="grid grid-cols-2 gap-3 mb-3.5">
                       {[
-                        { label: 'Total Projects', val: '487', color: 'text-slate-900 dark:text-slate-50' },
-                        { label: 'Active Classes', val: '24',  color: 'text-slate-900 dark:text-slate-50' },
-                        { label: 'Startup Teams',  val: '96',  color: 'text-slate-900 dark:text-slate-50' },
-                        { label: 'AI Reviews',     val: '312', color: 'text-success' },
+                        { label: t('home.totalProjects'), val: '487', color: 'text-slate-900 dark:text-slate-50' },
+                        { label: t('home.activeClasses'), val: '24',  color: 'text-slate-900 dark:text-slate-50' },
+                        { label: t('home.startupTeams'),  val: '96',  color: 'text-slate-900 dark:text-slate-50' },
+                        { label: t('home.aiReviews'),     val: '312', color: 'text-success' },
                       ].map(card => (
                         <div key={card.label} className="p-3.5 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/95 dark:bg-dark-page/60">
                           <p className="text-overline font-semibold uppercase tracking-wider mb-1.5 text-slate-400 dark:text-slate-400">{card.label}</p>
@@ -236,7 +242,7 @@ const Home: React.FC = () => {
                       ))}
                     </div>
                     <div className="p-4 rounded-xl border border-slate-200/80 dark:border-white/10 bg-white/95 dark:bg-dark-page/60">
-                      <p className="text-caption font-semibold mb-3 text-slate-400 dark:text-slate-400">PROJECT SUBMISSIONS</p>
+                      <p className="text-caption font-semibold mb-3 text-slate-400 dark:text-slate-400">{t('home.projectSubmissions')}</p>
                       <div className="flex items-end gap-1.5 h-[70px]">
                         {[30,55,40,70,50,85,60,75,45,90,65,80].map((h, i) => (
                           <motion.div key={i}
@@ -259,10 +265,10 @@ const Home: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
               className="text-center mb-16">
-              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-5 border text-slate-500 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-white/5 dark:border-white/10">Platform Features</span>
-              <h2 className="text-[clamp(28px,4vw,48px)] font-extrabold tracking-tight mb-4 text-slate-900 dark:text-white">Everything in one place</h2>
+              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-5 border text-slate-500 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-white/5 dark:border-white/10">{t('home.platformFeatures')}</span>
+              <h2 className="text-[clamp(28px,4vw,48px)] font-extrabold tracking-tight mb-4 text-slate-900 dark:text-white">{t('home.everythingInOnePlace')}</h2>
               <p className="text-[17px] leading-[1.75] max-w-[560px] mx-auto text-slate-500 dark:text-slate-300">
-                Built for educators, mentors, and students — EHub streamlines every step of the startup incubation journey.
+                {t('home.builtForEducatorsMentorsAndStudents')}
               </p>
             </motion.div>
 
@@ -289,8 +295,8 @@ const Home: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
               className="text-center mb-16">
-              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-5 border text-slate-500 bg-white border-slate-200 dark:text-slate-300 dark:bg-white/5 dark:border-white/10">How It Works</span>
-              <h2 className="text-[clamp(28px,4vw,48px)] font-extrabold tracking-tight text-slate-900 dark:text-white">Four simple steps</h2>
+              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-5 border text-slate-500 bg-white border-slate-200 dark:text-slate-300 dark:bg-white/5 dark:border-white/10">{t('home.howItWorks')}</span>
+              <h2 className="text-[clamp(28px,4vw,48px)] font-extrabold tracking-tight text-slate-900 dark:text-white">{t('home.fourSimpleSteps')}</h2>
             </motion.div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
               <div className="hidden lg:block absolute top-7 left-[12.5%] right-[12.5%] h-px bg-slate-200 dark:bg-white/10 z-0" />
@@ -330,23 +336,23 @@ const Home: React.FC = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-xl mb-8 bg-secondary shadow-[0_22px_55px_rgba(15,23,42,0.18)]">
               <Rocket size={32} color="#fff" />
             </div>
-            <h2 className="text-[clamp(28px,4vw,52px)] font-extrabold tracking-tight mb-5 text-slate-900 dark:text-white">Ready to launch your startup?</h2>
+            <h2 className="text-[clamp(28px,4vw,52px)] font-extrabold tracking-tight mb-5 text-slate-900 dark:text-white">{t('home.readyToLaunchYourStartup')}</h2>
             <p className="text-[17px] leading-[1.75] max-w-[500px] mx-auto mb-10 text-slate-500 dark:text-slate-300">
-              Join students and educators already using EHub to build, evaluate, and grow the next generation of startups.
+              {t('home.joinStudentsAndEducatorsAlreadyUsing')}
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link
                 to="/register"
                 className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-primary-600 border border-primary bg-transparent hover:bg-orange-50 hover:-translate-y-0.5 transition-all duration-200"
               >
-                Sign up <ArrowRight size={18} />
+                {t('home.signUp')} <ArrowRight size={18} />
               </Link>
 
               <Link
                 to="/login"
                 className="px-8 py-4 rounded-xl text-base font-semibold text-white bg-primary shadow-[0_18px_42px_rgba(249,115,22,0.22)] hover:bg-primary hover:-translate-y-0.5 transition-all duration-200"
               >
-                Sign in
+                {t('home.signIn')}
               </Link>
             </div>
           </motion.div>
@@ -357,14 +363,14 @@ const Home: React.FC = () => {
       <footer className="py-8 px-6 transition-colors border-t border-slate-200 bg-white dark:border-white/10 dark:bg-dark-page">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="EHub" className="w-8 h-8 object-contain" />
+            <img src={logo} alt={t('home.ehub')} className="w-8 h-8 object-contain" />
             <span className="text-base font-extrabold">
-              <span className="text-primary-600">E</span> 
-              <span className="text-slate-900 dark:text-white">HUB</span>
+              <span className="text-primary-600">{t('home.e')}</span> 
+              <span className="text-slate-900 dark:text-white">{t('home.hub')}</span>
             </span>
           </div>
           <p className="text-[13px] text-center text-slate-500 dark:text-slate-400">
-            © 2026 EHub — Entrepreneurship Hub Management & Startup Incubation Support Platform
+            {t('home.2026EhubEntrepreneurshipHubManagementStartup')}
           </p>
           <div className="flex gap-6">
             {['Features', 'How it works', 'About'].map(item => (

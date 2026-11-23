@@ -23,6 +23,7 @@ import { classFeatureFlags } from '../../config/classFeatureFlags';
 import { getDisplayTeamName } from '../../utils/teamDisplay';
 import { resolveWorkspaceTab, workspaceTabSearch } from '../../utils/workspaceNavigation';
 import { resolveStudentWorkspaceStage } from '../../utils/projectWorkspace';
+import { useTranslation } from 'react-i18next';
 
 const clearWorkspaceSelectionCache = () => {
   [
@@ -39,6 +40,7 @@ const clearWorkspaceSelectionCache = () => {
 };
 
 export default function TeamWorkspace() {
+  const { t } = useTranslation('workspace');
   const { teamId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,7 +77,7 @@ export default function TeamWorkspace() {
         clearWorkspaceSelectionCache();
         setWorkspaceContext(null);
         setData(null);
-        setEmptyMessage(contextRes?.message || 'You have joined this class but have not been assigned to a team yet.');
+        setEmptyMessage(contextRes?.message || t('teamWorkspace.youHaveJoinedThisClassBut'));
         return;
       }
 
@@ -87,7 +89,7 @@ export default function TeamWorkspace() {
         // Not assigned to team yet
         clearWorkspaceSelectionCache();
         setData(null);
-        setEmptyMessage(res.message || 'You have joined this class but have not been assigned to a team yet.');
+        setEmptyMessage(res.message || t('teamWorkspace.youHaveJoinedThisClassBut'));
       } else {
         const payload = res.data;
         setData({
@@ -104,7 +106,7 @@ export default function TeamWorkspace() {
     } catch (err) {
       console.error(err);
       if (err.status === 403) clearWorkspaceSelectionCache();
-      setErrorMsg(err.response?.data?.error || err.message || 'Failed to load workspace');
+      setErrorMsg(err.response?.data?.error || err.message || t('teamWorkspace.failedToLoadWorkspace'));
     } finally {
       setLoading(false);
     }
@@ -142,7 +144,7 @@ export default function TeamWorkspace() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-sm text-slate-400 mt-2 font-medium">Loading Startup Workspace...</p>
+        <p className="text-sm text-slate-400 mt-2 font-medium">{t('teamWorkspace.loadingStartupWorkspace')}</p>
       </div>
     );
   }
@@ -153,13 +155,13 @@ export default function TeamWorkspace() {
         <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-100">
           <Shield className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-slate-800">Access Restricted</h2>
+        <h2 className="text-xl font-bold text-slate-800">{t('teamWorkspace.accessRestricted')}</h2>
         <p className="text-slate-500 mt-2">{errorMsg}</p>
         <button
           onClick={() => navigate(-1)}
           className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary-700 hover:underline"
         >
-          <ArrowLeft className="w-4 h-4" /> Go Back
+          <ArrowLeft className="w-4 h-4" /> {t('common:actions.goBack')}
         </button>
       </div>
     );
@@ -171,9 +173,9 @@ export default function TeamWorkspace() {
         <div className="w-16 h-16 bg-primary-50 text-primary-700 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-100">
           <Users className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-slate-800">No Team Assigned</h2>
+        <h2 className="text-xl font-bold text-slate-800">{t('executionBoard.noTeamAssigned')}</h2>
         <p className="text-slate-500 mt-2 max-w-md mx-auto">
-          {emptyMessage || 'You have joined this class but have not been assigned to a team yet.'}
+          {emptyMessage || t('teamWorkspace.youHaveJoinedThisClassBut')}
         </p>
       </div>
     );
@@ -213,10 +215,10 @@ export default function TeamWorkspace() {
             <div>
               <span className="rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">{cls?.classCode}</span>
               <h1 className="mt-1 text-heading sm:text-display text-secondary tracking-tight">{displayTeamName}</h1>
-              <p className="mt-0.5 text-sm text-slate-500">No project workspace has been created for this team.</p>
+              <p className="mt-0.5 text-sm text-slate-500">{t('teamWorkspace.noProjectWorkspaceHasBeenCreated')}</p>
             </div>
           </div>
-          {teamId && <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Back</button>}
+          {teamId && <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> {t('common:actions.back')}</button>}
         </div>
 
         {isTeamLeader && !isReadOnly ? (
@@ -224,9 +226,9 @@ export default function TeamWorkspace() {
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
             <Shield className="mx-auto h-8 w-8 text-amber-500" />
-            <h2 className="mt-3 text-lg font-bold text-slate-800">Waiting for the team leader</h2>
+            <h2 className="mt-3 text-lg font-bold text-slate-800">{t('teamWorkspace.waitingForTheTeamLeader')}</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">
-              Only the active team leader can create this project workspace. It will automatically link to the team, class, subject and semester.
+              {t('teamWorkspace.onlyTheActiveTeamLeaderCan')}
             </p>
           </div>
         )}
@@ -241,16 +243,16 @@ export default function TeamWorkspace() {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-caption text-slate-500">{cls?.classCode}</p>
           <h1 className="text-heading sm:text-display text-secondary">{displayTeamName}</h1>
-          <p className="mt-1 text-body-sm text-slate-500">Your project workspace will open after the lecturer approves the project proposal.</p>
+          <p className="mt-1 text-body-sm text-slate-500">{t('teamWorkspace.yourProjectWorkspaceWillOpenAfter')}</p>
         </div>
         {workspaceStage === 'revise' ? (
           <ProjectDirectionCard team={team} project={project} canEdit={isTeamLeader && !isReadOnly} />
         ) : (
           <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
             <Shield className="mx-auto h-8 w-8 text-amber-500" />
-            <h2 className="mt-3 text-subheading text-slate-800">{awaitingLeader ? 'Waiting for the team leader' : 'Waiting for lecturer approval'}</h2>
+            <h2 className="mt-3 text-subheading text-slate-800">{awaitingLeader ? t('teamWorkspace.waitingForTheTeamLeader') : t('teamWorkspace.waitingForLecturerApproval')}</h2>
             <p className="mx-auto mt-2 max-w-xl text-body-sm text-slate-600">
-              {awaitingLeader ? 'The team leader is updating the project proposal. Workspace activities will become available after lecturer approval.' : 'The project proposal has been submitted. Workspace activities will become available after lecturer approval.'}
+              {awaitingLeader ? t('teamWorkspace.theTeamLeaderIsUpdatingThe') : t('teamWorkspace.theProjectProposalHasBeenSubmitted')}
             </p>
           </div>
         )}
@@ -272,8 +274,8 @@ export default function TeamWorkspace() {
                 {cls?.classCode}
               </span>
             </div>
-            <h1 className="mt-1 text-heading sm:text-display text-secondary tracking-tight">{displayTeamName} Workspace</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{team.description || 'Startup Workspace'}</p>
+            <h1 className="mt-1 text-heading sm:text-display text-secondary tracking-tight">{t('teamWorkspace.workspace', { displayTeamName })}</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{team.description || t('startupWorkspaceHub.startupWorkspace')}</p>
           </div>
         </div>
 
@@ -282,7 +284,7 @@ export default function TeamWorkspace() {
             onClick={() => navigate(-1)}
             className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 transition-colors text-sm font-semibold px-4 py-2 border border-slate-200 rounded-xl"
           >
-            <ArrowLeft className="w-4 h-4" /> Back
+            <ArrowLeft className="w-4 h-4" /> {t('common:actions.back')}
           </button>
         )}
         <WorkspaceSelector
@@ -296,19 +298,19 @@ export default function TeamWorkspace() {
       {isReadOnly && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
           {workspaceContext?.selectedWorkspace?.isArchived
-            ? 'This is an archived workspace. Editing actions are disabled.'
-            : 'You are viewing this previous course workspace in read-only mode.'}
+            ? t('teamWorkspace.thisIsAnArchivedWorkspaceEditing')
+            : t('teamWorkspace.youAreViewingThisPreviousCourse')}
         </div>
       )}
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 overflow-x-auto">
         {[
-          { key: 'overview', label: 'Workspace Overview' },
-          { key: 'feedback', label: 'Feedback Overview' },
-          { key: 'roadmap', label: 'Weekly Roadmap' },
-          { key: 'shortcut', label: 'Quick Shortcuts' },
-          { key: 'history', label: 'Semester History' },
+          { key: 'overview', label: t('teamWorkspace.workspaceOverview') },
+          { key: 'feedback', label: t('teamWorkspace.feedbackOverview') },
+          { key: 'roadmap', label: t('teamWorkspace.weeklyRoadmap') },
+          { key: 'shortcut', label: t('teamWorkspace.quickShortcuts') },
+          { key: 'history', label: t('teamWorkspace.semesterHistory') },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -359,13 +361,13 @@ export default function TeamWorkspace() {
             {/* Stakeholders Info */}
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-4">
               <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary" /> Members & Mentors
+                <Users className="w-4 h-4 text-primary" /> {t('teamWorkspace.membersMentors')}
               </h3>
 
               {/* Lecturer */}
               {lecturer && (
                 <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                  <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">Lecturer</p>
+                  <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">{t('teamWorkspace.lecturer')}</p>
                   <div className="flex items-center gap-2.5 mt-1.5">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs">
                       {lecturer.name?.charAt(0)}
@@ -380,7 +382,7 @@ export default function TeamWorkspace() {
 
               {/* Mentor */}
               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">Mentors</p>
+                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider">{t('teamWorkspace.mentors')}</p>
                 {mentors.length ? (
                   <div className="mt-1.5 space-y-2.5">{mentors.map(currentMentor => <div key={currentMentor.id || currentMentor._id || currentMentor.email} className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-semibold text-xs">
@@ -392,13 +394,13 @@ export default function TeamWorkspace() {
                     </div>
                   </div>)}</div>
                 ) : (
-                  <p className="text-xs text-slate-400 mt-1 italic">No mentor assigned yet</p>
+                  <p className="text-xs text-slate-400 mt-1 italic">{t('teamWorkspace.noMentorAssignedYet')}</p>
                 )}
               </div>
 
               {/* Members List */}
               <div className="space-y-3">
-                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider px-1">Startup Team Members</p>
+                <p className="text-overline font-bold text-slate-400 uppercase tracking-wider px-1">{t('teamWorkspace.startupTeamMembers')}</p>
                 <div className="space-y-2">
                   {members && members.map(member => (
                     <div key={member._id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50/60 border border-transparent hover:border-slate-100 transition-all">
@@ -412,7 +414,7 @@ export default function TeamWorkspace() {
                         </div>
                       </div>
                       <span className="text-overline font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md">
-                        {member.roleInTeam || 'Member'}
+                        {member.roleInTeam || t('teamWorkspace.member')}
                       </span>
                     </div>
                   ))}

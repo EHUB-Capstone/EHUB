@@ -2,6 +2,7 @@
 // frontend/src/components/evaluation/FeedbackDetailPage.jsx
 import React, { useState, useEffect } from 'react';
 import CommentThread from './CommentThread';
+import { useTranslation } from 'react-i18next';
 
 /**
  * FeedbackDetailPage Component
@@ -29,19 +30,20 @@ const FeedbackDetailPage = ({
   loading = false,
   error = null
 }) => {
+  const { t } = useTranslation('evaluation');
   const [selectedSection, setSelectedSection] = useState('OVERALL');
   const [showUnresolved, setShowUnresolved] = useState(true);
   const [newCommentText, setNewCommentText] = useState('');
   const [isAddingComment, setIsAddingComment] = useState(false);
 
   const sections = [
-    { key: 'OVERALL', label: 'Overall', icon: '📋' },
-    { key: 'IDEA', label: 'Startup Idea', icon: '💡' },
-    { key: 'PROBLEM_ANALYSIS', label: 'Problem Analysis', icon: '🔍' },
-    { key: 'MARKET_RESEARCH', label: 'Market Research', icon: '📊' },
-    { key: 'MVP_PROTOTYPE', label: 'MVP/Prototype', icon: '🛠️' },
-    { key: 'BUSINESS_MODEL', label: 'Business Model', icon: '💼' },
-    { key: 'PITCH_DECK', label: 'Pitch Deck', icon: '🎯' },
+    { key: 'OVERALL', label: t('feedbackDetailPage.overall'), icon: '📋' },
+    { key: 'IDEA', label: t('feedbackDetailPage.startupIdea'), icon: '💡' },
+    { key: 'PROBLEM_ANALYSIS', label: t('feedbackDetailPage.problemAnalysis'), icon: '🔍' },
+    { key: 'MARKET_RESEARCH', label: t('feedbackDetailPage.marketResearch'), icon: '📊' },
+    { key: 'MVP_PROTOTYPE', label: t('feedbackDetailPage.mvpPrototype'), icon: '🛠️' },
+    { key: 'BUSINESS_MODEL', label: t('feedbackDetailPage.businessModel'), icon: '💼' },
+    { key: 'PITCH_DECK', label: t('feedbackDetailPage.pitchDeck'), icon: '🎯' },
   ];
 
   // Filter comments based on section and resolved status
@@ -92,7 +94,7 @@ const FeedbackDetailPage = ({
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="loading loading-lg text-primary-700 mb-4"></div>
-          <p>Loading feedback data...</p>
+          <p>{t('feedbackDetailPage.loadingFeedbackData')}</p>
         </div>
       </div>
     );
@@ -102,9 +104,9 @@ const FeedbackDetailPage = ({
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="mb-2 text-heading sm:text-display text-secondary tracking-tight">Feedback & Comments</h1>
+        <h1 className="mb-2 text-heading sm:text-display text-secondary tracking-tight">{t('feedbackDetailPage.feedbackComments')}</h1>
         <p className="text-gray-600">
-          Team: <span className="font-semibold">{proposal?.teamId?.name}</span>
+          {t('feedbackDetailPage.team')} <span className="font-semibold">{proposal?.teamId?.name}</span>
         </p>
       </div>
 
@@ -117,19 +119,19 @@ const FeedbackDetailPage = ({
       {/* Statistics Bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <div className="text-sm text-blue-600 font-semibold">Total Comments</div>
+          <div className="text-sm text-blue-600 font-semibold">{t('feedbackDetailPage.totalComments')}</div>
           <div className="text-2xl font-bold text-blue-900">{stats.total}</div>
         </div>
         <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-          <div className="text-sm text-yellow-600 font-semibold">Unresolved</div>
+          <div className="text-sm text-yellow-600 font-semibold">{t('feedbackDetailPage.unresolved')}</div>
           <div className="text-2xl font-bold text-yellow-900">{stats.unresolved}</div>
         </div>
         <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-          <div className="text-sm text-green-600 font-semibold">Resolved</div>
+          <div className="text-sm text-green-600 font-semibold">{t('feedbackDetailPage.resolved')}</div>
           <div className="text-2xl font-bold text-green-900">{stats.resolved}</div>
         </div>
         <div className="bg-secondary-50 rounded-lg p-4 border border-secondary-200">
-          <div className="text-sm text-secondary font-semibold">Completion</div>
+          <div className="text-sm text-secondary font-semibold">{t('feedbackDetailPage.completion')}</div>
           <div className="text-2xl font-bold text-secondary">
             {stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0}%
           </div>
@@ -140,7 +142,7 @@ const FeedbackDetailPage = ({
         {/* Sidebar */}
         <div className="col-span-1">
           <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 sticky top-6">
-            <h3 className="font-bold text-gray-800 mb-4">Sections</h3>
+            <h3 className="font-bold text-gray-800 mb-4">{t('feedbackDetailPage.sections')}</h3>
             
             <div className="space-y-2 mb-6">
               {sections.map(section => (
@@ -174,7 +176,7 @@ const FeedbackDetailPage = ({
                   className="checkbox checkbox-sm"
                 />
                 <span className="text-sm font-semibold text-gray-700">
-                  Show Unresolved Only
+                  {t('feedbackDetailPage.showUnresolvedOnly')}
                 </span>
               </label>
             </div>
@@ -185,12 +187,12 @@ const FeedbackDetailPage = ({
         <div className="col-span-3">
           {/* New Comment Form */}
           <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 mb-6">
-            <h3 className="font-bold text-gray-800 mb-4">Add Comment</h3>
+            <h3 className="font-bold text-gray-800 mb-4">{t('feedbackDetailPage.addComment')}</h3>
             {isAddingComment ? (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Section
+                    {t('feedbackDetailPage.section')}
                   </label>
                   <select
                     value={selectedSection}
@@ -207,7 +209,7 @@ const FeedbackDetailPage = ({
                 <textarea
                   value={newCommentText}
                   onChange={(e) => setNewCommentText(e.target.value)}
-                  placeholder="Type your comment here..."
+                  placeholder={t('feedbackDetailPage.typeYourCommentHere')}
                   className="textarea textarea-bordered w-full"
                   rows="4"
                 />
@@ -219,14 +221,14 @@ const FeedbackDetailPage = ({
                     }}
                     className="btn btn-ghost btn-sm"
                   >
-                    Cancel
+                    {t('common:actions.cancel')}
                   </button>
                   <button
                     onClick={handleAddComment}
                     disabled={!newCommentText.trim()}
                     className="btn btn-primary btn-sm"
                   >
-                    Post Comment
+                    {t('feedbackDetailPage.postComment')}
                   </button>
                 </div>
               </div>
@@ -235,7 +237,7 @@ const FeedbackDetailPage = ({
                 onClick={() => setIsAddingComment(true)}
                 className="btn btn-outline btn-sm w-full"
               >
-                + Add Comment to {sections.find(s => s.key === selectedSection)?.label}
+                {t('feedbackDetailPage.addCommentTo', { label: sections.find(s => s.key === selectedSection)?.label })}
               </button>
             )}
           </div>
@@ -246,10 +248,10 @@ const FeedbackDetailPage = ({
               <div className="bg-gray-50 rounded-lg p-8 text-center border border-gray-200">
                 <div className="text-4xl mb-2">📝</div>
                 <p className="text-gray-600 font-semibold">
-                  No comments for this section
+                  {t('feedbackDetailPage.noCommentsForThisSection')}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Comments will appear here once they are added
+                  {t('feedbackDetailPage.commentsWillAppearHereOnceThey')}
                 </p>
               </div>
             ) : (

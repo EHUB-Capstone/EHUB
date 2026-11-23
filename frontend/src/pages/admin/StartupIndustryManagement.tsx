@@ -27,6 +27,7 @@ import type {
   StartupIndustryStatus,
 } from '../../types/startupIndustries';
 import { parseApiError } from '../../utils/apiError';
+import { useTranslation } from 'react-i18next';
 
 type StatusFilter = 'all' | StartupIndustryStatus;
 
@@ -81,6 +82,7 @@ interface StartupIndustryManagementProps {
 }
 
 export default function StartupIndustryManagement({ embedded = false }: StartupIndustryManagementProps = {}): React.ReactElement {
+  const { t } = useTranslation('admin');
   const [industries, setIndustries] = useState<StartupIndustryDto[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -129,7 +131,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         hasLoadedRef.current = true;
       } catch (error) {
         if (controller.signal.aborted) return;
-        const message = parseApiError(error, 'Failed to load startup industries.').message;
+        const message = parseApiError(error, t('startupIndustryManagement.failedToLoadStartupIndustries')).message;
         if (isFirstLoad) {
           setIndustries([]);
           setLoadError(message);
@@ -185,7 +187,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
     const name = form.name.trim();
 
     if (!name) {
-      toast.error('Industry name is required.');
+      toast.error(t('startupIndustryManagement.industryNameIsRequired'));
       return;
     }
 
@@ -195,7 +197,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
     );
 
     if (isDuplicate) {
-      toast.error('An industry with this name already exists.');
+      toast.error(t('startupIndustryManagement.anIndustryWithThisNameAlready'));
       return;
     }
 
@@ -209,17 +211,17 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
       let response: unknown;
       if (editingIndustryId) {
         response = await startupIndustryApi.update(editingIndustryId, payload);
-        toast.success('Industry updated successfully.');
+        toast.success(t('startupIndustryManagement.industryUpdatedSuccessfully'));
       } else {
         response = await startupIndustryApi.create(payload);
-        toast.success('Industry added successfully.');
+        toast.success(t('startupIndustryManagement.industryAddedSuccessfully'));
       }
       const savedIndustry = extractIndustry(response);
       if (savedIndustry) upsertVisibleIndustry(savedIndustry);
       else setRefreshVersion((version) => version + 1);
       closeForm();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save startup industry.').message);
+      toast.error(parseApiError(error, t('startupIndustryManagement.failedToSaveStartupIndustry')).message);
     } finally {
       setIsSaving(false);
     }
@@ -236,13 +238,13 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
     setIsChangingStatus(true);
     try {
       const response = await startupIndustryApi.changeStatus(statusTarget.id, nextStatus);
-      toast.success(`${statusTarget.name} is now ${nextStatus}.`);
+      toast.success(t('startupIndustryManagement.isNow', { name: statusTarget.name, status: t(`startupIndustryManagement.status.${nextStatus}`) }));
       const updatedIndustry = extractIndustry(response);
       if (updatedIndustry) upsertVisibleIndustry(updatedIndustry);
       else setRefreshVersion((version) => version + 1);
       setStatusTarget(null);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update industry status.').message);
+      toast.error(parseApiError(error, t('startupIndustryManagement.failedToUpdateIndustryStatus')).message);
     } finally {
       setIsChangingStatus(false);
     }
@@ -252,16 +254,16 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
     <div className="space-y-6">
       {embedded ? (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" icon={Upload} onClick={openImportModal}>Import Industry</Button>
-          <Button icon={Plus} onClick={openCreateForm}>Add Industry</Button>
+          <Button variant="outline" icon={Upload} onClick={openImportModal}>{t('startupIndustryManagement.importIndustry')}</Button>
+          <Button icon={Plus} onClick={openCreateForm}>{t('startupIndustryManagement.addIndustry')}</Button>
         </div>
       ) : (
         <PageHeader
-          title="Startup Industry Management"
-          subtitle="Manage the standardized startup industries used across E-HUB projects."
+          title={t('startupIndustryManagement.startupIndustryManagement')}
+          subtitle={t('startupIndustryManagement.manageTheStandardizedStartupIndustriesUsed')}
           actions={[
-            { label: 'Import Industry', icon: Upload, variant: 'outline', onClick: openImportModal },
-            { label: 'Add Industry', icon: Plus, variant: 'primary', onClick: openCreateForm },
+            { label: t('startupIndustryManagement.importIndustry'), icon: Upload, variant: 'outline', onClick: openImportModal },
+            { label: t('startupIndustryManagement.addIndustry'), icon: Plus, variant: 'primary', onClick: openCreateForm },
           ]}
         />
       )}
@@ -276,8 +278,8 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
-                aria-label="Search industries"
-                placeholder="Search industry..."
+                aria-label={t('startupIndustryManagement.searchIndustries')}
+                placeholder={t('startupIndustryManagement.searchIndustry')}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50/60 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
@@ -285,7 +287,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 sm:w-auto" aria-label="Filter industries by status">
+              <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 sm:w-auto" aria-label={t('startupIndustryManagement.filterIndustriesByStatus')}>
                 {(['all', 'active', 'inactive'] as const).map((status) => (
                   <button
                     key={status}
@@ -304,14 +306,14 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
               </div>
 
               <label className="relative block w-full sm:w-52">
-                <span className="sr-only">Sort by</span>
+                <span className="sr-only">{t('startupIndustryManagement.sortBy')}</span>
                 <select
                   value={sortOption}
                   onChange={(event) => setSortOption(event.target.value as StartupIndustrySort)}
                   className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3.5 pr-9 text-sm font-medium text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
                 >
-                  <option value="name-asc">Name A-Z</option>
-                  <option value="name-desc">Name Z-A</option>
+                  <option value="name-asc">{t('startupIndustryManagement.nameAZ')}</option>
+                  <option value="name-desc">{t('startupIndustryManagement.nameZA')}</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </label>
@@ -324,7 +326,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         ) : loadError ? (
           <div className="p-5">
             <ErrorState
-              title="Unable to load industries"
+              title={t('startupIndustryManagement.unableToLoadIndustries')}
               message={loadError}
               onRetry={() => setRefreshVersion((version) => version + 1)}
             />
@@ -332,20 +334,20 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         ) : industries.length === 0 ? (
           <EmptyState
             icon={Building2}
-            title="No industries found"
+            title={t('startupIndustryManagement.noIndustriesFound')}
             description={searchQuery || statusFilter !== 'all'
-              ? 'Try a different search term or status filter.'
-              : 'Create the first standardized startup industry for E-HUB projects.'}
+              ? t('startupIndustryManagement.tryADifferentSearchTermOr')
+              : t('startupIndustryManagement.createTheFirstStandardizedStartupIndustry')}
             action={searchQuery || statusFilter !== 'all'
               ? {
-                  label: 'Clear filters',
+                  label: t('startupIndustryManagement.clearFilters'),
                   onClick: () => {
                     setSearchQuery('');
                     setDebouncedSearch('');
                     setStatusFilter('all');
                   },
                 }
-              : { label: 'Add Industry', onClick: openCreateForm }}
+              : { label: t('startupIndustryManagement.addIndustry'), onClick: openCreateForm }}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -353,11 +355,11 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
               <thead>
                 <tr className="bg-slate-50/70 text-left">
                   <th className="w-16 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">#</th>
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Industry</th>
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Description</th>
-                  <th className="w-28 px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">Projects</th>
-                  <th className="w-28 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">Status</th>
-                  <th className="w-28 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600">Actions</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">{t('startupIndustryManagement.industry')}</th>
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">{t('startupIndustryManagement.description')}</th>
+                  <th className="w-28 px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">{t('startupIndustryManagement.projects')}</th>
+                  <th className="w-28 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-600">{t('mentorProfileDetail.status')}</th>
+                  <th className="w-28 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-600">{t('startupIndustryManagement.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -374,20 +376,20 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-flex min-w-10 items-center justify-center rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm font-bold tabular-nums text-slate-700">
-                        N/A
+                        {t('startupIndustryManagement.nA')}
                       </span>
                     </td>
                     <td className="px-5 py-4">
                       <Badge variant={industry.status === 'active' ? 'Active' : 'Inactive'} dot size="md">
-                        {industry.status === 'active' ? 'Active' : 'Inactive'}
+                        {industry.status === 'active' ? t('classManagement.active') : t('classManagement.inactive')}
                       </Badge>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          aria-label={`Edit ${industry.name}`}
-                          title="Edit industry"
+                          aria-label={t('startupIndustryManagement.edit', { name: industry.name })}
+                          title={t('startupIndustryManagement.editIndustry')}
                           onClick={() => openEditForm(industry)}
                           className="rounded-lg p-2 text-slate-400 transition hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
                         >
@@ -395,8 +397,8 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
                         </button>
                         <button
                           type="button"
-                          aria-label={`${industry.status === 'active' ? 'Deactivate' : 'Activate'} ${industry.name}`}
-                          title={industry.status === 'active' ? 'Deactivate industry' : 'Activate industry'}
+                          aria-label={t(industry.status === 'active' ? 'startupIndustryManagement.deactivateNamed' : 'startupIndustryManagement.activateNamed', { name: industry.name })}
+                          title={industry.status === 'active' ? t('startupIndustryManagement.deactivateIndustry') : t('startupIndustryManagement.activateIndustry')}
                           onClick={() => setStatusTarget(industry)}
                           className={`rounded-lg p-2 transition focus:outline-none focus:ring-2 focus:ring-primary/20 ${
                             industry.status === 'active'
@@ -418,11 +420,11 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         {!isInitialLoading && !loadError && <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3.5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <span className="inline-flex items-center gap-2" aria-live="polite">
             {isRefreshing && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-primary-700" aria-hidden="true" />}
-            Showing <strong className="font-semibold text-slate-700">{industries.length}</strong> industries
+            {t('startupIndustryManagement.showing')} <strong className="font-semibold text-slate-700">{industries.length}</strong> {t('startupIndustryManagement.industries')}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Layers3 className="h-3.5 w-3.5 text-secondary" />
-            Standardized taxonomy for E-HUB projects
+            {t('startupIndustryManagement.standardizedTaxonomyForEHubProjects')}
           </span>
         </div>}
       </section>
@@ -431,13 +433,13 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         isOpen={isFormOpen}
         onClose={closeForm}
         onSubmit={saveIndustry}
-        title={editingIndustryId ? 'Edit Industry' : 'Add Industry'}
-        submitText={editingIndustryId ? 'Save Changes' : 'Add Industry'}
+        title={editingIndustryId ? t('startupIndustryManagement.editIndustry2') : t('startupIndustryManagement.addIndustry')}
+        submitText={editingIndustryId ? t('startupIndustryManagement.saveChanges') : t('startupIndustryManagement.addIndustry')}
         isSubmitting={isSaving}
       >
         <div className="space-y-4">
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Industry name <span className="text-danger">*</span></span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">{t('startupIndustryManagement.industryName')} <span className="text-danger">*</span></span>
             <input
               autoFocus
               type="text"
@@ -445,7 +447,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
               aria-describedby="industry-name-character-count"
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="e.g. Logistics & Supply Chain"
+              placeholder={t('startupIndustryManagement.eGLogisticsSupplyChain')}
               className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
             <span id="industry-name-character-count" className="mt-1.5 block text-right text-xs text-slate-400">
@@ -454,14 +456,14 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Description</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">{t('startupIndustryManagement.description')}</span>
             <textarea
               rows={4}
               maxLength={240}
               aria-describedby="industry-description-character-count"
               value={form.description}
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Describe the scope of this startup industry..."
+              placeholder={t('startupIndustryManagement.describeTheScopeOfThisStartup')}
               className="w-full resize-y rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm leading-6 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
             <span id="industry-description-character-count" className="mt-1.5 block text-right text-xs text-slate-400">
@@ -470,14 +472,14 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Status</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">{t('mentorProfileDetail.status')}</span>
             <select
               value={form.status}
               onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as StartupIndustryStatus }))}
               className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="active">{t('classManagement.active')}</option>
+              <option value="inactive">{t('classManagement.inactive')}</option>
             </select>
           </label>
         </div>
@@ -494,11 +496,11 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         isOpen={Boolean(statusTarget)}
         onClose={() => setStatusTarget(null)}
         onConfirm={confirmStatusChange}
-        title={statusTarget?.status === 'active' ? 'Deactivate Industry' : 'Activate Industry'}
+        title={statusTarget?.status === 'active' ? t('startupIndustryManagement.deactivateIndustry2') : t('startupIndustryManagement.activateIndustry2')}
         description={statusTarget?.status === 'active'
-          ? `Deactivate ${statusTarget.name}? It will no longer appear as an active startup industry.`
-          : `Activate ${statusTarget?.name}? It will appear as an active startup industry.`}
-        confirmText={statusTarget?.status === 'active' ? 'Deactivate' : 'Activate'}
+          ? t('startupIndustryManagement.deactivateItWillNoLongerAppear', { name: statusTarget.name })
+          : t('startupIndustryManagement.activateItWillAppearAsAn', { name: statusTarget?.name })}
+        confirmText={statusTarget?.status === 'active' ? t('startupIndustryManagement.deactivate') : t('startupIndustryManagement.activate')}
         confirmVariant={statusTarget?.status === 'active' ? 'danger' : 'primary'}
         isSubmitting={isChangingStatus}
       />

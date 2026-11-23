@@ -1,4 +1,5 @@
 import type { ClassScheduleSlot, ClassStatus } from '../types/classes';
+import i18n from '../i18n/index.ts';
 
 export type EditableSchedule = {
   dayOfWeek: number | '';
@@ -16,8 +17,8 @@ export const isArchivedClass = (status: ClassStatus | string | undefined): boole
 
 export const getClassLifecyclePresentation = (status: ClassStatus | string | undefined) => (
   isArchivedClass(status)
-    ? { action: 'restore' as const, label: 'Restore Class', confirmLabel: 'Restore class' }
-    : { action: 'archive' as const, label: 'Archive Class', confirmLabel: 'Archive class' }
+    ? { action: 'restore' as const, label: i18n.t('utils:classComponentPolicy.restoreClass'), confirmLabel: 'Restore class' }
+    : { action: 'archive' as const, label: i18n.t('utils:classComponentPolicy.archiveClass'), confirmLabel: 'Archive class' }
 );
 
 export const buildScheduleUpdatePayload = (schedules: EditableSchedule[], rowVersion: string) => ({
@@ -32,8 +33,8 @@ export const buildScheduleUpdatePayload = (schedules: EditableSchedule[], rowVer
 export const validateImportFileSelection = (file: { name: string; size: number }): string => {
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (extension !== 'xlsx' && extension !== 'xls')
-    return 'Unsupported file type. Please choose an .xlsx or .xls file.';
+    return i18n.t('utils:classComponentPolicy.unsupportedFileTypePleaseChooseAn');
   if (file.size > 10 * 1024 * 1024)
-    return 'The file is larger than 10 MB. Please upload a smaller student list.';
+    return i18n.t('utils:classComponentPolicy.theFileIsLargerThan10');
   return '';
 };
