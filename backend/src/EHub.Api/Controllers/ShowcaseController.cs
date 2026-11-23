@@ -139,6 +139,23 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         return ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Report submitted.");
     }
 
+    [HttpGet("moderation-rules")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ModerationRules([FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(FeaturedRole, cancellationToken), "Moderation rules retrieved.");
+
+    [HttpPost("moderation-rules")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CreateModerationRule([FromBody] SaveShowcaseModerationRuleRequest request,
+        [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SaveAsync(null, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+
+    [HttpPut("moderation-rules/{ruleId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateModerationRule(Guid ruleId, [FromBody] SaveShowcaseModerationRuleRequest request,
+        [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SaveAsync(ruleId, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+
     [HttpGet("reports")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

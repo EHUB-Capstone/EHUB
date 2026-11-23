@@ -124,6 +124,11 @@ export interface ShowcaseReportReceiptDto {
 }
 
 export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
+  sources: Array<'User' | 'System'>;
+  systemNote: string | null;
+  userReportCount: number;
+  systemReportCount: number;
+  showcaseStatus: ShowcaseStatus | null;
   reason: ShowcaseReportReason;
   note: string | null;
   resolvedByUserId: string | null;
@@ -131,6 +136,20 @@ export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
   resolutionNote: string | null;
   reportCount: number;
 }
+
+export type ShowcaseViolationCategory = 'Profanity' | 'Insult' | 'Threat' | 'Defamation' | 'Racism' | 'AdultContent' | 'Spam';
+
+export interface ShowcaseModerationRuleDto {
+  id: string;
+  phrase: string;
+  description: string;
+  reason: 'Spam' | 'Harassment' | 'InappropriateContent';
+  category: ShowcaseViolationCategory;
+  isEnabled: boolean;
+  rowVersion: number;
+}
+
+export type SaveShowcaseModerationRuleRequest = Omit<ShowcaseModerationRuleDto, 'id' | 'rowVersion' | 'category'> & { category?: ShowcaseViolationCategory; rowVersion?: number };
 
 export interface ShowcaseReportPageDto {
   items: ShowcaseReportDto[];

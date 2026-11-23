@@ -99,6 +99,8 @@ public interface IApplicationDbContext
     DbSet<ShowcaseProject> ShowcaseProjects { get; }
     DbSet<ShowcaseComment> ShowcaseComments { get; }
     DbSet<ShowcaseReport> ShowcaseReports { get; }
+    DbSet<ShowcaseModerationRule> ShowcaseModerationRules { get; }
+    DbSet<ShowcaseModerationScan> ShowcaseModerationScans { get; }
     DbSet<ShowcaseUpvote> ShowcaseUpvotes { get; }
     DbSet<ShowcaseViewDaily> ShowcaseViewsDaily { get; }
     DbSet<ShowcaseLink> ShowcaseLinks { get; }

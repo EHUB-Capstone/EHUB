@@ -67,6 +67,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var direction = await DirectionQuery(tracking: true).FirstOrDefaultAsync(item => item.TeamId == teamId, cancellationToken);
         var revisedTitle = request.Title.Trim();
         var revisedSummary = request.Summary.Trim();
+        if (team.Project is { } linkedProject)
+        {
+            var language = await EHub.Application.Features.Showcase.Reports.ShowcaseLanguageGuard.ValidateProfileIfShowcasedAsync(
+                _context, linkedProject, [revisedTitle, revisedSummary, linkedProject.Problem, linkedProject.Solution, linkedProject.TargetUsers], cancellationToken);
+            if (language.IsFailure) return Result.Failure<ProjectDirectionDto>(language.Error);
+        }
         if (direction == null)
         {
             if (!string.IsNullOrWhiteSpace(request.RowVersion)) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction no longer matches this screen.");
@@ -167,6 +173,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         if (direction.Version != version) return Failure(ErrorCodes.ClassConcurrencyConflict, "The project direction changed concurrently. Refresh and try again.");
         if (direction.Status != ProjectDirectionStatus.Draft)
             return Failure(ErrorCodes.ProjectDirectionStateInvalid, "Save requested revisions as a draft before submitting.");
+        if (direction.Team.Project is { } linkedProject)
+        {
+            var language = await EHub.Application.Features.Showcase.Reports.ShowcaseLanguageGuard.ValidateProfileIfShowcasedAsync(
+                _context, linkedProject, [direction.Title, direction.Summary, linkedProject.Problem, linkedProject.Solution, linkedProject.TargetUsers], cancellationToken);
+            if (language.IsFailure) return Result.Failure<ProjectDirectionDto>(language.Error);
+        }
         var now = DateTime.UtcNow;
         direction.Status = ProjectDirectionStatus.Submitted;
         direction.SubmittedAtUtc = now;
@@ -267,6 +279,12 @@ public sealed class ProjectDirectionHandler : IProjectDirectionHandler
         var approvedStartupIndustries = approvedIndustries?.Select(industry => industry.Name).ToArray();
 
         var proposedTitle = direction.Title;
+        if (decision == ProjectDirectionStatus.Approved && project is not null)
+        {
+            var language = await EHub.Application.Features.Showcase.Reports.ShowcaseLanguageGuard.ValidateProfileIfShowcasedAsync(
+                _context, project, [direction.Title, direction.Summary, project.Problem, project.Solution, project.TargetUsers], cancellationToken);
+            if (language.IsFailure) return Result.Failure<ProjectDirectionDto>(language.Error);
+        }
         var proposedSummary = direction.Summary;
         direction.Status = decision == ProjectDirectionStatus.Rejected
             ? ProjectDirectionStatus.Approved

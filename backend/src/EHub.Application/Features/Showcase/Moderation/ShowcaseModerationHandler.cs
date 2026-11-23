@@ -38,6 +38,10 @@ public sealed class ShowcaseModerationHandler(
             return Invalid<ShowcaseDto>("Complete the Description, Problem and Solution in your Project Profile before submitting.");
 
         var now = dateTimeProvider.UtcNow;
+        var links = await context.ShowcaseLinks.AsNoTracking().Where(x => x.ShowcaseProjectId == showcase.Id)
+            .Select(x => new ShowcaseLinkRequest { Label = x.Label, Url = x.Url }).ToListAsync(cancellationToken);
+        var language = await Reports.ShowcaseLanguageGuard.ValidatePageAsync(context, showcase.ProjectLineageId, showcase.Highlights, links, cancellationToken);
+        if (language.IsFailure) return Result.Failure<ShowcaseDto>(language.Error);
         Transition(showcase, ShowcaseStatus.PendingReview, "Submitted for review.", userId, now);
         showcase.ReviewNote = null;
 
@@ -89,6 +93,14 @@ public sealed class ShowcaseModerationHandler(
             return Invalid<ShowcaseDto>("A note explaining the decision is required.");
         if (action == ShowcaseModerationAction.Unhide && showcase.PublishedAt is null)
             return InvalidState<ShowcaseDto>("This page was never published. Ask the team to submit it for review.");
+
+        if (action is ShowcaseModerationAction.Approve or ShowcaseModerationAction.Unhide)
+        {
+            var links = await context.ShowcaseLinks.AsNoTracking().Where(x => x.ShowcaseProjectId == showcase.Id)
+                .Select(x => new ShowcaseLinkRequest { Label = x.Label, Url = x.Url }).ToListAsync(cancellationToken);
+            var language = await Reports.ShowcaseLanguageGuard.ValidatePageAsync(context, showcase.ProjectLineageId, showcase.Highlights, links, cancellationToken);
+            if (language.IsFailure) return Result.Failure<ShowcaseDto>(language.Error);
+        }
 
         var now = dateTimeProvider.UtcNow;
         Transition(showcase, rule.To, trimmedNote ?? rule.DefaultNote, userId, now);

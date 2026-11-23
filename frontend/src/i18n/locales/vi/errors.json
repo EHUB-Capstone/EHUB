@@ -130,6 +130,8 @@
     "SHOWCASE_COMMENT_NOT_FOUND": "Không tìm thấy bình luận.",
     "SHOWCASE_REPORT_NOT_FOUND": "Không tìm thấy báo cáo.",
     "SHOWCASE_REPORT_ALREADY_EXISTS": "Bạn đã báo cáo nội dung này rồi.",
+    "SHOWCASE_LANGUAGE_BLOCKED": "Không được sử dụng ngôn từ tục tĩu, xúc phạm, đe dọa, miệt thị chủng tộc hoặc nội dung người lớn.",
+    "SHOWCASE_COMMENT_DUPLICATE": "Bạn vừa gửi bình luận này. Vui lòng chờ trước khi gửi lại.",
     "SHOWCASE_COMMENT_INVALID": "Bình luận không hợp lệ.",
     "SHOWCASE_CONCURRENCY_CONFLICT": "Trang này đã được người khác thay đổi. Hãy tải phiên bản mới nhất và thử lại.",
     "SHOWCASE_IMAGE_UPLOAD_FAILED": "Không thể tải hình ảnh lên.",
@@ -161,6 +163,13 @@
     "WEEKLY_TASK_NOT_FOUND": "Không tìm thấy công việc.",
     "WEEKLY_TASK_DUPLICATED": "Đã tồn tại công việc có cùng thông tin.",
     "SHORTCUT_NOT_FOUND": "Không tìm thấy lối tắt.",
-    "SHORTCUT_DUPLICATED": "Lối tắt này đã tồn tại."
+    "SHORTCUT_DUPLICATED": "Lối tắt này đã tồn tại.",
+    "SHOWCASE_LANGUAGE_BLOCKED_PROFANITY": "Không được sử dụng ngôn từ tục tĩu.",
+    "SHOWCASE_LANGUAGE_BLOCKED_INSULT": "Không được sử dụng ngôn từ xúc phạm hoặc công kích cá nhân.",
+    "SHOWCASE_LANGUAGE_BLOCKED_THREAT": "Không được sử dụng ngôn từ đe dọa hoặc kích động bạo lực.",
+    "SHOWCASE_LANGUAGE_BLOCKED_DEFAMATION": "Không được sử dụng lời cáo buộc mang tính công kích hoặc bôi nhọ.",
+    "SHOWCASE_LANGUAGE_BLOCKED_RACISM": "Không được sử dụng ngôn từ miệt thị hoặc phân biệt chủng tộc.",
+    "SHOWCASE_LANGUAGE_BLOCKED_ADULTCONTENT": "Không được đăng nội dung khiêu dâm hoặc nội dung người lớn không phù hợp.",
+    "SHOWCASE_LANGUAGE_BLOCKED_SPAM": "Không được đăng nội dung spam hoặc quảng cáo bị cấm."
   }
 }
