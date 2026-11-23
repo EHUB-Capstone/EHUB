@@ -116,7 +116,7 @@ export default function ShowcaseEditor() {
       <main className="mx-auto max-w-5xl p-4 sm:p-8">
         <ErrorState
           title={t('showcaseEditor.couldNotLoadTheEditor')}
-          message={parseApiError(mine.error, 'Failed to load your showcase pages.').message}
+          message={parseApiError(mine.error, t('myShowcase.failedToLoadYourShowcasePages')).message}
           onRetry={() => { void mine.refetch(); }}
         />
       </main>

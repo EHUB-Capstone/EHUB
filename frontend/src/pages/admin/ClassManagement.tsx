@@ -158,7 +158,7 @@ export default function ClassManagement() {
       setTotalCount(classList.totalCount || 0);
       setTotalPages(Math.max(1, classList.totalPages || 1));
     } catch (requestError) {
-      const parsed = parseApiError(requestError, 'Failed to load classes');
+      const parsed = parseApiError(requestError, t('classManagement.failedToLoadClasses'));
       setError(parsed.message);
       toast.error(parsed.message);
     } finally {
@@ -250,7 +250,7 @@ export default function ClassManagement() {
       setRestoreReason('');
       await fetchAll();
     } catch (requestError) {
-      toast.error(parseApiError(requestError, 'Failed to restore class').message);
+      toast.error(parseApiError(requestError, t('classManagement.failedToRestoreClass')).message);
     } finally {
       setRestoring(false);
     }
@@ -331,7 +331,7 @@ export default function ClassManagement() {
       window.URL.revokeObjectURL(url);
       toast.success(t('classManagement.exportedDataForClassEs', { length: selectedClasses.length }));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to export class data.').message);
+      toast.error(parseApiError(error, t('classManagement.failedToExportClassData')).message);
     } finally {
       setBulkExporting(false);
     }

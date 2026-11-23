@@ -86,7 +86,7 @@ export default function ShowcaseInsights({ showcaseId }: ShowcaseInsightsProps) 
   if (insights.isError) {
     return (
       <div className="relative z-10 mt-4">
-        <ErrorState title={t('showcaseInsights.couldNotLoadInsights')} message={parseApiError(insights.error, 'Failed to load showcase insights.').message} onRetry={() => { void insights.refetch(); }} />
+        <ErrorState title={t('showcaseInsights.couldNotLoadInsights')} message={parseApiError(insights.error, t('showcaseInsights.failedToLoadShowcaseInsights')).message} onRetry={() => { void insights.refetch(); }} />
       </div>
     );
   }

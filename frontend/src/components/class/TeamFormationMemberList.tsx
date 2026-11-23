@@ -39,7 +39,7 @@ export default function TeamFormationMemberList({ formation, onChanged }: Props)
       toast.success(t('teamFormationMemberList.invitationSentTo', { fullName: member.fullName }));
       await onChanged();
     } catch (error) {
-      toast.error(parseApiError(error, 'Could not send the invitation. Please refresh and try again.').message);
+      toast.error(parseApiError(error, t('teamFormationMemberList.couldNotSendTheInvitationPlease')).message);
     } finally {
       setReinvitingId(null);
     }

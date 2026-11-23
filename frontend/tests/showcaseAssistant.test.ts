@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import MockAdapter from 'axios-mock-adapter';
 import axiosClient from '../src/api/axiosClient.ts';
+import i18n from '../src/i18n/index.ts';
 import { showcaseApi } from '../src/api/showcaseApi.ts';
 import { readFileSync } from 'node:fs';
 import {
@@ -53,11 +54,16 @@ test('the assistant is offered on the gallery and project pages only', () => {
   assert.equal(isShowcaseAssistantRoute('/student'), false);
 });
 
-test('assistant errors never expose raw exceptions', () => {
-  assert.match(assistantErrorMessage({ response: { status: 429 } }, undefined), /đợi/);
-  assert.equal(assistantErrorMessage({ response: { status: 503 } }, 'Trợ lý AI chưa được bật.'), 'Trợ lý AI chưa được bật.');
-  assert.match(assistantErrorMessage(new Error('System.NullReferenceException at Foo'), 'System.NullReferenceException'), /Không gửi được/);
-  assert.match(assistantErrorMessage({ response: { status: 500 } }, 'stack trace here'), /Không gửi được/);
+test('assistant errors never expose raw exceptions (Vietnamese)', async () => {
+  await i18n.changeLanguage('vi');
+  try {
+    assert.match(assistantErrorMessage({ response: { status: 429 } }, undefined), /đợi/);
+    assert.equal(assistantErrorMessage({ response: { status: 503 } }, 'Trợ lý AI chưa được bật.'), 'Trợ lý AI chưa được bật.');
+    assert.match(assistantErrorMessage(new Error('System.NullReferenceException at Foo'), 'System.NullReferenceException'), /Không gửi được/);
+    assert.match(assistantErrorMessage({ response: { status: 500 } }, 'stack trace here'), /Không gửi được/);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
 });
 
 test('assistant client posts the question with its history and returns the reply', async () => {
@@ -99,31 +105,41 @@ test('the assistant timeout does not change the timeout of other showcase reques
   }
 });
 
-test('a pasted key is checked for shape only, with a reason the user can act on', () => {
-  assert.equal(assistantKeyProblem(KEY), null);
-  assert.equal(assistantKeyProblem('  ' + KEY + '\n'), null, 'a trailing space or newline is still the key');
-  assert.equal(cleanAssistantKey('  ' + KEY + '\n'), KEY);
-  assert.match(assistantKeyProblem('') ?? '', /dán/);
-  assert.match(assistantKeyProblem('AIza with spaces inside the key 123') ?? '', /khoảng trắng/);
-  assert.match(assistantKeyProblem('GEMINI_API_KEY=' + KEY) ?? '', /giá trị/);
-  assert.match(assistantKeyProblem('https://aistudio.google.com/app/apikey') ?? '', /giá trị/);
-  assert.match(assistantKeyProblem('AIzaShort') ?? '', /quá ngắn/);
-  assert.match(assistantKeyProblem('A'.repeat(300)) ?? '', /ký tự thông thường/);
-  // No message ever repeats what the user pasted.
-  for (const bad of ['GEMINI_API_KEY=' + KEY, 'AIza with spaces inside the key 123']) assert.doesNotMatch(assistantKeyProblem(bad) ?? '', /AIza/);
+test('a pasted key is checked for shape only, with a reason the user can act on (Vietnamese)', async () => {
+  await i18n.changeLanguage('vi');
+  try {
+    assert.equal(assistantKeyProblem(KEY), null);
+    assert.equal(assistantKeyProblem('  ' + KEY + '\n'), null, 'a trailing space or newline is still the key');
+    assert.equal(cleanAssistantKey('  ' + KEY + '\n'), KEY);
+    assert.match(assistantKeyProblem('') ?? '', /dán/);
+    assert.match(assistantKeyProblem('AIza with spaces inside the key 123') ?? '', /khoảng trắng/);
+    assert.match(assistantKeyProblem('GEMINI_API_KEY=' + KEY) ?? '', /giá trị/);
+    assert.match(assistantKeyProblem('https://aistudio.google.com/app/apikey') ?? '', /giá trị/);
+    assert.match(assistantKeyProblem('AIzaShort') ?? '', /quá ngắn/);
+    assert.match(assistantKeyProblem('A'.repeat(300)) ?? '', /ký tự thông thường/);
+    // No message ever repeats what the user pasted.
+    for (const bad of ['GEMINI_API_KEY=' + KEY, 'AIza with spaces inside the key 123']) assert.doesNotMatch(assistantKeyProblem(bad) ?? '', /AIza/);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
 });
 
-test('a key problem reported by the server is told apart from a server fault', () => {
-  const keyError = { response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_INVALID' } } };
-  assert.equal(isAssistantKeyError(keyError), true);
-  assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_REQUIRED' } } }), true);
-  assert.equal(isAssistantKeyError({ response: { status: 503, data: { code: 'SHOWCASE_ASSISTANT_UNAVAILABLE' } } }), false);
-  assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }), false);
-  assert.equal(isAssistantKeyError(new Error('boom')), false);
-  assert.equal(isAssistantKeyError(null), false);
-  // The server words it for the user and never repeats the key, so it is shown; any other 400 stays generic.
-  assert.equal(assistantErrorMessage(keyError, 'Google không chấp nhận API key này.'), 'Google không chấp nhận API key này.');
-  assert.match(assistantErrorMessage({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }, 'raw validation text'), /Không gửi được/);
+test('a key problem reported by the server is told apart from a server fault (Vietnamese)', async () => {
+  await i18n.changeLanguage('vi');
+  try {
+    const keyError = { response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_INVALID' } } };
+    assert.equal(isAssistantKeyError(keyError), true);
+    assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_REQUIRED' } } }), true);
+    assert.equal(isAssistantKeyError({ response: { status: 503, data: { code: 'SHOWCASE_ASSISTANT_UNAVAILABLE' } } }), false);
+    assert.equal(isAssistantKeyError({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }), false);
+    assert.equal(isAssistantKeyError(new Error('boom')), false);
+    assert.equal(isAssistantKeyError(null), false);
+    // The server words it for the user and never repeats the key, so it is shown; any other 400 stays generic.
+    assert.equal(assistantErrorMessage(keyError, 'Google không chấp nhận API key này.'), 'Google không chấp nhận API key này.');
+    assert.match(assistantErrorMessage({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }, 'raw validation text'), /Không gửi được/);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
 });
 
 test('the key stays in memory: never stored, never sent anywhere but the chat request', () => {
@@ -140,4 +156,11 @@ test('the key stays in memory: never stored, never sent anywhere but the chat re
   assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?setApiKey\(''\)/);
   assert.match(client, /headers: \{ \[ASSISTANT_KEY_HEADER\]: apiKey \}/);
   assert.doesNotMatch(client, /assistant\/chat\?/, 'the key is never put in the URL');
+});
+
+test('assistant messages are English by default and never expose raw exceptions', () => {
+  assert.match(assistantErrorMessage({ response: { status: 429 } }, undefined), /wait/i);
+  assert.match(assistantErrorMessage(new Error('System.NullReferenceException at Foo'), 'System.NullReferenceException'), /Could not send/);
+  assert.match(assistantKeyProblem('') ?? '', /paste/i);
+  assert.match(assistantKeyProblem('AIzaShort') ?? '', /too short/i);
 });

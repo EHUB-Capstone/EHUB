@@ -231,7 +231,13 @@
     "updatingResults": "Updating results...",
     "partialSave": "{{saved}} saved, but {{what}} not: {{reason}}",
     "and": "and",
-    "projectOutOfDate": "the project is out of date."
+    "projectOutOfDate": "the project is out of date.",
+    "unableToUpdateAchievements": "Unable to update achievements.",
+    "unableToUpdateStartupIndustries": "Unable to update startup industries.",
+    "unableToUpdateCompetitions": "Unable to update competitions.",
+    "failedToExportTheProjectData": "Failed to export the project data report.",
+    "failedToLoadProjectDataPlease": "Failed to load project data. Please try again.",
+    "refreshingProjectDataFailed": "Refreshing project data failed."
   },
   "achievements": {
     "Potential": "Potential",

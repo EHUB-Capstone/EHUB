@@ -102,7 +102,7 @@ export default function ShowcaseModeration() {
       {status !== 'Reports' && queue.isError && (
         <ErrorState
           title={t('showcaseModeration.couldNotLoadTheReviewQueue')}
-          message={parseApiError(queue.error, 'Failed to load showcase pages.').message}
+          message={parseApiError(queue.error, t('showcaseModeration.failedToLoadShowcasePages')).message}
           onRetry={() => { void queue.refetch(); }}
         />
       )}

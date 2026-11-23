@@ -56,7 +56,7 @@ const ResetPassword = (): React.ReactElement => {
       setIsSuccess(true);
       toast.success(t('resetPassword.passwordResetSuccessfully'));
     } catch (error: unknown) {
-      const apiError = parseApiError(error, 'Unable to reset your password. Please try again.');
+      const apiError = parseApiError(error, t('resetPassword.unableToResetYourPasswordPlease'));
       setErrors({
         password: apiError.fieldErrors.newPassword,
         confirmPassword: apiError.fieldErrors.confirmPassword,

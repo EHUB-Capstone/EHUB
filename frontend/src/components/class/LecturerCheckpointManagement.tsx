@@ -138,7 +138,7 @@ export default function LecturerCheckpointManagement({
       });
       setOverview(unwrapApiData<LecturerCheckpointOverview>(response));
     } catch (requestError) {
-      setError(parseApiError(requestError, 'Unable to load checkpoint management data.').message);
+      setError(parseApiError(requestError, t('lecturerCheckpointManagement.unableToLoadCheckpointManagementData')).message);
     } finally {
       setLoading(false);
     }
@@ -206,7 +206,7 @@ export default function LecturerCheckpointManagement({
       setConfirmingBulk(false);
       await load();
     } catch (requestError) {
-      toast.error(parseApiError(requestError, 'Unable to save checkpoint schedule.').message);
+      toast.error(parseApiError(requestError, t('lecturerCheckpointManagement.unableToSaveCheckpointSchedule')).message);
     } finally {
       setSaving(false);
     }
@@ -222,7 +222,7 @@ export default function LecturerCheckpointManagement({
     try {
       await checkpointApi.downloadFile(teamId, checkpointNumber, fileId, fileName);
     } catch (requestError) {
-      toast.error(parseApiError(requestError, 'Unable to download the submitted file.').message);
+      toast.error(parseApiError(requestError, t('lecturerCheckpointManagement.unableToDownloadTheSubmittedFile')).message);
     } finally {
       setDownloadingId(null);
     }

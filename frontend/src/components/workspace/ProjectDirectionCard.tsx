@@ -73,7 +73,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       .catch((error) => {
         if (!controller.signal.aborted) {
           setIndustries([]);
-          setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+          setIndustriesError(parseApiError(error, t('createProjectWorkspaceForm.failedToLoadStartupIndustries')).message);
         }
       })
       .finally(() => {
@@ -102,7 +102,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
         if (!active) return;
         applyDirection(value);
       } catch (error) {
-        const parsed = parseApiError(error, 'Unable to load project direction.');
+        const parsed = parseApiError(error, t('projectDirectionCard.unableToLoadProjectDirection'));
         if (parsed.code === 'PROJECT_DIRECTION_NOT_FOUND') {
           const seed = getProjectDirectionDraftSeed(null, project);
           setTitle(seed.title);
@@ -181,7 +181,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       applyDirection(value);
       toast.success(t('projectDirectionCard.projectDirectionSavedAsDraft'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to save project direction.').message);
+      toast.error(parseApiError(error, t('projectDirectionCard.unableToSaveProjectDirection')).message);
     } finally {
       actionInFlightRef.current = false;
       setActiveAction(null);
@@ -224,7 +224,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       toast.success(t('projectDirectionCard.projectDirectionSubmittedForLecturerReview'));
       setEditing(false);
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to submit project direction.').message);
+      toast.error(parseApiError(error, t('projectDirectionCard.unableToSubmitProjectDirection')).message);
     } finally {
       actionInFlightRef.current = false;
       setActiveAction(null);
@@ -269,7 +269,7 @@ export default function ProjectDirectionCard({ team, project, canEdit, onOpenPro
       applyDirection(latest);
       setEditing(true);
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to refresh project direction before editing.').message);
+      toast.error(parseApiError(error, t('projectDirectionCard.unableToRefreshProjectDirectionBefore')).message);
     } finally {
       actionInFlightRef.current = false;
       setActiveAction(null);

@@ -138,7 +138,7 @@ export default function ShowcaseDetail() {
           title={notFound ? t('showcaseDetail.thisPageIsNotAvailable') : t('showcaseDetail.couldNotLoadThisPage')}
           message={notFound
             ? t('showcaseDetail.itMayNotExistMayNot')
-            : parseApiError(detail.error, 'Failed to load this showcase page.').message}
+            : parseApiError(detail.error, t('showcaseDetail.failedToLoadThisShowcasePage')).message}
           onRetry={notFound ? undefined : () => { void detail.refetch(); }}
         />
       </main>

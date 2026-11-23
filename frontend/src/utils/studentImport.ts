@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import i18n from '../i18n/index.ts';
 
 export const STUDENT_IMPORT_ACCEPT = '.xlsx,.xls,.csv';
 export const STUDENT_IMPORT_MAX_SIZE = 10 * 1024 * 1024;
@@ -256,25 +257,25 @@ export function validateStudentRows(
     }
 
     if (!studentCode) {
-      errors.push('Student code is required.');
+      errors.push(i18n.t('utils:addStudent.studentCodeIsRequired'));
     } else if (!STUDENT_CODE_PATTERN.test(studentCode)) {
-      errors.push('Student code must be 3–20 characters and contain only letters, numbers, “-” or “_”.');
+      errors.push(i18n.t('utils:studentImport.studentCodeMustBe320'));
     } else if (existingCodes.has(studentCode)) {
-      errors.push('Student code already exists in this class.');
+      errors.push(i18n.t('utils:studentImport.studentCodeAlreadyExistsInThis'));
     } else if (firstCodeRows.has(studentCode)) {
-      errors.push(`Student code duplicates row ${firstCodeRows.get(studentCode)}.`);
+      errors.push(i18n.t('utils:studentImport.studentCodeDuplicatesRow', { v1: firstCodeRows.get(studentCode) }));
     }
 
-    if (!fullName) errors.push('Full name is required.');
+    if (!fullName) errors.push(i18n.t('utils:addStudent.fullNameIsRequired'));
 
     if (!email) {
-      errors.push('Email is required.');
+      errors.push(i18n.t('utils:addStudent.emailIsRequired'));
     } else if (!EMAIL_PATTERN.test(email)) {
-      errors.push('Email format is invalid.');
+      errors.push(i18n.t('utils:studentImport.emailFormatIsInvalid'));
     } else if (existingEmails.has(email)) {
-      errors.push('Email already exists in this class.');
+      errors.push(i18n.t('utils:studentImport.emailAlreadyExistsInThisClass'));
     } else if (firstEmailRows.has(email)) {
-      errors.push(`Email duplicates row ${firstEmailRows.get(email)}.`);
+      errors.push(i18n.t('utils:studentImport.emailDuplicatesRow', { v1: firstEmailRows.get(email) }));
     }
 
     if (studentCode && !firstCodeRows.has(studentCode)) firstCodeRows.set(studentCode, originalRowNumber);

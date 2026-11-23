@@ -30,7 +30,7 @@ export default function MentorDirectory() {
     const controller = new AbortController(); directoryController.current = controller;
     if (retry) { setLoading(true); setError(''); }
     try { const items = await mentorSupportApi.getDirectory(controller.signal); if (!controller.signal.aborted) setProfiles(items); }
-    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not load mentor directory').message); }
+    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, t('mentorDirectory.couldNotLoadMentorDirectory')).message); }
     finally { if (!controller.signal.aborted) setLoading(false); }
   };
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function MentorDirectory() {
     directoryController.current = controller;
     let active = true;
     mentorSupportApi.getDirectory(controller.signal).then(items => { if (active) setProfiles(items); })
-      .catch(cause => { if (active) setError(parseApiError(cause, 'Could not load mentor directory').message); })
+      .catch(cause => { if (active) setError(parseApiError(cause, t('mentorDirectory.couldNotLoadMentorDirectory')).message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; directoryController.current?.abort(); };
   }, []);
@@ -54,7 +54,7 @@ export default function MentorDirectory() {
       const link = document.createElement('a');
       link.href = url; link.download = kind === 'cv' ? profile.cvFileName ?? 'CV.pdf' : profile.portfolioFileName ?? 'Portfolio.pdf';
       link.click(); URL.revokeObjectURL(url);
-    } catch (cause) { setError(parseApiError(cause, 'Could not download document').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotDownloadDocument')).message); }
   };
   return <main className="mx-auto max-w-6xl space-y-5 p-4 text-body text-slate-700 sm:p-8">
     <header><h1 className="text-display text-secondary">{t('mentorDirectory.mentorDirectory')}</h1>

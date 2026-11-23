@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { resendRegistrationOtp } from '../../api/authApi';
 import { useTheme } from '../../context/ThemeContext';
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
+import { localizeValidationErrors } from '../../i18n/messages';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { TEAM_MAJOR_GROUPS } from '../../constants/majors';
@@ -27,6 +28,8 @@ import type { AuthFieldErrors, RegisterField } from '../../utils/authValidation'
 import logo from '../../assets/logo.png';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+
+const localizeAuthErrors = <E extends { field: string; message: string; code: string }>(errors: readonly E[]) => localizeValidationErrors('auth', errors);
 
 const OTP_EXPIRE_SECONDS = 5 * 60;
 const RESEND_COOLDOWN    = 60;
@@ -181,7 +184,7 @@ const Register: React.FC = () => {
   };
 
   const validateField = (field: RegisterField) => {
-    const error = validateRegisterPayload(currentRegisterPayload()).find(item => item.field === field);
+    const error = localizeAuthErrors(validateRegisterPayload(currentRegisterPayload())).find(item => item.field === field);
     setFieldErrors(current => {
       const next = { ...current };
       if (error) next[field] = error.message;
@@ -208,7 +211,7 @@ const Register: React.FC = () => {
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     const payload = currentRegisterPayload();
-    const nextFieldErrors = toFieldErrorMap(validateRegisterPayload(payload));
+    const nextFieldErrors = toFieldErrorMap(localizeAuthErrors(validateRegisterPayload(payload)));
     setFieldErrors(nextFieldErrors);
     setFormError('');
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -241,7 +244,7 @@ const Register: React.FC = () => {
       toast.success(result.message);
       requestAnimationFrame(() => otpRefs.current[0]?.focus());
     } catch (err: unknown) {
-      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Registration failed.');
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, tr('register.registrationFailed'));
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, REGISTER_FIELDS);
 
       if (code === AUTH_ERROR_CODES.REGISTRATION_FAILED) {
@@ -296,7 +299,7 @@ const Register: React.FC = () => {
         navigate('/student');
       }
     } catch (err: unknown) {
-      const { code, message } = parseApiError(err, 'Verification failed.');
+      const { code, message } = parseApiError(err, tr('register.verificationFailed'));
       if (code === AUTH_ERROR_CODES.VERIFICATION_CODE_EXPIRED) setCountdown(0);
       toast.error(message);
       setOtpValues(['','','','','','']); otpRefs.current[0]?.focus();
@@ -320,7 +323,7 @@ const Register: React.FC = () => {
       } satisfies StoredOtpSession));
       otpRefs.current[0]?.focus();
     } catch (err: unknown) {
-      toast.error(parseApiError(err, 'Failed to resend OTP.').message);
+      toast.error(parseApiError(err, tr('register.failedToResendOtp')).message);
     } finally { setResendLoading(false); }
   };
 

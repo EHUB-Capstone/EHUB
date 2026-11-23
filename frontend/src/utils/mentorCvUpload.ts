@@ -1,4 +1,5 @@
 import type { MentorCvMatchResponse, MentorProfile } from '../types/mentoring.ts';
+import i18n from '../i18n/index.ts';
 
 export const MENTOR_CV_MAX_BYTES = 10 * 1024 * 1024;
 export const MENTOR_CV_MAX_FILES = 50;
@@ -22,9 +23,9 @@ export interface MentorCvUploadRow<T extends CvFileMetadata = File> {
 }
 
 export function validateMentorCvFile(file: Pick<CvFileMetadata, 'name' | 'size'>): string | null {
-  if (!/\.(pdf|doc|docx)$/i.test(file.name)) return 'Choose a PDF, DOC or DOCX file.';
-  if (!Number.isFinite(file.size) || file.size <= 0) return 'This file is empty.';
-  if (file.size > MENTOR_CV_MAX_BYTES) return 'Each CV must be 10 MB or smaller.';
+  if (!/\.(pdf|doc|docx)$/i.test(file.name)) return i18n.t('utils:mentorCvUpload.chooseAPdfDocOrDocx');
+  if (!Number.isFinite(file.size) || file.size <= 0) return i18n.t('utils:mentorCvUpload.thisFileIsEmpty');
+  if (file.size > MENTOR_CV_MAX_BYTES) return i18n.t('utils:mentorCvUpload.eachCvMustBe10Mb');
   return null;
 }
 
@@ -72,14 +73,14 @@ export function failCvEmailRead<T extends CvFileMetadata>(row: MentorCvUploadRow
 }
 
 export function describeCvEmailMatch(row: Pick<MentorCvUploadRow, 'emailReadStatus' | 'emailMatch' | 'emailReadError' | 'suggested'>): string {
-  if (row.emailReadStatus === 'pending') return 'Waiting to read the email in this CV…';
-  if (row.emailReadStatus === 'reading') return 'Reading the email in this CV…';
+  if (row.emailReadStatus === 'pending') return i18n.t('utils:mentorCvUpload.waitingToReadTheEmailIn');
+  if (row.emailReadStatus === 'reading') return i18n.t('utils:mentorCvUpload.readingTheEmailInThisCv');
   if (row.emailReadError) return row.emailReadError;
   switch (row.emailMatch?.status) {
-    case 'Matched': return row.suggested ? 'Matched by email from CV — verify this mentor.' : 'Mentor selected manually after reading the CV email.';
-    case 'NoEmail': return 'No email was found in this CV. Choose the mentor manually.';
-    case 'NoMatch': return 'No imported mentor has a matching email. Check the imported email or choose manually.';
-    case 'Ambiguous': return 'The CV email does not identify one mentor uniquely. Choose the mentor manually.';
+    case 'Matched': return row.suggested ? i18n.t('utils:mentorCvUpload.matchedByEmailFromCvVerify') : i18n.t('utils:mentorCvUpload.mentorSelectedManuallyAfterReadingThe');
+    case 'NoEmail': return i18n.t('utils:mentorCvUpload.noEmailWasFoundInThis');
+    case 'NoMatch': return i18n.t('utils:mentorCvUpload.noImportedMentorHasAMatching');
+    case 'Ambiguous': return i18n.t('utils:mentorCvUpload.theCvEmailDoesNotIdentify');
     default: return '';
   }
 }
@@ -89,13 +90,13 @@ export function mentorCvRowIssue<T extends CvFileMetadata>(row: MentorCvUploadRo
   if (row.status === 'success') return null;
   const fileIssue = validateMentorCvFile(row.file);
   if (fileIssue) return fileIssue;
-  if (row.emailReadStatus === 'pending' || row.emailReadStatus === 'reading') return 'Wait until the CV email has been read.';
-  if (!row.mentorId) return 'Choose the mentor who owns this CV.';
+  if (row.emailReadStatus === 'pending' || row.emailReadStatus === 'reading') return i18n.t('utils:mentorCvUpload.waitUntilTheCvEmailHas');
+  if (!row.mentorId) return i18n.t('utils:mentorCvUpload.chooseTheMentorWhoOwnsThis');
   const mentor = mentors.find(item => item.id === row.mentorId);
-  if (!mentor) return 'This mentor is no longer available. Choose another mentor.';
+  if (!mentor) return i18n.t('utils:mentorCvUpload.thisMentorIsNoLongerAvailable');
   if (rows.some(item => item.id !== row.id && item.mentorId === row.mentorId))
-    return 'Only one CV can be uploaded for each mentor in this list.';
-  if (mentor.cvFileName && !row.replaceExisting) return 'Confirm replacement of the existing CV.';
+    return i18n.t('utils:mentorCvUpload.onlyOneCvCanBeUploaded');
+  if (mentor.cvFileName && !row.replaceExisting) return i18n.t('utils:mentorCvUpload.confirmReplacementOfTheExistingCv');
   return null;
 }
 

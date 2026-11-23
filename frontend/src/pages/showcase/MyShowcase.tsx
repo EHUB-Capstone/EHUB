@@ -42,7 +42,7 @@ export default function MyShowcase() {
       {mine.isError && (
         <ErrorState
           title={t('myShowcase.couldNotLoadYourShowcasePages')}
-          message={parseApiError(mine.error, 'Failed to load your showcase pages.').message}
+          message={parseApiError(mine.error, t('myShowcase.failedToLoadYourShowcasePages')).message}
           onRetry={() => { void mine.refetch(); }}
         />
       )}

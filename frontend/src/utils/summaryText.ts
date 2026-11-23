@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 // Every word of the AI summary screen that the application itself writes, in one place. What the AI writes about a submission
 // (overview, key points, suggested questions) and the sentences quoted from the files stay in the language of the submission; this
 // file is only the interface around them. The project has no translation library, so the strings are plain constants.
@@ -15,7 +16,7 @@ export const summaryText = {
   },
 
   card: {
-    title: 'AI summary',
+    get title() { return i18n.t('utils:summaryText.aiSummary'); },
     loading: 'Loading AI summary…',
     noFiles: 'The team has not submitted any file for this checkpoint.',
     filesLabel: 'Files',
@@ -81,12 +82,12 @@ export const summaryText = {
   },
 
   findings: {
-    Related: { label: 'Related content found', hint: 'Mentioned in the files, but no passage stands out to quote.' },
-    NotFound: { label: 'Not found in the files', hint: 'None of the files read mention this. Please check the files yourself.' },
-    NotChecked: { label: 'Not checked yet', hint: 'Summarise a file to check this item.' },
-    Live: { label: 'Assessed live', hint: 'Presentation, Q&A and teamwork are assessed live; a file cannot show them.' },
-    Product: { label: 'Check the product', hint: 'Assessed on the product or demo; the files do not mention it.' },
-    Overall: { label: 'Judged on the whole file', hint: 'Judged on how clear and complete the whole file is, not on one passage. Please read the file.' },
+    Related: { get label() { return i18n.t('utils:summaryText.relatedContentFound'); }, get hint() { return i18n.t('utils:summaryText.mentionedInTheFilesButNo'); } },
+    NotFound: { get label() { return i18n.t('utils:summaryText.notFoundInTheFiles'); }, get hint() { return i18n.t('utils:summaryText.noneOfTheFilesReadMention'); } },
+    NotChecked: { get label() { return i18n.t('utils:summaryText.notCheckedYet'); }, get hint() { return i18n.t('utils:summaryText.summariseAFileToCheckThis'); } },
+    Live: { get label() { return i18n.t('utils:summaryText.assessedLive'); }, get hint() { return i18n.t('utils:summaryText.presentationQAAndTeamworkAre'); } },
+    Product: { get label() { return i18n.t('utils:summaryText.checkTheProduct'); }, get hint() { return i18n.t('utils:summaryText.assessedOnTheProductOrDemo'); } },
+    Overall: { get label() { return i18n.t('utils:summaryText.judgedOnTheWholeFile'); }, get hint() { return i18n.t('utils:summaryText.judgedOnHowClearAndComplete'); } },
   },
 
   status: {
@@ -130,7 +131,7 @@ export const summaryText = {
   },
 
   feedback: {
-    question: 'Was this summary useful?',
+    get question() { return i18n.t('utils:summaryText.wasThisSummaryUseful'); },
     group: 'Rate this summary',
     useful: 'Useful',
     notUseful: 'Not useful',
@@ -152,7 +153,7 @@ export const summaryText = {
   },
 
   versions: {
-    title: 'Changes since the previous version',
+    get title() { return i18n.t('utils:summaryText.changesSinceThePreviousVersion'); },
     intro: 'The team uploaded some files again. Sentences are compared between the two versions without AI, so nothing is made up; only the most notable changes are shown.',
     compare: 'Compare',
     comparing: 'Comparing…',

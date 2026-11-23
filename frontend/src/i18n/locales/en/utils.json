@@ -1,0 +1,355 @@
+{
+  "classSchedule": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "slot": "Slot {{slot}} ({{startTime}} - {{endTime}})"
+  },
+  "projectProfile": {
+    "description": "Description"
+  },
+  "useWorkspaceShortcuts": {
+    "shortcutUpdated": "Shortcut updated.",
+    "shortcutAdded": "Shortcut added.",
+    "unableToSaveShortcut": "Unable to save shortcut.",
+    "shortcutDeleted": "Shortcut deleted.",
+    "unableToDeleteShortcut": "Unable to delete shortcut."
+  },
+  "academicDashboard": {
+    "totalClasses": "Total Classes",
+    "totalTeams": "Total Teams",
+    "totalProjects": "Total Projects",
+    "totalSubmissions": "Total Submissions",
+    "totalEvaluations": "Total Evaluations",
+    "potentialProjects": "Potential Projects"
+  },
+  "accountApproval": {
+    "pleaseProvideAReasonOfAt": "Please provide a reason of at least 10 characters.",
+    "theRejectionReasonCannotExceed500": "The rejection reason cannot exceed 500 characters."
+  },
+  "addStudent": {
+    "studentCodeIsRequired": "Student code is required.",
+    "studentCodeCannotExceed20Characters": "Student code cannot exceed 20 characters.",
+    "fullNameIsRequired": "Full name is required.",
+    "fullNameCannotExceed150Characters": "Full name cannot exceed 150 characters.",
+    "emailIsRequired": "Email is required.",
+    "enterAValidEmailAddress": "Enter a valid email address."
+  },
+  "bulkClassStudentImport": {
+    "noCreatedClassWasReturnedFor": "No created class was returned for '{{classVal}}'.",
+    "thisRowFailedImportValidation": "This row failed import validation.",
+    "unableToImportStudentsInto": "Unable to import students into {{classCode}}."
+  },
+  "checkpointFilePreview": {
+    "preview": "Preview · {{fileName}}",
+    "previewPreparationTimedOutYouCan": "Preview preparation timed out. You can still download the original file.",
+    "youDoNotHavePermissionTo": "You do not have permission to preview this file.",
+    "theSubmittedFileCouldNotBe": "The submitted file could not be found.",
+    "thisFileFormatCannotBePreviewed": "This file format cannot be previewed.",
+    "thePreviewCouldNotBePrepared": "The preview could not be prepared. You can still download the original file."
+  },
+  "checkpointLink": {
+    "linkUrlIsRequired": "Link URL is required.",
+    "linkUrlMustNotExceedCharacters": "Link URL must not exceed {{CHECKPOINT_LINK_URL_MAX_LENGTH}} characters.",
+    "onlyPublicHttpsLinksAreAccepted": "Only public HTTPS links are accepted.",
+    "linksContainingEmbeddedCredentialsAreNot": "Links containing embedded credentials are not accepted.",
+    "enterAValidPublicHttpsLink": "Enter a valid public HTTPS link."
+  },
+  "checkpointSummary": {
+    "couldNotBeSummarisedOpenTo": "{{failed}} {{v2}} could not be summarised. Open {{v3}} to see why.",
+    "stillOpenInTheFile": "Still open in the file:",
+    "notFoundInTheFiles": "Not found in the files: {{v1}}",
+    "newlyMentioned": "Newly mentioned",
+    "noLongerMentioned": "No longer mentioned",
+    "stillMentioned": "Still mentioned",
+    "stillNotMentioned": "Still not mentioned"
+  },
+  "checkpointUpload": {
+    "theUploadLinkForExpiredOr": "The upload link for \"{{fileName}}\" expired or was rejected. Retry to get a new link.",
+    "couldNotSendToFileStorage": "Could not send \"{{fileName}}\" to file storage. Check your connection and try again.",
+    "fileStorageCouldNotAcceptHttp": "File storage could not accept \"{{fileName}}\" (HTTP {{v2}}). Please try again.",
+    "couldNotReachTheUploadService": "Could not reach the upload service for \"{{fileName}}\". Check that the backend is running and try again.",
+    "theServerCouldNotProcessPlease": "The server could not process \"{{fileName}}\". Please try again or contact support if the problem continues.",
+    "couldNotUploadHttpPleaseTry": "Could not upload \"{{fileName}}\" (HTTP {{v2}}). Please try again."
+  },
+  "classComponentPolicy": {
+    "restoreClass": "Restore Class",
+    "archiveClass": "Archive Class",
+    "unsupportedFileTypePleaseChooseAn": "Unsupported file type. Please choose an .xlsx or .xls file.",
+    "theFileIsLargerThan10": "The file is larger than 10 MB. Please upload a smaller student list."
+  },
+  "groupProjectConsistency": {
+    "groupIsAssignedToMultipleProjects": "Group `{{key}}` is assigned to multiple projects: {{v2}}.",
+    "projectIsAssignedToMultipleGroups": "Project `{{key}}` is assigned to multiple groups: {{v2}}."
+  },
+  "incompleteMentorForm": {
+    "mentorNameIsRequiredAtLeast": "Mentor name is required (at least 2 characters).",
+    "mentorNameMayContainAtMost": "Mentor name may contain at most {{fullName}} characters.",
+    "loginEmailMustBeAValid": "Login email must be a valid email address.",
+    "fptEmailMustBeAValid": "Fpt Email must be a valid email address when provided.",
+    "dateOfBirthIsOutsideThe": "Date of birth is outside the allowed range."
+  },
+  "managedUserForm": {
+    "enterpriseMentor": "Enterprise mentor",
+    "lecturerMentor": "Lecturer mentor",
+    "chooseWhetherThisMentorIsAn": "Choose whether this mentor is an Enterprise mentor or a Lecturer mentor"
+  },
+  "mentorAllocationJob": {
+    "theAiResultIsUnavailablePlease": "The AI result is unavailable. Please generate the proposal again."
+  },
+  "mentorChangeReasons": {
+    "mentorIsNoLongerAvailable": "Mentor is no longer available",
+    "mentorIsOverloaded": "Mentor is overloaded",
+    "scheduleConflict": "Schedule conflict",
+    "teamRequestedAChange": "Team requested a change",
+    "rebalanceMentorWorkload": "Rebalance mentor workload",
+    "other": "Other"
+  },
+  "mentorCvUpload": {
+    "chooseAPdfDocOrDocx": "Choose a PDF, DOC or DOCX file.",
+    "thisFileIsEmpty": "This file is empty.",
+    "eachCvMustBe10Mb": "Each CV must be 10 MB or smaller.",
+    "waitingToReadTheEmailIn": "Waiting to read the email in this CV…",
+    "readingTheEmailInThisCv": "Reading the email in this CV…",
+    "matchedByEmailFromCvVerify": "Matched by email from CV — verify this mentor.",
+    "mentorSelectedManuallyAfterReadingThe": "Mentor selected manually after reading the CV email.",
+    "noEmailWasFoundInThis": "No email was found in this CV. Choose the mentor manually.",
+    "noImportedMentorHasAMatching": "No imported mentor has a matching email. Check the imported email or choose manually.",
+    "theCvEmailDoesNotIdentify": "The CV email does not identify one mentor uniquely. Choose the mentor manually.",
+    "waitUntilTheCvEmailHas": "Wait until the CV email has been read.",
+    "chooseTheMentorWhoOwnsThis": "Choose the mentor who owns this CV.",
+    "thisMentorIsNoLongerAvailable": "This mentor is no longer available. Choose another mentor.",
+    "onlyOneCvCanBeUploaded": "Only one CV can be uploaded for each mentor in this list.",
+    "confirmReplacementOfTheExistingCv": "Confirm replacement of the existing CV."
+  },
+  "mentorHistory": {
+    "finishedWithTheClass": "Finished with the class{{suffix}}",
+    "assignmentEndedEarly": "Assignment ended early{{suffix}}"
+  },
+  "mentorImportStatus": {
+    "completeRecord": "Complete record",
+    "update": "Update",
+    "incomplete": "Incomplete",
+    "invalid": "Invalid"
+  },
+  "mentorMasterImport": {
+    "onlyXlsxExcelFilesAreAccepted": "Only .xlsx Excel files are accepted.",
+    "theSelectedFileIsEmpty": "The selected file is empty.",
+    "theFileMayNotExceed5": "The file may not exceed 5 MB.",
+    "nothingToImport": "Nothing to import",
+    "update": "Update {{v1}}",
+    "create": "Create {{v1}}",
+    "saveAsIncomplete": "Save {{v1}} as incomplete",
+    "apply": "Apply {{v1}}",
+    "mentorImportCompleted": "Mentor import completed: {{v1}}.{{hint}}",
+    "noEmailYet": "No email yet"
+  },
+  "mentorProfileForm": {
+    "active": "Active",
+    "canBeAssignedToTeams": "Can be assigned to teams.",
+    "inactive": "Inactive",
+    "notUsedForNewAssignmentsExisting": "Not used for new assignments. Existing assignments stay.",
+    "unavailable": "Unavailable",
+    "temporarilyCannotTakeTeamsExistingAssignments": "Temporarily cannot take teams. Existing assignments stay.",
+    "linkedinUrlMustBeAValid": "LinkedIn URL must be a valid http or https address.",
+    "fptEmailMustBeAValid": "FPT email must be a valid email address."
+  },
+  "mentorProfiles": {
+    "chooseAMentorType": "Choose a mentor type.",
+    "enterAtMost40ExperienceEntries": "Enter at most 40 experience entries.",
+    "duplicateExperienceEntriesAreNotAllowed": "Duplicate experience entries are not allowed.",
+    "experienceRequiresAnAreaAndValid": "Experience requires an area and valid years (0–80, one decimal), level and notes."
+  },
+  "mentorTags": {
+    "expertise": "Expertise",
+    "startupDomain": "Startup domain",
+    "technology": "Technology",
+    "tag": "Tag"
+  },
+  "projectData": {
+    "carriedOver": "Carried over",
+    "changed": "Changed",
+    "showingTheLatestOfUpdates": "Showing the latest {{length}} of {{totalCount}} updates.",
+    "noProjects": "No projects",
+    "ofProjects": "{{first}}–{{last}} of {{totalItems}} projects",
+    "published": "Published",
+    "pendingPublication": "Pending publication",
+    "notGraded": "Not graded",
+    "checkpoint": "Checkpoint {{checkpointNumber}} · {{weight}}",
+    "assessment": "Assessment · {{weight}}",
+    "noCompletedSessions": "No completed sessions",
+    "1CompletedSession": "1 completed session",
+    "completedSessions": "{{countValue}} completed sessions",
+    "since": "Since {{started}}",
+    "inTotalLastOn": "{{sessions}} in total · last on {{v2}}"
+  },
+  "projectDirectionSync": {
+    "saveYourRevisedProjectInformationAs": "Save your revised project information as a draft to enable Submit.",
+    "theLecturerRequestedChangesUpdateThe": "The lecturer requested changes. Update the Project Name, Project description, or Startup Industry, then select Save draft to enable Submit.",
+    "saveYourChangesAsADraft": "Save your changes as a draft before submitting.",
+    "lecturerRejectedYourProjectProfileChanges": "Lecturer rejected your Project Profile changes. The approved profile remains unchanged.",
+    "lecturerApprovedYourProjectProfileChanges": "Lecturer approved your Project Profile changes. The approved profile is now updated.",
+    "lecturerRequestedRevisionsToYourProject": "Lecturer requested revisions to your Project Profile changes. The approved profile remains unchanged.",
+    "lecturerApprovedYourProjectDirection": "Lecturer approved your project direction.",
+    "lecturerReviewedYourProjectDirectionAnd": "Lecturer reviewed your project direction and requested changes."
+  },
+  "projectTrends": {
+    "averageScore": "Average score"
+  },
+  "projectWorkspace": {
+    "teamNameMustBe3100": "Team name must be 3–100 characters.",
+    "zaloGroupLinkIsRequired": "Zalo group link is required.",
+    "enterAValidHttpsLinkOn": "Enter a valid HTTPS link on zalo.me.",
+    "selectBetween1And3Startup": "Select between 1 and 3 startup industries.",
+    "problemMustBe202000Characters": "Problem must be 20–2000 characters when provided.",
+    "solutionMustBe202000Characters": "Solution must be 20–2000 characters when provided.",
+    "targetUsersMustBe32000": "Target users must be 3–2000 characters when provided."
+  },
+  "reviewDesk": {
+    "overdue": "Overdue",
+    "newVersion": "New version",
+    "dueSoon": "Due soon"
+  },
+  "rubricImport": {
+    "atLeastOnePerformanceLevelColumn": "At least one performance level column is required.",
+    "theWorksheetContainsMoreThanCriteria": "The worksheet contains more than {{MAX_CRITERIA}} criteria.",
+    "theWorksheetDoesNotContainAny": "The worksheet does not contain any rubric criteria.",
+    "aRubricCanContainAtMost": "A rubric can contain at most {{MAX_CHECKPOINTS}} checkpoints.",
+    "checkpointCriterionWeightsTotalNot100": "Checkpoint {{number}} criterion weights total {{v2}}%, not 100.0%.",
+    "worksheetWasUsedBecauseTheWorkbook": "Worksheet \"{{sheetName}}\" was used because the workbook has only one worksheet.",
+    "checkpoint": "Checkpoint {{number}}"
+  },
+  "semesterStaffCandidates": {
+    "alreadyInTheSemesterList": "Already in the semester list.",
+    "couldNotBeAdded": "Could not be added.",
+    "added": "Added {{v1}}.",
+    "addedSkipped": "Added {{v1}}, {{skipped}} skipped.",
+    "noSWereAdded": "No {{roleNoun}}s were added.",
+    "everyoneSelectedWasAlreadyInThe": "Everyone selected was already in the semester list."
+  },
+  "showcase": {
+    "draft": "Draft",
+    "onlyYourTeamCanSeeThis": "Only your team can see this page.",
+    "pendingReview": "Pending review",
+    "waitingForALecturerOrAdministrator": "Waiting for a lecturer or administrator to review it.",
+    "visibleToSignedInEHub": "Visible to signed-in E-HUB users.",
+    "hidden": "Hidden",
+    "notVisibleToTheCommunity": "Not visible to the community.",
+    "idea": "Idea",
+    "aConceptBeingValidated": "A concept being validated",
+    "aFirstWorkingVersion": "A first working version",
+    "beta": "Beta",
+    "earlyUsersAreTestingIt": "Early users are testing it",
+    "launched": "Launched",
+    "availableToItsCustomers": "Available to its customers",
+    "website": "Website",
+    "demo": "Demo",
+    "video": "Video",
+    "social": "Social",
+    "enterALabel": "Enter a label.",
+    "enterAFullLinkStartingWith": "Enter a full link starting with https:// or http://.",
+    "useAnHttpsLinkFromYoutube": "Use an https link from YouTube or Vimeo for a video.",
+    "onlyPngJpgAndWebpImages": "Only PNG, JPG and WEBP images are accepted.",
+    "thisImageIsEmpty": "This image is empty.",
+    "imagesMustBe5MbOr": "Images must be 5 MB or smaller.",
+    "noChange": "no change"
+  },
+  "showcaseAssistant": {
+    "hayDanApiKeyGeminiCua": "Please paste your Gemini API key.",
+    "apiKeyKhongCoKhoangTrang": "The API key has no spaces or line breaks. Paste it again as a single line.",
+    "chiDanPhanGiaTriCua": "Paste only the key value, without a variable name or path.",
+    "apiKeyQuaNganHayKiem": "The API key is too short. Check that you copied the whole key.",
+    "apiKeyChiGomChuCai": "The API key only contains letters, digits and ordinary characters. Paste the key again.",
+    "banHoiHoiNhanhHayDoi": "You are asking a bit fast. Please wait a moment and try again.",
+    "khongGuiDuocCauHoiVui": "Could not send the question. Please try again."
+  },
+  "showcaseDiscovery": {
+    "topLaunchesThisWeek": "Top launches this week",
+    "thisWeek": "This week",
+    "lastWeek": "Last week",
+    "earlier": "Earlier",
+    "trendingNow": "Trending now",
+    "featuredProducts": "Featured products",
+    "thisWeekSProducts": "This week's products",
+    "lastWeekSProducts": "Last week's products",
+    "earlierProducts": "Earlier products"
+  },
+  "startupIndustryImport": {
+    "onlyXlsxAndXlsExcelFiles": "Only .xlsx and .xls Excel files are accepted.",
+    "theExcelFileMustNotExceed": "The Excel file must not exceed 5 MB."
+  },
+  "studentAssignment": {
+    "selectAClassBeforeAssigningStudents": "Select a class before assigning students.",
+    "selectAtLeastOneStudent": "Select at least one student.",
+    "oneOrMoreSelectedStudentsCould": "One or more selected students could not be found.",
+    "selectATeamInThisClass": "Select a team in this class.",
+    "theSelectedTeamDoesNotBelong": "The selected team does not belong to this class.",
+    "aTeamMustIncludeAtLeast": "A team must include at least one GROUP_1 major and one GROUP_2 major."
+  },
+  "studentImport": {
+    "studentCodeMustBe320": "Student code must be 3–20 characters and contain only letters, numbers, “-” or “_”.",
+    "studentCodeAlreadyExistsInThis": "Student code already exists in this class.",
+    "studentCodeDuplicatesRow": "Student code duplicates row {{v1}}.",
+    "emailFormatIsInvalid": "Email format is invalid.",
+    "emailAlreadyExistsInThisClass": "Email already exists in this class.",
+    "emailDuplicatesRow": "Email duplicates row {{v1}}."
+  },
+  "summaryDiagnostics": {
+    "theAiModelServerIsNot": "The AI model server is not answering. Summaries cannot be made until it is back.",
+    "theModelHasNotBeenPulled": "The model \"{{model}}\" has not been pulled into the model server, so every summary fails.",
+    "theWorkerIsPausedBecauseThe": "The worker is paused because the model failed several times in a row. It tries again by itself.",
+    "theWorkerIsTestingTheModel": "The worker is testing the model again after a pause.",
+    "theQueueOfRequestedSummariesIs": "The queue of requested summaries is full; new requests are refused until it shrinks.",
+    "notWorking": "Not working",
+    "needsAttention": "Needs attention",
+    "healthy": "Healthy",
+    "hMin": "{{hours}} h {{v2}} min",
+    "dH": "{{days}} d {{v2}} h",
+    "running": "Running",
+    "paused": "Paused",
+    "testing": "Testing"
+  },
+  "summaryText": {
+    "aiSummary": "AI summary",
+    "relatedContentFound": "Related content found",
+    "mentionedInTheFilesButNo": "Mentioned in the files, but no passage stands out to quote.",
+    "notFoundInTheFiles": "Not found in the files",
+    "noneOfTheFilesReadMention": "None of the files read mention this. Please check the files yourself.",
+    "notCheckedYet": "Not checked yet",
+    "summariseAFileToCheckThis": "Summarise a file to check this item.",
+    "assessedLive": "Assessed live",
+    "presentationQAAndTeamworkAre": "Presentation, Q&A and teamwork are assessed live; a file cannot show them.",
+    "checkTheProduct": "Check the product",
+    "assessedOnTheProductOrDemo": "Assessed on the product or demo; the files do not mention it.",
+    "judgedOnTheWholeFile": "Judged on the whole file",
+    "judgedOnHowClearAndComplete": "Judged on how clear and complete the whole file is, not on one passage. Please read the file.",
+    "wasThisSummaryUseful": "Was this summary useful?",
+    "changesSinceThePreviousVersion": "Changes since the previous version"
+  },
+  "taskLimits": {
+    "titleMustBeCharactersOrFewer": "Title must be {{TASK_TITLE_MAX_LENGTH}} characters or fewer.",
+    "descriptionMustBeCharactersOrFewer": "Description must be {{TASK_DESCRIPTION_MAX_LENGTH}} characters or fewer."
+  },
+  "teamContinuity": {
+    "noTeamCanBeContinued": "No team{{source}} can be continued"
+  },
+  "teamManagement": {
+    "selectAtLeastStudents": "Select at least {{TEAM_MEMBER_MINIMUM}} students.",
+    "selectNoMoreThanStudents": "Select no more than {{TEAM_MEMBER_LIMIT}} students.",
+    "teamMustIncludeAtLeastOne": "Team must include at least one GROUP_1 major.",
+    "teamMustIncludeAtLeastOne2": "Team must include at least one GROUP_2 major.",
+    "teamLeaderIsRequired": "Team Leader is required.",
+    "teamNameMustBeBetween3": "Team name must be between 3 and 60 characters.",
+    "aTeamWithThisNameAlready": "A team with this name already exists in the class.",
+    "aClassIsRequired": "A class is required.",
+    "aTeamMustHave46": "A team must have 4-6 students.",
+    "oneOrMoreSelectedStudentsAre": "One or more selected students are not in this class.",
+    "selectATeamLeader": "Select a team leader.",
+    "theTeamLeaderMustBeOne": "The team leader must be one of the selected members.",
+    "projectNameMustBeBetween3": "Project name must be between 3 and 100 characters.",
+    "projectSummaryCannotExceed500Characters": "Project summary cannot exceed 500 characters."
+  }
+}

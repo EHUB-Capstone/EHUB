@@ -1,6 +1,7 @@
 import type { ParsedApiError } from './apiError.ts';
 import { parseApiError } from './apiError.ts';
 import { buildStudentImportWorkbookBlob } from './studentImport.ts';
+import i18n from '../i18n/index.ts';
 
 export interface ParsedBulkClassStudentRow {
   sourceRowNumber: number;
@@ -128,7 +129,7 @@ export async function importStudentsIntoCreatedClasses(
       rowNumber: row.sourceRowNumber,
       studentCode: row.studentCode,
       errorCode: 'CREATED_CLASS_NOT_RETURNED',
-      errorMessage: `No created class was returned for '${row.classVal}'.`,
+      errorMessage: i18n.t('utils:bulkClassStudentImport.noCreatedClassWasReturnedFor', { classVal: row.classVal }),
     });
   }
 
@@ -171,7 +172,7 @@ export async function importStudentsIntoCreatedClasses(
           rowNumber: sourceRowNumber(row.rowNumber, matchingRows),
           studentCode: row.studentCode,
           errorCode: 'IMPORT_PREVIEW_VALIDATION',
-          errorMessage: row.errorMessage || 'This row failed import validation.',
+          errorMessage: row.errorMessage || i18n.t('utils:bulkClassStudentImport.thisRowFailedImportValidation'),
         });
       }
 
@@ -213,7 +214,7 @@ export async function importStudentsIntoCreatedClasses(
         });
       }
     } catch (error) {
-      const parsed: ParsedApiError = parseApiError(error, `Unable to import students into ${targetClass.classCode}.`);
+      const parsed: ParsedApiError = parseApiError(error, i18n.t('utils:bulkClassStudentImport.unableToImportStudentsInto', { classCode: targetClass.classCode }));
       summary.issues.push(...rowIssues(
         targetClass,
         matchingRows,

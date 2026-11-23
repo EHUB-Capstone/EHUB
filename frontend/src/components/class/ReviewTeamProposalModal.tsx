@@ -48,7 +48,7 @@ export default function ReviewTeamProposalModal({ team, classStudents, onClose, 
       await onRefresh();
       onClose();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to review team proposal.').message);
+      toast.error(parseApiError(error, t('reviewTeamProposalModal.failedToReviewTeamProposal')).message);
     } finally {
       setSubmitting(false);
     }

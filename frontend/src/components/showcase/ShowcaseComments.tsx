@@ -304,7 +304,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
       <div className="mt-6">
         {comments.isPending && <div role="status" aria-label={t('showcaseComments.loadingComments')} className="space-y-3"><LoadingSkeleton lines={3} /></div>}
         {comments.isError && (
-          <ErrorState title={t('showcaseComments.couldNotLoadComments')} message={parseApiError(comments.error, 'Failed to load comments.').message} onRetry={() => { void comments.refetch(); }} />
+          <ErrorState title={t('showcaseComments.couldNotLoadComments')} message={parseApiError(comments.error, t('showcaseComments.failedToLoadComments')).message} onRetry={() => { void comments.refetch(); }} />
         )}
         {comments.isSuccess && items.length === 0 && (
           <EmptyState icon={MessageSquare} title={t('showcaseComments.noCommentsYet')} description={t('showcaseComments.beTheFirstToShareWhat')} size="sm" />

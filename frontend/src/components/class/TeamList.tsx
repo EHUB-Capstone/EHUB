@@ -92,7 +92,7 @@ export default function TeamList({
             <p className="text-sm text-slate-500">
               {t('teamList.teamsInClass', { count: teamCount })}
               {standaloneProposalCount > 0
-                ? ` · ${standaloneProposalCount} standalone proposal${standaloneProposalCount === 1 ? '' : 's'}`
+                ? t('teamList.standaloneProposals', { count: standaloneProposalCount })
                 : ''}
             </p>
           </div>

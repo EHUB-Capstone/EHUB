@@ -70,7 +70,7 @@ export default function CheckpointProgressBlock({ teamId, checkpointNumber }: Pr
     } catch (caught) {
       if (axios.isCancel(caught)) return;
       setProgress(null);
-      setError(parseApiError(caught, 'Could not load the progress across checkpoints.').message);
+      setError(parseApiError(caught, t('checkpointProgressBlock.couldNotLoadTheProgressAcross')).message);
     } finally {
       if (!signal.aborted) setLoading(false);
     }

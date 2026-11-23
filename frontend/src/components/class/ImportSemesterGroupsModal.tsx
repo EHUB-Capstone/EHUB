@@ -68,7 +68,7 @@ export default function ImportSemesterGroupsModal({
       setReport(unwrapResponse(response));
       toast.success(t('importSemesterGroupsModal.previewReadyNoSemesterGroupsHave'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to preview semester groups.').message);
+      toast.error(parseApiError(error, t('importSemesterGroupsModal.unableToPreviewSemesterGroups')).message);
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export default function ImportSemesterGroupsModal({
       toast.success(t('importSemesterGroupsModal.importedSemesterGroupValueS', { updatedCount: result.updatedCount }));
       onImported?.();
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to import semester groups.').message);
+      toast.error(parseApiError(error, t('importSemesterGroupsModal.unableToImportSemesterGroups')).message);
     } finally {
       setImporting(false);
     }

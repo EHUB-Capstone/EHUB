@@ -85,7 +85,10 @@
     "updatedClasses": "Lớp đã cập nhật",
     "classesRequiringAttention": "Lớp cần chú ý",
     "classesFound_other": "Tìm thấy {{count}} lớp",
-    "weeklySessions_other": "{{count}} buổi mỗi tuần"
+    "weeklySessions_other": "{{count}} buổi mỗi tuần",
+    "failedToLoadClasses": "Không thể tải các lớp",
+    "failedToRestoreClass": "Không thể khôi phục lớp",
+    "failedToExportClassData": "Không thể xuất dữ liệu lớp."
   },
   "mentorProfileDetail": {
     "atRisk": "Có rủi ro",
@@ -137,7 +140,9 @@
       "Active": "Đang hoạt động",
       "Inactive": "Không hoạt động",
       "Unavailable": "Tạm không khả dụng"
-    }
+    },
+    "theMentorProfileCouldNotBe": "Không thể tải hồ sơ Mentor.",
+    "theMentorProfileCouldNotBe2": "Không thể lưu hồ sơ Mentor."
   },
   "startupIndustryManagement": {
     "industryNameIsRequired": "Vui lòng nhập tên ngành.",
@@ -188,7 +193,10 @@
       "inactive": "ngừng kích hoạt"
     },
     "deactivateNamed": "Ngừng kích hoạt {{name}}",
-    "activateNamed": "Kích hoạt {{name}}"
+    "activateNamed": "Kích hoạt {{name}}",
+    "failedToLoadStartupIndustries": "Không thể tải các ngành khởi nghiệp.",
+    "failedToSaveStartupIndustry": "Không thể lưu ngành khởi nghiệp.",
+    "failedToUpdateIndustryStatus": "Không thể cập nhật trạng thái ngành."
   },
   "subjectDetail": {
     "estimatedHoursMustBeZeroOr": "Số giờ ước tính phải lớn hơn hoặc bằng 0",
@@ -305,7 +313,13 @@
     "checkpointRubricsAddedToTheDraft_other": "Đã thêm {{count}} rubric checkpoint vào bản nháp.",
     "deleteNamed": "Xóa {{name}}",
     "otherAssessmentFallback": "đánh giá khác",
-    "criterionFallback": "tiêu chí"
+    "criterionFallback": "tiêu chí",
+    "failedToLoadSubjectCurriculum": "Không thể tải chương trình môn học",
+    "failedToSaveRoadmapItem": "Không thể lưu mục lộ trình",
+    "failedToDeleteItem": "Không thể xóa mục",
+    "failedToSaveRubric": "Không thể lưu rubric",
+    "failedToSaveCriterion": "Không thể lưu tiêu chí",
+    "failedToSynchronizeRubric": "Không thể đồng bộ rubric"
   },
   "subjectManagement": {
     "teachesAndManagesClasses": "Giảng dạy và quản lý lớp học",
@@ -447,7 +461,18 @@
     "transitionSemesters2": "Chuyển tiếp học kỳ",
     "reasonForTransition": "Lý do chuyển tiếp",
     "planningSavesTheScheduleOnly": "Lập kế hoạch chỉ lưu lịch học kỳ; không kích hoạt học kỳ.",
-    "fallMayEndInJanuary": "Học kỳ Fall có thể kết thúc vào tháng 1 của năm kế tiếp."
+    "fallMayEndInJanuary": "Học kỳ Fall có thể kết thúc vào tháng 1 của năm kế tiếp.",
+    "failedToLoadSubjects": "Không thể tải các môn học",
+    "failedToLoadTheActiveSemester": "Không thể tải học kỳ đang hoạt động",
+    "failedToLoadTeachingStaff": "Không thể tải nhân sự giảng dạy",
+    "failedToUpdateSemesterTeachingStaff": "Không thể cập nhật nhân sự giảng dạy của học kỳ",
+    "failedToSaveSubject": "Không thể lưu môn học",
+    "failedToDisableSubject": "Không thể vô hiệu hóa môn học",
+    "failedToSaveSemesterSchedule": "Không thể lưu lịch học kỳ",
+    "failedToActivateSemester": "Không thể kích hoạt học kỳ",
+    "failedToPreviewSemesterCompletion": "Không thể xem trước việc hoàn thành học kỳ",
+    "failedToTransitionSemesters": "Không thể chuyển tiếp học kỳ",
+    "failedToChangeSemesterLifecycle": "Không thể thay đổi vòng đời học kỳ"
   },
   "userManagement": {
     "approved": "Đã duyệt",
@@ -537,7 +562,10 @@
     "createLecturerAccountsFromExcel": "Tạo tài khoản giảng viên từ Excel",
     "importMentors": "Nhập Mentor",
     "enterpriseAndLecturerMentors": "Mentor doanh nghiệp và Mentor là giảng viên",
-    "mentorImportedWithoutALoginAccount_other": "{{count}} Mentor đã được nhập nhưng chưa có tài khoản đăng nhập"
+    "mentorImportedWithoutALoginAccount_other": "{{count}} Mentor đã được nhập nhưng chưa có tài khoản đăng nhập",
+    "failedToUpdateUserStatus": "Không thể cập nhật trạng thái người dùng",
+    "failedToDeleteUser": "Không thể xóa người dùng",
+    "failedToSaveUser": "Không thể lưu người dùng"
   },
   "accountApprovalBoard": {
     "pendingReview": "Chờ xem xét",
@@ -617,7 +645,8 @@
     "addRoleToSemester": "Thêm {{roleNoun}} vào {{semesterLabel}}",
     "searchMentorsPlaceholder": "Tìm Mentor theo tên, email, hợp đồng hoặc thẻ...",
     "searchLecturersPlaceholder": "Tìm giảng viên theo tên, email...",
-    "selectAllShown": "Chọn tất cả kết quả đang hiển thị ({{length}})"
+    "selectAllShown": "Chọn tất cả kết quả đang hiển thị ({{length}})",
+    "failedToLoadEligibleLecturersAnd": "Không thể tải danh sách giảng viên và Mentor đủ điều kiện"
   },
   "aiSummaryDiagnosticsCard": {
     "onlyAdministratorsCanSeeThis": "Chỉ quản trị viên mới xem được nội dung này.",
@@ -691,7 +720,9 @@
     "row": "Dòng",
     "position": "Chức vụ",
     "googleLoginEmail": "Email đăng nhập Google",
-    "result": "Kết quả"
+    "result": "Kết quả",
+    "theLecturerFileCouldNotBe": "Không thể phân tích tệp giảng viên.",
+    "failedToImportLecturerAccounts": "Không thể nhập tài khoản Giảng viên."
   },
   "importMentorsModal": {
     "importMentorAccounts": "Nhập tài khoản Mentor",
@@ -721,7 +752,10 @@
     "showingOfRows": "Hiển thị {{length}} trên {{totalRows}} dòng.",
     "sheetRow": "Trang tính / dòng",
     "type": "Loại",
-    "enterprise": "Doanh nghiệp"
+    "enterprise": "Doanh nghiệp",
+    "failedToDownloadMentorTemplate": "Không thể tải mẫu Mentor xuống",
+    "theMentorFileCouldNotBe": "Không thể phân tích tệp Mentor.",
+    "failedToImportMentors": "Không thể nhập Mentor."
   },
   "importStartupIndustriesModal": {
     "previewAndValidateTheExcelFile": "Xem trước và kiểm tra tệp Excel trước khi thêm bất kỳ ngành nào",
@@ -756,7 +790,9 @@
     "importValidAndSkipRest_other": "Nhập {{count}} ngành hợp lệ và bỏ qua phần còn lại?",
     "rowsWillNotBeImported": "{{errorCount}} dòng có lỗi sẽ không được nhập.",
     "rowsWillNotBeImportedWithExisting": "{{errorCount}} dòng có lỗi và {{existingCount}} dòng đã tồn tại sẽ không được nhập.",
-    "industriesAddedAsActive_other": "Đã thêm {{count}} ngành ở trạng thái hoạt động."
+    "industriesAddedAsActive_other": "Đã thêm {{count}} ngành ở trạng thái hoạt động.",
+    "theFileCouldNotBeRead": "Không thể đọc tệp. Vui lòng kiểm tra định dạng.",
+    "failedToImportStartupIndustriesPreview": "Không thể nhập các ngành khởi nghiệp. Hãy xem trước lại tệp rồi thử lại."
   },
   "incompleteMentorEditModal": {
     "editMentorInformation": "Chỉnh sửa thông tin Mentor",
@@ -771,7 +807,8 @@
     "optionalNotTheLoginEmail": "Không bắt buộc. Không phải email đăng nhập.",
     "company": "Công ty",
     "currentAddress": "Địa chỉ hiện tại",
-    "nowHasAnAccount": "{{v1}} hiện đã có tài khoản{{carried}}. Họ có thể đặt mật khẩu bằng Quên mật khẩu."
+    "nowHasAnAccount": "{{v1}} hiện đã có tài khoản{{carried}}. Họ có thể đặt mật khẩu bằng Quên mật khẩu.",
+    "failedToUpdateTheMentor": "Không thể cập nhật Mentor"
   },
   "incompleteMentorsPanel": {
     "theseMentorsWereImportedWithoutA": "Các Mentor này được nhập mà không có email đăng nhập nên chưa có tài khoản. Hãy nhập tệp có email của họ (Nhập > Nhập Mentor) để tạo tài khoản.",
@@ -786,7 +823,9 @@
     "onTeams_other": "trong {{count}} nhóm",
     "fieldsMissing_other": "thiếu {{count}} trường",
     "thisMentor": "Mentor này",
-    "deleteConfirm": "Xóa {{name}}? Họ cũng sẽ bị gỡ khỏi các học kỳ đã được thêm vào. Mentor đang hoặc đã tham gia một nhóm không thể bị xóa."
+    "deleteConfirm": "Xóa {{name}}? Họ cũng sẽ bị gỡ khỏi các học kỳ đã được thêm vào. Mentor đang hoặc đã tham gia một nhóm không thể bị xóa.",
+    "failedToLoadMentorsThatNeed": "Không thể tải các Mentor cần bổ sung thông tin.",
+    "failedToDeleteTheMentor": "Không thể xóa Mentor"
   },
   "mentorAdministrationCard": {
     "mentorAssignment": "Phân công Mentor",
@@ -809,7 +848,9 @@
     "currentMentorAssignmentSWillEnd": "{{v1}} phân công Mentor hiện tại sẽ kết thúc và các Mentor được chọn sẽ tiếp quản. Lịch sử các phân công đã kết thúc được giữ nguyên.",
     "replaceAndSave": "Thay thế và lưu",
     "assignedMentorSlots_other": "Đã phân công {{count}} vị trí Mentor.",
-    "assignedMentorSlotsAndEnded_other": "Đã phân công {{count}} vị trí Mentor và kết thúc {{ended}} phân công bị thay thế."
+    "assignedMentorSlotsAndEnded_other": "Đã phân công {{count}} vị trí Mentor và kết thúc {{ended}} phân công bị thay thế.",
+    "failedToExportMentorAssignments": "Không thể xuất các phân công Mentor",
+    "failedToSaveTheMentorAssignment": "Không thể lưu phân công Mentor"
   },
   "mentorAllocationPreviewModal": {
     "enterpriseMentor": "Mentor doanh nghiệp",
@@ -966,7 +1007,8 @@
       "startupDomains": "Lĩnh vực startup",
       "technologySkills": "Kỹ năng công nghệ",
       "tags": "Thẻ Mentor"
-    }
+    },
+    "couldNotSaveMentorProfile": "Không thể lưu hồ sơ Mentor."
   },
   "mentorSearchSelect": {
     "noMentorMatches": "Không có Mentor nào khớp với \"{{v1}}\"."
@@ -982,7 +1024,9 @@
     "makeUnavailable": "Đặt là không khả dụng",
     "makeAvailable": "Đặt là khả dụng",
     "makeMentorUnavailable": "Đặt Mentor là không khả dụng?",
-    "removeAvailabilityForExistingAssignmentsMust": "Gỡ khả năng tham gia của {{v1}} {{v2}}. Các phân công hiện có phải được phân công lại trước."
+    "removeAvailabilityForExistingAssignmentsMust": "Gỡ khả năng tham gia của {{v1}} {{v2}}. Các phân công hiện có phải được phân công lại trước.",
+    "couldNotLoadSemesterAvailability": "Không thể tải khả năng tham gia theo học kỳ.",
+    "couldNotUpdateAvailabilityReloadAnd": "Không thể cập nhật khả năng tham gia. Hãy tải lại và thử lại."
   },
   "mentorTagFilter": {
     "filterByTag": "Lọc theo thẻ",
@@ -1024,7 +1068,8 @@
     "aiPreviewHint": "Bản xem trước AI chỉ đề xuất Mentor cho lớp đã chọn; hãy xem lại và chấp nhận trước khi lưu.",
     "openMentorSlots_other": "Còn {{count}} vị trí Mentor trống",
     "noLecturer": "Chưa có giảng viên",
-    "teamCount_other": "{{count}} nhóm"
+    "teamCount_other": "{{count}} nhóm",
+    "failedToLoadTheClassesOf": "Không thể tải các lớp của học kỳ này"
   },
   "tagInput": {
     "remove": "Gỡ {{tag}}",
@@ -1037,7 +1082,9 @@
     "noSemestersYet": "Chưa có học kỳ nào.",
     "noTeamWasContinuedInto": "Không có nhóm nào được tiếp nối sang {{semesterCode}}.",
     "continued": "Đã tiếp nối",
-    "dissolved": "Đã giải thể"
+    "dissolved": "Đã giải thể",
+    "unableToLoadSemesters": "Không thể tải các học kỳ.",
+    "unableToLoadTheTeamContinuity": "Không thể tải báo cáo tiếp nối nhóm."
   },
   "temporaryMentorBadge": {
     "thisMentorHasNoAccountYet": "Mentor này chưa có tài khoản. Họ không thể đăng nhập hoặc xem nhóm cho đến khi có email."
@@ -1079,7 +1126,10 @@
     "noMentorMatchesThisNameOr": "Không có Mentor nào khớp với tên hoặc email này.",
     "progress_other": "Đã chọn {{count}} tệp · {{completed}} đã tải lên · còn {{remaining}}",
     "retryCvs_other": "Thử lại {{count}} CV",
-    "uploadCvs_other": "Tải lên {{count}} CV"
+    "uploadCvs_other": "Tải lên {{count}} CV",
+    "couldNotLoadMentorProfilesPlease": "Không thể tải hồ sơ Mentor. Vui lòng thử lại.",
+    "couldNotReadTheCvEmail": "Không thể đọc email trong CV. Hãy thử lại hoặc chọn Mentor thủ công.",
+    "uploadCouldNotBeConfirmedCheck": "Không thể xác nhận việc tải lên. Hãy kiểm tra CV hiện tại trước khi thử lại."
   },
   "roleNames": {
     "LECTURER": "giảng viên",

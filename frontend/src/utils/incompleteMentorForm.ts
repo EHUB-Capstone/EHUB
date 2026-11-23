@@ -1,4 +1,5 @@
 import type { IncompleteMentor, UpdateIncompleteMentorPayload } from '../types/mentorAdmin';
+import i18n from '../i18n/index.ts';
 
 /** The edit form keeps every value as text; empty text means "not known yet". */
 export interface IncompleteMentorFormValues {
@@ -38,8 +39,8 @@ export function toFormValues(mentor: IncompleteMentor): IncompleteMentorFormValu
 /** Returns the first problem as one sentence, or null when the form can be saved. */
 export function validateFormValues(values: IncompleteMentorFormValues, mentorType: IncompleteMentor['mentorType']): string | null {
   const name = values.fullName.trim();
-  if (name.length < 2) return 'Mentor name is required (at least 2 characters).';
-  if (name.length > LIMITS.fullName) return `Mentor name may contain at most ${LIMITS.fullName} characters.`;
+  if (name.length < 2) return i18n.t('utils:incompleteMentorForm.mentorNameIsRequiredAtLeast');
+  if (name.length > LIMITS.fullName) return i18n.t('utils:incompleteMentorForm.mentorNameMayContainAtMost', { fullName: LIMITS.fullName });
   const checks: [string, keyof typeof LIMITS, string][] = mentorType === 'Enterprise'
     ? [[values.phone, 'phone', 'Phone number'], [values.contractType, 'contractType', 'Contract type'], [values.educationLevel, 'educationLevel', 'Education level'],
        [values.currentAddress, 'currentAddress', 'Current address'], [values.organization, 'organization', 'Company'], [values.jobTitle, 'jobTitle', 'Job title']]
@@ -48,12 +49,12 @@ export function validateFormValues(values: IncompleteMentorFormValues, mentorTyp
     if (value.trim().length > LIMITS[key]) return `${label} may contain at most ${LIMITS[key]} characters.`;
   }
   const loginEmail = values.email.trim();
-  if (loginEmail && !EMAIL_PATTERN.test(loginEmail)) return 'Login email must be a valid email address.';
+  if (loginEmail && !EMAIL_PATTERN.test(loginEmail)) return i18n.t('utils:incompleteMentorForm.loginEmailMustBeAValid');
   const fpt = values.fptEmail.trim();
-  if (mentorType === 'Enterprise' && fpt && !EMAIL_PATTERN.test(fpt)) return 'Fpt Email must be a valid email address when provided.';
+  if (mentorType === 'Enterprise' && fpt && !EMAIL_PATTERN.test(fpt)) return i18n.t('utils:incompleteMentorForm.fptEmailMustBeAValid');
   if (mentorType === 'Enterprise' && values.dateOfBirth) {
     const born = new Date(`${values.dateOfBirth}T00:00:00`);
-    if (Number.isNaN(born.getTime()) || born > new Date() || born.getFullYear() < 1900) return 'Date of birth is outside the allowed range.';
+    if (Number.isNaN(born.getTime()) || born > new Date() || born.getFullYear() < 1900) return i18n.t('utils:incompleteMentorForm.dateOfBirthIsOutsideThe');
   }
   return null;
 }

@@ -22,7 +22,7 @@ export default function StudentPreviousScoresDialog({ classId, studentId, fullNa
       if (!response.success) throw new Error(response.message || 'Unable to load previous scores.');
       setData(response.data);
     }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) setError(parseApiError(reason, 'Unable to load previous scores.').message);
+      if (!controller.signal.aborted) setError(parseApiError(reason, t('studentPreviousScoresDialog.unableToLoadPreviousScores')).message);
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [classId, studentId, retry]);

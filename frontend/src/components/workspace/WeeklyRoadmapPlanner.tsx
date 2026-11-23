@@ -103,7 +103,7 @@ const SectionEmpty = ({ label }) => {
     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
       <ClipboardList className="w-5 h-5 text-slate-400" />
     </div>
-    <p className="text-sm text-slate-400 font-medium">No {label} for this week</p>
+    <p className="text-sm text-slate-400 font-medium">{tr('weeklyRoadmapPlanner.noForThisWeek', { label })}</p>
   </div>
 );
                      };
@@ -759,7 +759,7 @@ export default function WeeklyRoadmapPlanner({
 
   // ─── Error ─────────────────────────────────────────────────
   if (error) {
-    return <ErrorState message={parseApiError(error, 'Unable to load the weekly roadmap.').message} onRetry={() => void refetch()} />;
+    return <ErrorState message={parseApiError(error, tr('weeklyRoadmapPlanner.unableToLoadTheWeeklyRoadmap')).message} onRetry={() => void refetch()} />;
   }
 
   // ─── Main render ───────────────────────────────────────────

@@ -25,13 +25,15 @@
     "viewMoreReplies_one": "View {{count}} more reply",
     "viewMoreReplies_other": "View {{count}} more replies",
     "itsRepliesWillBeRemoved_one": "Its {{count}} reply will be removed with it.",
-    "itsRepliesWillBeRemoved_other": "Its {{count}} replies will be removed with it."
+    "itsRepliesWillBeRemoved_other": "Its {{count}} replies will be removed with it.",
+    "failedToLoadComments": "Failed to load comments."
   },
   "showcaseFeaturedToggle": {
     "featuredSelectionRemoved": "Featured selection removed.",
     "projectMarkedAsFeatured": "Project marked as featured.",
     "thisProjectWillNoLongerAppear": "This project will no longer appear in the faculty-selected showcases. It will remain published.",
-    "thisPublishedProjectWillAppearIn": "This published project will appear in the faculty-selected showcases."
+    "thisPublishedProjectWillAppearIn": "This published project will appear in the faculty-selected showcases.",
+    "unableToUpdateTheFeaturedSelection": "Unable to update the featured selection. Try again."
   },
   "showcaseInsights": {
     "views": "Views",
@@ -44,7 +46,8 @@
     "details": "Details",
     "last14Days": "Last 14 days",
     "dailyEngagementOverTheLastFourteen": "Daily engagement over the last fourteen days",
-    "noEngagementInTheLast14": "No engagement in the last 14 days yet. Views, interest and comments will appear here."
+    "noEngagementInTheLast14": "No engagement in the last 14 days yet. Views, interest and comments will appear here.",
+    "failedToLoadShowcaseInsights": "Failed to load showcase insights."
   },
   "showcaseModerationActions": {
     "rejectThisPage": "Reject this page",
@@ -61,7 +64,8 @@
     "rejectPage": "Reject page",
     "showcaseRejected": "Showcase rejected.",
     "hidePage": "Hide page",
-    "showcaseHidden": "Showcase hidden."
+    "showcaseHidden": "Showcase hidden.",
+    "unableToSaveTheDecisionTry": "Unable to save the decision. Try again."
   },
   "showcaseProfileSummary": {
     "projectProfile": "Project Profile",
@@ -96,7 +100,8 @@
     "reportsAreReviewedByAuthorisedStaff": "Reports are reviewed by authorised staff. Your identity is not shown to the project team.",
     "note": "Note",
     "optional": "(optional)",
-    "addContextForTheReviewer": "Add context for the reviewer"
+    "addContextForTheReviewer": "Add context for the reviewer",
+    "couldNotSubmitTheReportTry": "Could not submit the report. Try again."
   },
   "showcaseReports": {
     "reportDismissed": "Report dismissed.",
@@ -139,7 +144,10 @@
     "viewReportedComment": "View reported comment",
     "viewReportedShowcase": "View reported showcase",
     "historySummary_one": "{{count}} {{status}} report in this history.",
-    "historySummary_other": "{{count}} {{status}} reports in this history."
+    "historySummary_other": "{{count}} {{status}} reports in this history.",
+    "couldNotResolveThisReportTry": "Could not resolve this report. Try again.",
+    "couldNotDeleteReportHistoryTry": "Could not delete report history. Try again.",
+    "failedToLoadReports": "Failed to load reports."
   },
   "showcaseReviewHistory": {
     "submittedForReview": "Submitted for review",
@@ -210,7 +218,8 @@
     "hintAdmin": "All published projects. Tick projects, then feature or unfeature them together.",
     "hintLecturer": "Published projects of your classes. Tick projects, then feature or unfeature them together.",
     "noLecturer": "No lecturer",
-    "featuredCount": "{{featured}}/{{total}} featured"
+    "featuredCount": "{{featured}}/{{total}} featured",
+    "pleaseTryAgain": "Please try again."
   },
   "projectMedia": {
     "videoPreview": "{{name}} video preview"
@@ -277,7 +286,8 @@
     "startsAsAPrivateDraft": "Starts as a private draft.",
     "openEditor": "Open editor",
     "createPage": "Create page",
-    "viewPublicPage": "View public page"
+    "viewPublicPage": "View public page",
+    "failedToLoadYourShowcasePages": "Failed to load your showcase pages."
   },
   "showcaseDetail": {
     "screenshots": "Screenshots",
@@ -296,7 +306,8 @@
     "links": "Links",
     "opensInANewTab": "(opens in a new tab)",
     "whatMakesItDifferent": "What makes it different",
-    "reviewThisPage": "Review this page"
+    "reviewThisPage": "Review this page",
+    "failedToLoadThisShowcasePage": "Failed to load this showcase page."
   },
   "showcaseEditor": {
     "loadingShowcaseEditor": "Loading showcase editor",
@@ -385,6 +396,7 @@
       "Published": "No pages are published yet.",
       "Hidden": "No pages are hidden.",
       "Draft": "No pages are in draft."
-    }
+    },
+    "failedToLoadShowcasePages": "Failed to load showcase pages."
   }
 }

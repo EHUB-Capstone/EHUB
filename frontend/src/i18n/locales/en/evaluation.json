@@ -118,7 +118,8 @@
     "noPublishedScoresAvailableForThe": "No published scores available for the previous semester.",
     "assessment": "Assessment",
     "personalScore": "Personal score",
-    "checkpoint": "Checkpoint {{checkpointNumber}}: "
+    "checkpoint": "Checkpoint {{checkpointNumber}}: ",
+    "unableToLoadPreviousScores": "Unable to load previous scores."
   },
   "evaluationGrading": {
     "checkpoint": "Checkpoint {{number}}: {{title}}",
@@ -258,7 +259,14 @@
       "LECTURER": "Review and manage grading for teams in the classes you teach.",
       "MENTOR": "Review written feedback for the teams you mentor.",
       "STUDENT": "Review your published personal scores and written feedback."
-    }
+    },
+    "unableToSaveAssessmentScore": "Unable to save assessment score.",
+    "unableToLoadSubmissionAnalytics": "Unable to load submission analytics.",
+    "unableToLoadTeamsForEvaluation": "Unable to load teams for evaluation and grading.",
+    "unableToLoadEvaluationAndGrading": "Unable to load evaluation and grading data.",
+    "unableToExportEvaluationReport": "Unable to export evaluation report.",
+    "unableToPublishEvaluation": "Unable to publish evaluation.",
+    "unableToHidePublishedScores": "Unable to hide published scores."
   },
   "rankings": {
     "teamRankings": "Team Rankings",
@@ -270,6 +278,7 @@
     "allAssignedClasses": "All assigned classes",
     "rankingCheckpoint": "Ranking checkpoint",
     "checkpointTotal": "Checkpoint total",
-    "loadingRankings": "Loading rankings…"
+    "loadingRankings": "Loading rankings…",
+    "unableToLoadRankings": "Unable to load rankings."
   }
 }

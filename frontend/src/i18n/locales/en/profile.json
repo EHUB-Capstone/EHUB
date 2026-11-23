@@ -51,7 +51,9 @@
     "reEnterNewPassword": "Re-enter new password",
     "hideConfirmPassword": "Hide confirm password",
     "showConfirmPassword": "Show confirm password",
-    "updatePassword": "Update Password"
+    "updatePassword": "Update Password",
+    "failedToUpdateProfile": "Failed to update profile",
+    "failedToChangePassword": "Failed to change password"
   },
   "feedbackPage": {
     "view": "View {{originalName}}",

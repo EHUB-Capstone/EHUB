@@ -92,7 +92,7 @@ export default function EditScheduleModal({
       toast.success(t('editScheduleModal.scheduleUpdatedSuccessfully'));
       await onUpdated();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update schedule').message);
+      toast.error(parseApiError(error, t('editScheduleModal.failedToUpdateSchedule')).message);
     } finally {
       setSubmitting(false);
     }

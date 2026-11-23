@@ -57,7 +57,7 @@ export default function ShowcaseModerationActions({ showcaseId, title, status, w
       return true;
     } catch (error) {
       // The page may have changed since the list was loaded; keep the dialog open so the note is not lost.
-      toast.error(parseApiError(error, 'Unable to save the decision. Try again.').message);
+      toast.error(parseApiError(error, t('showcaseModerationActions.unableToSaveTheDecisionTry')).message);
       return false;
     } finally {
       setBusy(null);

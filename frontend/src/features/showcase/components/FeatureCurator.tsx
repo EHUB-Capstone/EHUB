@@ -56,14 +56,14 @@ export default function FeatureCurator({ isAdmin, search, stage }: FeatureCurato
       toast.success(`${result.updated} ${result.updated === 1 ? 'project' : 'projects'} ${featured ? 'featured' : 'unfeatured'}.${skipped}`);
       setSelected(new Set());
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to update the featured selection. Try again.').message);
+      toast.error(parseApiError(error, t('showcaseFeaturedToggle.unableToUpdateTheFeaturedSelection')).message);
     } finally {
       setIsSaving(false);
     }
   };
 
   if (candidates.isPending) return <div className="space-y-3" role="status" aria-label={t('featureCurator.loadingProjectsToFeature')}>{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} variant="card" className="h-28" />)}</div>;
-  if (candidates.isError) return <ErrorState title={t('featureCurator.couldNotLoadProjects')} message={parseApiError(candidates.error, 'Please try again.').message} />;
+  if (candidates.isError) return <ErrorState title={t('featureCurator.couldNotLoadProjects')} message={parseApiError(candidates.error, t('featureCurator.pleaseTryAgain')).message} />;
 
   return <section aria-label={t('featureCurator.selectFeaturedProjects')} className="space-y-5">
     <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-dark-surface">

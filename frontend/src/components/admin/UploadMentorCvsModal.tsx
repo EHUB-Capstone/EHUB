@@ -51,7 +51,7 @@ export default function UploadMentorCvsModal({ onClose, onUploaded }: Props) {
       }
     } catch (cause) {
       if (!controller.signal.aborted && mounted.current)
-        setDirectoryError(parseApiError(cause, 'Could not load mentor profiles. Please try again.').message);
+        setDirectoryError(parseApiError(cause, t('uploadMentorCvsModal.couldNotLoadMentorProfilesPlease')).message);
     } finally {
       if (!controller.signal.aborted && mounted.current) setLoading(false);
     }
@@ -95,7 +95,7 @@ export default function UploadMentorCvsModal({ onClose, onUploaded }: Props) {
           setRows(current => current.map(item => item.id === row.id ? applyCvEmailMatch(item, response, mentors) : item));
         } catch (cause) {
           if (controller.signal.aborted || !mounted.current) break;
-          const message = parseApiError(cause, 'Could not read the CV email. Try again or select the mentor manually.').message;
+          const message = parseApiError(cause, t('uploadMentorCvsModal.couldNotReadTheCvEmail')).message;
           setRows(current => current.map(item => item.id === row.id ? failCvEmailRead(item, message) : item));
         }
       }
@@ -150,7 +150,7 @@ export default function UploadMentorCvsModal({ onClose, onUploaded }: Props) {
         } catch (cause) {
           if (controller.signal.aborted || !mounted.current) break;
           failed++;
-          const message = parseApiError(cause, 'Upload could not be confirmed. Check the current CV before trying again.').message;
+          const message = parseApiError(cause, t('uploadMentorCvsModal.uploadCouldNotBeConfirmedCheck')).message;
           setRows(current => current.map(item => item.id === row.id ? { ...item, status: 'error', error: message } : item));
         }
       }

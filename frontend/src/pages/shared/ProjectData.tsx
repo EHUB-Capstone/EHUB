@@ -91,7 +91,7 @@ export default function ProjectData() {
             }
           : current);
       } catch (error) {
-        const parsed = parseApiError(error, 'Unable to update achievements.');
+        const parsed = parseApiError(error, t('projectData.unableToUpdateAchievements'));
         const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
         setSaveError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
         toast.error(isConflict ? t('projectData.projectDataIsOutOfDate') : parsed.message);
@@ -111,7 +111,7 @@ export default function ProjectData() {
           ? { ...current, startupIndustries: result.startupIndustries, rowVersion: result.rowVersion }
           : current);
       } catch (error) {
-        const parsed = parseApiError(error, 'Unable to update startup industries.');
+        const parsed = parseApiError(error, t('projectData.unableToUpdateStartupIndustries'));
         const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
         setIndustryError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
         failureToast('the startup industries were', isConflict, parsed.message);
@@ -130,7 +130,7 @@ export default function ProjectData() {
           ? { ...current, competitions: result.competitions, rowVersion: result.rowVersion }
           : current);
       } catch (error) {
-        const parsed = parseApiError(error, 'Unable to update competitions.');
+        const parsed = parseApiError(error, t('projectData.unableToUpdateCompetitions'));
         const isConflict = parsed.code === CONCURRENCY_CONFLICT_CODE;
         setCompetitionError({ isConflict, message: isConflict ? conflictMessage : parsed.message });
         failureToast('the competitions were', isConflict, parsed.message);
@@ -148,7 +148,7 @@ export default function ProjectData() {
       downloadBlob(blob, `project-data-${fileDateStamp()}.xlsx`);
       toast.success(t('projectData.projectDataReportDownloaded'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to export the project data report.').message);
+      toast.error(parseApiError(error, t('projectData.failedToExportTheProjectData')).message);
     }
   }, [exportProjectData, query]);
 
@@ -183,7 +183,7 @@ export default function ProjectData() {
       return (
         <ErrorState
           title={t('projectData.projectDataCouldNotBeLoaded')}
-          message={parseApiError(list.error, 'Failed to load project data. Please try again.').message}
+          message={parseApiError(list.error, t('projectData.failedToLoadProjectDataPlease')).message}
           onRetry={() => { void list.refetch(); }}
         />
       );
@@ -309,7 +309,7 @@ export default function ProjectData() {
       )}
       {list.isError && page && (
         <p role="alert" className="mb-2 flex flex-wrap items-center gap-2 text-sm text-danger">
-          {parseApiError(list.error, 'Refreshing project data failed.').message}
+          {parseApiError(list.error, t('projectData.refreshingProjectDataFailed')).message}
           <button type="button" onClick={() => { void list.refetch(); }} className="font-semibold underline underline-offset-2">{t('projectAchievementHistory.retry')}</button>
         </p>
       )}

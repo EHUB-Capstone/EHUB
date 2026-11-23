@@ -1,4 +1,5 @@
 import type { InboxReason, ReviewDeskInboxItem } from '../types/reviewDesk';
+import i18n from '../i18n/index.ts';
 
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -8,9 +9,9 @@ const DAY = 24 * HOUR;
 
 /** Why a team is in "Needs a look today". Overdue first, then new versions, then deadlines coming up. */
 export const inboxReasonView: Record<InboxReason, { label: string; tone: Tone }> = {
-  Overdue: { label: 'Overdue', tone: 'danger' },
-  NewVersion: { label: 'New version', tone: 'info' },
-  DueSoon: { label: 'Due soon', tone: 'warning' },
+  Overdue: { get label() { return i18n.t('utils:reviewDesk.overdue'); }, tone: 'danger' },
+  NewVersion: { get label() { return i18n.t('utils:reviewDesk.newVersion'); }, tone: 'info' },
+  DueSoon: { get label() { return i18n.t('utils:reviewDesk.dueSoon'); }, tone: 'warning' },
 };
 
 /** Opens the team's workspace with the checkpoint's panel already open. */

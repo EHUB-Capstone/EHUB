@@ -218,7 +218,7 @@ export default function TeamFeedbackOverview({ teamId, onOpenCheckpoints }: Team
       setState({ status: 'ready', data: response.data });
     } catch (error: unknown) {
       if (controller.signal.aborted || (error as { code?: string })?.code === 'ERR_CANCELED') return;
-      setState({ status: 'error', message: parseApiError(error, 'Unable to load the feedback overview.').message });
+      setState({ status: 'error', message: parseApiError(error, t('teamFeedbackOverview.unableToLoadTheFeedbackOverview')).message });
     }
   }, [teamId]);
 

@@ -32,7 +32,7 @@ export default function TeamContinuityReportCard() {
       setSemesterId((current) => current || loaded[0]?.id || '');
       if (loaded.length === 0) setLoading(false);
     } catch (caught: unknown) {
-      setError(parseApiError(caught, 'Unable to load semesters.').message);
+      setError(parseApiError(caught, t('teamContinuityReportCard.unableToLoadSemesters')).message);
       setLoading(false);
     }
   }, []);
@@ -50,7 +50,7 @@ export default function TeamContinuityReportCard() {
       setReport(response.data ?? null);
     } catch (caught: unknown) {
       if ((caught as { code?: string })?.code === 'ERR_CANCELED') return;
-      setError(parseApiError(caught, 'Unable to load the team continuity report.').message);
+      setError(parseApiError(caught, t('teamContinuityReportCard.unableToLoadTheTeamContinuity')).message);
     } finally {
       setLoading(false);
     }

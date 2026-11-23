@@ -1,11 +1,12 @@
 import type { MentorImportCommitResult, MentorImportPreview } from '../types/mentorAdmin';
+import i18n from '../i18n/index.ts';
 
 export const MASTER_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 export function validateMentorWorkbook(file: { name: string; size: number }): string | null {
-  if (!file.name.toLowerCase().endsWith('.xlsx')) return 'Only .xlsx Excel files are accepted.';
-  if (file.size === 0) return 'The selected file is empty.';
-  if (file.size > MASTER_IMPORT_MAX_BYTES) return 'The file may not exceed 5 MB.';
+  if (!file.name.toLowerCase().endsWith('.xlsx')) return i18n.t('utils:mentorMasterImport.onlyXlsxExcelFilesAreAccepted');
+  if (file.size === 0) return i18n.t('utils:mentorMasterImport.theSelectedFileIsEmpty');
+  if (file.size > MASTER_IMPORT_MAX_BYTES) return i18n.t('utils:mentorMasterImport.theFileMayNotExceed5');
   return null;
 }
 
@@ -38,11 +39,11 @@ export function describeImportAction(preview: ImportCounts): { label: string; br
   ].filter(Boolean);
   const breakdown = parts.join(' · ');
 
-  if (total === 0) return { label: 'Nothing to import', breakdown };
-  if (created + completed === 0 && incomplete === 0) return { label: `Update ${plural(total, 'mentor')}`, breakdown };
-  if (updated === 0 && incomplete === 0) return { label: `Create ${plural(total, 'account')}`, breakdown };
-  if (created + completed + updated === 0) return { label: `Save ${plural(total, 'mentor')} as incomplete`, breakdown };
-  return { label: `Apply ${plural(total, 'change')}`, breakdown };
+  if (total === 0) return { label: i18n.t('utils:mentorMasterImport.nothingToImport'), breakdown };
+  if (created + completed === 0 && incomplete === 0) return { label: i18n.t('utils:mentorMasterImport.update', { v1: plural(total, 'mentor') }), breakdown };
+  if (updated === 0 && incomplete === 0) return { label: i18n.t('utils:mentorMasterImport.create', { v1: plural(total, 'account') }), breakdown };
+  if (created + completed + updated === 0) return { label: i18n.t('utils:mentorMasterImport.saveAsIncomplete', { v1: plural(total, 'mentor') }), breakdown };
+  return { label: i18n.t('utils:mentorMasterImport.apply', { v1: plural(total, 'change') }), breakdown };
 }
 
 export function describeMasterImportResult(result: MentorImportCommitResult): string {
@@ -54,13 +55,13 @@ export function describeMasterImportResult(result: MentorImportCommitResult): st
   const semesters = result.temporarySemestersConverted ?? 0;
   if (semesters > 0) parts.push(`${plural(semesters, 'semester entry', 'semester entries')} moved onto the account, no need to add the mentor again`);
   const hint = result.createdCount > 0 ? ' New accounts can use Forgot Password to set their first password.' : '';
-  return `Mentor import completed: ${parts.join(', ')}.${hint}`;
+  return i18n.t('utils:mentorMasterImport.mentorImportCompleted', { v1: parts.join(', '), hint });
 }
 
 /** What to show in the Email column of an import row: a neutral hint instead of an error when the file has no email. */
 export function emailCellText(email: string | null | undefined): { text: string; provided: boolean } {
   const value = email?.trim();
-  return value ? { text: value, provided: true } : { text: 'No email yet', provided: false };
+  return value ? { text: value, provided: true } : { text: i18n.t('utils:mentorMasterImport.noEmailYet'), provided: false };
 }
 
 /** Short summary of the missing columns for a table cell: the first few names and how many are hidden. */

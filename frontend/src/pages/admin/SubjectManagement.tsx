@@ -216,7 +216,7 @@ const SubjectManagement = () => {
       hasLoadedSubjects.current = true;
     } catch (error) {
       if (requestId !== subjectsRequestId.current) return;
-      toast.error(parseApiError(error, 'Failed to load subjects').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToLoadSubjects')).message);
     } finally {
       if (requestId === subjectsRequestId.current) {
         setSubjectsLoading(false);
@@ -256,7 +256,7 @@ const SubjectManagement = () => {
       setSemesterContextReady(true);
       return semester ?? null;
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to load the active semester').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToLoadTheActiveSemester')).message);
       return null;
     }
   };
@@ -274,7 +274,7 @@ const SubjectManagement = () => {
       setStaffSummary({ ...emptySummary, ...(payload.summary ?? {}) });
     } catch (error) {
       if (requestId !== staffRequestId.current) return;
-      toast.error(parseApiError(error, 'Failed to load teaching staff').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToLoadTeachingStaff')).message);
       setStaff([]);
       setStaffSummary(emptySummary);
     } finally {
@@ -344,7 +344,7 @@ const SubjectManagement = () => {
       setStaffModalOpen(false);
       await loadStaff();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update semester teaching staff').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToUpdateSemesterTeachingStaff')).message);
     } finally {
       setStaffSaving(false);
     }
@@ -379,7 +379,7 @@ const SubjectManagement = () => {
       setModalOpen(false);
       await loadSubjects();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save subject').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToSaveSubject')).message);
     } finally {
       setSavingSubject(false);
     }
@@ -394,7 +394,7 @@ const SubjectManagement = () => {
       setDisableTarget(null);
       await loadSubjects();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to disable subject').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToDisableSubject')).message);
     } finally {
       setDisabling(false);
     }
@@ -485,7 +485,7 @@ const SubjectManagement = () => {
       setSemesterScheduleOpen(false);
       await loadSemester();
     } catch (error) {
-      const parsedError = parseApiError(error, 'Failed to save semester schedule');
+      const parsedError = parseApiError(error, t('subjectManagement.failedToSaveSemesterSchedule'));
       setSemesterScheduleServerError({ code: parsedError.code, message: parsedError.message });
       if (!['SEMESTER_ALREADY_PLANNED', 'SEMESTER_DATE_OVERLAP', 'SEMESTER_DATE_INVALID'].includes(parsedError.code)) {
         toast.error(parsedError.message);
@@ -506,7 +506,7 @@ const SubjectManagement = () => {
       toast.success(t('subjectManagement.activeSemesterSetTo', { v1: semesterLabel(nextSemester) }));
       await loadSemester();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to activate semester').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToActivateSemester')).message);
     } finally {
       setSavingSemester(false);
     }
@@ -518,7 +518,7 @@ const SubjectManagement = () => {
       const preview = responseData(await subjectApi.getSemesterCompletionPreview(semester.id));
       setSemesterLifecycleTarget({ semester, action: 'complete', preview });
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to preview semester completion').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToPreviewSemesterCompletion')).message);
     } finally {
       setSemesterLifecycleBusy(false);
     }
@@ -541,7 +541,7 @@ const SubjectManagement = () => {
       setSemesterTransitionReason('');
       await loadSemester();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to transition semesters').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToTransitionSemesters')).message);
     } finally {
       setSavingSemester(false);
     }
@@ -567,7 +567,7 @@ const SubjectManagement = () => {
       setSemesterLifecycleReason('');
       await loadSemester();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to change semester lifecycle').message);
+      toast.error(parseApiError(error, t('subjectManagement.failedToChangeSemesterLifecycle')).message);
     } finally {
       setSemesterLifecycleBusy(false);
     }

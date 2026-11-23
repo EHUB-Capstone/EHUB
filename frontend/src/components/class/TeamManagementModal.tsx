@@ -169,7 +169,7 @@ export default function TeamManagementModal({
       onSave(savedTeam);
       toast.success(t('teamManagementModal.teamMembersUpdatedSuccessfully'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update team.').message);
+      toast.error(parseApiError(error, t('teamManagementModal.failedToUpdateTeam')).message);
     } finally {
       setSubmitting(false);
     }

@@ -45,7 +45,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
         setTitle(value.title || '');
         setSummary(value.summary || '');
       } catch (error) {
-        const parsed = parseApiError(error, 'Failed to load project direction.');
+        const parsed = parseApiError(error, t('projectDirectionModal.failedToLoadProjectDirection'));
         if (parsed.code !== 'PROJECT_DIRECTION_NOT_FOUND') toast.error(parsed.message);
       } finally {
         if (active) setLoading(false);
@@ -67,7 +67,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       setDirection(value);
       toast.success(t('projectDirectionModal.projectDirectionSavedAsDraft'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save project direction.').message);
+      toast.error(parseApiError(error, t('projectDirectionModal.failedToSaveProjectDirection')).message);
     } finally {
       setSubmitting(false);
     }
@@ -81,7 +81,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       setDirection(unwrapApiData(response));
       toast.success(t('projectDirectionModal.projectDirectionSubmittedToTheAssigned'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to submit project direction.').message);
+      toast.error(parseApiError(error, t('projectDirectionModal.failedToSubmitProjectDirection')).message);
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +103,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
       setComment('');
       toast.success(decision === 'Approved' ? t('projectDirectionModal.projectDirectionApproved') : t('projectDirectionModal.changesRequested'));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to review project direction.').message);
+      toast.error(parseApiError(error, t('projectDirectionModal.failedToReviewProjectDirection')).message);
     } finally {
       setSubmitting(false);
     }

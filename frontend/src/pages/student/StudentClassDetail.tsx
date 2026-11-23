@@ -229,7 +229,7 @@ export default function StudentClassDetail() {
       await fetchClassDetail();
       return true;
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update your major.').message);
+      toast.error(parseApiError(error, t('studentClassDetail.failedToUpdateYourMajor')).message);
       return false;
     } finally {
       setUpdatingMajor(false);
@@ -262,7 +262,7 @@ export default function StudentClassDetail() {
       setCancellationReason('');
       await fetchClassDetail();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to cancel team proposal.').message);
+      toast.error(parseApiError(error, t('studentClassDetail.failedToCancelTeamProposal')).message);
     } finally {
       setCancellingProposal(false);
     }

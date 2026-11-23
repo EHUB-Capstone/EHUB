@@ -155,7 +155,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
       setEndReason('');
       await refreshAfterChange();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to end mentor assignment').message);
+      toast.error(parseApiError(error, t('assignMentorsModal.failedToEndMentorAssignment')).message);
     } finally {
       if (mounted.current) setEnding(false);
     }
@@ -207,7 +207,7 @@ export default function AssignMentorsModal({ classId, onClose, onAssigned }: Ass
       await refreshAfterChange();
     } catch (error) {
       // The ticks stay so the admin can read the reason and try again.
-      const message = parseApiError(error, 'Failed to assign the mentor').message;
+      const message = parseApiError(error, t('assignMentorsModal.failedToAssignTheMentor')).message;
       if (mounted.current) setBulkResult({ tone: 'error', message });
       toast.error(message);
     } finally {

@@ -98,7 +98,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (requestError: unknown) {
-      toast.error(parseApiError(requestError, 'Failed to download mentor template').message);
+      toast.error(parseApiError(requestError, t('importMentorsModal.failedToDownloadMentorTemplate')).message);
     } finally {
       setDownloading(false);
     }
@@ -122,7 +122,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       setPreview(response.data);
       setPhase('review');
     } catch (requestError: unknown) {
-      setError(parseApiError(requestError, 'The mentor file could not be analyzed.').message);
+      setError(parseApiError(requestError, t('importMentorsModal.theMentorFileCouldNotBe')).message);
     } finally {
       setAnalyzing(false);
     }
@@ -138,7 +138,7 @@ export default function ImportMentorsModal({ onClose, onImported }: ImportMentor
       onImported();
       toast.success(describeMasterImportResult(response.data));
     } catch (requestError: unknown) {
-      toast.error(parseApiError(requestError, 'Failed to import mentors.').message);
+      toast.error(parseApiError(requestError, t('importMentorsModal.failedToImportMentors')).message);
     } finally {
       setImporting(false);
     }

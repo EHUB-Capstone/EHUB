@@ -232,7 +232,7 @@ export default function ClassDetail() {
         setStudents(mapRosterStudents(rawStudents, currentClassId, teamProposalsRef.current));
       } catch (error) {
         if (!controller.signal.aborted) {
-          setRosterLoadError(parseApiError(error, 'Failed to load the class roster.').message);
+          setRosterLoadError(parseApiError(error, tr('classDetail.failedToLoadTheClassRoster')).message);
         }
       } finally {
         // A superseded request must not clear the indicator of the one that replaced it.
@@ -300,7 +300,7 @@ export default function ClassDetail() {
       } else if (rawClass.students) {
         rawStudents = rawClass.students;
       } else {
-        setRosterLoadError(parseApiError(studentRes.reason, 'Failed to load the class roster.').message);
+        setRosterLoadError(parseApiError(studentRes.reason, tr('classDetail.failedToLoadTheClassRoster')).message);
       }
 
       let rawTeams = [];
@@ -430,7 +430,7 @@ export default function ClassDetail() {
       const directoryCandidates = records.map(directoryRecordToStudent).filter(Boolean);
       setAssignmentCandidates(mergeAssignmentCandidates(classCandidates, directoryCandidates));
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to load the student directory.').message);
+      toast.error(parseApiError(error, tr('classDetail.unableToLoadTheStudentDirectory')).message);
     } finally {
       setAssignmentCandidatesLoading(false);
     }
@@ -456,7 +456,7 @@ export default function ClassDetail() {
       setTeamToDelete(null);
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to delete the team.').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToDeleteTheTeam')).message);
     } finally {
       setDeletingTeam(false);
     }
@@ -472,7 +472,7 @@ export default function ClassDetail() {
       );
       await fetchData();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to repair chat memberships').message);
+      toast.error(parseApiError(e, tr('classDetail.failedToRepairChatMemberships')).message);
     } finally {
       setBackfilling(false);
     }
@@ -487,7 +487,7 @@ export default function ClassDetail() {
       setCls(prev => ({ ...prev, isMajorLocked: res.data.isLocked }));
       toast.success(res.message || tr('classDetail.majorUpdateLockStatusChangedSuccessfully'));
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change the major update lock status.').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeTheMajorUpdate')).message);
     } finally {
       setTogglingLock(false);
     }
@@ -506,7 +506,7 @@ export default function ClassDetail() {
       toast.success(tr('classDetail.synchronizedRegisteredMajors', { count: result.synchronizedCount ?? 0 }));
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to synchronize registered majors.').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToSynchronizeRegisteredMajors')).message);
     } finally {
       setSynchronizingMajors(false);
     }
@@ -532,7 +532,7 @@ export default function ClassDetail() {
       window.URL.revokeObjectURL(url);
       toast.success(tr('classDetail.exportSuccessful'));
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to export students').message);
+      toast.error(parseApiError(e, tr('classDetail.failedToExportStudents')).message);
     } finally {
       setExporting(false);
     }
@@ -550,7 +550,7 @@ export default function ClassDetail() {
       setStudentToDelete(null);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to drop enrollment').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToDropEnrollment')).message);
     } finally {
       setRemovingStudent(false);
     }
@@ -571,7 +571,7 @@ export default function ClassDetail() {
       setRosterPage(1);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to remove all students from the class.').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToRemoveAllStudentsFrom')).message);
     } finally {
       setDroppingAllStudents(false);
     }
@@ -592,7 +592,7 @@ export default function ClassDetail() {
         navigate(targetRoute);
       }
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change class lifecycle').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeClassLifecycle')).message);
     } finally {
       setDeletingClass(false);
       setShowDeleteClass(false);
@@ -612,7 +612,7 @@ export default function ClassDetail() {
       setCompletionPreview(unwrapApiData(response));
       setShowCompletion(true);
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to preview class completion').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToPreviewClassCompletion')).message);
     } finally {
       setCompletionLoading(false);
     }
@@ -640,7 +640,7 @@ export default function ClassDetail() {
       setCompletionPreview(null);
       await fetchData();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change class completion status').message);
+      toast.error(parseApiError(err, tr('classDetail.failedToChangeClassCompletionStatus')).message);
     } finally {
       setCompletionLoading(false);
     }
@@ -721,7 +721,7 @@ export default function ClassDetail() {
       setStudentToReEnroll(null);
       await fetchData();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to re-enroll student').message);
+      toast.error(parseApiError(error, tr('classDetail.failedToReEnrollStudent')).message);
     } finally {
       setReEnrollingStudent(false);
     }

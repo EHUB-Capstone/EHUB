@@ -1,4 +1,5 @@
 import type { MentorProfile, MentorProfileStatus, UpdateMentorProfilePayload } from '../types/mentorProfile';
+import i18n from '../i18n/index.ts';
 
 /** Same limits as the server, so most mistakes are shown before the request is sent. */
 export const MENTOR_PROFILE_LIMITS = {
@@ -18,9 +19,9 @@ export const MENTOR_PROFILE_LIMITS = {
 } as const;
 
 export const MENTOR_PROFILE_STATUSES: ReadonlyArray<{ value: MentorProfileStatus; label: string; hint: string }> = [
-  { value: 'Active', label: 'Active', hint: 'Can be assigned to teams.' },
-  { value: 'Inactive', label: 'Inactive', hint: 'Not used for new assignments. Existing assignments stay.' },
-  { value: 'Unavailable', label: 'Unavailable', hint: 'Temporarily cannot take teams. Existing assignments stay.' },
+  { value: 'Active', get label() { return i18n.t('utils:mentorProfileForm.active'); }, get hint() { return i18n.t('utils:mentorProfileForm.canBeAssignedToTeams'); } },
+  { value: 'Inactive', get label() { return i18n.t('utils:mentorProfileForm.inactive'); }, get hint() { return i18n.t('utils:mentorProfileForm.notUsedForNewAssignmentsExisting'); } },
+  { value: 'Unavailable', get label() { return i18n.t('utils:mentorProfileForm.unavailable'); }, get hint() { return i18n.t('utils:mentorProfileForm.temporarilyCannotTakeTeamsExistingAssignments'); } },
 ];
 
 export interface MentorProfileFormValues {
@@ -119,14 +120,14 @@ export function validateMentorProfileForm(values: MentorProfileFormValues, today
   tooLong('currentAddress', 'Address');
 
   const linkedIn = values.linkedInUrl.trim();
-  if (linkedIn && (linkedIn.length > MENTOR_PROFILE_LIMITS.linkedInUrl || !isHttpUrl(linkedIn))) errors.linkedInUrl = 'LinkedIn URL must be a valid http or https address.';
+  if (linkedIn && (linkedIn.length > MENTOR_PROFILE_LIMITS.linkedInUrl || !isHttpUrl(linkedIn))) errors.linkedInUrl = i18n.t('utils:mentorProfileForm.linkedinUrlMustBeAValid');
 
   const fptEmail = values.fptEmail.trim();
-  if (fptEmail && (fptEmail.length > MENTOR_PROFILE_LIMITS.fptEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fptEmail))) errors.fptEmail = 'FPT email must be a valid email address.';
+  if (fptEmail && (fptEmail.length > MENTOR_PROFILE_LIMITS.fptEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fptEmail))) errors.fptEmail = i18n.t('utils:mentorProfileForm.fptEmailMustBeAValid');
 
   if (values.dateOfBirth) {
     const date = new Date(`${values.dateOfBirth}T00:00:00`);
-    if (Number.isNaN(date.getTime()) || date.getFullYear() < 1900 || date > today) errors.dateOfBirth = 'Date of birth is outside the allowed range.';
+    if (Number.isNaN(date.getTime()) || date.getFullYear() < 1900 || date > today) errors.dateOfBirth = i18n.t('utils:incompleteMentorForm.dateOfBirthIsOutsideThe');
   }
   return errors;
 }

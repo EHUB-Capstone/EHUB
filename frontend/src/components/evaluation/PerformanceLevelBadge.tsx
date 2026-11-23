@@ -125,7 +125,7 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
     <div className="flex-1 min-w-0">
       <p className="font-semibold text-slate-900 text-sm">{criterionName}</p>
       <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-caption font-bold text-slate-600 mt-1">
-        Weight: {weight}%
+        {t('evaluationHistoryPage.weight', { weight })}
       </span>
     </div>
 
@@ -138,7 +138,7 @@ export const MentorRubricRow = ({ criterionName, weight, level, label, comment }
     {comment && (
       <div className="flex-1 min-w-0">
         <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">
-          Comment
+          {t('performanceLevelBadge.comment')}
         </p>
         <p className="text-sm text-slate-700 whitespace-pre-wrap">{comment}</p>
       </div>

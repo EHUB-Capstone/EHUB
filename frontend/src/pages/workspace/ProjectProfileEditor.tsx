@@ -119,7 +119,7 @@ export default function ProjectProfileEditor() {
       setIndustryIds(null);
       setIndustryError('');
     } catch (error) {
-      setLoadError(parseApiError(error, 'Unable to load the project profile.').message);
+      setLoadError(parseApiError(error, t('projectProfileEditor.unableToLoadTheProjectProfile')).message);
     } finally {
       setLoading(false);
     }
@@ -147,7 +147,7 @@ export default function ProjectProfileEditor() {
       .catch((error) => {
         if (controller.signal.aborted) return;
         setIndustries([]);
-        setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+        setIndustriesError(parseApiError(error, t('createProjectWorkspaceForm.failedToLoadStartupIndustries')).message);
       })
       .finally(() => {
         if (!controller.signal.aborted) setIndustriesLoading(false);
@@ -248,7 +248,7 @@ export default function ProjectProfileEditor() {
       setIndustryIds(null);
       toast.success(t('projectProfileEditor.projectProfileUpdatedSuccessfully'));
     } catch (error) {
-      toast.error(parseApiError(error, 'The server did not save all project profile fields. Please retry after the API is updated.').message);
+      toast.error(parseApiError(error, t('projectProfileEditor.theServerDidNotSaveAll')).message);
     } finally {
       setSaving(false);
     }

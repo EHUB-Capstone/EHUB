@@ -59,7 +59,7 @@ export default function IncompleteMentorEditModal({ mentor, onClose, onSaved }: 
       onSaved();
     } catch (requestError: unknown) {
       // The form stays open with every value kept so the admin can fix it and try again.
-      setError(parseApiError(requestError, 'Failed to update the mentor').message);
+      setError(parseApiError(requestError, t('incompleteMentorEditModal.failedToUpdateTheMentor')).message);
     } finally {
       setSaving(false);
     }

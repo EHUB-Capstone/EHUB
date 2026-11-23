@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 export const CHECKPOINT_LINK_NAME_MAX_LENGTH = 100;
 export const CHECKPOINT_LINK_URL_MAX_LENGTH = 1_000;
 
@@ -14,20 +15,20 @@ export function normalizeCheckpointLinkUrl(value: string): string {
 
 export function validateCheckpointLinkUrl(value: string): string | null {
   const candidate = value.trim();
-  if (!candidate) return 'Link URL is required.';
-  if (candidate.length > CHECKPOINT_LINK_URL_MAX_LENGTH) return `Link URL must not exceed ${CHECKPOINT_LINK_URL_MAX_LENGTH} characters.`;
+  if (!candidate) return i18n.t('utils:checkpointLink.linkUrlIsRequired');
+  if (candidate.length > CHECKPOINT_LINK_URL_MAX_LENGTH) return i18n.t('utils:checkpointLink.linkUrlMustNotExceedCharacters', { CHECKPOINT_LINK_URL_MAX_LENGTH });
   try {
     const parsed = new URL(normalizeCheckpointLinkUrl(candidate));
-    if (parsed.protocol !== 'https:') return 'Only public HTTPS links are accepted.';
-    if (parsed.username || parsed.password) return 'Links containing embedded credentials are not accepted.';
+    if (parsed.protocol !== 'https:') return i18n.t('utils:checkpointLink.onlyPublicHttpsLinksAreAccepted');
+    if (parsed.username || parsed.password) return i18n.t('utils:checkpointLink.linksContainingEmbeddedCredentialsAreNot');
     const host = parsed.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
     if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') ||
       host.endsWith('.internal') || host.endsWith('.lan') || (!host.includes('.') && !host.includes(':')) || isPrivateIp(host)) {
-      return 'Only public HTTPS links are accepted.';
+      return i18n.t('utils:checkpointLink.onlyPublicHttpsLinksAreAccepted');
     }
     return null;
   } catch {
-    return 'Enter a valid public HTTPS link.';
+    return i18n.t('utils:checkpointLink.enterAValidPublicHttpsLink');
   }
 }
 

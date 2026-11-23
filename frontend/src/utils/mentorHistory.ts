@@ -1,4 +1,5 @@
 import type { MentorHistoryItem } from '../types/teamManagement';
+import i18n from '../i18n/index.ts';
 
 export interface MentorHistoryGroup {
   semester: string;
@@ -25,6 +26,6 @@ export function describeMentorHistoryEnd(item: Pick<MentorHistoryItem, 'endedBec
   const when = dateText(item.endedAtUtc);
   const suffix = when ? ` on ${when}` : '';
   return item.endedBecause === 'ClassCompleted'
-    ? `Finished with the class${suffix}`
-    : `Assignment ended early${suffix}`;
+    ? i18n.t('utils:mentorHistory.finishedWithTheClass', { suffix })
+    : i18n.t('utils:mentorHistory.assignmentEndedEarly', { suffix });
 }

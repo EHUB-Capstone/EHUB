@@ -1,3 +1,4 @@
+import i18n from '../i18n/index.ts';
 /**
  * Field limits of the Project Profile. The Project Showcase page reads these same fields, so there is one set of
  * names and limits. Keep in sync with the backend validators (ProjectWorkspaceHandler, ProjectDirectionHandler,
@@ -11,7 +12,7 @@ export const PROJECT_DESCRIPTION_MAX_LENGTH = 300;
 /** One name per field, used by the Project Profile page and by the Project Showcase page that reads it. */
 export const PROJECT_PROFILE_LABELS = {
   projectName: 'Project name',
-  description: 'Description',
+  get description() { return i18n.t('utils:projectProfile.description'); },
   problem: 'Problem',
   solution: 'Solution',
   targetUsers: 'Target users',

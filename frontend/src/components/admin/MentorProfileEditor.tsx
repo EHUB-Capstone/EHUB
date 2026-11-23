@@ -42,7 +42,7 @@ export default function MentorProfileEditor({ profile, onClose, onSaved }: Props
       if (!controller.signal.aborted) onSaved(result);
     } catch (cause) {
       if (!controller.signal.aborted) {
-        const parsed = parseApiError(cause, 'Could not save mentor profile.');
+        const parsed = parseApiError(cause, t('mentorProfileEditor.couldNotSaveMentorProfile'));
         setError(Object.values(parsed.fieldErrors).join(' ') || parsed.message);
       }
     }

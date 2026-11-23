@@ -44,7 +44,7 @@ export default function MentoringSessionsPage() {
       setTeams(list.map(normalizeManagedTeam).filter(item => (item.currentMentorAssignments?.length || 0) > 0 && item.status === 'Active')
         .map(item => ({ id: item._id, teamName: item.teamName, teamCode: item.teamCode ?? '',
           assignments: (item.currentMentorAssignments ?? []).filter(a => user?.role !== 'MENTOR' || a.mentor.userId === user.id) })));
-    } catch (cause) { setError(parseApiError(cause, 'Could not load mentoring sessions').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotLoadMentoringSessions')).message); }
     finally { setLoading(false); }
   }, [teamId, user?.role, user?.id]);
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
@@ -63,7 +63,7 @@ export default function MentoringSessionsPage() {
       else await mentorSupportApi.createSession(payload);
       setForm(emptyForm); setEditingId(null); setNotice(editingId ? t('mentoringSessionsPage.sessionUpdated') : t('mentoringSessionsPage.sessionScheduled'));
       await load();
-    } catch (cause) { setError(parseApiError(cause, 'Could not save session').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotSaveSession')).message); }
     finally { setSaving(false); }
   };
 
@@ -75,7 +75,7 @@ export default function MentoringSessionsPage() {
       if (action === 'cancel') await mentorSupportApi.cancelSession(session.id);
       else await mentorSupportApi.completeSession(session.id, notes[session.id]);
       setNotice(action === 'cancel' ? t('mentoringSessionsPage.sessionCancelled') : t('mentoringSessionsPage.sessionCompleted')); await load();
-    } catch (cause) { setError(parseApiError(cause, 'Could not update session').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotUpdateSession')).message); }
     finally { setSaving(false); }
   };
 
@@ -84,7 +84,7 @@ export default function MentoringSessionsPage() {
     if (!content) return;
     setSaving(true); setError('');
     try { await mentorSupportApi.addActionItem(session.id, content); setActionText(current => ({ ...current, [session.id]: '' })); await load(); }
-    catch (cause) { setError(parseApiError(cause, 'Could not add action item').message); }
+    catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotAddActionItem')).message); }
     finally { setSaving(false); }
   };
 
@@ -93,14 +93,14 @@ export default function MentoringSessionsPage() {
     if (!comment) { setError(t('mentoringSessionsPage.addACommentWithYourRating')); return; }
     setSaving(true); setError(''); setNotice('');
     try { await mentorSupportApi.saveFeedback(session.id, feedbackRating[session.id] ?? 5, comment); setNotice(t('mentoringSessionsPage.feedbackSaved')); }
-    catch (cause) { setError(parseApiError(cause, 'Could not save feedback').message); }
+    catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotSaveFeedback')).message); }
     finally { setSaving(false); }
   };
 
   const viewFeedback = async (session: MentoringSession) => {
     try { const feedback = await mentorSupportApi.getFeedback(session.id);
       setFeedbackBySession(current => ({ ...current, [session.id]: feedback })); }
-    catch (cause) { setError(parseApiError(cause, 'Could not load feedback').message); }
+    catch (cause) { setError(parseApiError(cause, t('mentoringSessionsPage.couldNotLoadFeedback')).message); }
   };
 
   const edit = (session: MentoringSession) => {

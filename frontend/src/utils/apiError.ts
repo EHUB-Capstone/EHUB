@@ -1,4 +1,5 @@
 import type { ApiResponse } from '../types/auth';
+import { localizeApiMessage } from '../i18n/messages.ts';
 
 export interface ParsedApiError {
   code: string;
@@ -17,11 +18,13 @@ export function parseApiError(error: unknown, fallbackMessage: string): ParsedAp
     return result;
   }, {});
 
+  const code = response?.code
+    ?? (response as { errorCode?: string | null } | undefined)?.errorCode
+    ?? '';
+
   return {
-    code: response?.code
-      ?? (response as { errorCode?: string | null } | undefined)?.errorCode
-      ?? '',
-    message: response?.message || fallbackMessage,
+    code,
+    message: localizeApiMessage(code, response?.message, fallbackMessage),
     fieldErrors,
   };
 }

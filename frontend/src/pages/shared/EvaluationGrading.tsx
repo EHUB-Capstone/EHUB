@@ -317,7 +317,7 @@ function CourseAssessmentDialog({
       toast.success(t('evaluationGrading.scoreSaved', { name: assessment.name }));
       onSaved();
     } catch (error: unknown) {
-      toast.error(parseApiError(error, 'Unable to save assessment score.').message);
+      toast.error(parseApiError(error, t('evaluationGrading.unableToSaveAssessmentScore')).message);
     } finally {
       setSaving(false);
     }
@@ -421,7 +421,7 @@ export default function EvaluationGrading() {
       if (!response.success) throw new Error(response.message || 'Unable to load submission analytics.');
       setSubmissionAnalytics(response.data);
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted) setSubmissionError(parseApiError(error, 'Unable to load submission analytics.').message);
+      if (!controller.signal.aborted) setSubmissionError(parseApiError(error, t('evaluationGrading.unableToLoadSubmissionAnalytics')).message);
     }).finally(() => {
       if (!controller.signal.aborted) setLoadingSubmissions(false);
     });
@@ -467,7 +467,7 @@ export default function EvaluationGrading() {
       setTeams(Array.isArray(response.data) ? response.data : []);
     } catch (error: unknown) {
       setTeams([]);
-      setErrorMessage(parseApiError(error, 'Unable to load teams for evaluation and grading.').message);
+      setErrorMessage(parseApiError(error, t('evaluationGrading.unableToLoadTeamsForEvaluation')).message);
     } finally {
       setLoadingTeams(false);
     }
@@ -545,7 +545,7 @@ export default function EvaluationGrading() {
       setPartialFailureCount(0);
     } catch (error: unknown) {
       if (requestId !== recordsRequestId.current) return;
-      setErrorMessage(parseApiError(error, 'Unable to load evaluation and grading data.').message);
+      setErrorMessage(parseApiError(error, t('evaluationGrading.unableToLoadEvaluationAndGrading')).message);
     } finally {
       if (requestId === recordsRequestId.current) setLoadingRecords(false);
     }
@@ -672,7 +672,7 @@ export default function EvaluationGrading() {
       window.URL.revokeObjectURL(url);
       toast.success(t('evaluationGrading.evaluationReportExportedSuccessfully'));
     } catch (error: unknown) {
-      toast.error(parseApiError(error, 'Unable to export evaluation report.').message);
+      toast.error(parseApiError(error, t('evaluationGrading.unableToExportEvaluationReport')).message);
     } finally {
       setExportingReport(false);
     }
@@ -706,8 +706,8 @@ export default function EvaluationGrading() {
       retry();
     } catch (error: unknown) {
       toast.error(parseApiError(error, action === 'publish'
-        ? 'Unable to publish evaluation.'
-        : 'Unable to hide published scores.').message);
+        ? t('evaluationGrading.unableToPublishEvaluation')
+        : t('evaluationGrading.unableToHidePublishedScores')).message);
     } finally {
       setPublishingEvaluationId(null);
       setBulkPublicationSubmitting(false);

@@ -13,7 +13,9 @@
     "youCannotViewSubmissionsOfThis": "Bạn không thể xem bài nộp của học kỳ này.",
     "loadingTeamHistory": "Đang tải lịch sử nhóm…",
     "noSemesterHistoryIsAvailableFor": "Chưa có lịch sử học kỳ nào của nhóm này.",
-    "teamHistoryBySemester": "Lịch sử nhóm theo học kỳ"
+    "teamHistoryBySemester": "Lịch sử nhóm theo học kỳ",
+    "unableToLoadSubmissions": "Không thể tải các bài nộp.",
+    "unableToLoadTheTeamHistory": "Không thể tải lịch sử nhóm."
   },
   "boardColumn": {
     "dropTaskHere": "Thả công việc vào đây"
@@ -161,7 +163,9 @@
     "saving": "Đang lưu…",
     "saveProfile": "Lưu hồ sơ",
     "approvedIndustries": "Đã duyệt: {{list}} · hãy chọn từ 1 đến 3.",
-    "none": "không có"
+    "none": "không có",
+    "unableToLoadTheProjectProfile": "Không thể tải hồ sơ dự án.",
+    "theServerDidNotSaveAll": "Máy chủ chưa lưu hết các trường hồ sơ dự án. Vui lòng thử lại sau khi API được cập nhật."
   },
   "proposalEditor": {
     "failedToFetchProposalDetails": "Không thể tải chi tiết đề xuất",
@@ -272,7 +276,8 @@
       "LECTURER": "Các nhóm thuộc lớp bạn giảng dạy",
       "MENTOR": "Các nhóm bạn cố vấn"
     },
-    "teamCount_other": "{{count}} nhóm"
+    "teamCount_other": "{{count}} nhóm",
+    "failedToLoadStartupWorkspacesOr": "Không thể tải các không gian khởi nghiệp hoặc học kỳ đang hoạt động."
   },
   "teamWorkspace": {
     "youHaveJoinedThisClassBut": "Bạn đã tham gia lớp này nhưng chưa được phân vào nhóm nào.",
@@ -342,7 +347,9 @@
     "thisLinkWillBeAvailableAnd": "Liên kết này sẽ khả dụng và có thể chỉnh sửa trong Hồ sơ dự án.",
     "startupIndustry": "Ngành khởi nghiệp",
     "creatingTheWorkspaceAlsoSubmitsThis": "Việc tạo không gian làm việc cũng sẽ gửi thông tin này tới giảng viên để xem xét.",
-    "createWorkspaceSubmit": "Tạo không gian làm việc & gửi"
+    "createWorkspaceSubmit": "Tạo không gian làm việc & gửi",
+    "failedToLoadStartupIndustries": "Không thể tải các ngành khởi nghiệp.",
+    "failedToCreateProjectWorkspace": "Không thể tạo không gian làm việc dự án."
   },
   "evaluationPanel": {
     "notSet": "Chưa đặt",
@@ -512,7 +519,11 @@
     "nowStatusReload": "Định hướng dự án hiện ở trạng thái {{status}}. Hãy tải lại trước khi gửi lại.",
     "nowStatusCannotEdit": "Định hướng dự án hiện ở trạng thái {{status}} và không thể chỉnh sửa.",
     "openProfileView": "Mở hồ sơ để xem chi tiết",
-    "openProfileViewOrUpdate": "Mở hồ sơ để xem chi tiết hoặc cập nhật"
+    "openProfileViewOrUpdate": "Mở hồ sơ để xem chi tiết hoặc cập nhật",
+    "unableToLoadProjectDirection": "Không thể tải định hướng dự án.",
+    "unableToSaveProjectDirection": "Không thể lưu định hướng dự án.",
+    "unableToSubmitProjectDirection": "Không thể gửi định hướng dự án.",
+    "unableToRefreshProjectDirectionBefore": "Không thể làm mới định hướng dự án trước khi chỉnh sửa."
   },
   "projectWorkspaceProfile": {
     "draft": "Bản nháp",
@@ -653,7 +664,8 @@
     "clearFilters": "Xóa bộ lọc",
     "noMatchingFeedback": "Không có phản hồi phù hợp",
     "tryADifferentCheckpointSourceOr": "Hãy thử checkpoint, nguồn hoặc từ khóa khác.",
-    "feedbackByCheckpoint": "Phản hồi theo checkpoint"
+    "feedbackByCheckpoint": "Phản hồi theo checkpoint",
+    "unableToLoadTheFeedbackOverview": "Không thể tải tổng quan phản hồi."
   },
   "workshopAttendanceManager": {
     "couldNotLoadClassList": "Không thể tải danh sách lớp.",
@@ -901,7 +913,8 @@
     "classRequirements": "Yêu cầu của lớp",
     "teamTasks": "Công việc nhóm",
     "editTask": "Chỉnh sửa công việc",
-    "newTask": "Công việc mới"
+    "newTask": "Công việc mới",
+    "unableToLoadTheWeeklyRoadmap": "Không thể tải lộ trình theo tuần."
   },
   "addShortcutModal": {
     "editShortcut": "Chỉnh sửa lối tắt",

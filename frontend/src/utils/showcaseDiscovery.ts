@@ -1,20 +1,21 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import type { GetShowcasesRequest, ShowcaseCardDto, ShowcaseDiscoveryPageDto, ShowcaseLaunchPeriod, ShowcaseStage, ShowcaseUpvoteDto } from '../types/showcase.ts';
+import i18n from '../i18n/index.ts';
 
 export const DISCOVERY_PAGE_SIZE = 8;
 export const SHOWCASE_LAUNCH_PERIODS: ReadonlyArray<{ value: ShowcaseLaunchPeriod; label: string }> = [
-  { value: 'topThisWeek', label: 'Top launches this week' },
-  { value: 'thisWeek', label: 'This week' },
-  { value: 'lastWeek', label: 'Last week' },
-  { value: 'earlier', label: 'Earlier' },
-  { value: 'trending', label: 'Trending now' },
+  { value: 'topThisWeek', get label() { return i18n.t('utils:showcaseDiscovery.topLaunchesThisWeek'); } },
+  { value: 'thisWeek', get label() { return i18n.t('utils:showcaseDiscovery.thisWeek'); } },
+  { value: 'lastWeek', get label() { return i18n.t('utils:showcaseDiscovery.lastWeek'); } },
+  { value: 'earlier', get label() { return i18n.t('utils:showcaseDiscovery.earlier'); } },
+  { value: 'trending', get label() { return i18n.t('utils:showcaseDiscovery.trendingNow'); } },
 ];
 export const SHOWCASE_DISCOVER_OPTIONS = [
-  { value: 'trending', label: 'Trending now' },
-  { value: 'featured', label: 'Featured products' },
-  { value: 'thisWeek', label: "This week's products" },
-  { value: 'lastWeek', label: "Last week's products" },
-  { value: 'earlier', label: 'Earlier products' },
+  { value: 'trending', get label() { return i18n.t('utils:showcaseDiscovery.trendingNow'); } },
+  { value: 'featured', get label() { return i18n.t('utils:showcaseDiscovery.featuredProducts'); } },
+  { value: 'thisWeek', get label() { return i18n.t('utils:showcaseDiscovery.thisWeekSProducts'); } },
+  { value: 'lastWeek', get label() { return i18n.t('utils:showcaseDiscovery.lastWeekSProducts'); } },
+  { value: 'earlier', get label() { return i18n.t('utils:showcaseDiscovery.earlierProducts'); } },
 ] as const;
 /** How many projects the "Newly published" rail shows before "View more". */
 export const NEWLY_PUBLISHED_COUNT = 5;

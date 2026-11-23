@@ -64,7 +64,7 @@ export default function CheckpointLinkForm({
       onCancelEdit?.();
       await onSaved();
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to save the submitted link.').message);
+      toast.error(parseApiError(error, t('checkpointLinkForm.unableToSaveTheSubmittedLink')).message);
     } finally {
       setSaving(false);
     }

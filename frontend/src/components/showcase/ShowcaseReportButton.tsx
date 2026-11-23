@@ -35,7 +35,7 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
       setOpen(false);
       setNote('');
     } catch (error) {
-      toast.error(parseApiError(error, 'Could not submit the report. Try again.').message);
+      toast.error(parseApiError(error, t('showcaseReportButton.couldNotSubmitTheReportTry')).message);
     } finally {
       setSubmitting(false);
     }

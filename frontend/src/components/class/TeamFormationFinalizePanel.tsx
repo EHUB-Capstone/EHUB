@@ -41,7 +41,7 @@ export default function TeamFormationFinalizePanel({ formation, onChanged }: Pro
       toast.success(t('teamFormationFinalizePanel.teamCreated'));
       await onChanged();
     } catch (error) {
-      toast.error(parseApiError(error, 'Could not finalize the team. Please refresh and try again.').message);
+      toast.error(parseApiError(error, t('teamFormationFinalizePanel.couldNotFinalizeTheTeamPlease')).message);
     } finally {
       setWorking(false);
     }

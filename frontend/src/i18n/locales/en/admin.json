@@ -87,7 +87,10 @@
     "classesFound_one": "{{count}} class found",
     "classesFound_other": "{{count}} classes found",
     "weeklySessions_one": "{{count}} weekly session",
-    "weeklySessions_other": "{{count}} weekly sessions"
+    "weeklySessions_other": "{{count}} weekly sessions",
+    "failedToLoadClasses": "Failed to load classes",
+    "failedToRestoreClass": "Failed to restore class",
+    "failedToExportClassData": "Failed to export class data."
   },
   "mentorProfileDetail": {
     "atRisk": "At Risk",
@@ -141,7 +144,9 @@
       "Active": "Active",
       "Inactive": "Inactive",
       "Unavailable": "Unavailable"
-    }
+    },
+    "theMentorProfileCouldNotBe": "The mentor profile could not be loaded.",
+    "theMentorProfileCouldNotBe2": "The mentor profile could not be saved."
   },
   "startupIndustryManagement": {
     "industryNameIsRequired": "Industry name is required.",
@@ -192,7 +197,10 @@
       "inactive": "inactive"
     },
     "deactivateNamed": "Deactivate {{name}}",
-    "activateNamed": "Activate {{name}}"
+    "activateNamed": "Activate {{name}}",
+    "failedToLoadStartupIndustries": "Failed to load startup industries.",
+    "failedToSaveStartupIndustry": "Failed to save startup industry.",
+    "failedToUpdateIndustryStatus": "Failed to update industry status."
   },
   "subjectDetail": {
     "estimatedHoursMustBeZeroOr": "Estimated hours must be zero or greater",
@@ -310,7 +318,13 @@
     "checkpointRubricsAddedToTheDraft_other": "{{count}} checkpoint rubrics added to the draft.",
     "deleteNamed": "Delete {{name}}",
     "otherAssessmentFallback": "other assessment",
-    "criterionFallback": "criterion"
+    "criterionFallback": "criterion",
+    "failedToLoadSubjectCurriculum": "Failed to load subject curriculum",
+    "failedToSaveRoadmapItem": "Failed to save roadmap item",
+    "failedToDeleteItem": "Failed to delete item",
+    "failedToSaveRubric": "Failed to save rubric",
+    "failedToSaveCriterion": "Failed to save criterion",
+    "failedToSynchronizeRubric": "Failed to synchronize rubric"
   },
   "subjectManagement": {
     "teachesAndManagesClasses": "Teaches and manages classes",
@@ -452,7 +466,18 @@
     "transitionSemesters2": "Transition semesters",
     "reasonForTransition": "Reason for transition",
     "planningSavesTheScheduleOnly": "Planning saves the schedule only; it does not activate the semester.",
-    "fallMayEndInJanuary": "Fall may end in January of the following year."
+    "fallMayEndInJanuary": "Fall may end in January of the following year.",
+    "failedToLoadSubjects": "Failed to load subjects",
+    "failedToLoadTheActiveSemester": "Failed to load the active semester",
+    "failedToLoadTeachingStaff": "Failed to load teaching staff",
+    "failedToUpdateSemesterTeachingStaff": "Failed to update semester teaching staff",
+    "failedToSaveSubject": "Failed to save subject",
+    "failedToDisableSubject": "Failed to disable subject",
+    "failedToSaveSemesterSchedule": "Failed to save semester schedule",
+    "failedToActivateSemester": "Failed to activate semester",
+    "failedToPreviewSemesterCompletion": "Failed to preview semester completion",
+    "failedToTransitionSemesters": "Failed to transition semesters",
+    "failedToChangeSemesterLifecycle": "Failed to change semester lifecycle"
   },
   "userManagement": {
     "approved": "Approved",
@@ -543,7 +568,10 @@
     "importMentors": "Import Mentors",
     "enterpriseAndLecturerMentors": "Enterprise and lecturer mentors",
     "mentorImportedWithoutALoginAccount_one": "{{count}} mentor imported without a login account",
-    "mentorImportedWithoutALoginAccount_other": "{{count}} mentors imported without a login account"
+    "mentorImportedWithoutALoginAccount_other": "{{count}} mentors imported without a login account",
+    "failedToUpdateUserStatus": "Failed to update user status",
+    "failedToDeleteUser": "Failed to delete user",
+    "failedToSaveUser": "Failed to save user"
   },
   "accountApprovalBoard": {
     "pendingReview": "Pending review",
@@ -624,7 +652,8 @@
     "addRoleToSemester": "Add {{roleNoun}} to {{semesterLabel}}",
     "searchMentorsPlaceholder": "Search mentors by name, email, contract or tag...",
     "searchLecturersPlaceholder": "Search lecturers by name, email...",
-    "selectAllShown": "Select all shown ({{length}})"
+    "selectAllShown": "Select all shown ({{length}})",
+    "failedToLoadEligibleLecturersAnd": "Failed to load eligible lecturers and mentors"
   },
   "aiSummaryDiagnosticsCard": {
     "onlyAdministratorsCanSeeThis": "Only administrators can see this.",
@@ -698,7 +727,9 @@
     "row": "Row",
     "position": "Position",
     "googleLoginEmail": "Google login email",
-    "result": "Result"
+    "result": "Result",
+    "theLecturerFileCouldNotBe": "The lecturer file could not be analyzed.",
+    "failedToImportLecturerAccounts": "Failed to import Lecturer accounts."
   },
   "importMentorsModal": {
     "importMentorAccounts": "Import Mentor accounts",
@@ -728,7 +759,10 @@
     "showingOfRows": "Showing {{length}} of {{totalRows}} rows.",
     "sheetRow": "Sheet / row",
     "type": "Type",
-    "enterprise": "Enterprise"
+    "enterprise": "Enterprise",
+    "failedToDownloadMentorTemplate": "Failed to download mentor template",
+    "theMentorFileCouldNotBe": "The mentor file could not be analyzed.",
+    "failedToImportMentors": "Failed to import mentors."
   },
   "importStartupIndustriesModal": {
     "previewAndValidateTheExcelFile": "Preview and validate the Excel file before any industry is added",
@@ -770,7 +804,9 @@
     "rowsWillNotBeImported": "{{errorCount}} row(s) with errors will not be imported.",
     "rowsWillNotBeImportedWithExisting": "{{errorCount}} row(s) with errors and {{existingCount}} existing will not be imported.",
     "industriesAddedAsActive_one": "{{count}} industry was added as active.",
-    "industriesAddedAsActive_other": "{{count}} industries were added as active."
+    "industriesAddedAsActive_other": "{{count}} industries were added as active.",
+    "theFileCouldNotBeRead": "The file could not be read. Please check its format.",
+    "failedToImportStartupIndustriesPreview": "Failed to import startup industries. Preview the file again and retry."
   },
   "incompleteMentorEditModal": {
     "editMentorInformation": "Edit mentor information",
@@ -785,7 +821,8 @@
     "optionalNotTheLoginEmail": "Optional. Not the login email.",
     "company": "Company",
     "currentAddress": "Current address",
-    "nowHasAnAccount": "{{v1}} now has an account{{carried}}. They can set a password with Forgot Password."
+    "nowHasAnAccount": "{{v1}} now has an account{{carried}}. They can set a password with Forgot Password.",
+    "failedToUpdateTheMentor": "Failed to update the mentor"
   },
   "incompleteMentorsPanel": {
     "theseMentorsWereImportedWithoutA": "These mentors were imported without a login email, so they have no account yet. Import a file that includes their email (Import > Import Mentors) to create their accounts.",
@@ -802,7 +839,9 @@
     "fieldsMissing_one": "{{count}} field missing",
     "fieldsMissing_other": "{{count}} fields missing",
     "thisMentor": "this mentor",
-    "deleteConfirm": "Delete {{name}}? They are also removed from the semesters they were added to. A mentor who is or was on a team cannot be deleted."
+    "deleteConfirm": "Delete {{name}}? They are also removed from the semesters they were added to. A mentor who is or was on a team cannot be deleted.",
+    "failedToLoadMentorsThatNeed": "Failed to load mentors that need information.",
+    "failedToDeleteTheMentor": "Failed to delete the mentor"
   },
   "mentorAdministrationCard": {
     "mentorAssignment": "Mentor assignment",
@@ -827,7 +866,9 @@
     "assignedMentorSlots_one": "Assigned {{count}} mentor slot.",
     "assignedMentorSlots_other": "Assigned {{count}} mentor slots.",
     "assignedMentorSlotsAndEnded_one": "Assigned {{count}} mentor slot and ended {{ended}} replaced assignment(s).",
-    "assignedMentorSlotsAndEnded_other": "Assigned {{count}} mentor slots and ended {{ended}} replaced assignment(s)."
+    "assignedMentorSlotsAndEnded_other": "Assigned {{count}} mentor slots and ended {{ended}} replaced assignment(s).",
+    "failedToExportMentorAssignments": "Failed to export mentor assignments",
+    "failedToSaveTheMentorAssignment": "Failed to save the mentor assignment"
   },
   "mentorAllocationPreviewModal": {
     "enterpriseMentor": "Enterprise mentor",
@@ -984,7 +1025,8 @@
       "startupDomains": "Startup domains",
       "technologySkills": "Technology skills",
       "tags": "Mentor tags"
-    }
+    },
+    "couldNotSaveMentorProfile": "Could not save mentor profile."
   },
   "mentorSearchSelect": {
     "noMentorMatches": "No mentor matches \"{{v1}}\"."
@@ -1000,7 +1042,9 @@
     "makeUnavailable": "Make unavailable",
     "makeAvailable": "Make available",
     "makeMentorUnavailable": "Make mentor unavailable?",
-    "removeAvailabilityForExistingAssignmentsMust": "Remove availability for {{v1}} {{v2}}. Existing assignments must be reassigned first."
+    "removeAvailabilityForExistingAssignmentsMust": "Remove availability for {{v1}} {{v2}}. Existing assignments must be reassigned first.",
+    "couldNotLoadSemesterAvailability": "Could not load semester availability.",
+    "couldNotUpdateAvailabilityReloadAnd": "Could not update availability. Reload and try again."
   },
   "mentorTagFilter": {
     "filterByTag": "Filter by tag",
@@ -1044,7 +1088,8 @@
     "openMentorSlots_other": "{{count}} open mentor slots",
     "noLecturer": "No lecturer",
     "teamCount_one": "{{count}} team",
-    "teamCount_other": "{{count}} teams"
+    "teamCount_other": "{{count}} teams",
+    "failedToLoadTheClassesOf": "Failed to load the classes of this semester"
   },
   "tagInput": {
     "remove": "Remove {{tag}}",
@@ -1057,7 +1102,9 @@
     "noSemestersYet": "No semesters yet.",
     "noTeamWasContinuedInto": "No team was continued into {{semesterCode}}.",
     "continued": "Continued",
-    "dissolved": "Dissolved"
+    "dissolved": "Dissolved",
+    "unableToLoadSemesters": "Unable to load semesters.",
+    "unableToLoadTheTeamContinuity": "Unable to load the team continuity report."
   },
   "temporaryMentorBadge": {
     "thisMentorHasNoAccountYet": "This mentor has no account yet. They cannot log in or see the team until an email is added."
@@ -1102,7 +1149,10 @@
     "retryCvs_one": "Retry {{count}} CV",
     "retryCvs_other": "Retry {{count}} CVs",
     "uploadCvs_one": "Upload {{count}} CV",
-    "uploadCvs_other": "Upload {{count}} CVs"
+    "uploadCvs_other": "Upload {{count}} CVs",
+    "couldNotLoadMentorProfilesPlease": "Could not load mentor profiles. Please try again.",
+    "couldNotReadTheCvEmail": "Could not read the CV email. Try again or select the mentor manually.",
+    "uploadCouldNotBeConfirmedCheck": "Upload could not be confirmed. Check the current CV before trying again."
   },
   "roleNames": {
     "LECTURER": "lecturer",

@@ -1,4 +1,5 @@
 import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_DESCRIPTION_MIN_LENGTH, PROJECT_NAME_MAX_LENGTH, PROJECT_NAME_MIN_LENGTH } from '../constants/projectProfile.ts';
+import i18n from '../i18n/index.ts';
 export interface ProjectWorkspaceDraft {
   teamName: string;
   projectName: string;
@@ -90,24 +91,24 @@ export const validateProjectWorkspace = (draft: ProjectWorkspaceDraft): ProjectW
   const nameLength = draft.projectName.trim().length;
   const descriptionLength = draft.description.trim().length;
   const zaloGroupUrl = draft.zaloGroupUrl.trim();
-  if (teamNameLength < 3 || teamNameLength > 100) errors.teamName = 'Team name must be 3–100 characters.';
+  if (teamNameLength < 3 || teamNameLength > 100) errors.teamName = i18n.t('utils:projectWorkspace.teamNameMustBe3100');
   if (nameLength < PROJECT_NAME_MIN_LENGTH || nameLength > PROJECT_NAME_MAX_LENGTH) errors.projectName = `Project name must be ${PROJECT_NAME_MIN_LENGTH}–${PROJECT_NAME_MAX_LENGTH} characters.`;
   if (descriptionLength < PROJECT_DESCRIPTION_MIN_LENGTH || descriptionLength > PROJECT_DESCRIPTION_MAX_LENGTH) errors.description = `Description must be ${PROJECT_DESCRIPTION_MIN_LENGTH}–${PROJECT_DESCRIPTION_MAX_LENGTH} characters.`;
   if (!zaloGroupUrl) {
-    errors.zaloGroupUrl = 'Zalo group link is required.';
+    errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.zaloGroupLinkIsRequired');
   } else {
     try {
       const url = new URL(zaloGroupUrl);
       const isZaloHost = url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me');
       if (url.protocol !== 'https:' || !isZaloHost || zaloGroupUrl.length > 500) {
-        errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+        errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.enterAValidHttpsLinkOn');
       }
     } catch {
-      errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+      errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.enterAValidHttpsLinkOn');
     }
   }
   if (draft.startupIndustryIds.length < 1 || draft.startupIndustryIds.length > 3) {
-    errors.startupIndustryIds = 'Select between 1 and 3 startup industries.';
+    errors.startupIndustryIds = i18n.t('utils:projectWorkspace.selectBetween1And3Startup');
   }
   return errors;
 };
@@ -168,25 +169,25 @@ export const validateProjectProfile = (draft: ProjectProfileDraft): ProjectProfi
   if (lengths.projectName < PROJECT_NAME_MIN_LENGTH || lengths.projectName > PROJECT_NAME_MAX_LENGTH) errors.projectName = `Project name must be ${PROJECT_NAME_MIN_LENGTH}–${PROJECT_NAME_MAX_LENGTH} characters.`;
   if (lengths.description < PROJECT_DESCRIPTION_MIN_LENGTH || lengths.description > PROJECT_DESCRIPTION_MAX_LENGTH) errors.description = `Description must be ${PROJECT_DESCRIPTION_MIN_LENGTH}–${PROJECT_DESCRIPTION_MAX_LENGTH} characters.`;
   if (lengths.problem > 0 && (lengths.problem < 20 || lengths.problem > 2_000)) {
-    errors.problem = 'Problem must be 20–2000 characters when provided.';
+    errors.problem = i18n.t('utils:projectWorkspace.problemMustBe202000Characters');
   }
   if (lengths.solution > 0 && (lengths.solution < 20 || lengths.solution > 2_000)) {
-    errors.solution = 'Solution must be 20–2000 characters when provided.';
+    errors.solution = i18n.t('utils:projectWorkspace.solutionMustBe202000Characters');
   }
   if (lengths.targetUsers > 0 && (lengths.targetUsers < 3 || lengths.targetUsers > 2_000)) {
-    errors.targetUsers = 'Target users must be 3–2000 characters when provided.';
+    errors.targetUsers = i18n.t('utils:projectWorkspace.targetUsersMustBe32000');
   }
   if (lengths.zaloGroupUrl === 0) {
-    errors.zaloGroupUrl = 'Zalo group link is required.';
+    errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.zaloGroupLinkIsRequired');
   } else {
     try {
       const url = new URL(draft.zaloGroupUrl.trim());
       const isZaloHost = url.hostname === 'zalo.me' || url.hostname.endsWith('.zalo.me');
       if (url.protocol !== 'https:' || !isZaloHost || lengths.zaloGroupUrl > 500) {
-        errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+        errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.enterAValidHttpsLinkOn');
       }
     } catch {
-      errors.zaloGroupUrl = 'Enter a valid HTTPS link on zalo.me.';
+      errors.zaloGroupUrl = i18n.t('utils:projectWorkspace.enterAValidHttpsLinkOn');
     }
   }
   return errors;

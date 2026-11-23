@@ -100,7 +100,7 @@ export default function BulkCreateModal({
         }));
       } catch (error) {
         if (active && !controller.signal.aborted) {
-          toast.error(parseApiError(error, 'Failed to load subjects, semesters, or lecturers.').message);
+          toast.error(parseApiError(error, t('bulkCreateModal.failedToLoadSubjectsSemestersOr')).message);
         }
       } finally {
         if (active) setLoadingOptions(false);
@@ -142,7 +142,7 @@ export default function BulkCreateModal({
     }).catch(error => {
       if (active) {
         setLecturers([]);
-        toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+        toast.error(parseApiError(error, t('bulkAssignLecturerModal.failedToLoadSemesterLecturers')).message);
       }
     }).finally(() => {
       if (active) setLoadingLecturers(false);
@@ -283,7 +283,7 @@ export default function BulkCreateModal({
       onCreated({ suppressToast: true });
     } catch (error) {
       setServerPreview(null);
-      toast.error(parseApiError(error, 'Failed to create classes.').message);
+      toast.error(parseApiError(error, t('bulkCreateModal.failedToCreateClasses')).message);
     } finally {
       setSubmitting(false);
     }

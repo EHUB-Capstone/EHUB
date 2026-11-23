@@ -49,7 +49,7 @@ export default function MentorProfileDetail() {
       const response = await mentorProfileApi.get(profileId, signal);
       setProfile(response.data);
     } catch (error: unknown) {
-      if (!signal?.aborted) setLoadError(parseApiError(error, 'The mentor profile could not be loaded.').message);
+      if (!signal?.aborted) setLoadError(parseApiError(error, t('mentorProfileDetail.theMentorProfileCouldNotBe')).message);
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function MentorProfileDetail() {
       toast.success(t('mentorProfileDetail.mentorProfileSaved'));
     } catch (error: unknown) {
       // The form stays open with everything the admin typed, so nothing is lost.
-      const parsed = parseApiError(error, 'The mentor profile could not be saved.');
+      const parsed = parseApiError(error, t('mentorProfileDetail.theMentorProfileCouldNotBe2'));
       setSaveError(parsed.message);
       setConflict(parsed.code === 'MENTOR_PROFILE_CONFLICT');
     } finally {

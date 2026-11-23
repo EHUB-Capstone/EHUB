@@ -87,7 +87,7 @@ export default function StartupWorkspaceHub() {
     } catch (error: unknown) {
       setTeams([]);
       setActiveSemester(null);
-      setErrorMessage(parseApiError(error, 'Failed to load startup workspaces or the active semester.').message);
+      setErrorMessage(parseApiError(error, t('startupWorkspaceHub.failedToLoadStartupWorkspacesOr')).message);
     } finally {
       setLoading(false);
     }

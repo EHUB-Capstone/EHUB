@@ -132,7 +132,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to export mentor assignments').message);
+      toast.error(parseApiError(error, t('mentorAdministrationCard.failedToExportMentorAssignments')).message);
     } finally {
       if (currentSemester.current === semesterId) setBusy(null);
     }
@@ -257,7 +257,7 @@ export default function MentorAdministrationCard({ semesterId, semesterLabel, te
       closePreview();
       await onImportCommitted();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save the mentor assignment').message);
+      toast.error(parseApiError(error, t('mentorAdministrationCard.failedToSaveTheMentorAssignment')).message);
       // A conflict means data changed after the preview, so it must be regenerated before it can be saved.
       if ((error as { response?: { status?: number } }).response?.status === 409) setPreviewStale(true);
     } finally {

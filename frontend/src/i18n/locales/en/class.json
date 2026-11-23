@@ -15,7 +15,8 @@
     "optionalForRegisteredStudents": "(optional for registered students)",
     "useTheStudentSRegisteredMajor": "Use the student's registered major",
     "leaveThisBlankToUseAn": "Leave this blank to use an existing student's registered major. A major is required for a new profile, and a selected major must match an existing profile.",
-    "addStudent2": "Add student"
+    "addStudent2": "Add student",
+    "failedToAddTheStudent": "Failed to add the student."
   },
   "assignLectureModal": {
     "selectAnActiveLecturerBeforeSaving": "Select an active lecturer before saving.",
@@ -28,7 +29,9 @@
     "unassignedDraftClassesOnly": "Unassigned (Draft classes only)",
     "noActiveLecturersAreListedFor": "No active lecturers are listed for this semester",
     "saveAssignment": "Save Assignment",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "failedToLoadLecturers": "Failed to load lecturers.",
+    "failedToAssignLecturer": "Failed to assign lecturer"
   },
   "assignMentorsModal": {
     "all": "All",
@@ -79,7 +82,9 @@
     "temporarySlots_other": "{{count}} slots use a temporary mentor with no account yet. They cannot log in or see their team until their email is added through Import Mentors.",
     "teamsThisSemester_one": "{{count}} team this semester",
     "teamsThisSemester_other": "{{count}} teams this semester",
-    "everyTeamHasMentorKind": "Every active team already has a {{kind}}"
+    "everyTeamHasMentorKind": "Every active team already has a {{kind}}",
+    "failedToEndMentorAssignment": "Failed to end mentor assignment",
+    "failedToAssignTheMentor": "Failed to assign the mentor"
   },
   "bulkAssignLecturerModal": {
     "assignLecturerToSelectedClasses": "Assign Lecturer to Selected Classes",
@@ -87,7 +92,8 @@
     "eachClassIsValidatedIndependentlySchedule": "Each class is validated independently. Schedule conflicts or stale class versions will be reported without reverting successful assignments.",
     "searchLecturersByNameOrEmail": "Search lecturers by name or email...",
     "noActiveLecturerIsListedFor": "No active lecturer is listed for every selected semester",
-    "assignToClasses": "Assign to {{length}} classes"
+    "assignToClasses": "Assign to {{length}} classes",
+    "failedToLoadSemesterLecturers": "Failed to load semester lecturers."
   },
   "bulkCreateModal": {
     "classEsCannotBeCreatedReview": "{{invalidCount}} class(es) cannot be created. Review the conflicts below.",
@@ -133,7 +139,9 @@
     "confirmCreate": "Confirm & Create",
     "previewClasses": "Preview Classes",
     "processing": "Processing...",
-    "exampleSingle": "e.g. {{startIndex}}"
+    "exampleSingle": "e.g. {{startIndex}}",
+    "failedToLoadSubjectsSemestersOr": "Failed to load subjects, semesters, or lecturers.",
+    "failedToCreateClasses": "Failed to create classes."
   },
   "checkpointDateTimeField": {
     "date": "Date",
@@ -191,7 +199,8 @@
       "APPROVED": "Approved",
       "CHANGES_REQUESTED": "Changes requested",
       "NOT_SUBMITTED": "Not submitted"
-    }
+    },
+    "failedToLoadStartupIndustries": "Failed to load startup industries."
   },
   "editScheduleModal": {
     "aClassCanContainAtMost": "A class can contain at most 12 weekly sessions.",
@@ -209,7 +218,8 @@
     "eGP301": "e.g. P.301",
     "removeSession": "Remove session {{v1}}",
     "addSession": "Add session",
-    "saveSchedule": "Save schedule"
+    "saveSchedule": "Save schedule",
+    "failedToUpdateSchedule": "Failed to update schedule"
   },
   "groupProjectWarningBanner": {
     "groupAndProjectDataIsInconsistent": "Group and project data is inconsistent (",
@@ -250,7 +260,9 @@
     "importGroups": "Import groups",
     "backToPreview": "Back to preview",
     "confirmUpdate": "Update {{count}} active enrollment(s) using RollNumber and {{column}}?",
-    "semesterGroupColumn": "the semester group column"
+    "semesterGroupColumn": "the semester group column",
+    "unableToPreviewSemesterGroups": "Unable to preview semester groups.",
+    "unableToImportSemesterGroups": "Unable to import semester groups."
   },
   "importStudentsModal": {
     "selectFile": "Select file",
@@ -344,7 +356,9 @@
     "rowsHaveValidationErrors_one": "{{count}} row has validation errors.",
     "rowsHaveValidationErrors_other": "{{count}} rows have validation errors.",
     "projectLabel": "Project: {{name}}",
-    "missing": "Missing"
+    "missing": "Missing",
+    "theFileCouldNotBeRead": "The file could not be read. Please check its format.",
+    "failedToCommitStudentImport": "Failed to commit student import."
   },
   "invitationCountdown": {
     "invitationExpired": "Invitation expired",
@@ -408,7 +422,10 @@
     "applyToClasses_one": "Apply to {{count}} Class",
     "applyToClasses_other": "Apply to {{count}} Classes",
     "scheduleWillBeAppliedTo_one": "This schedule will be applied to {{count}} class:",
-    "scheduleWillBeAppliedTo_other": "This schedule will be applied to {{count}} classes:"
+    "scheduleWillBeAppliedTo_other": "This schedule will be applied to {{count}} classes:",
+    "unableToLoadCheckpointManagementData": "Unable to load checkpoint management data.",
+    "unableToSaveCheckpointSchedule": "Unable to save checkpoint schedule.",
+    "unableToDownloadTheSubmittedFile": "Unable to download the submitted file."
   },
   "mentorSlotDialog": {
     "mentorReplaced": "Mentor replaced",
@@ -431,7 +448,9 @@
     "noEmailYet": "No email yet",
     "teamsThisSemester_one": "{{count}} team this semester",
     "teamsThisSemester_other": "{{count}} teams this semester",
-    "candidates": "{{label}} candidates"
+    "candidates": "{{label}} candidates",
+    "couldNotLoadRecommendations": "Could not load recommendations",
+    "failedToReplaceTheMentor": "Failed to replace the mentor"
   },
   "mentorTeamsBoard": {
     "unnamedTeam": "Unnamed team",
@@ -464,7 +483,11 @@
     "lecturerReview": "Lecturer review",
     "optional31000Characters": "Optional: 3–1000 characters",
     "submitReview": "Submit review",
-    "reviewHistory": "Review history"
+    "reviewHistory": "Review history",
+    "failedToLoadProjectDirection": "Failed to load project direction.",
+    "failedToSaveProjectDirection": "Failed to save project direction.",
+    "failedToSubmitProjectDirection": "Failed to submit project direction.",
+    "failedToReviewProjectDirection": "Failed to review project direction."
   },
   "renameClassModal": {
     "classCodeIsRequired": "Class code is required.",
@@ -495,7 +518,8 @@
     "missingMajor": "Missing major",
     "decision": "Decision",
     "31000Characters": "3–1000 characters",
-    "aReasonIsRequiredForThis": "A reason is required for this decision."
+    "aReasonIsRequiredForThis": "A reason is required for this decision.",
+    "failedToReviewTeamProposal": "Failed to review team proposal."
   },
   "studentAssignmentModal": {
     "assignToClass": "Assign to class",
@@ -537,7 +561,8 @@
     "alreadyInClass": "{{name}} is already in the selected class.",
     "alreadyInTeam": "{{name}} is already in the selected team.",
     "placesAvailable_one": "{{count}} place available in this team.",
-    "placesAvailable_other": "{{count}} places available in this team."
+    "placesAvailable_other": "{{count}} places available in this team.",
+    "unableToUpdateTheStudentAssignment": "Unable to update the student assignment."
   },
   "studentMajorActionCard": {
     "actionRequired": "Action Required",
@@ -695,7 +720,8 @@
     "youAcceptedWaitingForTheCreator": "You accepted. Waiting for the creator to finalize the team.",
     "accept": "Invitation accepted.",
     "leave": "You left the team formation.",
-    "cancel": "Team formation cancelled."
+    "cancel": "Team formation cancelled.",
+    "couldNotUpdateTheFormationPlease": "Could not update the formation. Please refresh and try again."
   },
   "teamFormationFinalizePanel": {
     "teamCreated": "Team created.",
@@ -711,7 +737,8 @@
     "someInvitationsAreStillWaitingFor": "Some invitations are still waiting for an answer. If you finalize now, these students will not join the team and their invitations will be closed.",
     "theTeamWillBeCreatedWith": "The team will be created with {{length}} members. This cannot be undone.",
     "keepWaiting": "Keep waiting",
-    "proposedLeaderNotAccepted": "{{name}}, the proposed leader, has not accepted."
+    "proposedLeaderNotAccepted": "{{name}}, the proposed leader, has not accepted.",
+    "couldNotFinalizeTheTeamPlease": "Could not finalize the team. Please refresh and try again."
   },
   "teamFormationMemberList": {
     "invitationSentTo": "Invitation sent to {{fullName}}.",
@@ -725,7 +752,8 @@
     "theTeamAlreadyHas6Members": "The team already has 6 members or pending invitations.",
     "invitationHistory": "Invitation history (",
     "invited": "{{status}} · invited {{v2}} {{v3}}",
-    "respondedAt": "responded {{date}}"
+    "respondedAt": "responded {{date}}",
+    "couldNotSendTheInvitationPlease": "Could not send the invitation. Please refresh and try again."
   },
   "teamList": {
     "teamManagement": "Team management",
@@ -758,7 +786,9 @@
     "previousSemester": "the previous semester",
     "chat": "Chat: {{status}}",
     "chatOn": "Chat",
-    "chatOff": "No Chat"
+    "chatOff": "No Chat",
+    "standaloneProposals_one": " · {{count}} standalone proposal",
+    "standaloneProposals_other": " · {{count}} standalone proposals"
   },
   "teamMajorWarningBanner": {
     "team": "team",
@@ -786,7 +816,8 @@
     "member": "member",
     "projectLinked": "Project linked",
     "noProjectLinked": "No project linked",
-    "saveMembers": "Save members"
+    "saveMembers": "Save members",
+    "failedToUpdateTeam": "Failed to update team."
   },
   "verifyMajorModal": {
     "profileWillChange": "Profile will change",
@@ -825,7 +856,11 @@
     "verifyMajorsUpdate": "Verify majors & update",
     "verifyAndUpdateMajors": "Verify and update majors?",
     "applyOfficialMajorsFromThisFile": "Apply official majors from this file to {{length}} active class student(s) and their profiles?{{v2}} Existing majors will be replaced.",
-    "unmatchedRows": "{{count}} unmatched file/class row(s) will not receive a major."
+    "unmatchedRows": "{{count}} unmatched file/class row(s) will not receive a major.",
+    "unableToPreviewMajorChanges": "Unable to preview major changes.",
+    "unableToSynchronizeMajorsFromThe": "Unable to synchronize majors from the file.",
+    "failedToUpdateTheMajor": "Failed to update the major.",
+    "unableToDownloadTheTemplate": "Unable to download the template."
   },
   "classDetail": {
     "invalidClassIdentifier": "Invalid class identifier",
@@ -909,7 +944,20 @@
     "completedClassReadOnly": "Completed class — read-only",
     "scheduleLine": "{{day}}, Slot {{slot}} · Room {{room}}",
     "deleteTeamTitle": "Delete {{name}}?",
-    "thisTeam": "this team"
+    "thisTeam": "this team",
+    "failedToLoadTheClassRoster": "Failed to load the class roster.",
+    "unableToLoadTheStudentDirectory": "Unable to load the student directory.",
+    "failedToDeleteTheTeam": "Failed to delete the team.",
+    "failedToRepairChatMemberships": "Failed to repair chat memberships",
+    "failedToChangeTheMajorUpdate": "Failed to change the major update lock status.",
+    "failedToSynchronizeRegisteredMajors": "Failed to synchronize registered majors.",
+    "failedToExportStudents": "Failed to export students",
+    "failedToDropEnrollment": "Failed to drop enrollment",
+    "failedToRemoveAllStudentsFrom": "Failed to remove all students from the class.",
+    "failedToChangeClassLifecycle": "Failed to change class lifecycle",
+    "failedToPreviewClassCompletion": "Failed to preview class completion",
+    "failedToChangeClassCompletionStatus": "Failed to change class completion status",
+    "failedToReEnrollStudent": "Failed to re-enroll student"
   },
   "ideaForm": {
     "nameAndProblemAreRequired": "Name and problem are required",
@@ -1043,6 +1091,8 @@
       "CANCELLED": "cancelled",
       "NEEDS_REVISION": "under revision",
       "REVISION_REQUESTED": "under revision"
-    }
+    },
+    "failedToUpdateYourMajor": "Failed to update your major.",
+    "failedToCancelTeamProposal": "Failed to cancel team proposal."
   }
 }

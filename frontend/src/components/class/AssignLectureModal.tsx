@@ -32,7 +32,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
         if (active) setLecturers(list);
       } catch (error) {
         if (active) {
-          toast.error(parseApiError(error, 'Failed to load lecturers.').message);
+          toast.error(parseApiError(error, t('assignLectureModal.failedToLoadLecturers')).message);
         }
       } finally {
         if (active) setLoading(false);
@@ -62,7 +62,7 @@ export default function AssignLectureModal({ classId, semester, year, currentLec
       toast.success(selectedId ? t('assignLectureModal.lecturerAssignedSuccessfully') : t('assignLectureModal.lecturerUnassignedSuccessfully'));
       await onAssigned();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to assign lecturer').message);
+      toast.error(parseApiError(e, t('assignLectureModal.failedToAssignLecturer')).message);
     } finally {
       setSubmitting(false);
     }

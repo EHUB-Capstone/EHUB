@@ -5,6 +5,7 @@ import type {
 } from '../types/subjects';
 import { matchesSearchQuery } from './searchText.ts';
 import { matchesAnyTag, tagSearchText } from './mentorTags.ts';
+import i18n from '../i18n/index.ts';
 
 export type MentorKindFilter = 'ALL' | MentorKind;
 
@@ -64,15 +65,15 @@ export function summarizeStaffBatch(
     .map(item => ({
       userId: item.userId,
       name: nameOf(item.userId),
-      message: item.message || (item.outcome === 'AlreadyInList' ? 'Already in the semester list.' : 'Could not be added.'),
+      message: item.message || (item.outcome === 'AlreadyInList' ? i18n.t('utils:semesterStaffCandidates.alreadyInTheSemesterList') : i18n.t('utils:semesterStaffCandidates.couldNotBeAdded')),
     }));
   const added = response.addedCount;
   const skipped = response.alreadyInListCount + response.rejectedCount;
 
-  if (added > 0 && skipped === 0) return { tone: 'success', message: `Added ${plural(added, roleNoun)}.`, problems };
-  if (added > 0) return { tone: 'partial', message: `Added ${plural(added, roleNoun)}, ${skipped} skipped.`, problems };
-  if (response.rejectedCount > 0) return { tone: 'error', message: `No ${roleNoun}s were added.`, problems };
-  return { tone: 'info', message: `Everyone selected was already in the semester list.`, problems };
+  if (added > 0 && skipped === 0) return { tone: 'success', message: i18n.t('utils:semesterStaffCandidates.added', { v1: plural(added, roleNoun) }), problems };
+  if (added > 0) return { tone: 'partial', message: i18n.t('utils:semesterStaffCandidates.addedSkipped', { v1: plural(added, roleNoun), skipped }), problems };
+  if (response.rejectedCount > 0) return { tone: 'error', message: i18n.t('utils:semesterStaffCandidates.noSWereAdded', { roleNoun }), problems };
+  return { tone: 'info', message: i18n.t('utils:semesterStaffCandidates.everyoneSelectedWasAlreadyInThe'), problems };
 }
 
 /** Combines the results of several batch calls (accounts, then mentors without an account) into one. */

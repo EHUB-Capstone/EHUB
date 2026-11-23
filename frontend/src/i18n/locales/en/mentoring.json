@@ -168,7 +168,13 @@
     "whatWasUsefulWhatCouldImprove": "What was useful? What could improve?",
     "saveFeedback": "Save feedback",
     "viewStudentFeedback": "View student feedback",
-    "noFeedbackYet": "No feedback yet."
+    "noFeedbackYet": "No feedback yet.",
+    "couldNotLoadMentoringSessions": "Could not load mentoring sessions",
+    "couldNotSaveSession": "Could not save session",
+    "couldNotUpdateSession": "Could not update session",
+    "couldNotAddActionItem": "Could not add action item",
+    "couldNotSaveFeedback": "Could not save feedback",
+    "couldNotLoadFeedback": "Could not load feedback"
   },
   "mentorProfilePage": {
     "mentorProfileSaved": "Mentor profile saved.",
@@ -203,7 +209,12 @@
     "leadershipPythonProjectPlanning": "Leadership, Python, project planning",
     "enterUpTo20DistinctSkills": "Enter up to 20 distinct skills, each at most 80 characters. Skills are entered manually and kept when you upload a CV.",
     "saveProfile": "Save profile",
-    "cvPreview": "CV preview"
+    "cvPreview": "CV preview",
+    "couldNotLoadMentorProfile": "Could not load mentor profile",
+    "couldNotSaveMentorProfile": "Could not save mentor profile",
+    "couldNotUploadDocument": "Could not upload document",
+    "couldNotDownloadDocument": "Could not download document",
+    "couldNotPreviewCv": "Could not preview CV"
   },
   "pastSessionList": {
     "pastMentoringSessions": "Past Mentoring Sessions",
@@ -262,6 +273,7 @@
     "loadingMentors": "Loading mentors…",
     "noMentorsMatchYourSearch": "No mentors match your search.",
     "mentorCount_one": "{{count}} mentor",
-    "mentorCount_other": "{{count}} mentors"
+    "mentorCount_other": "{{count}} mentors",
+    "couldNotLoadMentorDirectory": "Could not load mentor directory"
   }
 }

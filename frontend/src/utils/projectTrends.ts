@@ -1,4 +1,5 @@
 import type { ProjectDataTrendRow, ProjectDataTrends } from '../types/projectData';
+import i18n from '../i18n/index.ts';
 
 export const TREND_LEVELS = ['semester', 'subject', 'class'] as const;
 export type TrendLevel = (typeof TREND_LEVELS)[number];
@@ -120,7 +121,7 @@ export function toScoreChartData(
   if (level !== 'subject') {
     return {
       data: pivot(trends.semesters, () => 'score'),
-      series: [{ key: 'score', label: 'Average score', slot: null }],
+      series: [{ key: 'score', label: i18n.t('utils:projectTrends.averageScore'), slot: null }],
       hiddenSubjects: 0,
     };
   }

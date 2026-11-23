@@ -8,6 +8,7 @@ import type {
   RawAccountRegistration,
 } from '../types/accountApproval';
 import { matchesSearchQuery } from './searchText.ts';
+import i18n from '../i18n/index.ts';
 
 export function normalizeApprovalRole(value?: string | null): AccountApprovalRole | null {
   const normalized = String(value || '').trim().toUpperCase();
@@ -54,8 +55,8 @@ export function registrationToApprovalRequest(
 
 export function validateRejectionReason(reason: string): string | null {
   const normalized = reason.trim();
-  if (normalized.length < 10) return 'Please provide a reason of at least 10 characters.';
-  if (normalized.length > 500) return 'The rejection reason cannot exceed 500 characters.';
+  if (normalized.length < 10) return i18n.t('utils:accountApproval.pleaseProvideAReasonOfAt');
+  if (normalized.length > 500) return i18n.t('utils:accountApproval.theRejectionReasonCannotExceed500');
   return null;
 }
 

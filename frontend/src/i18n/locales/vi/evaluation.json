@@ -117,7 +117,8 @@
     "noPublishedScoresAvailableForThe": "Không có điểm đã công bố của học kỳ trước.",
     "assessment": "Bài đánh giá",
     "personalScore": "Điểm cá nhân",
-    "checkpoint": "Checkpoint {{checkpointNumber}}:"
+    "checkpoint": "Checkpoint {{checkpointNumber}}:",
+    "unableToLoadPreviousScores": "Không thể tải điểm các kỳ trước."
   },
   "evaluationGrading": {
     "checkpoint": "Checkpoint {{number}}: {{title}}",
@@ -251,7 +252,14 @@
       "LECTURER": "Xem xét và quản lý việc chấm điểm cho các nhóm trong lớp bạn giảng dạy.",
       "MENTOR": "Xem phản hồi bằng văn bản cho các nhóm bạn cố vấn.",
       "STUDENT": "Xem điểm cá nhân đã công bố và phản hồi bằng văn bản của bạn."
-    }
+    },
+    "unableToSaveAssessmentScore": "Không thể lưu điểm đánh giá.",
+    "unableToLoadSubmissionAnalytics": "Không thể tải phân tích bài nộp.",
+    "unableToLoadTeamsForEvaluation": "Không thể tải các nhóm để đánh giá và chấm điểm.",
+    "unableToLoadEvaluationAndGrading": "Không thể tải dữ liệu đánh giá và chấm điểm.",
+    "unableToExportEvaluationReport": "Không thể xuất báo cáo đánh giá.",
+    "unableToPublishEvaluation": "Không thể công bố đánh giá.",
+    "unableToHidePublishedScores": "Không thể ẩn các điểm đã công bố."
   },
   "rankings": {
     "teamRankings": "Xếp hạng nhóm",
@@ -263,6 +271,7 @@
     "allAssignedClasses": "Tất cả lớp được phân công",
     "rankingCheckpoint": "Checkpoint xếp hạng",
     "checkpointTotal": "Tổng điểm checkpoint",
-    "loadingRankings": "Đang tải xếp hạng…"
+    "loadingRankings": "Đang tải xếp hạng…",
+    "unableToLoadRankings": "Không thể tải bảng xếp hạng."
   }
 }

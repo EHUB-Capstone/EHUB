@@ -26,7 +26,7 @@ export default function MentorOverview() {
       setTeams(Array.isArray(list) ? list.map((item: Record<string, unknown>) => ({ id: String(item.id),
         teamName: String(item.teamName ?? 'Team'), projectName: typeof item.projectName === 'string' ? item.projectName : undefined })) : []);
       setSessions(meetings);
-    } catch (cause) { setError(parseApiError(cause, 'Could not load mentor overview').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorOverview.couldNotLoadMentorOverview')).message); }
     finally { setLoading(false); }
   };
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function MentorOverview() {
         setTeams(Array.isArray(list) ? list.map((item: Record<string, unknown>) => ({ id: String(item.id),
           teamName: String(item.teamName ?? 'Team'), projectName: typeof item.projectName === 'string' ? item.projectName : undefined })) : []);
         setSessions(meetings);
-      }).catch(cause => { if (active) setError(parseApiError(cause, 'Could not load mentor overview').message); })
+      }).catch(cause => { if (active) setError(parseApiError(cause, t('mentorOverview.couldNotLoadMentorOverview')).message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);

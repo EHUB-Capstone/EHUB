@@ -140,7 +140,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       setAppliedSummary(null);
       toast.success(tr('verifyMajorModal.previewReadyNoMajorsHaveBeen'));
     } catch (e) {
-      toast.error(parseApiError(e, 'Unable to preview major changes.').message);
+      toast.error(parseApiError(e, tr('verifyMajorModal.unableToPreviewMajorChanges')).message);
     } finally {
       setLoading(false);
     }
@@ -180,7 +180,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       }
       onUpdated?.();
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to synchronize majors from the file.').message);
+      toast.error(parseApiError(error, tr('verifyMajorModal.unableToSynchronizeMajorsFromThe')).message);
     } finally {
       setApplying(false);
     }
@@ -197,7 +197,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
       toast.success(tr('verifyMajorModal.majorUpdatedToPreviewAgainBefore', { newMajor }));
       onUpdated?.();
     } catch (e) {
-      toast.error(parseApiError(e, 'Failed to update the major.').message);
+      toast.error(parseApiError(e, tr('verifyMajorModal.failedToUpdateTheMajor')).message);
     } finally {
       setSavingId(null);
     }
@@ -240,7 +240,7 @@ export default function VerifyMajorModal({ classId, onClose, onUpdated }) {
               </div>
             </div>
             <button
-              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, 'Unable to download the template.').message))}
+              onClick={() => void downloadTemplate().catch(error => toast.error(parseApiError(error, tr('verifyMajorModal.unableToDownloadTheTemplate')).message))}
               className="text-xs px-3 py-1.5 bg-secondary text-white rounded-lg hover:bg-secondary-700 transition-all font-medium"
             >
               {tr('common:actions.download')}

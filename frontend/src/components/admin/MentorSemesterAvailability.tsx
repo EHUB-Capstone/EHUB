@@ -35,7 +35,7 @@ export default function MentorSemesterAvailability({ profile, onClose }: { profi
           return { semester, staff: staff.find(x => x.userId === profile.userId && x.role === 'MENTOR') };
         }));
         if (!controller.signal.aborted) setRows(loaded);
-      } catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not load semester availability.').message); }
+      } catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, t('mentorSemesterAvailability.couldNotLoadSemesterAvailability')).message); }
       finally { if (!controller.signal.aborted) setLoading(false); }
     }
     void load();
@@ -51,7 +51,7 @@ export default function MentorSemesterAvailability({ profile, onClose }: { profi
       }, controller.signal);
       else await subjectApi.addTeachingStaff({ semester: row.semester.semester, year: row.semester.year, userId: profile.userId, role: 'MENTOR' }, controller.signal);
       if (!controller.signal.aborted) { setNotice(t('mentorSemesterAvailability.semesterAvailabilitySaved')); setReload(x => x + 1); }
-    } catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not update availability. Reload and try again.').message); }
+    } catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, t('mentorSemesterAvailability.couldNotUpdateAvailabilityReloadAnd')).message); }
     finally { busy.current = false; if (!controller.signal.aborted) { setSaving(false); setConfirm(null); } }
   };
   return <Modal isOpen onClose={() => { if (!busy.current) onClose(); }} title={t('mentorSemesterAvailability.semesterAvailability', { fullName: profile.fullName })} size="lg">

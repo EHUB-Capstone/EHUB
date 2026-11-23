@@ -13,7 +13,9 @@
     "youCannotViewSubmissionsOfThis": "You cannot view submissions of this semester.",
     "loadingTeamHistory": "Loading team history…",
     "noSemesterHistoryIsAvailableFor": "No semester history is available for this team.",
-    "teamHistoryBySemester": "Team history by semester"
+    "teamHistoryBySemester": "Team history by semester",
+    "unableToLoadSubmissions": "Unable to load submissions.",
+    "unableToLoadTheTeamHistory": "Unable to load the team history."
   },
   "boardColumn": {
     "dropTaskHere": "Drop task here"
@@ -161,7 +163,9 @@
     "saving": "Saving…",
     "saveProfile": "Save profile",
     "approvedIndustries": "Approved: {{list}} · choose 1 to 3.",
-    "none": "none"
+    "none": "none",
+    "unableToLoadTheProjectProfile": "Unable to load the project profile.",
+    "theServerDidNotSaveAll": "The server did not save all project profile fields. Please retry after the API is updated."
   },
   "proposalEditor": {
     "failedToFetchProposalDetails": "Failed to fetch proposal details",
@@ -273,7 +277,8 @@
       "MENTOR": "Teams you mentor"
     },
     "teamCount_one": "{{count}} team",
-    "teamCount_other": "{{count}} teams"
+    "teamCount_other": "{{count}} teams",
+    "failedToLoadStartupWorkspacesOr": "Failed to load startup workspaces or the active semester."
   },
   "teamWorkspace": {
     "youHaveJoinedThisClassBut": "You have joined this class but have not been assigned to a team yet.",
@@ -343,7 +348,9 @@
     "thisLinkWillBeAvailableAnd": "This link will be available and editable in Project Profile.",
     "startupIndustry": "Startup Industry",
     "creatingTheWorkspaceAlsoSubmitsThis": "Creating the workspace also submits this information to the lecturer for review.",
-    "createWorkspaceSubmit": "Create workspace & submit"
+    "createWorkspaceSubmit": "Create workspace & submit",
+    "failedToLoadStartupIndustries": "Failed to load startup industries.",
+    "failedToCreateProjectWorkspace": "Failed to create project workspace."
   },
   "evaluationPanel": {
     "notSet": "Not set",
@@ -513,7 +520,11 @@
     "nowStatusReload": "Project direction is now {{status}}. Reload before submitting again.",
     "nowStatusCannotEdit": "Project direction is now {{status}} and cannot be edited.",
     "openProfileView": "Open the profile to view details",
-    "openProfileViewOrUpdate": "Open the profile to view details or update it"
+    "openProfileViewOrUpdate": "Open the profile to view details or update it",
+    "unableToLoadProjectDirection": "Unable to load project direction.",
+    "unableToSaveProjectDirection": "Unable to save project direction.",
+    "unableToSubmitProjectDirection": "Unable to submit project direction.",
+    "unableToRefreshProjectDirectionBefore": "Unable to refresh project direction before editing."
   },
   "projectWorkspaceProfile": {
     "draft": "Draft",
@@ -655,7 +666,8 @@
     "clearFilters": "Clear filters",
     "noMatchingFeedback": "No matching feedback",
     "tryADifferentCheckpointSourceOr": "Try a different checkpoint, source or search term.",
-    "feedbackByCheckpoint": "Feedback by checkpoint"
+    "feedbackByCheckpoint": "Feedback by checkpoint",
+    "unableToLoadTheFeedbackOverview": "Unable to load the feedback overview."
   },
   "workshopAttendanceManager": {
     "couldNotLoadClassList": "Could not load class list.",
@@ -903,7 +915,8 @@
     "classRequirements": "Class Requirements",
     "teamTasks": "Team Tasks",
     "editTask": "Edit Task",
-    "newTask": "New Task"
+    "newTask": "New Task",
+    "unableToLoadTheWeeklyRoadmap": "Unable to load the weekly roadmap."
   },
   "addShortcutModal": {
     "editShortcut": "Edit shortcut",

@@ -228,7 +228,13 @@
     "updatingResults": "Đang cập nhật kết quả...",
     "partialSave": "Đã lưu {{saved}}, nhưng {{what}} chưa được lưu: {{reason}}",
     "and": "và",
-    "projectOutOfDate": "dự án đã cũ."
+    "projectOutOfDate": "dự án đã cũ.",
+    "unableToUpdateAchievements": "Không thể cập nhật thành tích.",
+    "unableToUpdateStartupIndustries": "Không thể cập nhật các ngành khởi nghiệp.",
+    "unableToUpdateCompetitions": "Không thể cập nhật các cuộc thi.",
+    "failedToExportTheProjectData": "Không thể xuất báo cáo dữ liệu dự án.",
+    "failedToLoadProjectDataPlease": "Không thể tải dữ liệu dự án. Vui lòng thử lại.",
+    "refreshingProjectDataFailed": "Làm mới dữ liệu dự án thất bại."
   },
   "achievements": {
     "Potential": "Tiềm năng",

@@ -116,7 +116,7 @@ export default function ImportStudentsModal({
       setPreviewData(data);
       setPhase('review');
     } catch (error: unknown) {
-      setFileError(parseApiError(error, 'The file could not be read. Please check its format.').message);
+      setFileError(parseApiError(error, t('importStudentsModal.theFileCouldNotBeRead')).message);
     } finally {
       setAnalyzing(false);
     }
@@ -183,7 +183,7 @@ export default function ImportStudentsModal({
         toast(t('importStudentsModal.importCompletedNoProfileOrEnrollment'));
       }
     } catch (err: unknown) {
-      toast.error(parseApiError(err, 'Failed to commit student import.').message);
+      toast.error(parseApiError(err, t('importStudentsModal.failedToCommitStudentImport')).message);
     } finally {
       setImporting(false);
     }

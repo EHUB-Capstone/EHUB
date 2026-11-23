@@ -40,7 +40,7 @@ export default function ShowcaseReports() {
       toast.success(target?.action === 'Dismissed' ? t('showcaseReports.reportDismissed') : t('showcaseReports.actionCompleted'));
       setTarget(null); setNote('');
     },
-    onError: (error) => toast.error(parseApiError(error, 'Could not resolve this report. Try again.').message),
+    onError: (error) => toast.error(parseApiError(error, t('showcaseReports.couldNotResolveThisReportTry')).message),
   });
   const remove = useMutation({
     mutationFn: (report: ShowcaseReportDto) => showcaseApi.deleteReportHistory(report.id),
@@ -49,7 +49,7 @@ export default function ShowcaseReports() {
       toast.success(t('showcaseReports.reportHistoryDeleted'));
       setDeleteTarget(null);
     },
-    onError: (error) => toast.error(parseApiError(error, 'Could not delete report history. Try again.').message),
+    onError: (error) => toast.error(parseApiError(error, t('showcaseReports.couldNotDeleteReportHistoryTry')).message),
   });
   const removeAll = useMutation({
     mutationFn: (nextStatus: Extract<ShowcaseReportStatus, 'Dismissed' | 'ActionTaken'>) => showcaseApi.deleteAllReportHistory(nextStatus),
@@ -58,7 +58,7 @@ export default function ShowcaseReports() {
       toast.success(t('showcaseReports.reportHistoryDeleted'));
       setDeleteAllOpen(false);
     },
-    onError: (error) => toast.error(parseApiError(error, 'Could not delete report history. Try again.').message),
+    onError: (error) => toast.error(parseApiError(error, t('showcaseReports.couldNotDeleteReportHistoryTry')).message),
   });
   const isComment = target?.report.commentId !== null;
   const isHistory = status !== 'Open';
@@ -82,7 +82,7 @@ export default function ShowcaseReports() {
         </div>
         <div className="p-5 sm:p-6">
           {reports.isPending && <div role="status" aria-label={t('showcaseReports.loadingReports')} className="space-y-3"><LoadingSkeleton variant="card" /><LoadingSkeleton variant="card" /></div>}
-          {reports.isError && <ErrorState title={t('showcaseReports.couldNotLoadReports')} message={parseApiError(reports.error, 'Failed to load reports.').message} onRetry={() => { void reports.refetch(); }} />}
+          {reports.isError && <ErrorState title={t('showcaseReports.couldNotLoadReports')} message={parseApiError(reports.error, t('showcaseReports.failedToLoadReports')).message} onRetry={() => { void reports.refetch(); }} />}
           {reports.isSuccess && reports.data.items.length === 0 && <EmptyState title={t('showcaseReports.noReports')} description={t('showcaseReports.thereAreNoReports', { v1: STATUS_COPY[status].toLowerCase() })} />}
           {reports.isSuccess && reports.data.items.length > 0 && <>
             <ul className="space-y-4">

@@ -174,7 +174,7 @@ export default function StudentAssignmentModal({
           : t('studentAssignmentModal.studentsAssignedToTeam', { count: draft.studentIds.length, v3: targetTeam?.teamName || t('studentAssignmentModal.teamFallback') }),
       );
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to update the student assignment.').message);
+      toast.error(parseApiError(error, t('studentAssignmentModal.unableToUpdateTheStudentAssignment')).message);
     } finally {
       setSaving(false);
     }

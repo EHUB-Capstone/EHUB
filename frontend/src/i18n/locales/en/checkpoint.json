@@ -110,7 +110,8 @@
     "googleDriveFigmaGithubYoutubeMust": "Google Drive, Figma, GitHub, YouTube… must be publicly viewable.",
     "onlyPublicHttpsLinksAreAccepted": "Only public HTTPS links are accepted · Maximum 10 active links",
     "saveLink": "Save link",
-    "submitLink": "Submit link"
+    "submitLink": "Submit link",
+    "unableToSaveTheSubmittedLink": "Unable to save the submitted link."
   },
   "checkpointPanel": {
     "failedToDownloadFile": "Failed to download file.",
@@ -148,7 +149,8 @@
     "loadingProgressAcrossCheckpoints": "Loading progress across checkpoints…",
     "progressAcrossCheckpoints": "Progress across checkpoints",
     "whetherTheFilesOfEachCheckpoint": "Whether the files of each checkpoint mention what the rubrics ask for. “Mentioned” means a file names it, not that it is done well.",
-    "onlyPartOfTheFilesCould": "Only part of the files could be read ({{v1}}), so “not mentioned” may just mean a file was not read."
+    "onlyPartOfTheFilesCould": "Only part of the files could be read ({{v1}}), so “not mentioned” may just mean a file was not read.",
+    "couldNotLoadTheProgressAcross": "Could not load the progress across checkpoints."
   },
   "checkpointSection": {
     "checkpointsAreNotAvailableOnThis": "Checkpoints are not available on this server yet. Submission and feedback are unavailable.",

@@ -109,7 +109,7 @@ export default function ImportStartupIndustriesModal({
       setPreview((response?.data ?? response) as StartupIndustryImportPreviewResult);
       setPhase('review');
     } catch (error) {
-      setFileError(parseApiError(error, 'The file could not be read. Please check its format.').message);
+      setFileError(parseApiError(error, t('importStartupIndustriesModal.theFileCouldNotBeRead')).message);
     } finally {
       setAnalyzing(false);
     }
@@ -144,7 +144,7 @@ export default function ImportStartupIndustriesModal({
       onImported();
       toast.success(t('importStartupIndustriesModal.importedSuccessfully', { count: importResult.importedCount }));
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to import startup industries. Preview the file again and retry.').message);
+      toast.error(parseApiError(error, t('importStartupIndustriesModal.failedToImportStartupIndustriesPreview')).message);
     } finally {
       setImporting(false);
     }

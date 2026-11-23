@@ -51,7 +51,7 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
       setData(response.data);
       if (!search && mentorType === 'ALL') onUnfilteredTotal?.(response.data.pagination.total);
     } catch (requestError: unknown) {
-      if (!isCancelled()) setError(parseApiError(requestError, 'Failed to load mentors that need information.').message);
+      if (!isCancelled()) setError(parseApiError(requestError, t('incompleteMentorsPanel.failedToLoadMentorsThatNeed')).message);
     } finally {
       if (!isCancelled()) setLoading(false);
     }
@@ -75,7 +75,7 @@ export default function IncompleteMentorsPanel({ search, mentorType, onUnfiltere
       onChanged?.();
     } catch (requestError: unknown) {
       // The reason (for example teams still using the mentor) is shown as is; the dialog closes so the list can be fixed first.
-      toast.error(parseApiError(requestError, 'Failed to delete the mentor').message, { duration: 8000 });
+      toast.error(parseApiError(requestError, t('incompleteMentorsPanel.failedToDeleteTheMentor')).message, { duration: 8000 });
       setDeleting(null);
     } finally {
       setDeleteBusy(false);

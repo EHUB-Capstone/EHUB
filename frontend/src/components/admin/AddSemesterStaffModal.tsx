@@ -91,7 +91,7 @@ export default function AddSemesterStaffModal({
       if (!mounted.current) return;
       setLoadFailed(true);
       setCandidates([]);
-      toast.error(parseApiError(error, 'Failed to load eligible lecturers and mentors').message);
+      toast.error(parseApiError(error, t('addSemesterStaffModal.failedToLoadEligibleLecturersAnd')).message);
     } finally {
       if (mounted.current) setLoading(false);
     }

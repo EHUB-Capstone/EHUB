@@ -102,7 +102,7 @@ const ProfileSettings = () => {
       }
       toast.success(t('profileSettings.profileUpdatedSuccessfully'));
     } catch (err) {
-      const error = parseApiError(err, 'Failed to update profile');
+      const error = parseApiError(err, t('profileSettings.failedToUpdateProfile'));
       toast.error(error.message);
       if (role === 'STUDENT' && (error.code === 'MAJOR_LOCKED' || error.code === 'CLASS_ENROLLMENT_MAJOR_LOCKED')) {
         majorEditedRef.current = false;
@@ -150,7 +150,7 @@ const ProfileSettings = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to change password').message);
+      toast.error(parseApiError(err, t('profileSettings.failedToChangePassword')).message);
     } finally {
       setIsSavingPassword(false);
     }

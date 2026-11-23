@@ -131,7 +131,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
         hasLoadedRef.current = true;
       } catch (error) {
         if (controller.signal.aborted) return;
-        const message = parseApiError(error, 'Failed to load startup industries.').message;
+        const message = parseApiError(error, t('startupIndustryManagement.failedToLoadStartupIndustries')).message;
         if (isFirstLoad) {
           setIndustries([]);
           setLoadError(message);
@@ -221,7 +221,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
       else setRefreshVersion((version) => version + 1);
       closeForm();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to save startup industry.').message);
+      toast.error(parseApiError(error, t('startupIndustryManagement.failedToSaveStartupIndustry')).message);
     } finally {
       setIsSaving(false);
     }
@@ -244,7 +244,7 @@ export default function StartupIndustryManagement({ embedded = false }: StartupI
       else setRefreshVersion((version) => version + 1);
       setStatusTarget(null);
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update industry status.').message);
+      toast.error(parseApiError(error, t('startupIndustryManagement.failedToUpdateIndustryStatus')).message);
     } finally {
       setIsChangingStatus(false);
     }

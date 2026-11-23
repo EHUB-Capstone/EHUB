@@ -139,7 +139,7 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
       setPreview(unwrap<LecturerImportPreview>(response));
       setPhase('review');
     } catch (requestError: unknown) {
-      setError(parseApiError(requestError, 'The lecturer file could not be analyzed.').message);
+      setError(parseApiError(requestError, t('importLecturersModal.theLecturerFileCouldNotBe')).message);
     } finally {
       setAnalyzing(false);
     }
@@ -156,7 +156,7 @@ export default function ImportLecturersModal({ onClose, onImported }: ImportLect
       onImported();
       toast.success(t('importLecturersModal.createdAndActivatedLecturerAccountS', { createdCount: commitResult.createdCount, activatedCount: commitResult.activatedCount }));
     } catch (requestError: unknown) {
-      toast.error(parseApiError(requestError, 'Failed to import Lecturer accounts.').message);
+      toast.error(parseApiError(requestError, t('importLecturersModal.failedToImportLecturerAccounts')).message);
     } finally {
       setImporting(false);
     }

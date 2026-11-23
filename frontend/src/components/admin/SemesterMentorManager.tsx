@@ -49,7 +49,7 @@ export default function SemesterMentorManager({ isOpen, semesterId, semesterLabe
     } catch (error) {
       if (!mounted.current) return;
       setLoadFailed(true);
-      toast.error(parseApiError(error, 'Failed to load the classes of this semester').message);
+      toast.error(parseApiError(error, t('semesterMentorManager.failedToLoadTheClassesOf')).message);
     } finally {
       if (mounted.current) setLoading(false);
     }

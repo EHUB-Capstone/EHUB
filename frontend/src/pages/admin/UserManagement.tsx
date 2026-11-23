@@ -172,7 +172,7 @@ export default function UserManagement() {
       toast.success(t('userManagement.userMarkedAs', { newStatus }));
       fetchUsers();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to update user status').message);
+      toast.error(parseApiError(error, t('userManagement.failedToUpdateUserStatus')).message);
     } finally {
       setRowActionId(null);
     }
@@ -245,7 +245,7 @@ export default function UserManagement() {
       setDeleteTarget(null);
     } catch (error) {
       // The server names what still depends on the account, so the message is shown in full and the dialog closes.
-      toast.error(parseApiError(error, 'Failed to delete user').message, { duration: 8000 });
+      toast.error(parseApiError(error, t('userManagement.failedToDeleteUser')).message, { duration: 8000 });
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
@@ -293,7 +293,7 @@ export default function UserManagement() {
       setIsModalOpen(false);
       fetchUsers();
     } catch (err) {
-      toast.error(parseApiError(err, 'Failed to save user').message);
+      toast.error(parseApiError(err, t('userManagement.failedToSaveUser')).message);
     } finally {
       setIsSubmitting(false);
     }

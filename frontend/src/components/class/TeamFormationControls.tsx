@@ -45,7 +45,7 @@ export default function TeamFormationControls({ formation, onChanged, acceptDisa
       toast.success(SUCCESS_MESSAGES[action]);
       await onChanged();
     } catch (error) {
-      toast.error(parseApiError(error, 'Could not update the formation. Please refresh and try again.').message);
+      toast.error(parseApiError(error, t('teamFormationControls.couldNotUpdateTheFormationPlease')).message);
     } finally {
       setWorking(false);
     }

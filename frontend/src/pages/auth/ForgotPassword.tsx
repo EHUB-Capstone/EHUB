@@ -40,7 +40,7 @@ const ForgotPassword = (): React.ReactElement => {
       setEmail(normalizedEmail);
       setIsSuccess(true);
     } catch (error: unknown) {
-      const apiError = parseApiError(error, 'Unable to send the reset link. Please try again.');
+      const apiError = parseApiError(error, t('forgotPassword.unableToSendTheResetLink'));
       if (apiError.fieldErrors.email) {
         setEmailError(apiError.fieldErrors.email);
       } else {

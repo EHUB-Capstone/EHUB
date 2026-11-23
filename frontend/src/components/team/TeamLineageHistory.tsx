@@ -33,7 +33,7 @@ function TermCard({ teamId, term }: { teamId: string; term: TeamLineageTerm }) {
       setSubmissions({ status: 'ready', items: response.data ?? [] });
     } catch (error: unknown) {
       if (controller.signal.aborted || (error as { code?: string })?.code === 'ERR_CANCELED') return;
-      setSubmissions({ status: 'error', message: parseApiError(error, 'Unable to load submissions.').message });
+      setSubmissions({ status: 'error', message: parseApiError(error, t('teamLineageHistory.unableToLoadSubmissions')).message });
     }
   }, [teamId, term.teamId]);
 
@@ -148,7 +148,7 @@ export default function TeamLineageHistory({ teamId }: TeamLineageHistoryProps) 
       setLineage(response.data ?? null);
     } catch (caught: unknown) {
       if ((caught as { code?: string })?.code === 'ERR_CANCELED') return;
-      setError(parseApiError(caught, 'Unable to load the team history.').message);
+      setError(parseApiError(caught, t('teamLineageHistory.unableToLoadTheTeamHistory')).message);
     } finally {
       setLoading(false);
     }

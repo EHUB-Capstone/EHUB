@@ -15,7 +15,8 @@
     "optionalForRegisteredStudents": "(không bắt buộc với sinh viên đã đăng ký)",
     "useTheStudentSRegisteredMajor": "Dùng ngành học đã đăng ký của sinh viên",
     "leaveThisBlankToUseAn": "Để trống để dùng ngành học đã đăng ký của sinh viên hiện có. Hồ sơ mới bắt buộc có ngành học, và ngành đã chọn phải khớp với hồ sơ hiện có.",
-    "addStudent2": "Thêm sinh viên"
+    "addStudent2": "Thêm sinh viên",
+    "failedToAddTheStudent": "Không thể thêm sinh viên."
   },
   "assignLectureModal": {
     "selectAnActiveLecturerBeforeSaving": "Hãy chọn một giảng viên đang hoạt động trước khi lưu.",
@@ -28,7 +29,9 @@
     "unassignedDraftClassesOnly": "Chưa phân công (chỉ lớp Bản nháp)",
     "noActiveLecturersAreListedFor": "Không có giảng viên đang hoạt động nào trong danh sách học kỳ này",
     "saveAssignment": "Lưu phân công",
-    "saving": "Đang lưu..."
+    "saving": "Đang lưu...",
+    "failedToLoadLecturers": "Không thể tải danh sách giảng viên.",
+    "failedToAssignLecturer": "Không thể phân công giảng viên"
   },
   "assignMentorsModal": {
     "all": "Tất cả",
@@ -76,7 +79,9 @@
     "teamsSelectedForSavedAll_other": "Đã chọn {{length}}/{{length2}} nhóm cho {{name}}. Lưu tất cả cùng lúc hoặc không lưu gì.",
     "temporarySlots_other": "{{count}} vị trí đang dùng Mentor tạm thời chưa có tài khoản. Họ không thể đăng nhập hoặc xem nhóm cho đến khi email được bổ sung qua Nhập Mentor.",
     "teamsThisSemester_other": "{{count}} nhóm trong học kỳ này",
-    "everyTeamHasMentorKind": "Mọi nhóm đang hoạt động đều đã có {{kind}}"
+    "everyTeamHasMentorKind": "Mọi nhóm đang hoạt động đều đã có {{kind}}",
+    "failedToEndMentorAssignment": "Không thể kết thúc phân công Mentor",
+    "failedToAssignTheMentor": "Không thể phân công Mentor"
   },
   "bulkAssignLecturerModal": {
     "assignLecturerToSelectedClasses": "Phân công giảng viên cho các lớp đã chọn",
@@ -84,7 +89,8 @@
     "eachClassIsValidatedIndependentlySchedule": "Mỗi lớp được kiểm tra độc lập. Xung đột lịch học hoặc phiên bản lớp đã cũ sẽ được báo cáo mà không hoàn tác các phân công đã thành công.",
     "searchLecturersByNameOrEmail": "Tìm giảng viên theo tên hoặc email...",
     "noActiveLecturerIsListedFor": "Không có giảng viên đang hoạt động nào trong danh sách của mọi học kỳ đã chọn",
-    "assignToClasses": "Phân công cho {{length}} lớp"
+    "assignToClasses": "Phân công cho {{length}} lớp",
+    "failedToLoadSemesterLecturers": "Không thể tải danh sách giảng viên của học kỳ."
   },
   "bulkCreateModal": {
     "classEsCannotBeCreatedReview": "Không thể tạo {{invalidCount}} lớp. Hãy xem lại các xung đột bên dưới.",
@@ -130,7 +136,9 @@
     "confirmCreate": "Xác nhận & tạo",
     "previewClasses": "Xem trước lớp",
     "processing": "Đang xử lý...",
-    "exampleSingle": "VD: {{startIndex}}"
+    "exampleSingle": "VD: {{startIndex}}",
+    "failedToLoadSubjectsSemestersOr": "Không thể tải môn học, học kỳ hoặc giảng viên.",
+    "failedToCreateClasses": "Không thể tạo lớp."
   },
   "checkpointDateTimeField": {
     "date": "Ngày",
@@ -188,7 +196,8 @@
       "APPROVED": "Đã duyệt",
       "CHANGES_REQUESTED": "Yêu cầu chỉnh sửa",
       "NOT_SUBMITTED": "Chưa nộp"
-    }
+    },
+    "failedToLoadStartupIndustries": "Không thể tải các ngành khởi nghiệp."
   },
   "editScheduleModal": {
     "aClassCanContainAtMost": "Một lớp có tối đa 12 buổi học mỗi tuần.",
@@ -206,7 +215,8 @@
     "eGP301": "VD: P.301",
     "removeSession": "Xóa buổi {{v1}}",
     "addSession": "Thêm buổi",
-    "saveSchedule": "Lưu lịch học"
+    "saveSchedule": "Lưu lịch học",
+    "failedToUpdateSchedule": "Không thể cập nhật lịch học"
   },
   "groupProjectWarningBanner": {
     "groupAndProjectDataIsInconsistent": "Dữ liệu nhóm và dự án không nhất quán (",
@@ -247,7 +257,9 @@
     "importGroups": "Nhập nhóm",
     "backToPreview": "Quay lại bản xem trước",
     "confirmUpdate": "Cập nhật {{count}} lượt ghi danh đang hoạt động dựa trên RollNumber và {{column}}?",
-    "semesterGroupColumn": "cột nhóm học kỳ"
+    "semesterGroupColumn": "cột nhóm học kỳ",
+    "unableToPreviewSemesterGroups": "Không thể xem trước nhóm học kỳ.",
+    "unableToImportSemesterGroups": "Không thể nhập nhóm học kỳ."
   },
   "importStudentsModal": {
     "selectFile": "Chọn tệp",
@@ -335,7 +347,9 @@
     "studentsWrongMajor_other": "{{count}} sinh viên đã đăng ký sai ngành học.",
     "rowsHaveValidationErrors_other": "{{count}} dòng có lỗi kiểm tra dữ liệu.",
     "projectLabel": "Dự án: {{name}}",
-    "missing": "Thiếu"
+    "missing": "Thiếu",
+    "theFileCouldNotBeRead": "Không thể đọc tệp. Vui lòng kiểm tra định dạng.",
+    "failedToCommitStudentImport": "Không thể ghi nhận việc nhập sinh viên."
   },
   "invitationCountdown": {
     "invitationExpired": "Lời mời đã hết hạn",
@@ -393,7 +407,10 @@
     "appliesToClasses_other": "Áp dụng cho {{count}} lớp",
     "reopenToClasses_other": "Mở lại cho {{count}} lớp",
     "applyToClasses_other": "Áp dụng cho {{count}} lớp",
-    "scheduleWillBeAppliedTo_other": "Lịch này sẽ được áp dụng cho {{count}} lớp:"
+    "scheduleWillBeAppliedTo_other": "Lịch này sẽ được áp dụng cho {{count}} lớp:",
+    "unableToLoadCheckpointManagementData": "Không thể tải dữ liệu quản lý checkpoint.",
+    "unableToSaveCheckpointSchedule": "Không thể lưu lịch checkpoint.",
+    "unableToDownloadTheSubmittedFile": "Không thể tải xuống tệp đã nộp."
   },
   "mentorSlotDialog": {
     "mentorReplaced": "Đã thay thế Mentor",
@@ -415,7 +432,9 @@
     "assignMentor": "Phân công Mentor",
     "noEmailYet": "Chưa có email",
     "teamsThisSemester_other": "{{count}} nhóm trong học kỳ này",
-    "candidates": "Ứng viên {{label}}"
+    "candidates": "Ứng viên {{label}}",
+    "couldNotLoadRecommendations": "Không thể tải các gợi ý",
+    "failedToReplaceTheMentor": "Không thể thay thế Mentor"
   },
   "mentorTeamsBoard": {
     "unnamedTeam": "Nhóm chưa đặt tên",
@@ -448,7 +467,11 @@
     "lecturerReview": "Giảng viên xem xét",
     "optional31000Characters": "Không bắt buộc: 3–1000 ký tự",
     "submitReview": "Gửi nhận xét",
-    "reviewHistory": "Lịch sử xem xét"
+    "reviewHistory": "Lịch sử xem xét",
+    "failedToLoadProjectDirection": "Không thể tải định hướng dự án.",
+    "failedToSaveProjectDirection": "Không thể lưu định hướng dự án.",
+    "failedToSubmitProjectDirection": "Không thể gửi định hướng dự án.",
+    "failedToReviewProjectDirection": "Không thể xem xét định hướng dự án."
   },
   "renameClassModal": {
     "classCodeIsRequired": "Vui lòng nhập mã lớp.",
@@ -479,7 +502,8 @@
     "missingMajor": "Thiếu ngành học",
     "decision": "Quyết định",
     "31000Characters": "3–1000 ký tự",
-    "aReasonIsRequiredForThis": "Cần có lý do cho quyết định này."
+    "aReasonIsRequiredForThis": "Cần có lý do cho quyết định này.",
+    "failedToReviewTeamProposal": "Không thể xem xét đề xuất nhóm."
   },
   "studentAssignmentModal": {
     "assignToClass": "Phân công vào lớp",
@@ -518,7 +542,8 @@
     "teamFallback": "nhóm",
     "alreadyInClass": "{{name}} đã có trong lớp được chọn.",
     "alreadyInTeam": "{{name}} đã có trong nhóm được chọn.",
-    "placesAvailable_other": "Nhóm này còn {{count}} chỗ trống."
+    "placesAvailable_other": "Nhóm này còn {{count}} chỗ trống.",
+    "unableToUpdateTheStudentAssignment": "Không thể cập nhật phân công sinh viên."
   },
   "studentMajorActionCard": {
     "actionRequired": "Cần thực hiện",
@@ -675,7 +700,8 @@
     "youAcceptedWaitingForTheCreator": "Bạn đã chấp nhận. Đang chờ người tạo chốt nhóm.",
     "accept": "Đã chấp nhận lời mời.",
     "leave": "Bạn đã rời khỏi việc lập nhóm.",
-    "cancel": "Đã hủy việc lập nhóm."
+    "cancel": "Đã hủy việc lập nhóm.",
+    "couldNotUpdateTheFormationPlease": "Không thể cập nhật việc lập nhóm. Vui lòng làm mới và thử lại."
   },
   "teamFormationFinalizePanel": {
     "teamCreated": "Đã tạo nhóm.",
@@ -691,7 +717,8 @@
     "someInvitationsAreStillWaitingFor": "Một số lời mời vẫn đang chờ phản hồi. Nếu bạn chốt ngay bây giờ, những sinh viên này sẽ không tham gia nhóm và lời mời của họ sẽ bị đóng.",
     "theTeamWillBeCreatedWith": "Nhóm sẽ được tạo với {{length}} thành viên. Không thể hoàn tác.",
     "keepWaiting": "Tiếp tục chờ",
-    "proposedLeaderNotAccepted": "{{name}}, trưởng nhóm đề xuất, chưa chấp nhận."
+    "proposedLeaderNotAccepted": "{{name}}, trưởng nhóm đề xuất, chưa chấp nhận.",
+    "couldNotFinalizeTheTeamPlease": "Không thể chốt nhóm. Vui lòng làm mới và thử lại."
   },
   "teamFormationMemberList": {
     "invitationSentTo": "Đã gửi lời mời tới {{fullName}}.",
@@ -705,7 +732,8 @@
     "theTeamAlreadyHas6Members": "Nhóm đã có 6 thành viên hoặc lời mời đang chờ.",
     "invitationHistory": "Lịch sử lời mời (",
     "invited": "{{status}} · được mời {{v2}} {{v3}}",
-    "respondedAt": "đã phản hồi {{date}}"
+    "respondedAt": "đã phản hồi {{date}}",
+    "couldNotSendTheInvitationPlease": "Không thể gửi lời mời. Vui lòng làm mới và thử lại."
   },
   "teamList": {
     "teamManagement": "Quản lý nhóm",
@@ -737,7 +765,8 @@
     "previousSemester": "học kỳ trước",
     "chat": "Trò chuyện: {{status}}",
     "chatOn": "Có",
-    "chatOff": "Chưa có"
+    "chatOff": "Chưa có",
+    "standaloneProposals_other": " · {{count}} đề xuất độc lập"
   },
   "teamMajorWarningBanner": {
     "team": "nhóm",
@@ -765,7 +794,8 @@
     "member": "thành viên",
     "projectLinked": "Đã liên kết dự án",
     "noProjectLinked": "Chưa liên kết dự án",
-    "saveMembers": "Lưu thành viên"
+    "saveMembers": "Lưu thành viên",
+    "failedToUpdateTeam": "Không thể cập nhật nhóm."
   },
   "verifyMajorModal": {
     "profileWillChange": "Hồ sơ sẽ thay đổi",
@@ -804,7 +834,11 @@
     "verifyMajorsUpdate": "Xác minh ngành học & cập nhật",
     "verifyAndUpdateMajors": "Xác minh và cập nhật ngành học?",
     "applyOfficialMajorsFromThisFile": "Áp dụng các ngành học chính thức từ tệp này cho {{length}} sinh viên đang học trong lớp và hồ sơ của họ?{{v2}} Các ngành học hiện có sẽ bị thay thế.",
-    "unmatchedRows": "{{count}} dòng tệp/lớp không khớp sẽ không được cập nhật ngành học."
+    "unmatchedRows": "{{count}} dòng tệp/lớp không khớp sẽ không được cập nhật ngành học.",
+    "unableToPreviewMajorChanges": "Không thể xem trước các thay đổi ngành học.",
+    "unableToSynchronizeMajorsFromThe": "Không thể đồng bộ ngành học từ tệp.",
+    "failedToUpdateTheMajor": "Không thể cập nhật ngành học.",
+    "unableToDownloadTheTemplate": "Không thể tải mẫu xuống."
   },
   "classDetail": {
     "invalidClassIdentifier": "Mã định danh lớp không hợp lệ",
@@ -885,7 +919,20 @@
     "completedClassReadOnly": "Lớp đã hoàn thành — chỉ đọc",
     "scheduleLine": "{{day}}, Ca {{slot}} · Phòng {{room}}",
     "deleteTeamTitle": "Xóa {{name}}?",
-    "thisTeam": "nhóm này"
+    "thisTeam": "nhóm này",
+    "failedToLoadTheClassRoster": "Không thể tải danh sách sinh viên của lớp.",
+    "unableToLoadTheStudentDirectory": "Không thể tải danh bạ sinh viên.",
+    "failedToDeleteTheTeam": "Không thể xóa nhóm.",
+    "failedToRepairChatMemberships": "Không thể sửa các thành viên trò chuyện",
+    "failedToChangeTheMajorUpdate": "Không thể đổi trạng thái khóa cập nhật ngành học.",
+    "failedToSynchronizeRegisteredMajors": "Không thể đồng bộ các ngành học đã đăng ký.",
+    "failedToExportStudents": "Không thể xuất danh sách sinh viên",
+    "failedToDropEnrollment": "Không thể cho rút ghi danh",
+    "failedToRemoveAllStudentsFrom": "Không thể gỡ tất cả sinh viên khỏi lớp.",
+    "failedToChangeClassLifecycle": "Không thể thay đổi vòng đời lớp",
+    "failedToPreviewClassCompletion": "Không thể xem trước việc hoàn thành lớp",
+    "failedToChangeClassCompletionStatus": "Không thể thay đổi trạng thái hoàn thành lớp",
+    "failedToReEnrollStudent": "Không thể ghi danh lại sinh viên"
   },
   "ideaForm": {
     "nameAndProblemAreRequired": "Cần có tên và vấn đề",
@@ -1019,6 +1066,8 @@
       "CANCELLED": "đã hủy",
       "NEEDS_REVISION": "cần chỉnh sửa",
       "REVISION_REQUESTED": "cần chỉnh sửa"
-    }
+    },
+    "failedToUpdateYourMajor": "Không thể cập nhật ngành học của bạn.",
+    "failedToCancelTeamProposal": "Không thể hủy đề xuất nhóm."
   }
 }

@@ -51,7 +51,9 @@
     "reEnterNewPassword": "Nhập lại mật khẩu mới",
     "hideConfirmPassword": "Ẩn mật khẩu xác nhận",
     "showConfirmPassword": "Hiện mật khẩu xác nhận",
-    "updatePassword": "Cập nhật mật khẩu"
+    "updatePassword": "Cập nhật mật khẩu",
+    "failedToUpdateProfile": "Không thể cập nhật hồ sơ",
+    "failedToChangePassword": "Không thể đổi mật khẩu"
   },
   "feedbackPage": {
     "view": "Xem {{originalName}}",

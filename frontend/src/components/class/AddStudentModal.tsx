@@ -55,7 +55,7 @@ export default function AddStudentModal({ classId, onClose, onAdded }: AddStuden
       toast.success(t('addStudentModal.studentAddedSuccessfully'));
       onAdded();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to add the student.').message);
+      toast.error(parseApiError(error, t('addStudentModal.failedToAddTheStudent')).message);
     } finally {
       setSubmitting(false);
     }

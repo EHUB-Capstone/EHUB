@@ -56,7 +56,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
     const controller = new AbortController();
     mentorSupportApi.getRecommendations(team._id, controller.signal)
       .then(items => { if (active) setRecommendationResult({ teamId: team._id, attempt: recommendationAttempt, items, error: '' }); })
-      .catch(requestError => { if (active) setRecommendationResult({ teamId: team._id, attempt: recommendationAttempt, items: [], error: parseApiError(requestError, 'Could not load recommendations').message }); });
+      .catch(requestError => { if (active) setRecommendationResult({ teamId: team._id, attempt: recommendationAttempt, items: [], error: parseApiError(requestError, t('mentorSlotDialog.couldNotLoadRecommendations')).message }); });
     return () => { active = false; controller.abort(); };
   }, [team._id, recommendationAttempt]);
   const tagOptions = useMemo(() => collectTagOptions(slotMentors), [slotMentors]);
@@ -84,7 +84,7 @@ export default function MentorSlotDialog({ team, slot, current, mentors, onClose
       onClose();
     } catch (requestError: unknown) {
       // The dialog stays open with the choice kept, so the admin can read the reason and try again.
-      setError(parseApiError(requestError, replacing ? 'Failed to replace the mentor' : 'Failed to assign the mentor').message);
+      setError(parseApiError(requestError, replacing ? t('mentorSlotDialog.failedToReplaceTheMentor') : t('assignMentorsModal.failedToAssignTheMentor')).message);
     } finally {
       setSaving(false);
     }

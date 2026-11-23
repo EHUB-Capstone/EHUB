@@ -168,7 +168,13 @@
     "whatWasUsefulWhatCouldImprove": "Điều gì hữu ích? Điều gì có thể cải thiện?",
     "saveFeedback": "Lưu phản hồi",
     "viewStudentFeedback": "Xem phản hồi của sinh viên",
-    "noFeedbackYet": "Chưa có phản hồi."
+    "noFeedbackYet": "Chưa có phản hồi.",
+    "couldNotLoadMentoringSessions": "Không thể tải các buổi cố vấn",
+    "couldNotSaveSession": "Không thể lưu buổi cố vấn",
+    "couldNotUpdateSession": "Không thể cập nhật buổi cố vấn",
+    "couldNotAddActionItem": "Không thể thêm việc cần làm",
+    "couldNotSaveFeedback": "Không thể lưu phản hồi",
+    "couldNotLoadFeedback": "Không thể tải phản hồi"
   },
   "mentorProfilePage": {
     "mentorProfileSaved": "Đã lưu hồ sơ Mentor.",
@@ -203,7 +209,12 @@
     "leadershipPythonProjectPlanning": "Lãnh đạo, Python, lập kế hoạch dự án",
     "enterUpTo20DistinctSkills": "Nhập tối đa 20 kỹ năng khác nhau, mỗi kỹ năng tối đa 80 ký tự. Kỹ năng được nhập thủ công và được giữ lại khi bạn tải CV lên.",
     "saveProfile": "Lưu hồ sơ",
-    "cvPreview": "Xem trước CV"
+    "cvPreview": "Xem trước CV",
+    "couldNotLoadMentorProfile": "Không thể tải hồ sơ Mentor",
+    "couldNotSaveMentorProfile": "Không thể lưu hồ sơ Mentor",
+    "couldNotUploadDocument": "Không thể tải tài liệu lên",
+    "couldNotDownloadDocument": "Không thể tải tài liệu xuống",
+    "couldNotPreviewCv": "Không thể xem trước CV"
   },
   "pastSessionList": {
     "pastMentoringSessions": "Các buổi cố vấn đã qua",
@@ -261,6 +272,7 @@
     "unspecified": "Chưa phân loại",
     "loadingMentors": "Đang tải danh sách Mentor…",
     "noMentorsMatchYourSearch": "Không có Mentor nào khớp với tìm kiếm của bạn.",
-    "mentorCount_other": "{{count}} Mentor"
+    "mentorCount_other": "{{count}} Mentor",
+    "couldNotLoadMentorDirectory": "Không thể tải danh bạ Mentor"
   }
 }

@@ -1,4 +1,5 @@
 import type { ShowcaseAssistantProjectDto, ShowcaseAssistantTurn } from '../types/showcase.ts';
+import i18n from '../i18n/index.ts';
 
 export const ASSISTANT_MAX_MESSAGE_LENGTH = 500;
 /** The server keeps only the most recent turns, so the client does not send more. */
@@ -50,11 +51,11 @@ export const cleanAssistantKey = (raw: string): string => raw.trim();
 /** Why a pasted key cannot be right, in words for the user; null when it looks like a key. Nothing is sent anywhere to find out. */
 export function assistantKeyProblem(raw: string): string | null {
   const key = cleanAssistantKey(raw);
-  if (key.length === 0) return 'Hãy dán API key Gemini của bạn.';
-  if (/\s/.test(key)) return 'API key không có khoảng trắng hay xuống dòng. Hãy dán lại đúng một dòng.';
-  if (key.includes('://') || key.includes('=')) return 'Chỉ dán phần giá trị của key, không kèm tên biến hay đường dẫn.';
-  if (key.length < KEY_MIN_LENGTH) return 'API key quá ngắn. Hãy kiểm tra lại key đã sao chép đủ chưa.';
-  if (key.length > KEY_MAX_LENGTH || !/^[\x21-\x7E]+$/.test(key)) return 'API key chỉ gồm chữ cái, số và ký tự thông thường. Hãy dán lại key.';
+  if (key.length === 0) return i18n.t('utils:showcaseAssistant.hayDanApiKeyGeminiCua');
+  if (/\s/.test(key)) return i18n.t('utils:showcaseAssistant.apiKeyKhongCoKhoangTrang');
+  if (key.includes('://') || key.includes('=')) return i18n.t('utils:showcaseAssistant.chiDanPhanGiaTriCua');
+  if (key.length < KEY_MIN_LENGTH) return i18n.t('utils:showcaseAssistant.apiKeyQuaNganHayKiem');
+  if (key.length > KEY_MAX_LENGTH || !/^[\x21-\x7E]+$/.test(key)) return i18n.t('utils:showcaseAssistant.apiKeyChiGomChuCai');
   return null;
 }
 
@@ -68,8 +69,8 @@ export function isAssistantKeyError(error: unknown): boolean {
 
 export function assistantErrorMessage(error: unknown, serverMessage: string | undefined): string {
   const status = (error as { response?: { status?: number } } | null)?.response?.status;
-  if (status === 429) return 'Bạn hỏi hơi nhanh. Hãy đợi một chút rồi thử lại nhé.';
+  if (status === 429) return i18n.t('utils:showcaseAssistant.banHoiHoiNhanhHayDoi');
   // The server words key problems for the user and never repeats the key, so its message is safe to show.
   if ((status === 503 || (status === 400 && isAssistantKeyError(error))) && serverMessage) return serverMessage;
-  return 'Không gửi được câu hỏi. Vui lòng thử lại.';
+  return i18n.t('utils:showcaseAssistant.khongGuiDuocCauHoiVui');
 }

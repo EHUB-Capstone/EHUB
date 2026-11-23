@@ -168,6 +168,7 @@
     "noTeamsAreAssignedYet": "Chưa có nhóm nào được phân công.",
     "openWorkspace": "Mở không gian làm việc",
     "nextSessions": "Buổi cố vấn tiếp theo",
-    "noUpcomingSessions": "Không có buổi cố vấn sắp tới."
+    "noUpcomingSessions": "Không có buổi cố vấn sắp tới.",
+    "couldNotLoadMentorOverview": "Không thể tải tổng quan Mentor"
   }
 }

@@ -59,7 +59,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
       .catch((error) => {
         if (!controller.signal.aborted) {
           setIndustries([]);
-          setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+          setIndustriesError(parseApiError(error, t('createProjectWorkspaceForm.failedToLoadStartupIndustries')).message);
         }
       })
       .finally(() => {
@@ -93,7 +93,7 @@ export default function CreateProjectWorkspaceForm({ team, proposal, project, cl
       toast.success(t('createProjectWorkspaceForm.workspaceCreatedAndProjectDirectionSubmitted'));
       await onCreated();
     } catch (error) {
-      toast.error(parseApiError(error, 'Failed to create project workspace.').message);
+      toast.error(parseApiError(error, t('createProjectWorkspaceForm.failedToCreateProjectWorkspace')).message);
     } finally {
       setSubmitting(false);
     }

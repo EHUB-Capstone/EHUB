@@ -53,7 +53,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       setExpertiseText(result.expertise.join(', '));
       setSkillsText(result.technologySkills.join(', '));
       setEditing(needsMentorProfileSetup(result));
-    } catch (cause) { setError(parseApiError(cause, 'Could not load mentor profile').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotLoadMentorProfile')).message); }
     finally { setLoading(false); }
   };
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       setProfile(result); setDraft(result); setExpertiseText(result.expertise.join(', '));
       setSkillsText(result.technologySkills.join(', '));
       setEditing(needsMentorProfileSetup(result));
-    }).catch(cause => { if (active) setError(parseApiError(cause, 'Could not load mentor profile').message); })
+    }).catch(cause => { if (active) setError(parseApiError(cause, t('mentorProfilePage.couldNotLoadMentorProfile')).message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -83,7 +83,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       setProfile(result); setDraft(result); setExpertiseText(result.expertise.join(', '));
       setSkillsText(result.technologySkills.join(', '));
       setEditing(false); setNotice(t('mentorProfilePage.mentorProfileSaved'));
-    } catch (cause) { setError(parseApiError(cause, 'Could not save mentor profile').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotSaveMentorProfile')).message); }
     finally { setSaving(false); }
   };
 
@@ -106,7 +106,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
         setNotice(t('mentorProfilePage.cvUploadedEducationAndWorkExperience'));
       } else setNotice(t('mentorProfilePage.documentUploaded'));
     }
-    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, 'Could not upload document').message); }
+    catch (cause) { if (!controller.signal.aborted) setError(parseApiError(cause, t('mentorProfilePage.couldNotUploadDocument')).message); }
     finally { if (!controller.signal.aborted) setUploading(null); uploadController.current = null; }
   };
 
@@ -119,7 +119,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
       const link = document.createElement('a');
       link.href = url; link.download = kind === 'cv' ? profile.cvFileName ?? 'CV.pdf' : profile.portfolioFileName ?? 'Portfolio.pdf';
       link.click(); URL.revokeObjectURL(url);
-    } catch (cause) { setError(parseApiError(cause, 'Could not download document').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotDownloadDocument')).message); }
     finally { setDownloading(null); }
   };
 
@@ -129,7 +129,7 @@ export default function MentorProfilePage({ embedded = false }: { embedded?: boo
     try {
       const blob = await mentorSupportApi.previewMyCv();
       setCvPreviewUrl(URL.createObjectURL(blob));
-    } catch (cause) { setError(parseApiError(cause, 'Could not preview CV').message); }
+    } catch (cause) { setError(parseApiError(cause, t('mentorProfilePage.couldNotPreviewCv')).message); }
     finally { setPreviewingCv(false); }
   };
 

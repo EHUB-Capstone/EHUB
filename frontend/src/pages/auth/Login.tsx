@@ -11,6 +11,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import { useTheme } from '../../context/ThemeContext';
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
+import { localizeValidationErrors } from '../../i18n/messages';
 import { useAuth } from '../../hooks/useAuth';
 import { AUTH_ERROR_CODES } from '../../types/auth';
 import { parseApiError } from '../../utils/apiError';
@@ -29,6 +30,8 @@ import type { AuthFieldErrors, LoginField } from '../../utils/authValidation';
 import logo from '../../assets/logo.png';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+
+const localizeAuthErrors = <E extends { field: string; message: string; code: string }>(errors: readonly E[]) => localizeValidationErrors('auth', errors);
 
 /* ─── Google icon ─────────────────────────────────── */
 const GoogleIcon: React.FC = () => (
@@ -139,7 +142,7 @@ const Login: React.FC = () => {
   };
 
   const validateField = (field: LoginField) => {
-    const error = validateLoginPayload({ email, password }).find(item => item.field === field);
+    const error = localizeAuthErrors(validateLoginPayload({ email, password })).find(item => item.field === field);
     setFieldErrors(current => {
       const next = { ...current };
       if (error) next[field] = error.message;
@@ -160,7 +163,7 @@ const Login: React.FC = () => {
     setRejectedStatus(false);
     setBlockedStatus(false);
     const payload = { email, password };
-    const nextFieldErrors = toFieldErrorMap(validateLoginPayload(payload));
+    const nextFieldErrors = toFieldErrorMap(localizeAuthErrors(validateLoginPayload(payload)));
     setFieldErrors(nextFieldErrors);
     setFormError('');
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -176,7 +179,7 @@ const Login: React.FC = () => {
       toast.success(t('login.loginSuccessful'));
       await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
-      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, 'Login failed.');
+      const { code, message, fieldErrors: apiFieldErrors } = parseApiError(err, t('login.loginFailed'));
       const mappedFieldErrors = mapApiFieldErrors(apiFieldErrors, LOGIN_FIELDS);
       setFieldErrors(mappedFieldErrors);
       focusFirstError(mappedFieldErrors);
@@ -206,7 +209,7 @@ const Login: React.FC = () => {
       const user = await loginWithGoogle(credentialResponse.credential);
       await redirectByRole(user.roles as string[]);
     } catch (err: unknown) {
-      const { code, message } = parseApiError(err, 'Google sign-in failed.');
+      const { code, message } = parseApiError(err, t('login.googleSignInFailed'));
       if (code === AUTH_ERROR_CODES.ACCOUNT_NOT_REGISTERED) {
         toast.error(t('login.noAccountFoundForThisGoogle'));
       } else if (code === AUTH_ERROR_CODES.ACCOUNT_PENDING_APPROVAL) {

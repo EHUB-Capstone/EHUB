@@ -31,7 +31,7 @@ export default function Rankings() {
         setData(response.data);
         if (!classId) setOptions(response.data.items);
       }).catch((reason: unknown) => {
-        if (!controller.signal.aborted) setError(parseApiError(reason, 'Unable to load rankings.').message);
+        if (!controller.signal.aborted) setError(parseApiError(reason, t('rankings.unableToLoadRankings')).message);
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [semesterCode, classId, checkpointNumber, refresh]);

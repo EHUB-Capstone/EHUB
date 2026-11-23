@@ -79,7 +79,7 @@ const BulkAssignLecturerModal = ({
       .catch(error => {
         if (active) {
           setLecturers([]);
-          toast.error(parseApiError(error, 'Failed to load semester lecturers.').message);
+          toast.error(parseApiError(error, t('bulkAssignLecturerModal.failedToLoadSemesterLecturers')).message);
         }
       })
       .finally(() => {

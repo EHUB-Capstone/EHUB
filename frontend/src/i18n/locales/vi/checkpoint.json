@@ -110,7 +110,8 @@
     "googleDriveFigmaGithubYoutubeMust": "Google Drive, Figma, GitHub, YouTube… phải cho phép xem công khai.",
     "onlyPublicHttpsLinksAreAccepted": "Chỉ chấp nhận liên kết HTTPS công khai · Tối đa 10 liên kết đang hoạt động",
     "saveLink": "Lưu liên kết",
-    "submitLink": "Nộp liên kết"
+    "submitLink": "Nộp liên kết",
+    "unableToSaveTheSubmittedLink": "Không thể lưu liên kết đã nộp."
   },
   "checkpointPanel": {
     "failedToDownloadFile": "Không thể tải tệp xuống.",
@@ -148,7 +149,8 @@
     "loadingProgressAcrossCheckpoints": "Đang tải tiến độ qua các checkpoint…",
     "progressAcrossCheckpoints": "Tiến độ qua các checkpoint",
     "whetherTheFilesOfEachCheckpoint": "Các tệp của từng checkpoint có đề cập đến những gì rubric yêu cầu hay không. “Được đề cập” nghĩa là có tệp nêu tên mục đó, không có nghĩa là đã làm tốt.",
-    "onlyPartOfTheFilesCould": "Chỉ đọc được một phần các tệp ({{v1}}), nên “không được đề cập” có thể chỉ là do tệp chưa được đọc."
+    "onlyPartOfTheFilesCould": "Chỉ đọc được một phần các tệp ({{v1}}), nên “không được đề cập” có thể chỉ là do tệp chưa được đọc.",
+    "couldNotLoadTheProgressAcross": "Không thể tải tiến độ qua các checkpoint."
   },
   "checkpointSection": {
     "checkpointsAreNotAvailableOnThis": "Máy chủ này chưa hỗ trợ checkpoint. Chưa thể nộp bài và xem phản hồi.",

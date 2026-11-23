@@ -112,7 +112,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
       .catch((error) => {
         if (controller.signal.aborted) return;
         setIndustries([]);
-        setIndustriesError(parseApiError(error, 'Failed to load startup industries.').message);
+        setIndustriesError(parseApiError(error, t('classDirectionOverview.failedToLoadStartupIndustries')).message);
       })
       .finally(() => {
         if (!controller.signal.aborted) setIndustriesLoading(false);

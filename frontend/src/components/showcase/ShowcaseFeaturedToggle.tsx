@@ -36,7 +36,7 @@ export default function ShowcaseFeaturedToggle({ showcaseId, title, isFeatured, 
       toast.success(isFeatured ? t('showcaseFeaturedToggle.featuredSelectionRemoved') : t('showcaseFeaturedToggle.projectMarkedAsFeatured'));
       setIsOpen(false);
     } catch (error) {
-      toast.error(parseApiError(error, 'Unable to update the featured selection. Try again.').message);
+      toast.error(parseApiError(error, t('showcaseFeaturedToggle.unableToUpdateTheFeaturedSelection')).message);
     } finally {
       setIsSubmitting(false);
     }

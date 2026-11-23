@@ -23,13 +23,15 @@
     "thisCannotBeUndone": "Hành động này không thể hoàn tác.",
     "deleteComment": "Xóa bình luận",
     "viewMoreReplies_other": "Xem thêm {{count}} phản hồi",
-    "itsRepliesWillBeRemoved_other": "{{count}} phản hồi của bình luận sẽ bị xóa cùng với nó."
+    "itsRepliesWillBeRemoved_other": "{{count}} phản hồi của bình luận sẽ bị xóa cùng với nó.",
+    "failedToLoadComments": "Không thể tải bình luận."
   },
   "showcaseFeaturedToggle": {
     "featuredSelectionRemoved": "Đã bỏ lựa chọn nổi bật.",
     "projectMarkedAsFeatured": "Đã đánh dấu dự án là nổi bật.",
     "thisProjectWillNoLongerAppear": "Dự án này sẽ không còn xuất hiện trong các showcase do khoa chọn. Dự án vẫn được công khai.",
-    "thisPublishedProjectWillAppearIn": "Dự án đã công khai này sẽ xuất hiện trong các showcase do khoa chọn."
+    "thisPublishedProjectWillAppearIn": "Dự án đã công khai này sẽ xuất hiện trong các showcase do khoa chọn.",
+    "unableToUpdateTheFeaturedSelection": "Không thể cập nhật lựa chọn nổi bật. Hãy thử lại."
   },
   "showcaseInsights": {
     "views": "Lượt xem",
@@ -42,7 +44,8 @@
     "details": "Chi tiết",
     "last14Days": "14 ngày gần nhất",
     "dailyEngagementOverTheLastFourteen": "Mức tương tác hằng ngày trong mười bốn ngày gần nhất",
-    "noEngagementInTheLast14": "Chưa có tương tác nào trong 14 ngày gần nhất. Lượt xem, lượt quan tâm và bình luận sẽ xuất hiện tại đây."
+    "noEngagementInTheLast14": "Chưa có tương tác nào trong 14 ngày gần nhất. Lượt xem, lượt quan tâm và bình luận sẽ xuất hiện tại đây.",
+    "failedToLoadShowcaseInsights": "Không thể tải thống kê showcase."
   },
   "showcaseModerationActions": {
     "rejectThisPage": "Từ chối trang này",
@@ -59,7 +62,8 @@
     "rejectPage": "Từ chối trang",
     "showcaseRejected": "Đã từ chối showcase.",
     "hidePage": "Ẩn trang",
-    "showcaseHidden": "Đã ẩn showcase."
+    "showcaseHidden": "Đã ẩn showcase.",
+    "unableToSaveTheDecisionTry": "Không thể lưu quyết định. Hãy thử lại."
   },
   "showcaseProfileSummary": {
     "projectProfile": "Hồ sơ dự án",
@@ -94,7 +98,8 @@
     "reportsAreReviewedByAuthorisedStaff": "Báo cáo được nhân sự có thẩm quyền xem xét. Danh tính của bạn không hiển thị với nhóm dự án.",
     "note": "Ghi chú",
     "optional": "(không bắt buộc)",
-    "addContextForTheReviewer": "Thêm bối cảnh cho người xem xét"
+    "addContextForTheReviewer": "Thêm bối cảnh cho người xem xét",
+    "couldNotSubmitTheReportTry": "Không thể gửi báo cáo. Hãy thử lại."
   },
   "showcaseReports": {
     "reportDismissed": "Đã bỏ qua báo cáo.",
@@ -136,7 +141,10 @@
     },
     "viewReportedComment": "Xem bình luận bị báo cáo",
     "viewReportedShowcase": "Xem showcase bị báo cáo",
-    "historySummary_other": "{{count}} báo cáo {{status}} trong lịch sử này."
+    "historySummary_other": "{{count}} báo cáo {{status}} trong lịch sử này.",
+    "couldNotResolveThisReportTry": "Không thể xử lý báo cáo này. Hãy thử lại.",
+    "couldNotDeleteReportHistoryTry": "Không thể xóa lịch sử báo cáo. Hãy thử lại.",
+    "failedToLoadReports": "Không thể tải báo cáo."
   },
   "showcaseReviewHistory": {
     "submittedForReview": "Đã gửi để xem xét",
@@ -207,7 +215,8 @@
     "hintAdmin": "Tất cả dự án đã công khai. Hãy chọn các dự án, sau đó làm nổi bật hoặc bỏ nổi bật cùng lúc.",
     "hintLecturer": "Các dự án đã công khai thuộc lớp của bạn. Hãy chọn các dự án, sau đó làm nổi bật hoặc bỏ nổi bật cùng lúc.",
     "noLecturer": "Chưa có giảng viên",
-    "featuredCount": "{{featured}}/{{total}} nổi bật"
+    "featuredCount": "{{featured}}/{{total}} nổi bật",
+    "pleaseTryAgain": "Vui lòng thử lại."
   },
   "projectMedia": {
     "videoPreview": "Xem trước video của {{name}}"
@@ -274,7 +283,8 @@
     "startsAsAPrivateDraft": "Bắt đầu dưới dạng bản nháp riêng tư.",
     "openEditor": "Mở trình chỉnh sửa",
     "createPage": "Tạo trang",
-    "viewPublicPage": "Xem trang công khai"
+    "viewPublicPage": "Xem trang công khai",
+    "failedToLoadYourShowcasePages": "Không thể tải các trang showcase của bạn."
   },
   "showcaseDetail": {
     "screenshots": "Ảnh chụp màn hình",
@@ -293,7 +303,8 @@
     "links": "Liên kết",
     "opensInANewTab": "(mở trong thẻ mới)",
     "whatMakesItDifferent": "Điểm khác biệt",
-    "reviewThisPage": "Xem xét trang này"
+    "reviewThisPage": "Xem xét trang này",
+    "failedToLoadThisShowcasePage": "Không thể tải trang showcase này."
   },
   "showcaseEditor": {
     "loadingShowcaseEditor": "Đang tải trình chỉnh sửa showcase",
@@ -381,6 +392,7 @@
       "Published": "Chưa có trang nào được công khai.",
       "Hidden": "Không có trang nào bị ẩn.",
       "Draft": "Không có trang nào ở dạng bản nháp."
-    }
+    },
+    "failedToLoadShowcasePages": "Không thể tải các trang showcase."
   }
 }

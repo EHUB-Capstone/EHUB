@@ -169,6 +169,7 @@
     "noTeamsAreAssignedYet": "No teams are assigned yet.",
     "openWorkspace": "Open workspace",
     "nextSessions": "Next sessions",
-    "noUpcomingSessions": "No upcoming sessions."
+    "noUpcomingSessions": "No upcoming sessions.",
+    "couldNotLoadMentorOverview": "Could not load mentor overview"
   }
 }
