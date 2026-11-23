@@ -23,6 +23,7 @@ import type {
 import ProjectAchievementBadges from './ProjectAchievementBadges';
 import ProjectCompetitionBadges from './ProjectCompetitionBadges';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 const headerClass = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap';
 const cellClass = 'px-4 py-3 align-top text-sm text-slate-700';
@@ -49,7 +50,7 @@ export function MentorLabel({ mentor }: { mentor: ProjectDataMentor | null }) {
       {mentor.isHistorical && (
         <span
           className="text-caption font-medium text-slate-400"
-          title={mentor.endedAtUtc ? t('projectDataTable.assignmentEnded2', { v1: new Date(mentor.endedAtUtc).toLocaleDateString() }) : t('projectDataTable.assignmentEnded')}
+          title={mentor.endedAtUtc ? t('projectDataTable.assignmentEnded2', { v1: fmtDate(mentor.endedAtUtc) }) : t('projectDataTable.assignmentEnded')}
         >
           {t('projectDataTable.assignmentEnded')}
         </span>

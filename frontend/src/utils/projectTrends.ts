@@ -5,9 +5,9 @@ export const TREND_LEVELS = ['semester', 'subject', 'class'] as const;
 export type TrendLevel = (typeof TREND_LEVELS)[number];
 
 export const TREND_LEVEL_LABELS: Record<TrendLevel, string> = {
-  semester: 'Semester',
-  subject: 'Subject',
-  class: 'Class',
+  get semester() { return i18n.t('utils:projectData.semester'); },
+  get subject() { return i18n.t('utils:projectData.subject'); },
+  get class() { return i18n.t('utils:projectTrends.class'); },
 };
 
 export const TREND_SCORE_SCALE = 10;

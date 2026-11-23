@@ -1,5 +1,6 @@
 import type { MentorHistoryItem } from '../types/teamManagement';
 import i18n from '../i18n/index.ts';
+import { formatDate as fmtDate } from '../i18n/format.ts';
 
 export interface MentorHistoryGroup {
   semester: string;
@@ -18,7 +19,7 @@ export function groupMentorHistoryBySemester(items: readonly MentorHistoryItem[]
 
 const dateText = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB');
+  return Number.isNaN(date.getTime()) ? '' : fmtDate(date);
 };
 
 /** One short line saying how and when the assignment ended. */

@@ -37,6 +37,7 @@ import {
 } from '../../utils/accountApproval';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 interface AccountApprovalBoardProps {
   requests: AccountApprovalRequest[];
@@ -65,7 +66,7 @@ const ROLE_STYLES = {
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getTime() === 0) return 'Date unavailable';
-  return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return fmtDate(date, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function initials(name: string): string {

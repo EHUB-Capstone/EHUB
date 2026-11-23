@@ -5,6 +5,7 @@ import RubricScoringForm from './RubricScoringForm';
 import CommentThread from './CommentThread';
 import PerformanceLevelBadge from './PerformanceLevelBadge';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 /**
  * EvaluationSummary Component
@@ -112,7 +113,7 @@ const EvaluationSummary = ({
           <div className="bg-blue-50 p-3 rounded">
             <div className="text-gray-600">{t('evaluationSummary.submitted')}</div>
             <div className="font-semibold">
-              {evaluation?.submittedAt ? new Date(evaluation.submittedAt).toLocaleDateString() : t('evaluationSummary.notSubmitted')}
+              {evaluation?.submittedAt ? fmtDate(evaluation.submittedAt) : t('evaluationSummary.notSubmitted')}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import Badge from '../ui/Badge';
 import Card from '../ui/Card';
 import type { ShowcaseReferenceDataDto, ShowcaseReferenceEvaluationDto } from '../../types/showcase';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 function formatScore(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -31,7 +32,7 @@ function EvaluationItem({ evaluation }: { evaluation: ShowcaseReferenceEvaluatio
         <span className="text-body-sm font-normal text-slate-600"> / {formatScore(evaluation.maxTotalScore)}</span>
       </p>
       {evaluation.publishedAt && (
-        <p className="text-caption text-slate-600">{t('showcaseReferenceData.published', { v1: new Date(evaluation.publishedAt).toLocaleDateString() })}</p>
+        <p className="text-caption text-slate-600">{t('showcaseReferenceData.published', { v1: fmtDate(evaluation.publishedAt) })}</p>
       )}
       <dl className="mt-2 space-y-2">
         <FeedbackLine label={t('showcaseReferenceData.strengths')} value={evaluation.strengths} />

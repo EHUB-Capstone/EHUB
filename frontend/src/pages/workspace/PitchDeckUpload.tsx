@@ -5,6 +5,7 @@ import { UploadCloud, FileText, Download, Trash2, Loader2, Calendar } from 'luci
 import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEditable, onRefresh }) {
   const { t } = useTranslation('workspace');
@@ -138,7 +139,7 @@ export default function PitchDeckUpload({ teamId, latestDeck, pitchDecks, isEdit
               </h3>
               <p className="text-xs text-slate-400 mt-1">{t('pitchDeckUpload.version', { v1: formatBytes(latestDeck.fileSize), versionNumber: latestDeck.versionNumber })}</p>
               <div className="flex items-center gap-3 mt-3 text-xs text-slate-400">
-                <span className="flex items-center gap-1 shrink-0"><Calendar className="w-3.5 h-3.5" />{new Date(latestDeck.createdAt).toLocaleDateString()}</span>
+                <span className="flex items-center gap-1 shrink-0"><Calendar className="w-3.5 h-3.5" />{fmtDate(latestDeck.createdAt)}</span>
                 {getWorkspaceLabel(latestDeck.teamId) && (
                   <span className="font-semibold text-slate-500">{getWorkspaceLabel(latestDeck.teamId)}</span>
                 )}

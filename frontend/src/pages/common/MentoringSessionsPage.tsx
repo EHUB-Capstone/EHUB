@@ -11,6 +11,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 interface TeamOption { id: string; teamName: string; teamCode?: string; assignments: MentorAssignment[] }
 const emptyForm: SaveMentoringSession = { teamId: '', title: '', description: '', startAt: '', endAt: '', location: '', meetingUrl: '' };
@@ -138,7 +139,7 @@ export default function MentoringSessionsPage() {
       <select aria-label={t('mentoringSessionsPage.filterByTeam')} value={teamId} onChange={event => setTeamId(event.target.value)} className="rounded-lg border p-2 text-body"><option value="">{t('mentoringSessionsPage.allAccessibleTeams')}</option>{teams.map(team => <option key={team.id} value={team.id}>{team.teamName}</option>)}</select></div>
       {loading ? <p>{t('mentoringSessionsPage.loadingSessions')}</p> : sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-card">{t('mentoringSessionsPage.noMentoringSessionsYet')}</div> : sessions.map(session =>
         <article key={session.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-subheading text-secondary">{session.title}</h3>
-          <p className="text-body text-slate-600">{teams.find(team => team.id === session.teamId)?.teamName ?? t('mentoringSessionsPage.team')} · {new Date(session.startAt).toLocaleString()} – {new Date(session.endAt).toLocaleString()}</p></div>
+          <p className="text-body text-slate-600">{teams.find(team => team.id === session.teamId)?.teamName ?? t('mentoringSessionsPage.team')} · {fmtDateTime(session.startAt)} – {fmtDateTime(session.endAt)}</p></div>
           <Badge variant={session.status === 'Scheduled' ? 'info' : session.status === 'Completed' ? 'success' : session.status === 'Cancelled' ? 'neutral' : 'danger'}>{session.status}</Badge></div>
           {session.description && <p className="text-body">{session.description}</p>}
           {session.location && <p className="text-body text-slate-600">{t('mentoringSessionsPage.location', { location: session.location })}</p>}

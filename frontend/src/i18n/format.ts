@@ -19,33 +19,33 @@ export function toValidDate(value: DateInput): Date | null {
 
 export function formatDate(
   value: DateInput,
-  options: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' },
+  options?: Intl.DateTimeFormatOptions,
   fallback = '',
 ): string {
   const date = toValidDate(value);
   return date ? new Intl.DateTimeFormat(getIntlLocale(), options).format(date) : fallback;
 }
 
+const DATE_TIME_DEFAULTS: Intl.DateTimeFormatOptions = {
+  year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+};
+const TIME_DEFAULTS: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: 'numeric', second: 'numeric' };
+
+// Without options these behave like Date#toLocaleString() / toLocaleTimeString(), but in the active UI language.
 export function formatDateTime(
   value: DateInput,
-  options: Intl.DateTimeFormatOptions = {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  },
+  options?: Intl.DateTimeFormatOptions,
   fallback = '',
 ): string {
-  return formatDate(value, options, fallback);
+  return formatDate(value, options ?? DATE_TIME_DEFAULTS, fallback);
 }
 
 export function formatTime(
   value: DateInput,
-  options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' },
+  options?: Intl.DateTimeFormatOptions,
   fallback = '',
 ): string {
-  return formatDate(value, options, fallback);
+  return formatDate(value, options ?? TIME_DEFAULTS, fallback);
 }
 
 export function formatNumber(

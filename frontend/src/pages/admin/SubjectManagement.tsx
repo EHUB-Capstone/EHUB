@@ -66,6 +66,7 @@ import type {
 } from '../../types/subjects';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const emptySummary: TeachingStaffSummary = { lecturers: 0, mentors: 0, assigned: 0, unassigned: 0, classes: 0 };
 const currentYear = new Date().getFullYear();
@@ -85,7 +86,7 @@ function semesterLabel({ semester, year }: SemesterDto) {
 
 function formatSemesterDate(value: string | null) {
   if (!value) return 'Not configured';
-  return new Intl.DateTimeFormat('en-GB').format(new Date(`${value}T00:00:00`));
+  return fmtDate(new Date(`${value}T00:00:00`));
 }
 
 function semesterTiming(semester: SemesterDto): 'Not configured' | 'Upcoming' | 'In progress' | 'Ended' {

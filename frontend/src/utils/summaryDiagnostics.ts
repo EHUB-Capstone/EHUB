@@ -48,14 +48,14 @@ export function ageText(seconds: number | null | undefined): string {
 }
 
 const FAILURE_LABELS: Record<string, string> = {
-  WORKSPACE_SUMMARY_UNREADABLE: 'The file has no readable text (scan, image or password-protected)',
-  WORKSPACE_SUMMARY_NO_CONTENT: 'The file was removed or has no content',
-  WORKSPACE_SUMMARY_MODEL_UNREACHABLE: 'The AI model could not be reached',
-  WORKSPACE_SUMMARY_MODEL_TIMEOUT: 'The AI model took too long',
-  WORKSPACE_SUMMARY_MODEL_BAD_ANSWER: 'The AI model returned an answer that could not be used',
-  WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE: 'The file storage was unavailable',
-  WORKSPACE_SUMMARY_UNAVAILABLE: 'The summary failed unexpectedly',
-  UNKNOWN: 'No reason was recorded',
+  get WORKSPACE_SUMMARY_UNREADABLE() { return i18n.t('utils:summaryDiagnostics.theFileHasNoReadableText'); },
+  get WORKSPACE_SUMMARY_NO_CONTENT() { return i18n.t('utils:summaryDiagnostics.theFileWasRemovedOrHas'); },
+  get WORKSPACE_SUMMARY_MODEL_UNREACHABLE() { return i18n.t('utils:summaryDiagnostics.theAiModelCouldNotBe'); },
+  get WORKSPACE_SUMMARY_MODEL_TIMEOUT() { return i18n.t('utils:summaryDiagnostics.theAiModelTookTooLong'); },
+  get WORKSPACE_SUMMARY_MODEL_BAD_ANSWER() { return i18n.t('utils:summaryDiagnostics.theAiModelReturnedAnAnswer'); },
+  get WORKSPACE_SUMMARY_STORAGE_UNAVAILABLE() { return i18n.t('utils:summaryDiagnostics.theFileStorageWasUnavailable'); },
+  get WORKSPACE_SUMMARY_UNAVAILABLE() { return i18n.t('utils:summaryDiagnostics.theSummaryFailedUnexpectedly'); },
+  get UNKNOWN() { return i18n.t('utils:summaryDiagnostics.noReasonWasRecorded'); },
 };
 
 /** A reason a file failed, in plain words; an unknown code is shown as it is so it can still be looked up. */

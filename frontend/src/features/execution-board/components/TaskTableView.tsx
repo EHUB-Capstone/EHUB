@@ -6,6 +6,7 @@ import { getTaskStatus } from '../boardUtils';
 import { taskProgress as getProgress } from '../../../utils/taskProgress';
 import TruncatedText from '../../../components/ui/TruncatedText';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 function Badge({ children, className = '' }) {
   return (
@@ -17,7 +18,7 @@ function Badge({ children, className = '' }) {
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-GB', {
+  return fmtDate(value, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

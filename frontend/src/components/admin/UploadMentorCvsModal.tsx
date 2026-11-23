@@ -12,6 +12,7 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface Props { onClose: () => void; onUploaded: () => void }
 
@@ -217,7 +218,7 @@ export default function UploadMentorCvsModal({ onClose, onUploaded }: Props) {
                 const locked = uploading || matching || row.status === 'success';
                 const labelId = `${inputId}-mentor-${index}`;
                 return <tr key={row.id}>
-                  <td className="w-1/4 p-3 align-top"><p className="break-all font-medium">{row.file.name}</p><p className="mt-1 text-caption text-slate-500">{t('uploadMentorCvsModal.kb', { v1: (row.file.size / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 }) })}</p></td>
+                  <td className="w-1/4 p-3 align-top"><p className="break-all font-medium">{row.file.name}</p><p className="mt-1 text-caption text-slate-500">{t('uploadMentorCvsModal.kb', { v1: fmtNumber((row.file.size / 1024), { maximumFractionDigits: 1 }) })}</p></td>
                   <td className="w-1/2 space-y-2 p-3 align-top">
                     <label htmlFor={labelId} className="sr-only">{t('uploadMentorCvsModal.mentorFor', { name: row.file.name })}</label>
                     <CvMentorPicker id={labelId} fileName={row.file.name} value={row.mentorId} disabled={locked}

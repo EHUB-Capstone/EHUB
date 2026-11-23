@@ -22,6 +22,7 @@ import {
 import type { WeeklyTask, WeeklyTaskKind, WeeklyTaskStatus, SaveWeeklyTaskPayload } from '../../types/workspaceTools';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 interface RoadmapMember {
   _id?: string;
@@ -117,7 +118,7 @@ function TaskCard({ task, canEdit, canDelete, canUpdateSts, onEdit, onOpen, onDe
   const checklist = task.checklist || [];
   const checklistDone = checklist.filter(c => c.isCompleted).length;
   const assigneeName = task.assigneeStudentId?.fullName || task.assigneeStudentId?.rollNumber || null;
-  const dueDateStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : null;
+  const dueDateStr = task.dueDate ? fmtDate(task.dueDate, { day: '2-digit', month: 'short' }) : null;
   const isOverdue = task.status === 'OVERDUE';
 
   const handleCardClick = (event) => {

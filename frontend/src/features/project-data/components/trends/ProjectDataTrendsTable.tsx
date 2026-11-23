@@ -9,11 +9,12 @@ import {
 } from '../../../../utils/projectTrends';
 import { ScoreChange } from './TrendDelta';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../../../i18n/format';
 
 function Count({ value, change }: { value: number; change: number | null }) {
   return (
     <span>
-      {value.toLocaleString()}
+      {fmtNumber(value)}
       {change !== null && change !== 0 && <span className="ml-1 text-caption text-slate-500">({formatCountChange(change)})</span>}
     </span>
   );
@@ -52,8 +53,8 @@ export default function ProjectDataTrendsTable({ rows, level }: { rows: ProjectD
               <th scope="row" className="py-2 pr-3 font-semibold text-secondary">{row.semesterCode}</th>
               {showSubject && <td className="py-2 pr-3 text-slate-700">{row.subjectCode}</td>}
               {showClass && <td className="py-2 pr-3 text-slate-700">{row.classCode}</td>}
-              <td className="py-2 pr-3 text-right">{row.totalGroups.toLocaleString()}</td>
-              <td className="py-2 pr-3 text-right">{row.gradedGroups.toLocaleString()}</td>
+              <td className="py-2 pr-3 text-right">{fmtNumber(row.totalGroups)}</td>
+              <td className="py-2 pr-3 text-right">{fmtNumber(row.gradedGroups)}</td>
               <td className="py-2 pr-3">
                 <div className="flex items-center gap-2">
                   <span className="w-10 shrink-0 font-semibold text-secondary">{formatScore(row.averageScore)}</span>

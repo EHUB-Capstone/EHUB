@@ -4,6 +4,7 @@ import { getSessionsByTeam, cancelSession } from '../../api/mentoringApi';
 import ScheduleSessionModal from './ScheduleSessionModal';
 import SessionNoteForm from './SessionNoteForm';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const SessionCalendar = ({ teamId }) => {
   const { t } = useTranslation('mentoring');
@@ -57,7 +58,7 @@ const SessionCalendar = ({ teamId }) => {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
+    return fmtDate(date, {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -101,7 +102,7 @@ const SessionCalendar = ({ teamId }) => {
 
   const daysInMonth = getDaysInMonth(currentMonth);
   const firstDay = getFirstDayOfMonth(currentMonth);
-  const monthName = currentMonth.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+  const monthName = fmtDate(currentMonth, { month: 'long', year: 'numeric' });
 
   return (
     <div className="space-y-6">

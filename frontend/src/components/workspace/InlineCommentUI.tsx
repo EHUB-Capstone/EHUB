@@ -5,6 +5,7 @@ import { getProposalComments, createProposalComment, resolveComment } from '../.
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const roleBadge = (role) => {
   const normalized = (role || '').toUpperCase();
@@ -86,8 +87,8 @@ function CommentNode({ comment, onReply, onResolve, canResolve, canReply }) {
             )}
           </div>
           <p className="text-xs text-slate-400 flex items-center gap-1.5">
-            {new Date(comment.createdAt).toLocaleString()}
-            {comment.resolvedAt && <span>{t('inlineCommentUI.resolved2', { v1: new Date(comment.resolvedAt).toLocaleString() })}</span>}
+            {fmtDateTime(comment.createdAt)}
+            {comment.resolvedAt && <span>{t('inlineCommentUI.resolved2', { v1: fmtDateTime(comment.resolvedAt) })}</span>}
           </p>
           <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{comment.content}</p>
 

@@ -1,7 +1,8 @@
 // Single source of truth for supported UI languages. Adding a language means adding
 // one entry here plus a `locales/<code>/` folder with the same namespaces as `en`.
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en', label: 'English', short: 'EN', intlLocale: 'en-US' },
+  // English uses day-first dates (en-GB), matching the rest of the product and Vietnamese users' habits.
+  { code: 'en', label: 'English', short: 'EN', intlLocale: 'en-GB' },
   { code: 'vi', label: 'Tiếng Việt', short: 'VI', intlLocale: 'vi-VN' },
 ] as const;
 

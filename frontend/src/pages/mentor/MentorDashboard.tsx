@@ -16,6 +16,7 @@ import {
   ArrowRight, Zap, Star, AlertCircle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const MentorDashboard = () => {
   const { t } = useTranslation('dashboard');
@@ -112,7 +113,7 @@ const MentorDashboard = () => {
                 {recentSessions.map(s => (
                   <div key={s._id} className="p-3 rounded-xl border border-slate-100">
                     <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{s.teamId?.teamName || s.teamId?.name || t('mentorDashboard.team')} • {s.meetingDate ? new Date(s.meetingDate).toLocaleDateString() : '—'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{s.teamId?.teamName || s.teamId?.name || t('mentorDashboard.team')} • {s.meetingDate ? fmtDate(s.meetingDate) : '—'}</p>
                   </div>
                 ))}
               </div>

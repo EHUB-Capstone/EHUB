@@ -1,10 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
+import { enGB, vi as viLocale } from 'react-day-picker/locale';
+import { useLanguage } from '../../context/LanguageContext';
 import 'react-day-picker/style.css';
 import type { SemesterCode } from '../../types/subjects';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 type ActiveField = 'start' | 'end';
 
@@ -46,7 +49,7 @@ function toIsoDate(value: Date): string {
 
 function displayDate(value: string): string {
   const date = parseIsoDate(value);
-  return date ? new Intl.DateTimeFormat('en-GB').format(date) : value;
+  return date ? fmtDate(date) : value;
 }
 
 function monthStart(value: Date): Date {
@@ -58,7 +61,7 @@ function addMonths(value: Date, amount: number): Date {
 }
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
-  new Intl.DateTimeFormat('en', { month: 'short' }).format(new Date(2026, month, 1)));
+  fmtDate(new Date(2026, month, 1), { month: 'short' }));
 
 const HiddenMonthCaption = () => null;
 
@@ -71,6 +74,7 @@ export default function SemesterDateRangePicker({
   onChange,
 }: SemesterDateRangePickerProps) {
   const { t } = useTranslation('admin');
+  const { language } = useLanguage();
   const helpId = useId();
   const endButtonRef = useRef<HTMLButtonElement>(null);
   const [activeField, setActiveField] = useState<ActiveField | null>(null);
@@ -224,7 +228,7 @@ export default function SemesterDateRangePicker({
                   aria-expanded={monthSelectionOpen}
                   aria-label={t('semesterDateRangePicker.chooseCalendarMonthAndYear')}
                 >
-                  {new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(displayedMonth)}
+                  {fmtDate(displayedMonth, { month: 'long', year: 'numeric' })}
                   <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${monthSelectionOpen ? 'rotate-180' : ''}`} />
                 </button>
                 <button
@@ -279,6 +283,7 @@ export default function SemesterDateRangePicker({
               ) : (
                 <DayPicker
                   mode="single"
+                  locale={language === 'vi' ? viLocale : enGB}
                   selected={activeField === 'start' ? selectedStart : selectedEnd}
                   onSelect={selectDate}
                   month={displayedMonth}

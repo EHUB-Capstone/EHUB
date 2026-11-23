@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { matchesSearchQuery } from '../../utils/searchText';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatTime as fmtTime } from '../../i18n/format';
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const roleConfig = {
   ADMIN:    { color: 'bg-red-50 text-red-700 border-red-200',     icon: <Shield       className="w-3 h-3 text-red-500 shrink-0" />,     get label() { return i18n.t('community:groupChat.admin'); } },
@@ -840,7 +841,7 @@ export default function GroupChat() {
                     const senderAvatar = typeof m.senderId === 'object'
                       ? m.senderId?.avatar
                       : null;
-                    const formattedTime = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const formattedTime = fmtTime(m.createdAt, { hour: '2-digit', minute: '2-digit' });
                     // Ưu tiên nickname từ map; fallback về senderName đã lưu
                     const resolvedName = (senderId && nicknameMap[senderId]) || m.senderName;
                     const hasNickname  = senderId && !!nicknameMap[senderId];

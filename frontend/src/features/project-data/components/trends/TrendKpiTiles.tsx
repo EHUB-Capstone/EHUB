@@ -5,6 +5,7 @@ import { CHART_COLORS } from '../../../../constants/chartColors';
 import { formatScore, type LatestSemesterSummary } from '../../../../utils/projectTrends';
 import { CountChange, ScoreChange } from './TrendDelta';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../../../i18n/format';
 
 function Sparkline({ values, label }: { values: (number | null)[]; label: string }) {
   const data = values.map((value, index) => ({ index, value }));
@@ -59,7 +60,7 @@ export default function TrendKpiTiles({ summary }: { summary: LatestSemesterSumm
 
       <Tile title={t('trendKpiTiles.gradedGroups')} caption={t('trendKpiTiles.ofGroupsHaveAnOfficialScore', { coveragePercent: summary.coveragePercent })}>
         <p className="text-heading font-semibold text-secondary">
-          {summary.gradedGroups.toLocaleString()} <span className="text-body text-slate-500">/ {summary.totalGroups.toLocaleString()}</span>
+          {fmtNumber(summary.gradedGroups)} <span className="text-body text-slate-500">/ {fmtNumber(summary.totalGroups)}</span>
         </p>
         <span className="mt-2 block h-2 w-full min-w-24 rounded-full bg-slate-200" aria-hidden="true">
           <span className="block h-2 rounded-full bg-primary" style={{ width: `${summary.coveragePercent}%` }} />
@@ -71,7 +72,7 @@ export default function TrendKpiTiles({ summary }: { summary: LatestSemesterSumm
         caption={t('trendKpiTiles.groupsLabelledPotential', { semesterCode: summary.semesterCode })}
         aside={<Sparkline values={potential} label={t('trendKpiTiles.potentialProjectsBySemesterLatest', { potentialGroups: summary.potentialGroups })} />}
       >
-        <p className="text-heading font-semibold text-secondary">{summary.potentialGroups.toLocaleString()}</p>
+        <p className="text-heading font-semibold text-secondary">{fmtNumber(summary.potentialGroups)}</p>
         <p className="text-body-sm"><CountChange change={summary.potentialChange} /></p>
       </Tile>
     </div>

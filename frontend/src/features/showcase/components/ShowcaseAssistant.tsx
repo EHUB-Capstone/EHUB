@@ -22,6 +22,7 @@ import {
   type AssistantChatMessage,
 } from '../../../utils/showcaseAssistant';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 const GREETED_KEY = 'ehub-hubby-greeted';
 
@@ -51,8 +52,8 @@ function ProjectResult({ project, backTo }: { project: ShowcaseAssistantProjectD
           {project.reason && <p className="mt-1 text-body-sm text-slate-700 dark:text-slate-200">{project.reason}</p>}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-slate-500 dark:text-slate-400">
             {project.industries.slice(0, 2).map(industry => <span key={industry} className="font-medium text-primary-700 dark:text-primary-300">{industry}</span>)}
-            <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />{project.likeCount.toLocaleString()}<span className="sr-only"> {t('showcaseAssistant.luotThich')}</span></span>
-            <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" aria-hidden="true" />{project.viewCount.toLocaleString()}<span className="sr-only"> {t('showcaseAssistant.luotXem')}</span></span>
+            <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />{fmtNumber(project.likeCount)}<span className="sr-only"> {t('showcaseAssistant.luotThich')}</span></span>
+            <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" aria-hidden="true" />{fmtNumber(project.viewCount)}<span className="sr-only"> {t('showcaseAssistant.luotXem')}</span></span>
           </div>
         </div>
       </div>

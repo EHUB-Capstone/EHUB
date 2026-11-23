@@ -7,6 +7,7 @@ import { PRIORITY_CFG, STATUS_CFG } from '../../features/execution-board/constan
 import type { WeeklyTask } from '../../types/workspaceTools';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 type DetailTask = WeeklyTask & { computedStatus?: string };
 
@@ -23,7 +24,7 @@ const TASK_TYPE_LABEL: Record<string, string> = {
 };
 
 const formatDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  value ? fmtDate(value, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const assigneeLabel = (task: DetailTask) => {
   const assignee = task.assigneeStudentId;

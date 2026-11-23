@@ -20,6 +20,7 @@ import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_LIMITS, timeAgo } from '../../utils/showcase';
 import ShowcaseReportButton from './ShowcaseReportButton';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime, formatNumber as fmtNumber } from '../../i18n/format';
 
 const PAGE_SIZE = 10;
 const REPLY_PAGE_SIZE = 20;
@@ -171,7 +172,7 @@ function CommentBody({ showcaseId, comment, canReport, small = false, onReply, o
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-body font-semibold text-secondary">{comment.authorName}</span>
           {comment.isTeamReply && <Badge variant="brand" size="sm">{t('showcaseComments.team')}</Badge>}
-          <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()} className="text-caption text-slate-500">{timeAgo(comment.createdAt)}</time>
+          <time dateTime={comment.createdAt} title={fmtDateTime(comment.createdAt)} className="text-caption text-slate-500">{timeAgo(comment.createdAt)}</time>
         </div>
         <ExpandableText text={comment.content} />
         <div className="mt-1 flex gap-4 text-body-sm font-semibold text-slate-500">
@@ -295,7 +296,7 @@ export default function ShowcaseComments({ showcaseId, commentCount }: ShowcaseC
       <Card.Header className="mb-4">
         <Card.Title icon={MessageSquare}>
           <span id="showcase-comments-heading">{t('showcaseComments.comments')}</span>
-          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-semibold text-slate-700">{commentCount.toLocaleString()}</span>
+          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-semibold text-slate-700">{fmtNumber(commentCount)}</span>
         </Card.Title>
       </Card.Header>
 

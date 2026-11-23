@@ -18,6 +18,7 @@ import {
 } from '../../../utils/projectDistribution';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from '../../../i18n/format';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 interface ProjectDataDistributionProps {
   distribution: ProjectDataDistributionData | undefined;
@@ -56,7 +57,7 @@ function BarList({ rows, total, label }: { rows: Row[]; total: number; label: st
             <span className="flex items-baseline justify-between gap-3 text-body-sm">
               <span className="min-w-0 truncate text-slate-700">{row.label}</span>
               <span className="shrink-0 font-semibold text-secondary">
-                {row.count.toLocaleString()} <span className="font-normal text-slate-500">({percent}%)</span>
+                {fmtNumber(row.count)} <span className="font-normal text-slate-500">({percent}%)</span>
               </span>
             </span>
             <span className="mt-1 block h-2 w-full rounded-full bg-slate-100" aria-hidden="true">
@@ -219,7 +220,7 @@ export default function ProjectDataDistribution({
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption text-slate-500">
-          {t('projectDataDistribution.percentagesAreSharesOfGroupsSo', { v1: total.toLocaleString() })}
+          {t('projectDataDistribution.percentagesAreSharesOfGroupsSo', { v1: fmtNumber(total) })}
         </p>
         <Button variant="outline" size="sm" onClick={onViewTable}>
           {t('projectDataDistribution.viewGroupsInTable', { count: total, formatted: formatNumber(total) })}

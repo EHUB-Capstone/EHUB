@@ -14,6 +14,7 @@ import { Star, MessageSquare, ClipboardCheck, Award, ChevronDown, ChevronUp } fr
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const CRITERIA = [
   { key: 'innovationScore', get label() { return i18n.t('community:ideaDetail.innovation'); }, get desc() { return i18n.t('community:ideaDetail.originalityAndCreativityOfTheIdea'); } },
@@ -258,7 +259,7 @@ const EvaluationPage = () => {
                           <div className="flex justify-between items-center mb-3">
                             <div>
                               <p className="font-semibold text-slate-900">{ev.lecturerId?.name || t('groupChat.lecturer')}</p>
-                              <p className="text-xs text-slate-400">{ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : '—'}</p>
+                              <p className="text-xs text-slate-400">{ev.createdAt ? fmtDate(ev.createdAt) : '—'}</p>
                             </div>
                             <span className={`text-2xl font-black ${ev.totalScore >= 8 ? 'text-green-600' : ev.totalScore >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{ev.totalScore?.toFixed(2)}/10</span>
                           </div>

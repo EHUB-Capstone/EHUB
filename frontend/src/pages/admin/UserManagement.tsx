@@ -22,6 +22,7 @@ import { mentorAdminApi } from '../../api/mentorAdminApi';
 import { MENTOR_KIND_OPTIONS, mentorTypeError, toManagedUserPayload } from '../../utils/managedUserForm';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const roleBadge = { ADMIN: 'Approved', LECTURER: 'Submitted', MENTOR: 'Review', STUDENT: 'Reviewed' };
 const roleLabel = { get ADMIN() { return i18n.t('admin:userManagement.admin'); }, get LECTURER() { return i18n.t('admin:classManagement.lecturer'); }, get MENTOR() { return i18n.t('admin:subjectManagement.mentor'); }, get STUDENT() { return i18n.t('admin:userManagement.student'); } };
@@ -507,7 +508,7 @@ export default function UserManagement() {
                       {user.groupName || '—'}
                     </td>
                     <td className="py-3.5 px-6 text-xs text-slate-400">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                      {user.createdAt ? fmtDate(user.createdAt) : '—'}
                     </td>
                     <td className="sticky right-0 z-[1] bg-white py-3.5 px-6 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50">
                       <div className="flex items-center justify-end gap-1.5">

@@ -34,6 +34,7 @@ import type {
 } from '../types/projectData.ts';
 import { haveSameIndustrySelection, resolveIndustryIds, validateIndustrySelection } from './projectWorkspace.ts';
 import i18n from '../i18n/index.ts';
+import { formatNumber as fmtNumber, formatDateTime as fmtDateTime, formatDate as fmtDate } from '../i18n/format.ts';
 
 export const PROJECT_DATA_SEARCH_MAX_LENGTH = 100;
 export const PROJECT_ACHIEVEMENT_NOTE_MAX_LENGTH = 500;
@@ -42,7 +43,7 @@ export const PROJECT_DATA_EMPTY_VALUE = '-';
 export const SHOWCASE_METRICS_REFERENCE_NOTE = 'Chỉ mang tính tham khảo, không dùng để xếp hạng hay trao giải.';
 
 export const displayShowcaseMetric = (value: number | null | undefined): string =>
-  value == null ? '—' : value.toLocaleString('en-US');
+  value == null ? '—' : fmtNumber(value);
 
 /** Most values one multi-select filter carries; the API rejects more, and it keeps shared links short. */
 export const PROJECT_DATA_MAX_FILTER_VALUES = 100;
@@ -81,18 +82,18 @@ const MULTI_FILTER_KEYS: readonly MultiFilterKey[] = [
 const FILTER_KEYS: readonly FilterKey[] = [...SCALAR_FILTER_KEYS, ...MULTI_FILTER_KEYS];
 
 export const FILTER_LABELS: Record<FilterKey, string> = {
-  subjectCode: 'Subject',
-  semester: 'Semester',
-  year: 'Year',
-  group: 'Group',
-  startupIndustry: 'Startup industry',
-  major: 'Major',
-  lecturerId: 'Lecturer',
-  mentorId: 'Mentor',
-  achievement: 'Achievement',
-  competition: 'Competition',
-  competitionStage: 'Competition stage',
-  competitionYear: 'Competition year',
+  get subjectCode() { return i18n.t('utils:projectData.subject'); },
+  get semester() { return i18n.t('utils:projectData.semester'); },
+  get year() { return i18n.t('utils:projectData.year'); },
+  get group() { return i18n.t('utils:projectData.group'); },
+  get startupIndustry() { return i18n.t('utils:projectData.startupIndustry'); },
+  get major() { return i18n.t('utils:projectData.major'); },
+  get lecturerId() { return i18n.t('utils:projectData.lecturer'); },
+  get mentorId() { return i18n.t('utils:projectData.mentor'); },
+  get achievement() { return i18n.t('utils:projectData.achievement'); },
+  get competition() { return i18n.t('utils:projectData.competition'); },
+  get competitionStage() { return i18n.t('utils:projectData.competitionStage'); },
+  get competitionYear() { return i18n.t('utils:projectData.competitionYear'); },
 };
 
 const toPositiveInteger = (value: string | null): number | null => {
@@ -307,7 +308,7 @@ export function projectDataHistoryKey(userId: string | undefined, projectId: str
 export function formatHistoryDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
-  return date.toLocaleString('en-GB', {
+  return fmtDateTime(date, {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
   });
 }
@@ -583,7 +584,7 @@ export function formatEvidenceDate(iso: string | null | undefined): string {
   if (!iso) return PROJECT_DATA_EMPTY_VALUE;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return PROJECT_DATA_EMPTY_VALUE;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return fmtDate(date, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** A 0-10 score with at most two decimals and no trailing zeros ("7.6", "8", "7.25"). */

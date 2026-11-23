@@ -24,6 +24,7 @@ import {
 } from '../../utils/mentorProfileForm';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const statusBadge: Record<MentorProfileStatus, string> = { Active: 'Active', Inactive: 'Inactive', Unavailable: 'At Risk' };
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-50';
@@ -281,7 +282,7 @@ export default function MentorProfileDetail() {
               <Detail label={t('mentorProfileDetail.department')} value={profile.department} />
               <Detail label={t('mentorProfileDetail.contractType')} value={profile.contractType} />
               <Detail label={t('mentorProfileDetail.educationLevel')} value={profile.educationLevel} />
-              <Detail label={t('mentorProfileDetail.dateOfBirth')} value={profile.dateOfBirth ? new Date(`${profile.dateOfBirth}T00:00:00`).toLocaleDateString('en-GB') : null} />
+              <Detail label={t('mentorProfileDetail.dateOfBirth')} value={profile.dateOfBirth ? fmtDate(`${profile.dateOfBirth}T00:00:00`) : null} />
               <Detail label={t('mentorProfileDetail.linkedin')} value={profile.linkedInUrl} href={profile.linkedInUrl ?? undefined} />
               <Detail label={t('mentorProfileDetail.fptEmail')} value={profile.fptEmail} />
               <Detail label={t('mentorProfileDetail.address')} value={profile.currentAddress} />

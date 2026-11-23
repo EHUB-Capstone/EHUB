@@ -36,6 +36,7 @@ import MentorChangeReasonField from './MentorChangeReasonField';
 import MentorSearchSelect from './MentorSearchSelect';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 type PreviewTab = 'teams' | 'mentors' | 'attention';
 type TeamFilter = 'all' | 'attention' | 'changed';
@@ -205,7 +206,7 @@ export default function MentorAllocationPreviewModal({
             <p><strong className="text-slate-800">{quality.needsReview}</strong> {t('mentorAllocationPreviewModal.needFitReview')}</p>
             <p><strong className="text-slate-800">{quality.missingProfileData}</strong> {t('mentorAllocationPreviewModal.haveIncompleteProfileData')}</p>
             {quality.unknownProfileData > 0 && <p>{t('mentorAllocationPreviewModal.profileDataCoverageUnavailableFor')} <strong className="text-slate-800">{quality.unknownProfileData}</strong></p>}
-            {quality.averageFit !== null && <p>{t('mentorAllocationPreviewModal.averageFit')} <strong className="text-slate-800">{quality.averageFit.toLocaleString(undefined, { maximumFractionDigits: 1 })}/100</strong></p>}
+            {quality.averageFit !== null && <p>{t('mentorAllocationPreviewModal.averageFit')} <strong className="text-slate-800">{fmtNumber(quality.averageFit, { maximumFractionDigits: 1 })}/100</strong></p>}
           </div>
           <p className="text-caption text-slate-500">{t('mentorAllocationPreviewModal.profile70MentoringHistoryUpTo')}</p>
         </Card>}
@@ -384,7 +385,7 @@ function SlotCell({ slot }: { slot: SlotView }) {
       </div>
       {(slot.fitScore != null || (slot.reasons?.length ?? 0) > 0 || slot.fitDetails) && (
         <div className="mt-2 space-y-1 text-caption text-slate-600">
-          {slot.fitScore != null && <p className="font-semibold">{t('mentorAllocationPreviewModal.diemPhuHop100', { v1: slot.fitScore.toLocaleString(undefined, { maximumFractionDigits: 1 }) })}</p>}
+          {slot.fitScore != null && <p className="font-semibold">{t('mentorAllocationPreviewModal.diemPhuHop100', { v1: fmtNumber(slot.fitScore, { maximumFractionDigits: 1 }) })}</p>}
           {missingFields && <p className={missingFields.length ? 'text-warning-dark' : 'text-slate-500'}>
             {t('mentorAllocationPreviewModal.profileDataCriteriaAvailable', { v1: criterionCount - missingFields.length, criterionCount, v3: missingFields.length > 0 ? ` · ${t('mentorAllocationPreviewModal.missingList', { list: missingFields.map(key => criterionLabels[key]).join(', ') })}` : '' })}
           </p>}
@@ -427,7 +428,7 @@ function AssignmentDetails({ mentorName, reasons, fitDetails }: { mentorName: st
       {expanded && (
         <div id={detailsId} className="mt-2 space-y-3" aria-label={t('mentorAllocationPreviewModal.assignmentReasonsFor', { v1: mentorName ?? 'mentor' })}>
           {fitDetails && <>
-            <p className="font-semibold">{t('mentorAllocationPreviewModal.profileFit100WeightedAt70', { v1: fitDetails.profileScore.toLocaleString(undefined, { maximumFractionDigits: 1 }) })}</p>
+            <p className="font-semibold">{t('mentorAllocationPreviewModal.profileFit100WeightedAt70', { v1: fmtNumber(fitDetails.profileScore, { maximumFractionDigits: 1 }) })}</p>
             {fitDetails.projectNeeds.length > 0 && <div>
               <p className="font-semibold text-slate-700">{t('mentorAllocationPreviewModal.projectSupportNeeds')}</p>
               <ul className="mt-1 list-disc space-y-1 pl-4">{fitDetails.projectNeeds.map((need, index) => <li key={`${index}-${need}`}>{need}</li>)}</ul>

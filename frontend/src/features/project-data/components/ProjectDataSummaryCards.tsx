@@ -6,6 +6,7 @@ import type { ProjectAchievement, ProjectDataSummary } from '../../../types/proj
 import { cn } from '../../../utils/cn';
 import { useTranslation } from 'react-i18next';
 import { achievementLabel } from '../../../i18n/labels';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 interface ProjectDataSummaryCardsProps {
   summary: ProjectDataSummary | undefined;
@@ -22,7 +23,7 @@ interface ProjectDataSummaryCardsProps {
   onClearFilters: () => void;
 }
 
-const formatCount = (value: number) => value.toLocaleString();
+const formatCount = (value: number) => fmtNumber(value);
 
 const achievementCards = [
   { achievement: 'Potential', field: 'potentialGroups', icon: Sparkles, color: 'primary' },

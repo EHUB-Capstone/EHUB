@@ -80,7 +80,7 @@ test('i18n switches language immediately and keeps both bundles in sync', async 
 test('formatters follow the active language and fall back for invalid input', async () => {
   const date = new Date(Date.UTC(2026, 2, 5, 12, 0, 0));
   await i18n.changeLanguage('en');
-  assert.equal(formatDate(date, { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }), '03/05/2026');
+  assert.equal(formatDate(date, { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }), '05/03/2026');
   assert.equal(formatNumber(1234567.5), '1,234,567.5');
   assert.equal(formatPercent(42.5, 1), '42.5%');
   await i18n.changeLanguage('vi');

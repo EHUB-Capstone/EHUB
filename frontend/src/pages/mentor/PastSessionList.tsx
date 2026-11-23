@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { getPastSessions } from '../../api/mentoringApi';
 import SessionNoteForm from './SessionNoteForm';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const PastSessionList = () => {
   const { t } = useTranslation('mentoring');
@@ -40,7 +41,7 @@ const PastSessionList = () => {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
+    return fmtDate(date, {
       weekday: 'short',
       year: 'numeric',
       month: 'short',

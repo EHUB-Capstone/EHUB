@@ -10,6 +10,7 @@ import ConfirmDialog from '../../ui/ConfirmDialog';
 import AutoSizeTextarea from '../../ui/AutoSizeTextarea';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
+import { formatDate as fmtDate, formatDateTime as fmtDateTime } from '../../../i18n/format';
 
 // Enter sends through the form's own submit handler, so the empty/duplicate checks stay in one place.
 const submitForm = (event) => event.currentTarget.form?.requestSubmit();
@@ -41,7 +42,7 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
   const submitTechnicalReview = async (event) => {
     event.preventDefault();
     if (!hasValidReviews || sending) return;
-    const reviewedAt = new Intl.DateTimeFormat('vi-VN').format(new Date());
+    const reviewedAt = fmtDate(new Date());
     const rows = TECHNICAL_REVIEW_CRITERIA
       .map(({ key, label, evidence }) => `• ${label} (${evidence}): ${reviews[key].trim()}`)
       .join('\n');
@@ -73,7 +74,7 @@ function TechnicalReviewForm({ teamId, checkpointNumber, onPosted, initiallyColl
             <p className="mt-0.5 text-caption text-slate-600">{t('feedbackThread.dungKhiCheckpointCanDanhGia')}</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1 text-caption font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> {new Intl.DateTimeFormat('vi-VN').format(new Date())} {expanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}</span>
+        <span className="inline-flex items-center gap-1 text-caption font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> {fmtDate(new Date())} {expanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}</span>
       </button>
       {expanded && <><div className="divide-y divide-slate-100">
         {TECHNICAL_REVIEW_CRITERIA.map(({ key, label, evidence, description }) => (
@@ -236,7 +237,7 @@ function ReplyItem({ reply, teamId, checkpointNumber, onPosted, onRequestDelete 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-caption font-bold text-slate-800">{reply.user?.name}</span>
         <span className={`text-[8px] font-bold px-1.5 py-px border rounded-md ${roleBadge(reply.user?.role)}`}>{roleLabel(reply.user?.role)}</span>
-        <span className="text-[9px] text-slate-400">{new Date(reply.createdAt).toLocaleString()}</span>
+        <span className="text-[9px] text-slate-400">{fmtDateTime(reply.createdAt)}</span>
         {canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-white hover:text-primary-700" aria-label={t('feedbackThread.editFeedback')} title={t('feedbackThread.editFeedback')}><Pencil className="h-3 w-3" /></button>}
       </div>
       {editing ? (isTechnicalReview ? <TechnicalReviewEditor feedback={reply} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} /> : <FeedbackEditor feedback={reply} teamId={teamId} checkpointNumber={checkpointNumber} onSaved={(updated) => { onPosted?.(updated); setEditing(false); }} onCancel={() => setEditing(false)} framed={false} />) : <TechnicalReviewDisplay content={reply.comment} />}
@@ -301,7 +302,7 @@ function FeedbackItem({ comment, replies, teamId, checkpointNumber, onPosted, on
             </span>
             <span className="text-overline text-slate-400 flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              {new Date(comment.createdAt).toLocaleString()}
+              {fmtDateTime(comment.createdAt)}
             </span>
             {canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-primary-700" aria-label={t('feedbackThread.editFeedback')} title={t('feedbackThread.editFeedback')}><Pencil className="h-3.5 w-3.5" /></button>}
           </div>

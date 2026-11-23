@@ -7,6 +7,7 @@ import { workspaceApi } from '../../api/workspaceApi';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate, formatDateTime as fmtDateTime } from '../../i18n/format';
 
 // Zero-dependency pure JS Word-level LCS Diffing Component
 function DiffText({ oldText = '', newText = '' }) {
@@ -153,7 +154,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-primary-700">{t('versionHistory.v', { versionNumber: ver.versionNumber })}</span>
                   <span className="text-overline text-slate-400 font-semibold flex items-center gap-0.5">
-                    <Calendar className="w-3 h-3" /> {new Date(ver.createdAt).toLocaleDateString()}
+                    <Calendar className="w-3 h-3" /> {fmtDate(ver.createdAt)}
                   </span>
                 </div>
                 <p className="text-xs font-medium text-slate-700 mt-1 truncate" title={ver.changeNote}>
@@ -209,7 +210,7 @@ export default function VersionHistory({ proposalId, versions, isEditable, onRef
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
                 <p className="text-xs text-slate-400">{t('versionHistory.createdBy')} <span className="font-semibold text-slate-700">{selectedVer.changedBy?.name}</span> ({selectedVer.changedBy?.email})</p>
-                <p className="text-xs text-slate-400 mt-0.5">{t('versionHistory.date', { v1: new Date(selectedVer.createdAt).toLocaleString() })}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('versionHistory.date', { v1: fmtDateTime(selectedVer.createdAt) })}</p>
                 {getWorkspaceLabel(selectedVer.teamId) && (
                   <p className="text-xs text-slate-400 mt-0.5">{t('versionHistory.workspace', { v1: getWorkspaceLabel(selectedVer.teamId) })}</p>
                 )}

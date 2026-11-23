@@ -19,6 +19,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import { dataBankApi } from '../../api/dataBankApi';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const mappingActions = ['MAP_TO_EXISTING', 'ADD_NEW_COLUMN', 'IGNORE_COLUMN', 'RENAME_AND_ADD'];
 const systemColumns = ['RollNumber', 'FullName', 'Email', 'Major'];
@@ -31,7 +32,7 @@ const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('vi-VN', {
+  return fmtDateTime(date, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

@@ -11,9 +11,10 @@ import {
 } from '../../utils/rubricDraft';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatTime as fmtTime } from '../../i18n/format';
 
 const DRAFT_WRITE_DELAY_MS = 500;
-const formatDraftTime = (value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const formatDraftTime = (value) => fmtTime(value, { hour: '2-digit', minute: '2-digit' });
 
 const evaluationStatusPresentation = {
   DRAFT: {

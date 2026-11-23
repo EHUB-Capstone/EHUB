@@ -1,5 +1,6 @@
 import { CalendarDays, Clock3, GraduationCap, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 type Props = {
   project: {
@@ -30,10 +31,10 @@ const formatDateTime = (value?: string | null) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
     ? 'Not available'
-    : new Intl.DateTimeFormat(undefined, {
+    : fmtDate(parsed, {
         dateStyle: 'medium',
         timeStyle: 'short',
-      }).format(parsed);
+      });
 };
 
 const TagList = ({ values, empty }: { values?: string[]; empty: string }) => (

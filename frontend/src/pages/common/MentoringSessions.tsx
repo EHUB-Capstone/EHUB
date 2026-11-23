@@ -18,6 +18,7 @@ import { normalizeManagedTeam } from '../../utils/teamManagement';
 import { Calendar, Plus, Video, Clock, Trash2, Edit, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../../i18n/format';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -561,7 +562,7 @@ const MentoringSessions = () => {
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {new Date(s.meetingDate).toLocaleDateString()} {s.startTime ? `${s.startTime}${s.endTime ? ` - ${s.endTime}` : ''}` : ''}
+                          {fmtDate(s.meetingDate)} {s.startTime ? `${s.startTime}${s.endTime ? ` - ${s.endTime}` : ''}` : ''}
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0 ml-2 items-start">
@@ -603,7 +604,7 @@ const MentoringSessions = () => {
                     <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-700 truncate">{s.title}</p>
-                      <p className="text-xs text-slate-400">{new Date(s.meetingDate).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-400">{fmtDate(s.meetingDate)}</p>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                       <button onClick={() => openEdit(s)} className="p-1 rounded text-slate-400 hover:text-primary-700" title={tr('mentoringSessions.editSession')} aria-label={tr('mentoringSessions.editSession')}><Edit className="w-3 h-3" /></button>

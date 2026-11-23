@@ -7,6 +7,7 @@ import type { ShowcaseHistoryDto, ShowcaseStatus } from '../../types/showcase';
 import type { ShowcaseTone } from '../../utils/showcase';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate, formatTime as fmtTime } from '../../i18n/format';
 
 interface EventMeta {
   label: string;
@@ -41,8 +42,8 @@ const DOT_TONE: Record<ShowcaseTone, string> = {
   neutral: 'bg-slate-400',
 };
 
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
-const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const formatDate = (iso: string) => fmtDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
+const formatTime = (iso: string) => fmtTime(iso, { hour: '2-digit', minute: '2-digit' });
 const feedbackOf = (entry: ShowcaseHistoryDto): string | null => {
   const note = entry.note?.trim();
   return note && !SYSTEM_NOTES.has(note) ? note : null;

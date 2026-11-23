@@ -11,9 +11,9 @@ export const PROJECT_DESCRIPTION_MAX_LENGTH = 300;
 
 /** One name per field, used by the Project Profile page and by the Project Showcase page that reads it. */
 export const PROJECT_PROFILE_LABELS = {
-  projectName: 'Project name',
+  get projectName() { return i18n.t('utils:projectProfile.projectName'); },
   get description() { return i18n.t('utils:projectProfile.description'); },
-  problem: 'Problem',
-  solution: 'Solution',
-  targetUsers: 'Target users',
+  get problem() { return i18n.t('utils:projectProfile.problem'); },
+  get solution() { return i18n.t('utils:projectProfile.solution'); },
+  get targetUsers() { return i18n.t('utils:projectProfile.targetUsers'); },
 } as const;

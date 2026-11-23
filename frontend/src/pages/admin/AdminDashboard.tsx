@@ -23,13 +23,14 @@ import TeamContinuityReportCard from '../../components/admin/TeamContinuityRepor
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { CHART_COLORS } from '../../constants/chartColors';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 type AnyRecord = Record<string, any>;
 const roleColors: Record<string, string> = { ADMIN: CHART_COLORS.danger, LECTURER: CHART_COLORS.navy, MENTOR: CHART_COLORS.warning, STUDENT: CHART_COLORS.info };
 const statusColors = [CHART_COLORS.navy, CHART_COLORS.brand, CHART_COLORS.success, CHART_COLORS.info, CHART_COLORS.danger, CHART_COLORS.neutral];
 const responseData = (response: any) => response?.data?.data ?? response?.data ?? response;
 const number = (value: unknown) => Number(value ?? 0);
-const formatNumber = (value: unknown) => number(value).toLocaleString();
+const formatNumber = (value: unknown) => fmtNumber(number(value));
 const initials = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
 const ago = (value?: string) => {
   if (!value) return 'unknown';

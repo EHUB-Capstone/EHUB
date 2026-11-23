@@ -23,6 +23,7 @@ import EmptyState from '../ui/EmptyState';
 import ErrorState from '../ui/ErrorState';
 import LoadingSkeleton from '../ui/LoadingSkeleton';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 interface TeamFeedbackOverviewProps {
   teamId: string;
@@ -52,7 +53,7 @@ const evaluationTones: Record<string, string> = {
 const formatDate = (value: string | null) => {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? '' : fmtDateTime(date);
 };
 
 function AuthorLine({ author, date }: { author: TeamFeedbackAuthor; date: string | null }) {

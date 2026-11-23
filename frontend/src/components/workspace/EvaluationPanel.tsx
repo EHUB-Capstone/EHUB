@@ -10,6 +10,7 @@ import PerformanceLevelBadge from '../evaluation/PerformanceLevelBadge';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { createRequestGate } from '../../utils/requestGate';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const CHECKPOINTS = [1, 2, 3, 4];
 const EMPTY_EVALUATION = {};
@@ -54,7 +55,7 @@ function EvaluationHistoryEntries({ history, compact = false }) {
                   <span className="rounded-md bg-white px-1.5 py-0.5 text-overline font-bold text-slate-400 ring-1 ring-slate-200">{t('evaluationPanel.v', { version: item.version })}</span>
                 </div>
                 <p className="mt-1 truncate font-semibold text-slate-900">{item.changedBy?.name || t('evaluationPanel.system')}</p>
-                <p className="text-slate-500">{new Date(item.createdAt).toLocaleString()}</p>
+                <p className="text-slate-500">{fmtDateTime(item.createdAt)}</p>
               </div>
               <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-primary-700 group-open:hidden">{t('evaluationPanel.viewDetails')}</span>
               <span className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 group-open:inline">{t('evaluationPanel.hideDetails')}</span>
@@ -535,7 +536,7 @@ export default function EvaluationPanel({
                       <div className="flex items-center justify-between gap-4 mb-3">
                         <div>
                           <p className="font-semibold text-slate-900">{ev.lecturerId?.name || t('evaluationPanel.evaluator')}</p>
-                          <p className="text-xs text-slate-400">{ev.evaluatorRole} · {new Date(ev.updatedAt).toLocaleString()}</p>
+                          <p className="text-xs text-slate-400">{ev.evaluatorRole} · {fmtDateTime(ev.updatedAt)}</p>
                         </div>
                         <div className="text-right">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-caption font-bold mb-1 ${ev.status === 'SUBMITTED' || ev.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>

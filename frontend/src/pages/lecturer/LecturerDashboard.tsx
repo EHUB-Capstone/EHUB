@@ -47,6 +47,7 @@ import {
 } from '../../utils/academicDashboard';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface MetricPresentation {
   icon: LucideIcon;
@@ -94,7 +95,7 @@ const metricPresentation: Record<string, MetricPresentation> = {
   },
 };
 
-const number = (value: number): string => value.toLocaleString();
+const number = (value: number): string => fmtNumber(value);
 
 function MetricCard({
   title,

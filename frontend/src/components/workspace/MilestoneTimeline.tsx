@@ -2,6 +2,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const STATUS_CONFIG = {
   PLANNED:     { get label() { return i18n.t('workspace:milestoneTimeline.planned'); },     bg: 'bg-slate-100',  text: 'text-slate-700',  dot: 'bg-slate-400' },
@@ -17,7 +18,7 @@ const DEFAULT_STATUS = { get label() { return i18n.t('workspace:versionHistory.u
 function formatDate(dateStr) {
   if (!dateStr) return null;
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return fmtDate(dateStr, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

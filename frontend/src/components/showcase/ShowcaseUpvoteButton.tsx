@@ -9,6 +9,7 @@ import { optimisticShowcaseUpvote } from '../../utils/showcase';
 import { updateShowcaseDiscoveryUpvote } from '../../utils/showcaseDiscovery';
 import Button from '../ui/Button';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface ShowcaseUpvoteButtonProps extends ShowcaseUpvoteDto {
   showcaseId: string;
@@ -92,7 +93,7 @@ export default function ShowcaseUpvoteButton({
     >
       {tile ? (
         <>
-          <span className="text-heading text-secondary">{current.likeCount.toLocaleString()}</span>
+          <span className="text-heading text-secondary">{fmtNumber(current.likeCount)}</span>
           <span className="inline-flex items-center gap-1 text-caption font-medium text-primary-700">
             {!pendingVote && <Flame className={cn('h-3.5 w-3.5 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
             {t('showcaseInsights.interested')}
@@ -101,7 +102,7 @@ export default function ShowcaseUpvoteButton({
       ) : (
         <>
           {!pendingVote && <Flame className={cn('h-4 w-4 text-primary', current.hasUpvoted && 'fill-current')} aria-hidden="true" />}
-          {current.likeCount.toLocaleString()}
+          {fmtNumber(current.likeCount)}
           {showLabel && <span>{t('showcaseUpvoteButton.interested')}</span>}
         </>
       )}

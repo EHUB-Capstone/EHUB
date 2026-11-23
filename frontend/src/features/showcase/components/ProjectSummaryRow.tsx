@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import ShowcaseUpvoteButton from '../../../components/showcase/ShowcaseUpvoteButton';
 import type { ShowcaseCardDto } from '../../../types/showcase';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 
 export default function ProjectSummaryRow({ project, backTo, index }: { project: ShowcaseCardDto; backTo: string; index: number }) {
   const { t } = useTranslation('showcase');
@@ -37,7 +38,7 @@ export default function ProjectSummaryRow({ project, backTo, index }: { project:
         <div className="relative z-10 flex items-center gap-3 text-body-sm text-slate-500 dark:text-slate-400">
           <ShowcaseUpvoteButton showcaseId={project.id} likeCount={project.likeCount} hasUpvoted={project.hasUpvoted} isOwner={project.isOwner} className="h-9 min-w-0 rounded-lg px-2" />
           <span className="inline-flex items-center gap-1" title={t('showcaseComments.comments')}>
-            <MessageSquare className="h-4 w-4" aria-hidden="true" />{project.commentCount.toLocaleString()}<span className="sr-only"> {t('projectSummaryCard.comments')}</span>
+            <MessageSquare className="h-4 w-4" aria-hidden="true" />{fmtNumber(project.commentCount)}<span className="sr-only"> {t('projectSummaryCard.comments')}</span>
           </span>
         </div>
       </div>

@@ -17,6 +17,7 @@ import { PRIORITY_CFG, STATUSES, STATUS_CFG, WORKFLOW_STATUSES } from '../consta
 import { taskProgress } from '../../../utils/taskProgress';
 import TruncatedText from '../../../components/ui/TruncatedText';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 const SWIPE_THRESHOLD = 72;
 const SWIPE_LIMIT = 120;
@@ -87,7 +88,7 @@ function TaskCard({
 
   const dueDate = useMemo(() => {
     if (!task.dueDate) return null;
-    return new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    return fmtDate(task.dueDate, { day: '2-digit', month: 'short' });
   }, [task.dueDate]);
 
   useEffect(() => {

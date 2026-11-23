@@ -10,6 +10,7 @@ import { cn } from '../../../utils/cn';
 import { parseShowcaseVideo } from '../../../utils/showcaseVideo';
 import ProjectMedia from './ProjectMedia';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate } from '../../../i18n/format';
 
 interface ProjectSummaryCardProps {
   project: ShowcaseCardDto;
@@ -57,7 +58,7 @@ export default function ProjectSummaryCard({ project, secondaryAction, backTo, b
           </h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-slate-500 dark:text-slate-300">
             <span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">{project.teamName}</span></span>
-            {project.publishedAt && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{new Date(project.publishedAt).toLocaleDateString()}</span>}
+            {project.publishedAt && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{fmtDate(project.publishedAt)}</span>}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

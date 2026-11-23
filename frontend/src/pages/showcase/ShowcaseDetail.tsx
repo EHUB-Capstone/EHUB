@@ -22,6 +22,7 @@ import { parseApiError } from '../../utils/apiError';
 import { SHOWCASE_ERROR_CODES, stageLabel } from '../../utils/showcase';
 import { parseShowcaseVideo, showcaseVideoEmbedUrl, VIDEO_IFRAME_SANDBOX, type ShowcaseVideo } from '../../utils/showcaseVideo';
 import { useTranslation } from 'react-i18next';
+import { formatNumber as fmtNumber, formatDate as fmtDate } from '../../i18n/format';
 
 function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
   if (typeof children === 'string' ? !children.trim() : !children) return null;
@@ -41,7 +42,7 @@ function StoryBlock({ icon: Icon, title, children }: { icon: LucideIcon; title: 
 function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
     <div className="flex flex-col items-center px-2 py-3 text-caption text-slate-500">
-      <span className="text-heading text-secondary">{value.toLocaleString()}</span>
+      <span className="text-heading text-secondary">{fmtNumber(value)}</span>
       <span className="mt-0.5 inline-flex items-center gap-1"><Icon className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />{label}</span>
     </div>
   );
@@ -224,7 +225,7 @@ export default function ShowcaseDetail() {
             <h1 className="mt-1.5 break-words text-display text-secondary">{profile.projectName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-body-sm text-slate-600">
               <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-slate-400" aria-hidden="true" />{teamName}</span>
-              {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />{t('showcaseDetail.published')} {new Date(showcase.publishedAt).toLocaleDateString()}</span>}
+              {showcase.publishedAt && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-slate-400" aria-hidden="true" />{t('showcaseDetail.published')} {fmtDate(showcase.publishedAt)}</span>}
             </div>
           </div>
           {isOwner && showcase.canEdit && (

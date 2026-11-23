@@ -42,6 +42,7 @@ import type { ClassCompletionPreview } from '../../types/classes';
 import type { StudentAssignmentMode } from '../../types/studentAssignment';
 import { subscribeProjectDirectionRealtime } from '../../api/projectDirectionRealtime';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const mapRosterStudents = (rawStudents, currentClassId, proposals = []) => {
   const reservedTeamIds = new Map();
@@ -899,7 +900,7 @@ export default function ClassDetail() {
             {cls.completedAtUtc && (
               <p className="mt-2 text-xs text-amber-800">
                 <span className="font-semibold">{tr('classDetail.completed')}</span>{' '}
-                {new Date(cls.completedAtUtc).toLocaleString()}
+                {fmtDateTime(cls.completedAtUtc)}
                 {cls.completionReason ? ` — ${cls.completionReason}` : ''}
               </p>
             )}

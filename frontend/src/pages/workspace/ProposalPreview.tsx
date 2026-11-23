@@ -3,6 +3,7 @@ import { FileText, ArrowLeft, Calendar, User, ShieldAlert } from 'lucide-react';
 import Badge from '../../components/ui/Badge';
 import InlineCommentUI from '../../components/workspace/InlineCommentUI';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime, formatDate as fmtDate } from '../../i18n/format';
 
 const statusColors = {
   DRAFT: 'bg-slate-100 text-slate-600 border border-slate-200',
@@ -75,9 +76,9 @@ export default function ProposalPreview({ proposal, onBack }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-6 mt-6 pt-6 border-t border-white/10 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {t('proposalPreview.updated')} {new Date(proposal.updatedAt).toLocaleString()}</span>
+          <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {t('proposalPreview.updated')} {fmtDateTime(proposal.updatedAt)}</span>
           {proposal.submittedAt && (
-            <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-400" /> {t('proposalPreview.submitted')} {new Date(proposal.submittedAt).toLocaleDateString()}</span>
+            <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-400" /> {t('proposalPreview.submitted')} {fmtDate(proposal.submittedAt)}</span>
           )}
         </div>
       </div>

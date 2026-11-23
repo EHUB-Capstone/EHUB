@@ -24,6 +24,7 @@ import type {
 } from '../../../types/workspaceCheckpoints';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
+import { formatDateTime as fmtDateTime } from '../../../i18n/format';
 
 export const MAX_CHECKPOINT_LINKS = 10;
 
@@ -62,7 +63,7 @@ const STATUS_META: Record<string, { label: string; tone: string; icon: LucideIco
 
 const FILE_TYPE_LABEL: Record<string, string> = { pdf: 'PDF', docx: 'DOCX', pptx: 'PPTX' };
 
-const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString() : '');
+const formatDateTime = (value?: string | null) => (value ? fmtDateTime(value) : '');
 
 const displayLinkHost = (url: string) => {
   try { return new URL(url).hostname; } catch { return url; }

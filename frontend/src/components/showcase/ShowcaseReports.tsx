@@ -15,6 +15,7 @@ import { parseApiError } from '../../utils/apiError';
 import type { ShowcaseReportDto, ShowcaseReportStatus } from '../../types/showcase';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const STATUSES: ShowcaseReportStatus[] = ['Open', 'Dismissed', 'ActionTaken'];
 const STATUS_COPY: Record<ShowcaseReportStatus, string> = {
@@ -91,7 +92,7 @@ export default function ShowcaseReports() {
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-between"><div>
               <div className="flex flex-wrap items-center gap-2"><Badge variant={report.commentId ? 'warning' : 'danger'} size="sm">{report.commentId ? t('showcaseReports.comment') : t('showcaseReports.showcase')}</Badge><Badge variant="brand" size="sm">{report.reason}</Badge><Badge variant="neutral" size="sm">{report.reportCount} {report.reportCount === 1 ? 'report' : 'reports'}</Badge></div>
               <p className="mt-2 text-body-sm text-slate-700">{report.note || t('showcaseReports.noAdditionalNote')}</p>
-              <p className="mt-2 text-caption text-slate-500">{t('showcaseReports.reported', { v1: new Date(report.createdAt).toLocaleString() })}</p>
+              <p className="mt-2 text-caption text-slate-500">{t('showcaseReports.reported', { v1: fmtDateTime(report.createdAt) })}</p>
               <Link to={`/showcase/${report.showcaseProjectId}${report.commentId ? `#comment-${report.commentId}` : ''}`} className="mt-2 inline-block text-body-sm font-semibold text-primary-700 hover:underline">{t(report.commentId ? 'showcaseReports.viewReportedComment' : 'showcaseReports.viewReportedShowcase')}</Link>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">

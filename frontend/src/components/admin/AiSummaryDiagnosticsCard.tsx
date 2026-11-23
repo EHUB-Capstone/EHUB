@@ -15,13 +15,14 @@ import {
 } from '../../utils/summaryDiagnostics';
 import type { SummaryDiagnostics } from '../../types/checkpointSummary';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime, formatNumber as fmtNumber } from '../../i18n/format';
 
-const time = (value: string | null) => (value ? new Date(value).toLocaleString() : '—');
+const time = (value: string | null) => (value ? fmtDateTime(value) : '—');
 
 const Stat = ({ label, value, hint }: { label: string; value: number; hint?: string }) => (
   <div className="rounded-xl border border-slate-200 px-3 py-2">
     <dt className="text-caption text-slate-500">{label}</dt>
-    <dd className="text-subheading text-slate-900">{value.toLocaleString()}</dd>
+    <dd className="text-subheading text-slate-900">{fmtNumber(value)}</dd>
     {hint && <p className="text-caption text-slate-500">{hint}</p>}
   </div>
 );

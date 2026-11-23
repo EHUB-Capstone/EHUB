@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 
 const statusColor = { DRAFT: 'Draft', SUBMITTED: 'Submitted', REVIEWED: 'Reviewed', APPROVED: 'Approved', NEEDSREVISION: 'Improving', NEEDS_REVISION: 'Improving' };
@@ -173,7 +174,7 @@ const StudentDashboard = () => {
                         <div className={`w-2 h-2 rounded-full shrink-0 ${m.status === 'DONE' ? 'bg-green-500' : m.status === 'OVERDUE' ? 'bg-red-500' : m.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300'}`} />
                         <span className="flex-1 text-sm text-slate-700 truncate">{m.title}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${milestoneStatus[m.status]}`}>{m.status}</span>
-                        {m.dueDate && <span className="text-xs text-slate-400">{new Date(m.dueDate).toLocaleDateString()}</span>}
+                        {m.dueDate && <span className="text-xs text-slate-400">{fmtDate(m.dueDate)}</span>}
                       </div>
                     ))}
                   </div>
@@ -282,7 +283,7 @@ const StudentDashboard = () => {
                       <div className="flex items-center gap-2 text-xs text-slate-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                         <span>{t('studentDashboard.nextDeadline')} <span className="font-semibold text-amber-700">
-                          {new Date(weeklyStats.nextDeadline).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                          {fmtDate(weeklyStats.nextDeadline, { day: '2-digit', month: 'short' })}
                         </span></span>
                       </div>
                     )}
@@ -320,7 +321,7 @@ const StudentDashboard = () => {
                         <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{s.title}</p>
-                          <p className="text-xs text-slate-400">{s.meetingDate ? new Date(s.meetingDate).toLocaleDateString() : '—'}</p>
+                          <p className="text-xs text-slate-400">{s.meetingDate ? fmtDate(s.meetingDate) : '—'}</p>
                         </div>
                       </div>
                     ))}

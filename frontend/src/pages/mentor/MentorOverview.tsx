@@ -7,6 +7,7 @@ import { unwrapApiData } from '../../utils/classMappers';
 import { parseApiError } from '../../utils/apiError';
 import Card from '../../components/ui/Card';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 interface TeamOverview { id: string; teamName: string; projectName?: string }
 
@@ -65,7 +66,7 @@ export default function MentorOverview() {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><h2 className="text-heading text-secondary">{t('mentorOverview.nextSessions')}</h2>
       {upcoming.length === 0 ? <p className="mt-3 text-body text-slate-600">{t('mentorOverview.noUpcomingSessions')}</p> :
         <ul className="mt-3 divide-y divide-slate-200">{upcoming.slice(0, 5).map(item => <li key={item.id} className="py-3 text-body">
-          <strong>{item.title}</strong><span className="ml-2 text-slate-600">{new Date(item.startAt).toLocaleString()}</span></li>)}</ul>}
+          <strong>{item.title}</strong><span className="ml-2 text-slate-600">{fmtDateTime(item.startAt)}</span></li>)}</ul>}
     </section>
   </main>;
 }

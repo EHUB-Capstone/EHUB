@@ -13,6 +13,7 @@ import LoadingSkeleton from '../ui/LoadingSkeleton';
 import { SHOWCASE_ROW_ACTION } from './rowActionStyles';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatNumber as fmtNumber } from '../../i18n/format';
 
 interface ShowcaseInsightsProps {
   showcaseId: string;
@@ -58,7 +59,7 @@ function Tile({ data, metric }: { data: ShowcaseInsightsDto; metric: (typeof MET
         {metric.label} {t('showcaseInsights.14d')}
       </p>
       <div className="mt-0.5 flex items-end justify-between gap-2">
-        <p className="text-display text-secondary">{total.toLocaleString()}</p>
+        <p className="text-display text-secondary">{fmtNumber(total)}</p>
         <Sparkline daily={data.daily} metric={metric.key} color={metric.color} />
       </div>
       <p className={cn('text-caption font-semibold', DELTA_TONE[delta.direction])}>

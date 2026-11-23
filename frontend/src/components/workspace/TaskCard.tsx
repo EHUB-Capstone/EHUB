@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pencil, Calendar, User, Flag, Milestone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDate as fmtDate } from '../../i18n/format';
 
 const PRIORITY_STYLES = {
   LOW: 'bg-gray-100 text-gray-600',
@@ -25,7 +26,7 @@ function formatDate(dateStr) {
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return null;
-    return date.toLocaleDateString('en-GB', {
+    return fmtDate(date, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',

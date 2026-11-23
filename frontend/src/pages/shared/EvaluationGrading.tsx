@@ -33,6 +33,7 @@ import { parseWorkspaceSemester } from '../../utils/workspaceHub';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../i18n/format';
 import i18n from '../../i18n';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const roleDescription: Record<string, string> = {
   get ADMIN() { return i18n.t('evaluation:evaluationGrading.roleDescription.ADMIN'); },
@@ -83,7 +84,7 @@ function normalizeStatus(value: string | undefined): Exclude<EvaluationGradingSt
 function formatUpdatedAt(value?: string): string {
   if (!value) return 'Not updated yet';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not updated yet' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? 'Not updated yet' : fmtDateTime(date);
 }
 
 function memberScore(record: EvaluationGradingRecord | undefined, studentId: string): {
@@ -751,7 +752,7 @@ export default function EvaluationGrading() {
         {canViewSubmissions && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div><h2 className="text-sm font-bold text-slate-800">{t('evaluationGrading.resultsOverview')}</h2><p className="mt-1 text-xs text-slate-500">{t('evaluationGrading.submissionCountsFollowTheSemesterYear')}</p></div>
-            {submissionAnalytics && <p className="text-xs text-slate-400">{t('evaluationGrading.updated2', { v1: new Date(submissionAnalytics.serverTimeUtc).toLocaleString() })}</p>}
+            {submissionAnalytics && <p className="text-xs text-slate-400">{t('evaluationGrading.updated2', { v1: fmtDateTime(submissionAnalytics.serverTimeUtc) })}</p>}
           </div>
         )}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={t('evaluationGrading.evaluationSummary')} aria-busy={canViewSubmissions && loadingSubmissions}>

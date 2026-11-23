@@ -3,6 +3,7 @@ import { Calendar, Clock, MapPin, ExternalLink, Edit2, Trash2, Monitor, Globe } 
 import Badge from '../ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import { formatDate as fmtDate, formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendance }) => {
   const { t } = useTranslation('workspace');
@@ -59,7 +60,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
         const offlineCodes = ws.offlineClassIds?.map(c => c.classCode).filter(Boolean) || [];
         const allClassCodes = [...onlineCodes, ...offlineCodes];
 
-        const formattedDate = new Date(ws.startDate).toLocaleDateString(undefined, {
+        const formattedDate = fmtDate(ws.startDate, {
           weekday: 'short',
           year: 'numeric',
           month: 'short',
@@ -142,7 +143,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
 
               {ws.checkInDeadline && (
                 <div className="text-caption font-semibold text-rose-500 bg-rose-50 px-2 py-1 rounded-md inline-block mt-2 border border-rose-100">
-                  {t('workshopList.hanCheckIn', { v1: new Date(ws.checkInDeadline).toLocaleString() })}
+                  {t('workshopList.hanCheckIn', { v1: fmtDateTime(ws.checkInDeadline) })}
                 </div>
               )}
               {attendance && attendance.status === 'REJECTED' && attendance.rejectReason && (
@@ -234,7 +235,7 @@ const WorkshopList = ({ workshops, onEdit, onDelete, onCheckIn, onManageAttendan
 
               <div className="flex items-center justify-between text-overline text-slate-400 pt-1 font-semibold">
                 <span>{t('workshopList.by', { name: ws.createdBy?.name || t('workshopList.instructor') })}</span>
-                <span>{t('workshopList.scheduled', { v1: new Date(ws.createdAt).toLocaleDateString() })}</span>
+                <span>{t('workshopList.scheduled', { v1: fmtDate(ws.createdAt) })}</span>
               </div>
             </div>
           </div>

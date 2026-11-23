@@ -10,6 +10,7 @@ import type {
   ShowcaseUpvoteDto,
 } from '../types/showcase.ts';
 import i18n from '../i18n/index.ts';
+import { formatDate as fmtDate, formatNumber as fmtNumber } from '../i18n/format.ts';
 
 export function optimisticShowcaseUpvote({ likeCount, hasUpvoted }: ShowcaseUpvoteDto): ShowcaseUpvoteDto {
   return {
@@ -202,15 +203,14 @@ export const timeAgo = (iso: string, now: number = Date.now()): string => {
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return '';
   const seconds = Math.max(0, Math.round((now - then) / 1000));
-  if (seconds < 60) return 'just now';
-  const plural = (value: number, unit: string) => `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+  if (seconds < 60) return i18n.t('utils:showcase.justNow');
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return plural(minutes, 'minute');
+  if (minutes < 60) return i18n.t('utils:showcase.minutesAgo', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return plural(hours, 'hour');
+  if (hours < 24) return i18n.t('utils:showcase.hoursAgo', { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return plural(days, 'day');
-  return new Date(then).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  if (days < 7) return i18n.t('utils:showcase.daysAgo', { count: days });
+  return fmtDate(then, { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 export type InsightsMetric = 'views' | 'upvotes' | 'comments';
@@ -224,6 +224,6 @@ export const insightsDelta = (current: number, previous: number): { label: strin
   const difference = current - previous;
   if (difference === 0) return { label: i18n.t('utils:showcase.noChange'), direction: 'flat' };
   return difference > 0
-    ? { label: `+${difference.toLocaleString()}`, direction: 'up' }
-    : { label: `-${Math.abs(difference).toLocaleString()}`, direction: 'down' };
+    ? { label: `+${fmtNumber(difference)}`, direction: 'up' }
+    : { label: `-${fmtNumber(Math.abs(difference))}`, direction: 'down' };
 };

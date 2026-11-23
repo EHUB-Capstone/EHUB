@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { workshopApi } from '../../api/workshopApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 export default function WorkshopAttendanceManager({ isOpen, onClose, workshop }) {
   const { t } = useTranslation('workspace');
@@ -549,7 +550,7 @@ export default function WorkshopAttendanceManager({ isOpen, onClose, workshop })
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {currentStudents.map(s => {
-                        const checkInDate = s.checkInTime ? new Date(s.checkInTime).toLocaleString('en-US', {
+                        const checkInDate = s.checkInTime ? fmtDateTime(s.checkInTime, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',

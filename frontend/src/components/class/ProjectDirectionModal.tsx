@@ -12,6 +12,7 @@ import {
   hasUnsavedProjectDirectionChanges,
 } from '../../utils/projectDirectionSync';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const formatStatus = (status) => String(status || 'Not created')
   .replace(/^NEEDSREVISION$/i, 'Needs revision')
@@ -144,7 +145,7 @@ export default function ProjectDirectionModal({ team, role, currentStudentId = '
               <div className="mt-2 flex justify-end"><button type="button" onClick={review} disabled={submitting || (comment.trim().length > 0 && comment.trim().length < 3)} className="rounded-xl bg-secondary-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{t('projectDirectionModal.submitReview')}</button></div>
             </section>}
 
-            {direction?.reviews?.length > 0 && <section><h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{t('projectDirectionModal.reviewHistory')}</h4><div className="space-y-2">{direction.reviews.map(review => <div key={review.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex justify-between gap-3 text-xs font-semibold text-slate-700"><span>{formatStatus(review.fromStatus)} → {formatStatus(review.toStatus)}</span><span className="text-slate-400">{new Date(review.occurredAtUtc).toLocaleString()}</span></div><p className="mt-1 text-sm text-slate-600">{review.comment}</p></div>)}</div></section>}
+            {direction?.reviews?.length > 0 && <section><h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{t('projectDirectionModal.reviewHistory')}</h4><div className="space-y-2">{direction.reviews.map(review => <div key={review.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="flex justify-between gap-3 text-xs font-semibold text-slate-700"><span>{formatStatus(review.fromStatus)} → {formatStatus(review.toStatus)}</span><span className="text-slate-400">{fmtDateTime(review.occurredAtUtc)}</span></div><p className="mt-1 text-sm text-slate-600">{review.comment}</p></div>)}</div></section>}
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 // @ts-nocheck
 // frontend/src/components/evaluation/PerformanceLevelBadge.jsx
 /**
@@ -167,7 +168,7 @@ export const MentorEvaluationCard = ({ evaluation, showIndividualScore = false }
           <p className="font-semibold text-slate-900">{evaluation?.lecturerId?.name || t('evaluationSummary.evaluator')}</p>
           <p className="text-xs text-slate-400 mt-0.5">
             {evaluation?.evaluatorRole} ·{' '}
-            {evaluation?.updatedAt ? new Date(evaluation.updatedAt).toLocaleString() : ''}
+            {evaluation?.updatedAt ? fmtDateTime(evaluation.updatedAt) : ''}
           </p>
         </div>
 

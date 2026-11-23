@@ -7,6 +7,7 @@ import { parseApiError } from '../../utils/apiError';
 import { canReinvite, currentInvitations, historyInvitations, remainingInviteSlots } from '../../utils/teamFormation';
 import InvitationCountdown from './InvitationCountdown';
 import { useTranslation } from 'react-i18next';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 interface Props {
   formation: TeamFormation;
@@ -21,7 +22,7 @@ const STATUS_CLASSES: Record<TeamInvitationStatus, string> = {
   Left: 'bg-slate-100 text-slate-600',
 };
 
-const formatDateTime = (value: string | null) => (value ? new Date(value).toLocaleString() : '');
+const formatDateTime = (value: string | null) => (value ? fmtDateTime(value) : '');
 
 export default function TeamFormationMemberList({ formation, onChanged }: Props) {
   const { t } = useTranslation('class');

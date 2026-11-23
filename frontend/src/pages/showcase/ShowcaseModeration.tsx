@@ -20,6 +20,7 @@ import { cn } from '../../utils/cn';
 import type { ShowcaseStatus } from '../../types/showcase';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { formatDateTime as fmtDateTime } from '../../i18n/format';
 
 const PAGE_SIZE = 20;
 type ModerationTab = ShowcaseStatus | 'Reports';
@@ -133,7 +134,7 @@ export default function ShowcaseModeration() {
                       </h2>
                       {item.description && <p className="mt-1 text-body text-slate-600">{item.description}</p>}
                       <p className="mt-2 text-caption text-slate-600">
-                        {t('showcaseModeration.updated', { v1: new Date(item.submittedOrUpdatedAt).toLocaleString() })}
+                        {t('showcaseModeration.updated', { v1: fmtDateTime(item.submittedOrUpdatedAt) })}
                       </p>
                       {item.reviewNote && (
                         <p className="mt-2 text-body-sm text-slate-600">{t('showcaseModeration.lastNote', { reviewNote: item.reviewNote })}</p>
