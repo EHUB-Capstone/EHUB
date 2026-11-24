@@ -13,6 +13,14 @@ services:
       Showcase__Assistant__Model: ${SHOWCASE_ASSISTANT_MODEL:-gemini-3.5-flash-lite}
       Showcase__Assistant__FallbackModels: ${SHOWCASE_ASSISTANT_FALLBACK_MODELS:-gemini-3.1-flash-lite}
       ShowcaseAssistantRateLimiting__RequestsPerUserPerMinute: ${SHOWCASE_ASSISTANT_REQUESTS_PER_USER_PER_MINUTE:-8}
+      ShowcaseAssistantRateLimiting__KeyRequestsPerUserPerMinute: ${SHOWCASE_ASSISTANT_KEY_REQUESTS_PER_USER_PER_MINUTE:-30}
+      # Optional. With an encryption key (32 random bytes, Base64) users may save their own Gemini key to their account; it is stored
+      # encrypted with this key. Leave empty to keep that off. The value belongs in the server secret store only: never in the repo and
+      # never in a backup of the database. Replace the active id to rotate; keep a retired key listed while keys made with it are in use.
+      Showcase__Assistant__KeyEncryption__ActiveKeyId: ${SHOWCASE_ASSISTANT_KEY_ENCRYPTION_ACTIVE_ID:-}
+      Showcase__Assistant__KeyEncryption__Keys__1: ${SHOWCASE_ASSISTANT_KEY_ENCRYPTION_KEY_1:-}
+      Showcase__Assistant__KeyEncryption__Keys__2: ${SHOWCASE_ASSISTANT_KEY_ENCRYPTION_KEY_2:-}
+      Showcase__Assistant__KeyEncryption__Keys__3: ${SHOWCASE_ASSISTANT_KEY_ENCRYPTION_KEY_3:-}
       Mentoring__Allocation__AcademicMethod: ${MENTOR_ACADEMIC_METHOD:-Balanced}
       Mentoring__Allocation__MaxProviderRetries: ${MENTOR_AI_PROVIDER_RETRIES:-2}
       Mentoring__Allocation__ProviderRetryDelaySeconds: ${MENTOR_AI_PROVIDER_RETRY_DELAY_SECONDS:-65}

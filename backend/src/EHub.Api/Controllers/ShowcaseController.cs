@@ -63,11 +63,35 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> AssistantChat(
         [FromBody] ShowcaseAssistantChatRequest request,
-        // The caller's own Gemini key. The server holds none; it is used for this call only and never stored or logged.
+        // The caller's own Gemini key for this call only, never logged. Without it the handler uses the key the caller stored.
         [FromHeader(Name = ShowcaseAssistantApiKey.HeaderName)] string? apiKey,
         [FromServices] IShowcaseAssistantHandler handler,
         CancellationToken cancellationToken) =>
         ToResponse(await handler.AskAsync(request, apiKey, UserId, cancellationToken), "Showcase assistant replied.");
+
+    // The key a user chose to keep on the server, encrypted. Every action is about the signed-in user's own key (no id is taken from
+    // the request) and none of them ever returns the key: only whether one is stored and its last four characters.
+    [HttpGet("assistant/key")]
+    [EnableRateLimiting(ShowcaseAssistantRateLimitPolicies.Key)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> AssistantKeyStatus(
+        [FromServices] IShowcaseAssistantKeyHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.GetStatusAsync(UserId, cancellationToken), "Showcase assistant key status retrieved.");
+
+    [HttpPut("assistant/key")]
+    [EnableRateLimiting(ShowcaseAssistantRateLimitPolicies.Key)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> SaveAssistantKey(
+        [FromBody] SaveShowcaseAssistantKeyRequest request,
+        [FromServices] IShowcaseAssistantKeyHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SaveAsync(request, UserId, cancellationToken), "Showcase assistant key saved.");
+
+    [HttpDelete("assistant/key")]
+    [EnableRateLimiting(ShowcaseAssistantRateLimitPolicies.Key)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> DeleteAssistantKey(
+        [FromServices] IShowcaseAssistantKeyHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.DeleteAsync(UserId, cancellationToken), "Showcase assistant key removed.");
 
     [HttpPost("{id:guid}/feature")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
@@ -347,7 +371,8 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
             ErrorCodes.ShowcaseInvalidState or
             ErrorCodes.ShowcaseConcurrencyConflict => Conflict(body),
             ErrorCodes.ShowcaseImageUploadFailed => StatusCode(StatusCodes.Status502BadGateway, body),
-            ErrorCodes.ShowcaseAssistantUnavailable => StatusCode(StatusCodes.Status503ServiceUnavailable, body),
+            ErrorCodes.ShowcaseAssistantUnavailable or
+            ErrorCodes.ShowcaseAssistantKeyStorageUnavailable => StatusCode(StatusCodes.Status503ServiceUnavailable, body),
             _ => BadRequest(body)
         };
     }

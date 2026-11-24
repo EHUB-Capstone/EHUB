@@ -59,12 +59,52 @@ export function assistantKeyProblem(raw: string): string | null {
   return null;
 }
 
-const KEY_ERROR_CODES = new Set(['SHOWCASE_ASSISTANT_KEY_REQUIRED', 'SHOWCASE_ASSISTANT_KEY_INVALID']);
+/** Where a key the user types is kept: on this page only, in this tab until it is closed, or encrypted on the server under their account. */
+export type AssistantKeyStorage = 'session' | 'tab' | 'account';
+
+/** Which key a question is asked with: one typed here, the one saved to the account, or none yet. */
+export type AssistantKeySource = 'typed' | 'saved' | 'none';
+
+/**
+ * A key typed on this page or kept in this tab wins over the one saved to the account, exactly as it does on the server. A saved
+ * key the server has just refused is not offered again until the user acts (it may be gone, revoked or out of quota).
+ */
+export function assistantKeySource(typedKey: string, saved: { hasKey: boolean } | null, savedRefused: boolean): AssistantKeySource {
+  if (typedKey) return 'typed';
+  return saved?.hasKey && !savedRefused ? 'saved' : 'none';
+}
+
+/** The last four characters, which is all that is ever shown of a key. */
+export const assistantKeyLast4 = (key: string): string => key.slice(-4);
+
+const KEY_REQUIRED_CODE = 'SHOWCASE_ASSISTANT_KEY_REQUIRED';
+const KEY_ERROR_CODES = new Set([KEY_REQUIRED_CODE, 'SHOWCASE_ASSISTANT_KEY_INVALID']);
+const KEY_STORAGE_UNAVAILABLE_CODE = 'SHOWCASE_ASSISTANT_KEY_STORAGE_UNAVAILABLE';
+
+function responseOf(error: unknown): { status: number | undefined; code: string | undefined } {
+  const response = (error as { response?: { status?: number; data?: { code?: unknown } } } | null)?.response;
+  const code = response?.data?.code;
+  return { status: response?.status, code: typeof code === 'string' ? code : undefined };
+}
 
 /** True when the server says the problem is the user's key (missing, malformed, refused or out of quota), so the key must be asked for again. */
 export function isAssistantKeyError(error: unknown): boolean {
-  const code = (error as { response?: { data?: { code?: unknown } } } | null)?.response?.data?.code;
-  return typeof code === 'string' && KEY_ERROR_CODES.has(code);
+  const { code } = responseOf(error);
+  return code !== undefined && KEY_ERROR_CODES.has(code);
+}
+
+/** True when the server found no key at all: none was sent and none is saved (any more) for this account. */
+export const isAssistantKeyMissing = (error: unknown): boolean => responseOf(error).code === KEY_REQUIRED_CODE;
+
+export type AssistantKeyAction = 'check' | 'save' | 'remove';
+
+/** Words for a failed look at, save of, or removal of the key kept on the account. They never repeat a key. */
+export function assistantKeyRequestError(error: unknown, action: AssistantKeyAction): string {
+  const { status, code } = responseOf(error);
+  if (code === KEY_STORAGE_UNAVAILABLE_CODE) return i18n.t('utils:showcaseAssistant.keyStorageUnavailable');
+  if (status === 429) return i18n.t('utils:showcaseAssistant.banHoiHoiNhanhHayDoi');
+  if (action === 'save') return status === 400 ? i18n.t('utils:showcaseAssistant.keyNotAccepted') : i18n.t('utils:showcaseAssistant.keySaveFailed');
+  return action === 'remove' ? i18n.t('utils:showcaseAssistant.keyRemoveFailed') : i18n.t('utils:showcaseAssistant.keyCheckFailed');
 }
 
 export function assistantErrorMessage(error: unknown, serverMessage: string | undefined): string {

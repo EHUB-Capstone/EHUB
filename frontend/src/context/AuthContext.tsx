@@ -11,6 +11,8 @@ import type {
 } from '../types/auth';
 import { clearPreviewDocumentCache } from '../utils/previewDocumentCache';
 import { clearAllRubricDrafts, getBrowserStorage } from '../utils/rubricDraft';
+import { clearAllAssistantChats } from '../utils/showcaseAssistantChat';
+import { forgetAllAssistantKeys } from '../utils/showcaseAssistantKey';
 
 // ─── Context shape ───────────────────────────────────────────────────────────
 
@@ -134,6 +136,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearPreviewDocumentCache();
       // Unsaved rubric scores must not stay in this tab for the next user.
       clearAllRubricDrafts(getBrowserStorage());
+      // The Showcase assistant conversation, and any key the user chose to remember, belong to the account that is signing out.
+      clearAllAssistantChats(getBrowserStorage());
+      forgetAllAssistantKeys(getBrowserStorage());
     }
   }, []);
 
