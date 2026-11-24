@@ -106,6 +106,7 @@ public interface IApplicationDbContext
     DbSet<ShowcaseLink> ShowcaseLinks { get; }
     DbSet<ShowcaseMedia> ShowcaseMedia { get; }
     DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories { get; }
+    DbSet<ShowcaseAssistantUserKey> ShowcaseAssistantUserKeys { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     void ClearChanges();

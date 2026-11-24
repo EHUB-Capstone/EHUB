@@ -174,6 +174,10 @@ public sealed class UserManagementHandler(IApplicationDbContext context, ICurren
         var profile = await context.MentorProfiles.FirstOrDefaultAsync(item => item.UserId == id, token);
         if (profile is not null) context.MentorProfiles.Remove(profile);
         if (user.Student is not null) context.Students.Remove(user.Student);
+        // A soft-deleted account never reaches the database's own cascade, so the Gemini key it kept for the Showcase assistant
+        // (encrypted, but still the account's own data) is removed here.
+        var assistantKey = await context.ShowcaseAssistantUserKeys.FirstOrDefaultAsync(item => item.UserId == id, token);
+        if (assistantKey is not null) context.ShowcaseAssistantUserKeys.Remove(assistantKey);
         // The account is soft-deleted by hand: removing the tracked entity makes EF refuse to detach its role links.
         user.IsDeleted = true;
         user.DeletedAt = DateTime.UtcNow;

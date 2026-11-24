@@ -157,6 +157,12 @@ export default function MentorAllocationPreviewModal({
             {t('mentorAllocationPreviewModal.aiMatchesBusinessMentorsToProject')}
           </p>
         )}
+        {summary.teams > 0 && summary.allocated === 0 && summary.manual === 0 && summary.replacements === 0
+          && summary.unfilledEnterprise === 0 && summary.unfilledAcademic === 0 && (
+          <p role="status" className="rounded-xl bg-warning-50 px-3 py-2 text-body-sm text-warning-dark">
+            {t('mentorAllocationPreviewModal.allMentorSlotsAlreadyFilled', { change: t('classManagement.change') })}
+          </p>
+        )}
         {(preview.balance?.length ?? 0) > 0 && (
           <section aria-label={t('mentorAllocationPreviewModal.semesterWorkloadBalance')} className="rounded-xl border border-slate-200 p-3 text-body-sm text-slate-600">
             <h3 className="font-semibold text-slate-800">{t('mentorAllocationPreviewModal.chiaDeuTheoHocKy')}</h3>

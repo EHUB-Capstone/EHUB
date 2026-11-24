@@ -122,6 +122,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ShowcaseLink> ShowcaseLinks => Set<ShowcaseLink>();
     public DbSet<ShowcaseMedia> ShowcaseMedia => Set<ShowcaseMedia>();
     public DbSet<ShowcaseReviewHistory> ShowcaseReviewHistories => Set<ShowcaseReviewHistory>();
+    public DbSet<ShowcaseAssistantUserKey> ShowcaseAssistantUserKeys => Set<ShowcaseAssistantUserKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

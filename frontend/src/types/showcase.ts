@@ -41,6 +41,21 @@ export interface ShowcaseAssistantReplyDto {
   suggestions: string[];
 }
 
+// Mirrors EHub.Contracts/Showcase/ShowcaseAssistantKeyContracts.cs. Keep both in sync.
+/** What the server says about the Gemini key the signed-in user saved to their account. The key itself is never returned. */
+export interface ShowcaseAssistantKeyStatusDto {
+  /** False when the server has no encryption key configured, so nothing can be saved there. */
+  storageAvailable: boolean;
+  hasKey: boolean;
+  /** The last four characters, enough to recognise which key it is. */
+  last4: string | null;
+  updatedAt: string | null;
+}
+
+export interface SaveShowcaseAssistantKeyRequest {
+  apiKey: string;
+}
+
 export interface ShowcaseFeaturedDto {
   id: string;
   isFeatured: boolean;

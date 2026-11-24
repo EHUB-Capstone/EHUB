@@ -20,7 +20,8 @@ public sealed class ShowcaseAssistantHandler(
     IApplicationDbContext context,
     IShowcaseAssistantModel model,
     IValidator<ShowcaseAssistantChatRequest> validator,
-    IDateTimeProvider time) : IShowcaseAssistantHandler
+    IDateTimeProvider time,
+    IStoredShowcaseAssistantKey? storedKey = null) : IShowcaseAssistantHandler
 {
     internal const int MaximumCatalogSize = 120;
     internal const int MaximumCandidates = 500;
@@ -42,9 +43,12 @@ public sealed class ShowcaseAssistantHandler(
         if (!validation.IsValid)
             return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseValidationError, validation.Errors[0].ErrorMessage);
 
-        // The key is the caller's own and never stored: refuse before any database or provider work when it is missing or malformed.
-        // A key pasted with a trailing space or newline is still the user's key.
+        // The key is always the caller's own. One sent with this request wins; otherwise the one they chose to keep on the server
+        // (encrypted, and only ever opened here for this call). Refuse before any database or provider work when there is none or
+        // it is malformed. A key pasted with a trailing space or newline is still the user's key.
         var key = apiKey?.Trim();
+        if (string.IsNullOrEmpty(key) && storedKey is not null)
+            key = await storedKey.RevealAsync(userId, cancellationToken);
         if (string.IsNullOrEmpty(key))
             return Result.Failure<ShowcaseAssistantReplyDto>(ErrorCodes.ShowcaseAssistantKeyRequired, "Hãy nhập API key Gemini của bạn để dùng trợ lý.");
         if (!ShowcaseAssistantApiKey.IsWellFormed(key))

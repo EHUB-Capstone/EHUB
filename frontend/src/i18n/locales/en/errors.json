@@ -138,6 +138,7 @@
     "SHOWCASE_ASSISTANT_UNAVAILABLE": "The showcase assistant is currently unavailable.",
     "SHOWCASE_ASSISTANT_KEY_REQUIRED": "A Gemini API key is required to use the assistant.",
     "SHOWCASE_ASSISTANT_KEY_INVALID": "The Gemini API key is invalid.",
+    "SHOWCASE_ASSISTANT_KEY_STORAGE_UNAVAILABLE": "The server cannot keep Gemini API keys yet.",
     "PROJECT_DATA_ACCESS_DENIED": "You do not have access to this project data.",
     "PROJECT_DATA_NOT_FOUND": "The project could not be found.",
     "PROJECT_DATA_VALIDATION_ERROR": "The project data is invalid. Please check it and try again.",

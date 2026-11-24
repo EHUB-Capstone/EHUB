@@ -5476,6 +5476,42 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("semester_temporary_mentors", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseAssistantUserKey", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<byte[]>("Ciphertext")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("ciphertext");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Last4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)")
+                        .HasColumnName("last4");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("showcase_assistant_user_keys", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10211,6 +10247,15 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Draft");
 
                     b.Navigation("Semester");
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseAssistantUserKey", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseComment", b =>
