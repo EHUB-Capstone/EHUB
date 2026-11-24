@@ -901,6 +901,7 @@
     "strategy": "Strategy:",
     "balanced": "Balanced",
     "aiMatchesBusinessMentorsToProject": "AI matches business mentors to project needs and balances workload; IT mentors are assigned evenly without AI.  Check suggestions with a fit score of 0. You can change a mentor or leave a slot empty before accepting.  Fit scores are not probabilities.",
+    "allMentorSlotsAlreadyFilled": "Every mentor slot here is already filled, so AI had nothing to assign. AI only fills empty slots. Use {{change}} on a row to replace a mentor.",
     "semesterWorkloadBalance": "Semester workload balance",
     "chiaDeuTheoHocKy": "Balanced across the semester",
     "tinhTaiTrenCaHocKy": "Workload is computed across the whole semester; only empty slots within the selected scope are filled. You can edit manually before confirming.",

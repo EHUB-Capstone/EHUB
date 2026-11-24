@@ -882,6 +882,7 @@
     "strategy": "Chiến lược:",
     "balanced": "Cân bằng",
     "aiMatchesBusinessMentorsToProject": "AI ghép Mentor doanh nghiệp với nhu cầu dự án và cân bằng khối lượng công việc; Mentor CNTT được phân công đều mà không dùng AI.  Hãy kiểm tra các gợi ý có điểm phù hợp bằng 0. Bạn có thể đổi Mentor hoặc để trống vị trí trước khi chấp nhận.  Điểm phù hợp không phải là xác suất.",
+    "allMentorSlotsAlreadyFilled": "Tất cả vị trí Mentor trong phạm vi này đều đã có người, nên AI không cần phân công thêm. AI chỉ phân công vào vị trí trống. Chọn {{change}} ở hàng tương ứng để đổi Mentor.",
     "semesterWorkloadBalance": "Cân bằng khối lượng theo học kỳ",
     "chiaDeuTheoHocKy": "Chia đều theo học kỳ",
     "tinhTaiTrenCaHocKy": "Tính tải trên cả học kỳ; chỉ thêm vào các vị trí trống trong phạm vi đã chọn. Có thể sửa tay trước khi chốt.",
