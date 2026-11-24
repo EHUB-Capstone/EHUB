@@ -242,7 +242,7 @@
     "nhapApiKeyGemini": "Enter a Gemini API key",
     "nhapApiKeyGeminiCuaBan": "Enter your Gemini API key",
     "hubbyChayBangKeyCuaChinh": "Hubby runs on your own key, so the system stores no AI key. You need a key to ask Hubby.",
-    "keyChiNamTrongBoNho": "The key only lives in this tab's memory: reload the page or leave Showcase and you must enter it again.",
+    "keyChiNamTrongBoNho": "By default, the key stays in memory and you need to enter it again after reloading. Select the option below to remember it in this tab.",
     "keyDuocGuiKemTungCau": "The key is sent with every question over HTTPS; the server does not store or log it.",
     "cauHoiVaThongTinCac": "Your questions and the information of published projects are sent to Google using your key.",
     "layKeyTaiGoogleAiStudio": "Get a key at Google AI Studio",
@@ -272,7 +272,18 @@
     "viDuCoDuAnNao": "For example: are there any agriculture projects?",
     "guiCauHoi": "Send question",
     "troLyAiCoTheNham": "The AI assistant can make mistakes. Open a project to see accurate information.",
-    "doiApiKey": "Change API key"
+    "doiApiKey": "Change API key",
+    "rememberKeyInTab": "Remember the key in this tab until you close it or sign out. Use this only on your own device.",
+    "reenterGeminiKey": "Re-enter your Gemini API key",
+    "pasteKeyToContinue": "Paste your Gemini API key to keep asking questions",
+    "resumeConversation": "Continue",
+    "conversationRestored": "Your conversation is kept when you reload. Select the option above to remember the key too.",
+    "clearConversation": "Delete conversation",
+    "confirmClearConversation": "Confirm conversation deletion",
+    "clearConversationPrompt": "Delete this entire conversation?",
+    "keepConversation": "Keep it",
+    "deleteConversation": "Delete",
+    "changeRememberedKey": "Change API key (remembered)"
   },
   "myShowcase": {
     "myShowcase": "My Showcase",

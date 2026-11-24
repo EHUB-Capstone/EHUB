@@ -239,7 +239,7 @@
     "nhapApiKeyGemini": "Nhập API key Gemini",
     "nhapApiKeyGeminiCuaBan": "Nhập API key Gemini của bạn",
     "hubbyChayBangKeyCuaChinh": "Hubby chạy bằng key của chính bạn, nên hệ thống không giữ key AI nào. Bạn cần key để hỏi Hubby.",
-    "keyChiNamTrongBoNho": "Key chỉ nằm trong bộ nhớ của tab này: tải lại trang hoặc rời Showcase là phải nhập lại.",
+    "keyChiNamTrongBoNho": "Mặc định key chỉ nằm trong bộ nhớ và cần nhập lại sau khi tải trang. Tích ô bên dưới để nhớ key trong tab này.",
     "keyDuocGuiKemTungCau": "Key được gửi kèm từng câu hỏi qua HTTPS, máy chủ không lưu và không ghi log key.",
     "cauHoiVaThongTinCac": "Câu hỏi và thông tin các dự án đã công bố được gửi tới Google bằng key của bạn.",
     "layKeyTaiGoogleAiStudio": "Lấy key tại Google AI Studio",
@@ -269,7 +269,18 @@
     "viDuCoDuAnNao": "Ví dụ: có dự án nào về nông nghiệp?",
     "guiCauHoi": "Gửi câu hỏi",
     "troLyAiCoTheNham": "Trợ lý AI có thể nhầm. Hãy mở dự án để xem thông tin chính xác.",
-    "doiApiKey": "Đổi API key"
+    "doiApiKey": "Đổi API key",
+    "rememberKeyInTab": "Nhớ key trong tab này đến khi đóng tab hoặc đăng xuất. Chỉ bật trên thiết bị của bạn.",
+    "reenterGeminiKey": "Nhập lại API key Gemini",
+    "pasteKeyToContinue": "Dán lại API key Gemini để hỏi tiếp",
+    "resumeConversation": "Tiếp tục",
+    "conversationRestored": "Cuộc trò chuyện được giữ khi tải lại trang. Tích ô trên để nhớ cả key.",
+    "clearConversation": "Xóa cuộc trò chuyện",
+    "confirmClearConversation": "Xác nhận xóa cuộc trò chuyện",
+    "clearConversationPrompt": "Xóa toàn bộ cuộc trò chuyện này?",
+    "keepConversation": "Giữ lại",
+    "deleteConversation": "Xóa",
+    "changeRememberedKey": "Đổi API key (đang nhớ)"
   },
   "myShowcase": {
     "myShowcase": "Showcase của tôi",

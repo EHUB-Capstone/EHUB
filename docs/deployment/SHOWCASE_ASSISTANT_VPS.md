@@ -2,8 +2,12 @@
 
 Chatbot Hubby dùng Gemini thật để tìm và giải thích các dự án đã công bố trên Showcase.
 Tính năng mặc định tắt. **Máy chủ không giữ key AI nào cho chatbot**: mỗi người dùng tự dán API key
-Gemini của mình vào khung chat. Key chỉ nằm trong bộ nhớ của tab trình duyệt, được gửi kèm từng câu
-hỏi qua HTTPS và chỉ dùng cho câu hỏi đó; backend không lưu và không ghi log key.
+Gemini của mình vào khung chat. Mặc định key chỉ nằm trong bộ nhớ của tab trình duyệt; người dùng có thể
+tích ô "Nhớ key trong tab này" để key được giữ trong bộ nhớ tạm của tab (sessionStorage, riêng cho từng tài
+khoản) đến khi họ đóng tab, đăng xuất hoặc bấm "Đổi API key". Key không bao giờ nằm trong localStorage,
+cookie hay trên máy chủ: nó được gửi kèm từng câu hỏi qua HTTPS và chỉ dùng cho câu hỏi đó; backend không
+lưu và không ghi log key. Cuộc trò chuyện cũng được giữ trong tab (không kèm key) để không mất khi tải lại
+trang, và bị xóa khi đăng xuất.
 
 ## Cấu hình Docker Compose
 

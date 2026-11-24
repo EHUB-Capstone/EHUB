@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
-import { ExternalLink, Eye, KeyRound, RotateCcw, Send, ThumbsUp, X } from 'lucide-react';
+import { ExternalLink, Eye, KeyRound, RotateCcw, Send, ThumbsUp, Trash2, X } from 'lucide-react';
 import { showcaseApi } from '../../../api/showcaseApi';
 import AutoSizeTextarea from '../../../components/ui/AutoSizeTextarea';
 import Button from '../../../components/ui/Button';
 import { badgeTones } from '../../../components/ui/Badge';
+import { useAuthContext } from '../../../context/AuthContext';
+import { formatNumber as fmtNumber } from '../../../i18n/format';
 import HubbyMascot from './HubbyMascot';
 import type { ShowcaseAssistantProjectDto, ShowcaseStage } from '../../../types/showcase';
 import { parseApiError } from '../../../utils/apiError';
 import { cn } from '../../../utils/cn';
+import { getBrowserStorage } from '../../../utils/rubricDraft';
 import { stageLabel } from '../../../utils/showcase';
 import {
   ASSISTANT_KEY_URL,
@@ -21,8 +25,8 @@ import {
   isAssistantKeyError,
   type AssistantChatMessage,
 } from '../../../utils/showcaseAssistant';
-import { useTranslation } from 'react-i18next';
-import { formatNumber as fmtNumber } from '../../../i18n/format';
+import { loadAssistantChat, saveAssistantChat } from '../../../utils/showcaseAssistantChat';
+import { forgetAssistantKey, recallAssistantKey, rememberAssistantKey } from '../../../utils/showcaseAssistantKey';
 
 const GREETED_KEY = 'ehub-hubby-greeted';
 
@@ -61,60 +65,121 @@ function ProjectResult({ project, backTo }: { project: ShowcaseAssistantProjectD
   );
 }
 
+/** Off by default: the key stays in memory unless the user chooses to keep it for this tab. */
+function RememberKeyOption({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+  const { t } = useTranslation('showcase');
+  return (
+    <label className="flex min-h-9 cursor-pointer items-start gap-2 text-caption text-slate-600 dark:text-slate-300">
+      <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+      <span>{t('showcaseAssistant.rememberKeyInTab')}</span>
+    </label>
+  );
+}
+
 /**
  * The assistant runs on the user's own Gemini key: the server keeps none. This is where it is pasted. The key is checked for
  * shape only (nothing is sent anywhere to test it); Google's answer to the first question tells whether it works.
  */
-function KeyForm({ draft, notice, inputRef, onDraft, onSubmit }: {
+function KeyForm({ draft, notice, inputRef, remember, onDraft, onRemember, onSubmit }: {
+  draft: string;
+  notice: string;
+  inputRef: React.Ref<HTMLInputElement>;
+  remember: boolean;
+  onDraft: (value: string) => void;
+  onRemember: (value: boolean) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const { t } = useTranslation('showcase');
+  return (
+    // The explanation scrolls; the field, the option and the button stay in view so the way forward is never below the fold.
+    <form onSubmit={onSubmit} aria-label={t('showcaseAssistant.nhapApiKeyGemini')} className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div className="flex flex-col items-center gap-2 text-center"><HubbyMascot className="hubby-float h-16 w-auto" /></div>
+        <h3 className="text-body font-semibold text-secondary dark:text-white">{t('showcaseAssistant.nhapApiKeyGeminiCuaBan')}</h3>
+        <p className="text-body-sm text-slate-600 dark:text-slate-300">{t('showcaseAssistant.hubbyChayBangKeyCuaChinh')}</p>
+        <ul className="list-disc space-y-1 pl-5 text-caption text-slate-500 dark:text-slate-400">
+          <li>{t('showcaseAssistant.keyChiNamTrongBoNho')}</li>
+          <li>{t('showcaseAssistant.keyDuocGuiKemTungCau')}</li>
+          <li>{t('showcaseAssistant.cauHoiVaThongTinCac')}</li>
+        </ul>
+        <a
+          href={ASSISTANT_KEY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-9 items-center gap-1 text-body-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
+        >
+          {t('showcaseAssistant.layKeyTaiGoogleAiStudio')} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only"> {t('showcaseAssistant.moTrongTabMoi')}</span>
+        </a>
+      </div>
+      <div className="space-y-2 border-t border-slate-200 px-4 py-3 dark:border-slate-600">
+        <KeyField draft={draft} notice={notice} inputRef={inputRef} onDraft={onDraft} label={t('showcaseAssistant.apiKeyGemini')} />
+        <RememberKeyOption checked={remember} onChange={onRemember} />
+        <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="w-full">{t('showcaseAssistant.luuKeyVaBatDau')}</Button>
+      </div>
+    </form>
+  );
+}
+
+/** The one place the key is typed: hidden while typing, never auto-filled, and only checked for shape by the parent. */
+function KeyField({ draft, notice, inputRef, onDraft, label }: {
   draft: string;
   notice: string;
   inputRef: React.Ref<HTMLInputElement>;
   onDraft: (value: string) => void;
-  onSubmit: (event: FormEvent) => void;
+  label: string;
 }) {
   const { t } = useTranslation('showcase');
   const id = useId();
   return (
-    <form onSubmit={onSubmit} aria-label={t('showcaseAssistant.nhapApiKeyGemini')} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-      <div className="flex flex-col items-center gap-2 text-center"><HubbyMascot className="hubby-float h-20 w-auto" /></div>
-      <h3 className="text-body font-semibold text-secondary dark:text-white">{t('showcaseAssistant.nhapApiKeyGeminiCuaBan')}</h3>
-      <p className="text-body-sm text-slate-600 dark:text-slate-300">
-        {t('showcaseAssistant.hubbyChayBangKeyCuaChinh')}
-      </p>
-      <ul className="list-disc space-y-1 pl-5 text-caption text-slate-500 dark:text-slate-400">
-        <li>{t('showcaseAssistant.keyChiNamTrongBoNho')}</li>
-        <li>{t('showcaseAssistant.keyDuocGuiKemTungCau')}</li>
-        <li>{t('showcaseAssistant.cauHoiVaThongTinCac')}</li>
-      </ul>
-      <a
-        href={ASSISTANT_KEY_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex min-h-9 items-center gap-1 text-body-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
-      >
-        {t('showcaseAssistant.layKeyTaiGoogleAiStudio')} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-        <span className="sr-only"> {t('showcaseAssistant.moTrongTabMoi')}</span>
-      </a>
-      <div>
-        <label htmlFor={`${id}-key`} className="text-caption font-semibold text-slate-700 dark:text-slate-200">{t('showcaseAssistant.apiKeyGemini')}</label>
-        <input
-          id={`${id}-key`}
-          ref={inputRef}
-          type="password"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          value={draft}
-          maxLength={512}
-          placeholder={t('showcaseAssistant.danKeyVaoDay')}
-          aria-invalid={notice ? true : undefined}
-          aria-describedby={notice ? `${id}-notice` : undefined}
-          onChange={event => onDraft(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-body-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-dark-surface dark:text-slate-100"
-        />
-        {notice && <p id={`${id}-notice`} role="alert" className="mt-1.5 text-body-sm text-danger-dark">{notice}</p>}
+    <div className="min-w-0">
+      <label htmlFor={`${id}-key`} className="text-caption font-semibold text-slate-700 dark:text-slate-200">{label}</label>
+      <input
+        id={`${id}-key`}
+        ref={inputRef}
+        type="password"
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        value={draft}
+        maxLength={512}
+        placeholder={t('showcaseAssistant.danKeyVaoDay')}
+        aria-invalid={notice ? true : undefined}
+        aria-describedby={notice ? `${id}-notice` : undefined}
+        onChange={event => onDraft(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-body-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-600 dark:bg-dark-surface dark:text-slate-100"
+      />
+      {notice && <p id={`${id}-notice`} role="alert" className="mt-1.5 text-body-sm text-danger-dark">{notice}</p>}
+    </div>
+  );
+}
+
+/** Shown under a restored conversation when the key was not remembered, so it is asked for again to carry on. */
+function ResumeKeyForm({ draft, notice, inputRef, remember, onDraft, onRemember, onSubmit }: {
+  draft: string;
+  notice: string;
+  inputRef: React.Ref<HTMLInputElement>;
+  remember: boolean;
+  onDraft: (value: string) => void;
+  onRemember: (value: boolean) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const { t } = useTranslation('showcase');
+  return (
+    <form onSubmit={onSubmit} aria-label={t('showcaseAssistant.reenterGeminiKey')} className="space-y-2 border-t border-slate-200 p-3 dark:border-slate-600">
+      <div className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <KeyField draft={draft} notice={notice} inputRef={inputRef} onDraft={onDraft} label={t('showcaseAssistant.pasteKeyToContinue')} />
+        </div>
+        <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="shrink-0">{t('showcaseAssistant.resumeConversation')}</Button>
       </div>
-      <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="w-full">{t('showcaseAssistant.luuKeyVaBatDau')}</Button>
+      <RememberKeyOption checked={remember} onChange={onRemember} />
+      <p className="text-caption text-slate-500 dark:text-slate-400">
+        {t('showcaseAssistant.conversationRestored')}{' '}
+        <a href={ASSISTANT_KEY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300">
+          {t('showcaseAssistant.layKeyTaiGoogleAiStudio')}<span className="sr-only"> {t('showcaseAssistant.moTrongTabMoi')}</span>
+        </a>
+      </p>
     </form>
   );
 }
@@ -125,7 +190,16 @@ export default function ShowcaseAssistant(): React.ReactElement {
   const backTo = `${location.pathname}${location.search}`;
   const titleId = useId();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
+  const { user } = useAuthContext();
+  // The signed-in account. (Inside send, "userId" is the id of the question message, a different thing.)
+  const accountId = user?.id ?? '';
+  // The conversation belongs to the signed-in account and is kept in this browser tab, so reloading the page does not lose it.
+  // It never includes the API key. Another account never sees it, and signing out removes it.
+  const [chat, setChat] = useState(() => ({ owner: accountId, messages: loadAssistantChat(getBrowserStorage(), accountId) }));
+  const messages = chat.messages;
+  const setMessages = useCallback((update: (current: AssistantChatMessage[]) => AssistantChatMessage[]) =>
+    setChat(current => ({ ...current, messages: update(current.messages) })), []);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const counter = useRef(0);
@@ -136,9 +210,12 @@ export default function ShowcaseAssistant(): React.ReactElement {
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(false);
   const [greeting, setGreeting] = useState(false);
-  // The user's own Gemini key. It lives only in this component's memory: reloading the page or leaving Showcase forgets it. It is
-  // never written to storage, and the server keeps none.
-  const [apiKey, setApiKey] = useState('');
+  // The user's own Gemini key. It lives in this component's memory, and the server keeps none. Only when the user ticks "remember"
+  // is it also kept in this tab's storage under their own account, until they close the tab, sign out or change the key.
+  const [apiKey, setApiKey] = useState(() => recallAssistantKey(getBrowserStorage(), accountId));
+  const [keyRemembered, setKeyRemembered] = useState(() => recallAssistantKey(getBrowserStorage(), accountId) !== '');
+  // The "remember" tick starts off every time a key is typed.
+  const [rememberKey, setRememberKey] = useState(false);
   const [keyDraft, setKeyDraft] = useState('');
   const [keyNotice, setKeyNotice] = useState('');
   const keyInputRef = useRef<HTMLInputElement | null>(null);
@@ -160,6 +237,20 @@ export default function ShowcaseAssistant(): React.ReactElement {
   // Cancel a request that is still running when the user leaves the showcase pages.
   useEffect(() => () => controller.current?.abort(), []);
 
+  // A different account signed in on this tab: show that account's conversation and key, never keep using the previous ones.
+  useEffect(() => {
+    if (chat.owner === accountId) return;
+    setChat({ owner: accountId, messages: loadAssistantChat(getBrowserStorage(), accountId) });
+    const remembered = recallAssistantKey(getBrowserStorage(), accountId);
+    setApiKey(remembered);
+    setKeyRemembered(remembered !== '');
+  }, [chat.owner, accountId]);
+
+  // Keep the conversation up to date for the next reload. It is saved under the account it was loaded for.
+  useEffect(() => {
+    saveAssistantChat(getBrowserStorage(), chat.owner, chat.messages);
+  }, [chat]);
+
   useEffect(() => {
     // With no key yet the first thing to do is paste one, so focus goes there; afterwards it goes to the question box.
     if (open) (apiKey ? inputRef : keyInputRef).current?.focus();
@@ -167,6 +258,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
       if (wasOpen.current) launcherRef.current?.focus();
       // A half-typed key does not wait around in memory once the panel is closed.
       setKeyDraft('');
+      setRememberKey(false);
     }
     wasOpen.current = open;
   }, [open, apiKey]);
@@ -176,7 +268,8 @@ export default function ShowcaseAssistant(): React.ReactElement {
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages, pending, open]);
 
-  const nextId = () => `m${++counter.current}`;
+  // Restored messages keep their ids, so new ones must never repeat an id from an earlier visit.
+  const nextId = () => `${Date.now().toString(36)}-${++counter.current}`;
 
   const send = useCallback(async (rawQuestion: string, replace: readonly string[] = []) => {
     const question = rawQuestion.trim();
@@ -208,6 +301,9 @@ export default function ShowcaseAssistant(): React.ReactElement {
         setMessages(current => current.filter(item => item.id !== userId));
         setDraft(question);
         setApiKey('');
+        // A refused key is not worth remembering: drop the copy kept in this tab as well.
+        forgetAssistantKey(getBrowserStorage(), accountId);
+        setKeyRemembered(false);
         setKeyNotice(message);
         return;
       }
@@ -216,7 +312,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
       inFlight.current = false;
       if (!request.signal.aborted) setPending(false);
     }
-  }, [messages, apiKey]);
+  }, [messages, apiKey, setMessages, accountId, t]);
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -230,8 +326,16 @@ export default function ShowcaseAssistant(): React.ReactElement {
       setKeyNotice(problem);
       return;
     }
-    setApiKey(cleanAssistantKey(keyDraft));
+    const key = cleanAssistantKey(keyDraft);
+    setApiKey(key);
+    // Keeping the key is the user's choice. Without the tick, any copy kept earlier is dropped so the tick always means what it says.
+    if (rememberKey) setKeyRemembered(rememberAssistantKey(getBrowserStorage(), accountId, key));
+    else {
+      forgetAssistantKey(getBrowserStorage(), accountId);
+      setKeyRemembered(false);
+    }
     setKeyDraft('');
+    setRememberKey(false);
     setKeyNotice('');
   };
 
@@ -240,12 +344,26 @@ export default function ShowcaseAssistant(): React.ReactElement {
     inFlight.current = false;
     setPending(false);
     setApiKey('');
+    forgetAssistantKey(getBrowserStorage(), accountId);
+    setKeyRemembered(false);
     setKeyDraft('');
+    setRememberKey(false);
     setKeyNotice('');
   };
 
+  const clearConversation = () => {
+    controller.current?.abort();
+    inFlight.current = false;
+    setPending(false);
+    setMessages(() => []);
+    setConfirmClear(false);
+  };
+
   const onPanelKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') setOpen(false);
+    if (event.key !== 'Escape') return;
+    // Escape first backs out of the "delete conversation" question, and only then closes the panel.
+    if (confirmClear) setConfirmClear(false);
+    else setOpen(false);
   };
 
   const last = messages[messages.length - 1];
@@ -293,13 +411,36 @@ export default function ShowcaseAssistant(): React.ReactElement {
             <p className="text-caption text-slate-500 dark:text-slate-400">{apiKey ? t('showcaseAssistant.hoiVeCacDuAnDa') : t('showcaseAssistant.canApiKeyGeminiCuaBan')}</p>
           </div>
         </div>
-        <button type="button" onClick={() => setOpen(false)} aria-label={t('showcaseAssistant.dongTroLy')} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmClear(true)}
+              aria-label={t('showcaseAssistant.clearConversation')}
+              title={t('showcaseAssistant.clearConversation')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+          <button type="button" onClick={() => setOpen(false)} aria-label={t('showcaseAssistant.dongTroLy')} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
-      {!apiKey ? (
-        <KeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onSubmit={saveKey} />
+      {confirmClear && (
+        <div role="group" aria-label={t('showcaseAssistant.confirmClearConversation')} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-body-sm text-slate-700 dark:border-slate-600 dark:bg-secondary-800 dark:text-slate-200">
+          <span>{t('showcaseAssistant.clearConversationPrompt')}</span>
+          <span className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" autoFocus onClick={() => setConfirmClear(false)}>{t('showcaseAssistant.keepConversation')}</Button>
+            <Button size="sm" variant="danger-outline" icon={Trash2} onClick={clearConversation}>{t('showcaseAssistant.deleteConversation')}</Button>
+          </span>
+        </div>
+      )}
+
+      {!apiKey && messages.length === 0 ? (
+        <KeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} remember={rememberKey} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onRemember={setRememberKey} onSubmit={saveKey} />
       ) : (
       <>
       <div ref={listRef} role="log" aria-live="polite" aria-label={t('showcaseAssistant.cuocTroChuyen')} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -350,6 +491,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
         )}
       </div>
 
+      {apiKey ? (
       <form onSubmit={submit} className="border-t border-slate-200 p-3 dark:border-slate-600">
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
@@ -375,10 +517,13 @@ export default function ShowcaseAssistant(): React.ReactElement {
             onClick={forgetKey}
             className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
           >
-            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />{t('showcaseAssistant.doiApiKey')}
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />{t(keyRemembered ? 'showcaseAssistant.changeRememberedKey' : 'showcaseAssistant.doiApiKey')}
           </button>
         </p>
       </form>
+      ) : (
+        <ResumeKeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} remember={rememberKey} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onRemember={setRememberKey} onSubmit={saveKey} />
+      )}
       </>
       )}
     </div>

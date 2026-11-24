@@ -142,18 +142,28 @@ test('a key problem reported by the server is told apart from a server fault (Vi
   }
 });
 
-test('the key stays in memory: never stored, never sent anywhere but the chat request', () => {
+test('the key stays in memory unless the user ticks "remember": never in storage that outlives the tab, never sent anywhere but the chat request', () => {
   const component = readFileSync(new URL('../src/features/showcase/components/ShowcaseAssistant.tsx', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../src/api/showcaseApi.ts', import.meta.url), 'utf8');
-  // The only storage this component touches is the one-time greeting flag, and never next to the key.
+  const keyStore = readFileSync(new URL('../src/utils/showcaseAssistantKey.ts', import.meta.url), 'utf8');
+  const auth = readFileSync(new URL('../src/context/AuthContext.tsx', import.meta.url), 'utf8');
+  // Nothing that outlives the tab is ever used for the key: neither by the component nor by the helper that keeps it on request.
   assert.doesNotMatch(component, /localStorage|indexedDB|document\.cookie/);
+  assert.doesNotMatch(keyStore, /localStorage|indexedDB|document\.cookie/);
+  // The component itself only touches the one-time greeting flag; a remembered key goes through the helper and this tab's storage.
   assert.equal((component.match(/sessionStorage/g) ?? []).length, 2, 'only the greeting flag is read and written');
-  assert.match(component, /const \[apiKey, setApiKey\] = useState\(''\)/);
+  // The key only ever starts from what the helper recalls for this account, and remembering is opt-in: off every time.
+  assert.match(component, /const \[apiKey, setApiKey\] = useState\(\(\) => recallAssistantKey\(/);
+  assert.match(component, /const \[rememberKey, setRememberKey\] = useState\(false\)/);
+  assert.match(component, /if \(rememberKey\) setKeyRemembered\(rememberAssistantKey\(/);
   assert.match(component, /type="password"/);
   assert.match(component, /autoComplete="off"/);
   assert.match(component, /showcaseApi\.askAssistant\(\{ message: question, history \}, apiKey, request\.signal\)/);
-  // A key the server refuses is forgotten and the question is given back, so nothing is lost and nothing is retried with it.
-  assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?setApiKey\(''\)/);
+  // A key the server refuses is forgotten, also from this tab's storage, and the question is given back: nothing is lost and nothing is retried with it.
+  assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
+  // "Đổi API key" forgets it everywhere, and signing out removes every remembered key.
+  assert.match(component, /const forgetKey = \(\) => \{[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
+  assert.match(auth, /forgetAllAssistantKeys\(getBrowserStorage\(\)\)/);
   assert.match(client, /headers: \{ \[ASSISTANT_KEY_HEADER\]: apiKey \}/);
   assert.doesNotMatch(client, /assistant\/chat\?/, 'the key is never put in the URL');
 });
