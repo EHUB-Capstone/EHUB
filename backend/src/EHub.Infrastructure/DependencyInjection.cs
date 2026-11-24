@@ -64,6 +64,7 @@ public static class DependencyInjection
         // Optional feature: Enabled=false must not stop the API, so there is no ValidateOnStart.
         // The assistant has no server-side key: every user supplies their own, so nothing here falls back to the mentor key.
         services.AddOptions<ShowcaseAssistantOptions>().Bind(configuration.GetSection(ShowcaseAssistantOptions.SectionName));
+        services.AddShowcaseAssistantKeyStorage(configuration);
         services.AddHttpClient<IShowcaseAssistantModel, GeminiShowcaseAssistantModel>(client =>
             client.Timeout = TimeSpan.FromSeconds(30))
             .RedactLoggedHeaders(["x-goog-api-key"])
