@@ -292,7 +292,12 @@
     "apiKeyQuaNganHayKiem": "The API key is too short. Check that you copied the whole key.",
     "apiKeyChiGomChuCai": "The API key only contains letters, digits and ordinary characters. Paste the key again.",
     "banHoiHoiNhanhHayDoi": "You are asking a bit fast. Please wait a moment and try again.",
-    "khongGuiDuocCauHoiVui": "Could not send the question. Please try again."
+    "khongGuiDuocCauHoiVui": "Could not send the question. Please try again.",
+    "keyStorageUnavailable": "This server cannot keep keys yet. Keep the key on this page or in this tab instead.",
+    "keyNotAccepted": "The key was not accepted. Paste the key again, exactly as shown in Google AI Studio.",
+    "keySaveFailed": "Could not save the key. Please try again.",
+    "keyRemoveFailed": "Could not remove the saved key. Please try again.",
+    "keyCheckFailed": "Could not check whether a key is saved to your account."
   },
   "showcaseDiscovery": {
     "topLaunchesThisWeek": "Top launches this week",

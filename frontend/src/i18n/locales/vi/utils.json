@@ -289,7 +289,12 @@
     "apiKeyQuaNganHayKiem": "API key quá ngắn. Hãy kiểm tra lại key đã sao chép đủ chưa.",
     "apiKeyChiGomChuCai": "API key chỉ gồm chữ cái, số và ký tự thông thường. Hãy dán lại key.",
     "banHoiHoiNhanhHayDoi": "Bạn hỏi hơi nhanh. Hãy đợi một chút rồi thử lại nhé.",
-    "khongGuiDuocCauHoiVui": "Không gửi được câu hỏi. Vui lòng thử lại."
+    "khongGuiDuocCauHoiVui": "Không gửi được câu hỏi. Vui lòng thử lại.",
+    "keyStorageUnavailable": "Máy chủ chưa bật việc lưu key. Bạn vẫn có thể giữ key trên trang này hoặc trong tab này.",
+    "keyNotAccepted": "Key không được chấp nhận. Hãy dán lại đúng key từ Google AI Studio.",
+    "keySaveFailed": "Không lưu được key. Vui lòng thử lại.",
+    "keyRemoveFailed": "Không xóa được key đã lưu. Vui lòng thử lại.",
+    "keyCheckFailed": "Không kiểm tra được key đã lưu trên tài khoản."
   },
   "showcaseDiscovery": {
     "topLaunchesThisWeek": "Top launches tuần này",

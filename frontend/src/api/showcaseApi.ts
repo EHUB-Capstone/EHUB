@@ -29,7 +29,9 @@ import type {
   ShowcaseReportDto,
   ShowcaseReportStatus,
   ShowcaseAssistantChatRequest,
+  ShowcaseAssistantKeyStatusDto,
   ShowcaseAssistantReplyDto,
+  SaveShowcaseAssistantKeyRequest,
 } from '../types/showcase.ts';
 
 // axiosClient resolves to the response body, so each call yields the ApiEnvelope.
@@ -46,11 +48,20 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
-  // The key is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is not kept.
-  askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string, signal?: AbortSignal) =>
+  // A key given here is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is
+  // not kept. Without one (null) the server uses the key this user saved to their account, and answers that a key is needed if none.
+  askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string | null, signal?: AbortSignal) =>
     unwrap<ShowcaseAssistantReplyDto>(axiosClient.post('/showcase/assistant/chat', body, {
-      signal, timeout: assistantRequestTimeout, headers: { [ASSISTANT_KEY_HEADER]: apiKey },
+      signal, timeout: assistantRequestTimeout, ...(apiKey ? { headers: { [ASSISTANT_KEY_HEADER]: apiKey } } : {}),
     })),
+  // The key a user chose to keep on the server, encrypted there. It is only ever sent in the body of a save; no call returns it,
+  // only whether one is saved and its last four characters.
+  getAssistantKey: (signal?: AbortSignal) =>
+    unwrap<ShowcaseAssistantKeyStatusDto>(axiosClient.get('/showcase/assistant/key', { signal })),
+  saveAssistantKey: (apiKey: string) =>
+    unwrap<ShowcaseAssistantKeyStatusDto>(axiosClient.put('/showcase/assistant/key', { apiKey } satisfies SaveShowcaseAssistantKeyRequest)),
+  deleteAssistantKey: () =>
+    unwrap<ShowcaseAssistantKeyStatusDto>(axiosClient.delete('/showcase/assistant/key')),
   recordView: (id: string, signal?: AbortSignal) =>
     unwrap<ShowcaseViewDto>(axiosClient.post(`/showcase/${id}/view`, undefined, { signal })),
   getInsights: (id: string, signal?: AbortSignal) =>

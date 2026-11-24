@@ -9,10 +9,14 @@ import {
   ASSISTANT_HISTORY_TURNS,
   ASSISTANT_KEY_HEADER,
   assistantErrorMessage,
+  assistantKeyLast4,
   assistantKeyProblem,
+  assistantKeyRequestError,
+  assistantKeySource,
   buildAssistantHistory,
   cleanAssistantKey,
   isAssistantKeyError,
+  isAssistantKeyMissing,
   isShowcaseAssistantRoute,
   type AssistantChatMessage,
 } from '../src/utils/showcaseAssistant.ts';
@@ -142,30 +146,138 @@ test('a key problem reported by the server is told apart from a server fault (Vi
   }
 });
 
-test('the key stays in memory unless the user ticks "remember": never in storage that outlives the tab, never sent anywhere but the chat request', () => {
-  const component = readFileSync(new URL('../src/features/showcase/components/ShowcaseAssistant.tsx', import.meta.url), 'utf8');
-  const client = readFileSync(new URL('../src/api/showcaseApi.ts', import.meta.url), 'utf8');
-  const keyStore = readFileSync(new URL('../src/utils/showcaseAssistantKey.ts', import.meta.url), 'utf8');
-  const auth = readFileSync(new URL('../src/context/AuthContext.tsx', import.meta.url), 'utf8');
-  // Nothing that outlives the tab is ever used for the key: neither by the component nor by the helper that keeps it on request.
-  assert.doesNotMatch(component, /localStorage|indexedDB|document\.cookie/);
-  assert.doesNotMatch(keyStore, /localStorage|indexedDB|document\.cookie/);
-  // The component itself only touches the one-time greeting flag; a remembered key goes through the helper and this tab's storage.
+test('a key given with the question has a header of its own and nothing else; without one no key header is sent', async () => {
+  const mock = new MockAdapter(axiosClient);
+  mock.onPost('/showcase/assistant/chat').reply(config => {
+    assert.equal(config.headers?.[ASSISTANT_KEY_HEADER], undefined, 'the server then uses the key saved to the account');
+    assert.deepEqual(JSON.parse(config.data), { message: 'Có dự án giáo dục không?', history: [] });
+    return [200, { data: { answer: 'Có EduBot', projects: [], suggestions: [] } }];
+  });
+  try {
+    const reply = await showcaseApi.askAssistant({ message: 'Có dự án giáo dục không?', history: [] }, null);
+    assert.equal(reply.answer, 'Có EduBot');
+  } finally {
+    mock.restore();
+  }
+});
+
+test('the key saved to the account is looked at, saved and removed through its own endpoint; the key only travels in the body of a save', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const controller = new AbortController();
+  const status = { storageAvailable: true, hasKey: true, last4: KEY.slice(-4), updatedAt: '2026-11-24T09:00:00Z' };
+  const none = { storageAvailable: true, hasKey: false, last4: null, updatedAt: null };
+  mock.onGet('/showcase/assistant/key').reply(config => {
+    assert.equal(config.data, undefined);
+    assert.equal(config.signal, controller.signal);
+    assert.equal(config.headers?.[ASSISTANT_KEY_HEADER], undefined);
+    return [200, { data: status }];
+  });
+  mock.onPut('/showcase/assistant/key').reply(config => {
+    assert.deepEqual(JSON.parse(config.data), { apiKey: KEY }, 'the key is in the body, nowhere else');
+    assert.doesNotMatch(String(config.url) + JSON.stringify(config.params ?? {}), /AIzaSy/, 'never in the URL');
+    assert.equal(config.headers?.[ASSISTANT_KEY_HEADER], undefined, 'not in the chat header either');
+    return [200, { data: status }];
+  });
+  mock.onDelete('/showcase/assistant/key').reply(config => {
+    assert.equal(config.data, undefined);
+    return [200, { data: none }];
+  });
+  try {
+    assert.deepEqual(await showcaseApi.getAssistantKey(controller.signal), status);
+    assert.deepEqual(await showcaseApi.saveAssistantKey(KEY), status);
+    assert.deepEqual(await showcaseApi.deleteAssistantKey(), none);
+    for (const answer of [status, none]) assert.ok(!('apiKey' in answer) && !JSON.stringify(answer).includes('AIzaSy'), 'an answer never carries the key');
+  } finally {
+    mock.restore();
+  }
+});
+
+test('which key a question uses: one kept here wins over the saved one, and a saved key that was just refused is not offered again', () => {
+  assert.equal(assistantKeySource(KEY, { hasKey: true }, false), 'typed');
+  assert.equal(assistantKeySource(KEY, null, false), 'typed');
+  assert.equal(assistantKeySource(KEY, { hasKey: true }, true), 'typed', 'a refused saved key does not hide a key typed since');
+  assert.equal(assistantKeySource('', { hasKey: true }, false), 'saved');
+  assert.equal(assistantKeySource('', { hasKey: true }, true), 'none');
+  assert.equal(assistantKeySource('', { hasKey: false }, false), 'none');
+  assert.equal(assistantKeySource('', null, false), 'none');
+  assert.equal(assistantKeyLast4(KEY), KEY.slice(-4));
+  assert.equal(assistantKeyLast4('abc'), 'abc');
+});
+
+test('a missing key is told apart from a refused one, and trouble with the saved key is worded for the user (English)', () => {
+  const missing = { response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_REQUIRED' } } };
+  const refused = { response: { status: 400, data: { code: 'SHOWCASE_ASSISTANT_KEY_INVALID' } } };
+  assert.equal(isAssistantKeyMissing(missing), true);
+  assert.equal(isAssistantKeyMissing(refused), false);
+  assert.equal(isAssistantKeyMissing(new Error('boom')), false);
+  assert.equal(isAssistantKeyMissing(null), false);
+
+  const off = { response: { status: 503, data: { code: 'SHOWCASE_ASSISTANT_KEY_STORAGE_UNAVAILABLE' } } };
+  assert.match(assistantKeyRequestError(off, 'save'), /cannot keep keys/i);
+  assert.match(assistantKeyRequestError({ response: { status: 429 } }, 'save'), /wait/i);
+  assert.match(assistantKeyRequestError({ response: { status: 400, data: { code: 'SHOWCASE_VALIDATION_ERROR' } } }, 'save'), /not accepted/i);
+  assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'save'), /Could not save/);
+  assert.match(assistantKeyRequestError(new Error('System.NullReferenceException at Foo'), 'save'), /Could not save/);
+  assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'remove'), /Could not remove/);
+  assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'check'), /Could not check/);
+  assert.doesNotMatch(assistantKeyRequestError({ response: { status: 500, data: { message: 'stack trace here' } } }, 'save'), /stack trace/);
+});
+
+test('trouble with the saved key is worded in Vietnamese too', async () => {
+  await i18n.changeLanguage('vi');
+  try {
+    const off = { response: { status: 503, data: { code: 'SHOWCASE_ASSISTANT_KEY_STORAGE_UNAVAILABLE' } } };
+    assert.match(assistantKeyRequestError(off, 'save'), /chưa bật việc lưu key/);
+    assert.match(assistantKeyRequestError({ response: { status: 429 } }, 'remove'), /đợi/);
+    assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'save'), /Không lưu được/);
+    assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'remove'), /Không xóa được/);
+    assert.match(assistantKeyRequestError({ response: { status: 500 } }, 'check'), /Không kiểm tra được/);
+  } finally {
+    await i18n.changeLanguage('en');
+  }
+});
+
+test('the key stays on this page unless the user chooses to keep it: in this tab, or encrypted on the server under their account', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const component = read('../src/features/showcase/components/ShowcaseAssistant.tsx');
+  const settings = read('../src/features/showcase/components/ShowcaseAssistantKeySettings.tsx');
+  const hook = read('../src/features/showcase/hooks/useAssistantServerKey.ts');
+  const client = read('../src/api/showcaseApi.ts');
+  const keyStore = read('../src/utils/showcaseAssistantKey.ts');
+  const types = read('../src/types/showcase.ts');
+  const auth = read('../src/context/AuthContext.tsx');
+  // Nothing that outlives the tab is ever used for the key: not by the screens, nor by the helper that keeps it on request.
+  for (const source of [component, settings, hook, keyStore]) assert.doesNotMatch(source, /localStorage|indexedDB|document\.cookie/);
+  // The screens only touch the one-time greeting flag; a key kept in this tab goes through the helper and this tab's storage.
   assert.equal((component.match(/sessionStorage/g) ?? []).length, 2, 'only the greeting flag is read and written');
-  // The key only ever starts from what the helper recalls for this account, and remembering is opt-in: off every time.
+  assert.doesNotMatch(settings + hook, /sessionStorage|getBrowserStorage/);
+  // The key only ever starts from what the helper recalls for this account, and keeping it anywhere is a choice that starts at "this page only".
   assert.match(component, /const \[apiKey, setApiKey\] = useState\(\(\) => recallAssistantKey\(/);
-  assert.match(component, /const \[rememberKey, setRememberKey\] = useState\(false\)/);
-  assert.match(component, /if \(rememberKey\) setKeyRemembered\(rememberAssistantKey\(/);
+  assert.match(component, /const \[keyStorage, setKeyStorage\] = useState<AssistantKeyStorage>\('session'\)/);
+  assert.match(component, /if \(keyStorage === 'tab'\) setKeyRemembered\(rememberAssistantKey\(/);
   assert.match(component, /type="password"/);
   assert.match(component, /autoComplete="off"/);
-  assert.match(component, /showcaseApi\.askAssistant\(\{ message: question, history \}, apiKey, request\.signal\)/);
-  // A key the server refuses is forgotten, also from this tab's storage, and the question is given back: nothing is lost and nothing is retried with it.
-  assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
-  // "Đổi API key" forgets it everywhere, and signing out removes every remembered key.
-  assert.match(component, /const forgetKey = \(\) => \{[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
+  // A key kept here goes with the question; without one the server uses the saved key.
+  assert.match(component, /showcaseApi\.askAssistant\(\{ message: question, history \}, apiKey \|\| null, request\.signal\)/);
+  // Saving to the account sends the key once; nothing is lost when that fails, and when it works this page keeps no copy of it.
+  assert.match(component, /if \(keyStorage === 'account'\) \{(?:(?!setKeyDraft\(''\))[\s\S])*?await savedKey\.save\(key\)[\s\S]*?assistantKeyRequestError\(error, 'save'\)[\s\S]*?return;[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
+  assert.match(component, /if \(saving\.current\) return;/, 'a second press while saving does nothing, even before React re-renders');
+  // A key kept here that the server refuses is forgotten, also from this tab's storage, and the question is given back: nothing
+  // is lost and nothing is retried with it. A saved key that is refused stays on the account, only not offered again.
+  assert.match(component, /if \(isAssistantKeyError\(error\)\)[\s\S]*?setDraft\(question\)[\s\S]*?if \(apiKey\) \{[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\([\s\S]*?\} else \{[\s\S]*?setSavedRefused\(true\)/);
+  assert.equal((component.match(/savedKey\.remove\(/g) ?? []).length, 1, 'the saved key is only ever removed by the user, through the one confirmed button');
+  assert.match(settings, /removeSavedKeyPrompt[\s\S]*?removeSavedKeyConfirm/, 'removing asks first');
+  // Letting go of the key kept here forgets it everywhere on this page, and signing out removes every key kept in this tab.
+  assert.match(component, /const forgetTypedKey = \(\) => \{[\s\S]*?setApiKey\(''\)[\s\S]*?forgetAssistantKey\(/);
   assert.match(auth, /forgetAllAssistantKeys\(getBrowserStorage\(\)\)/);
-  assert.match(client, /headers: \{ \[ASSISTANT_KEY_HEADER\]: apiKey \}/);
-  assert.doesNotMatch(client, /assistant\/chat\?/, 'the key is never put in the URL');
+  assert.doesNotMatch(auth, /deleteAssistantKey|showcaseApi/, 'signing out does not remove the key saved to the account: that is the point of saving it');
+  // The key header only exists when a key is given; the key is only ever in that header or in the body of a save, never in a URL.
+  assert.match(client, /\.\.\.\(apiKey \? \{ headers: \{ \[ASSISTANT_KEY_HEADER\]: apiKey \} \} : \{\}\)/);
+  assert.match(client, /put\('\/showcase\/assistant\/key', \{ apiKey \}/);
+  assert.doesNotMatch(client, /assistant\/(chat|key)\?/, 'the key is never put in the URL');
+  // What the server tells about the saved key never includes the key.
+  assert.match(types, /interface ShowcaseAssistantKeyStatusDto \{[^}]*last4: string \| null;[^}]*\}/);
+  assert.doesNotMatch(types.match(/interface ShowcaseAssistantKeyStatusDto \{[^}]*\}/)?.[0] ?? '', /apiKey|key:/);
 });
 
 test('assistant messages are English by default and never expose raw exceptions', () => {

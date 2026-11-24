@@ -136,6 +136,7 @@
     "SHOWCASE_ASSISTANT_UNAVAILABLE": "Trợ lý showcase hiện không khả dụng.",
     "SHOWCASE_ASSISTANT_KEY_REQUIRED": "Cần có khóa Gemini API để dùng trợ lý.",
     "SHOWCASE_ASSISTANT_KEY_INVALID": "Khóa Gemini API không hợp lệ.",
+    "SHOWCASE_ASSISTANT_KEY_STORAGE_UNAVAILABLE": "Máy chủ chưa bật việc lưu khóa Gemini API.",
     "PROJECT_DATA_ACCESS_DENIED": "Bạn không có quyền truy cập dữ liệu dự án này.",
     "PROJECT_DATA_NOT_FOUND": "Không tìm thấy dự án.",
     "PROJECT_DATA_VALIDATION_ERROR": "Dữ liệu dự án không hợp lệ. Vui lòng kiểm tra và thử lại.",

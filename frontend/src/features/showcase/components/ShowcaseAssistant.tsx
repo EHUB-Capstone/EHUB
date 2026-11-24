@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { ExternalLink, Eye, KeyRound, RotateCcw, Send, ThumbsUp, Trash2, X } from 'lucide-react';
@@ -8,7 +8,9 @@ import Button from '../../../components/ui/Button';
 import { badgeTones } from '../../../components/ui/Badge';
 import { useAuthContext } from '../../../context/AuthContext';
 import { formatNumber as fmtNumber } from '../../../i18n/format';
+import { useAssistantServerKey } from '../hooks/useAssistantServerKey';
 import HubbyMascot from './HubbyMascot';
+import { CurrentKeys, KeyStorageChoice } from './ShowcaseAssistantKeySettings';
 import type { ShowcaseAssistantProjectDto, ShowcaseStage } from '../../../types/showcase';
 import { parseApiError } from '../../../utils/apiError';
 import { cn } from '../../../utils/cn';
@@ -19,11 +21,16 @@ import {
   ASSISTANT_MAX_MESSAGE_LENGTH,
   ASSISTANT_STARTER_QUESTIONS,
   assistantErrorMessage,
+  assistantKeyLast4,
   assistantKeyProblem,
+  assistantKeyRequestError,
+  assistantKeySource,
   buildAssistantHistory,
   cleanAssistantKey,
   isAssistantKeyError,
+  isAssistantKeyMissing,
   type AssistantChatMessage,
+  type AssistantKeyStorage,
 } from '../../../utils/showcaseAssistant';
 import { loadAssistantChat, saveAssistantChat } from '../../../utils/showcaseAssistantChat';
 import { forgetAssistantKey, recallAssistantKey, rememberAssistantKey } from '../../../utils/showcaseAssistantKey';
@@ -65,37 +72,78 @@ function ProjectResult({ project, backTo }: { project: ShowcaseAssistantProjectD
   );
 }
 
-/** Off by default: the key stays in memory unless the user chooses to keep it for this tab. */
-function RememberKeyOption({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+/** What both key forms (the full one and the one under a restored conversation) are given. */
+interface KeyFormProps {
+  draft: string;
+  notice: string;
+  /** Good news about the last action (saved to the account, removed from it). */
+  info: string;
+  /** Why the key saved to the account could not be looked up; empty when it could. */
+  lookupError: string;
+  inputRef: React.Ref<HTMLInputElement>;
+  storage: AssistantKeyStorage;
+  /** Whether the server can keep keys at all. */
+  accountAvailable: boolean;
+  saving: boolean;
+  /** A key that already works is being changed, so there is something to go back to. */
+  changing: boolean;
+  /** The keys in use now, each with a way to let go of it. */
+  current: ReactNode;
+  onDraft: (value: string) => void;
+  onStorage: (value: AssistantKeyStorage) => void;
+  onSubmit: (event: FormEvent) => void;
+  onCancel: () => void;
+  onRetryLookup: () => void;
+}
+
+function KeyMessages({ info, lookupError, onRetryLookup }: Pick<KeyFormProps, 'info' | 'lookupError' | 'onRetryLookup'>) {
   const { t } = useTranslation('showcase');
   return (
-    <label className="flex min-h-9 cursor-pointer items-start gap-2 text-caption text-slate-600 dark:text-slate-300">
-      <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
-      <span>{t('showcaseAssistant.rememberKeyInTab')}</span>
-    </label>
+    <>
+      {info && <p role="status" className="rounded-lg border border-success-light bg-success-50 px-3 py-2 text-body-sm text-success-dark">{info}</p>}
+      {lookupError && (
+        <p role="alert" className="flex flex-wrap items-center gap-x-2 text-body-sm text-danger-dark">
+          <span>{lookupError}</span>
+          <button
+            type="button"
+            onClick={onRetryLookup}
+            className="inline-flex min-h-9 items-center rounded-md px-1 font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
+          >
+            {t('showcaseAssistant.thuLai')}
+          </button>
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Shown while the first look at the key saved to the account is running, so the form does not flash up for someone who has one. */
+function CheckingSavedKey({ compact }: { compact: boolean }) {
+  const { t } = useTranslation('showcase');
+  if (compact) return <p role="status" className="border-t border-slate-200 p-3 text-body-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">{t('showcaseAssistant.checkingSavedKey')}</p>;
+  return (
+    <div role="status" className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+      <HubbyMascot mood="thinking" className="h-16 w-auto" />
+      <p className="text-body-sm text-slate-600 dark:text-slate-300">{t('showcaseAssistant.checkingSavedKey')}</p>
+    </div>
   );
 }
 
 /**
- * The assistant runs on the user's own Gemini key: the server keeps none. This is where it is pasted. The key is checked for
- * shape only (nothing is sent anywhere to test it); Google's answer to the first question tells whether it works.
+ * The assistant runs on the user's own Gemini key: the system has none of its own. This is where it is pasted, and where the
+ * user chooses how long it is kept. The key is checked for shape only (nothing is sent anywhere to test it); Google's answer to
+ * the first question tells whether it works.
  */
-function KeyForm({ draft, notice, inputRef, remember, onDraft, onRemember, onSubmit }: {
-  draft: string;
-  notice: string;
-  inputRef: React.Ref<HTMLInputElement>;
-  remember: boolean;
-  onDraft: (value: string) => void;
-  onRemember: (value: boolean) => void;
-  onSubmit: (event: FormEvent) => void;
-}) {
+function KeyForm({ draft, notice, info, lookupError, inputRef, storage, accountAvailable, saving, changing, current, onDraft, onStorage, onSubmit, onCancel, onRetryLookup }: KeyFormProps) {
   const { t } = useTranslation('showcase');
   return (
-    // The explanation scrolls; the field, the option and the button stay in view so the way forward is never below the fold.
+    // The explanation scrolls; the field, the options and the buttons stay in view so the way forward is never below the fold.
     <form onSubmit={onSubmit} aria-label={t('showcaseAssistant.nhapApiKeyGemini')} className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        <div className="flex flex-col items-center gap-2 text-center"><HubbyMascot className="hubby-float h-16 w-auto" /></div>
-        <h3 className="text-body font-semibold text-secondary dark:text-white">{t('showcaseAssistant.nhapApiKeyGeminiCuaBan')}</h3>
+        <div className="flex flex-col items-center gap-2 text-center"><HubbyMascot className="hubby-float h-12 w-auto" /></div>
+        <h3 className="text-body font-semibold text-secondary dark:text-white">{changing ? t('showcaseAssistant.changeKeyTitle') : t('showcaseAssistant.nhapApiKeyGeminiCuaBan')}</h3>
+        <KeyMessages info={info} lookupError={lookupError} onRetryLookup={onRetryLookup} />
+        {current}
         <p className="text-body-sm text-slate-600 dark:text-slate-300">{t('showcaseAssistant.hubbyChayBangKeyCuaChinh')}</p>
         <ul className="list-disc space-y-1 pl-5 text-caption text-slate-500 dark:text-slate-400">
           <li>{t('showcaseAssistant.keyChiNamTrongBoNho')}</li>
@@ -114,8 +162,13 @@ function KeyForm({ draft, notice, inputRef, remember, onDraft, onRemember, onSub
       </div>
       <div className="space-y-2 border-t border-slate-200 px-4 py-3 dark:border-slate-600">
         <KeyField draft={draft} notice={notice} inputRef={inputRef} onDraft={onDraft} label={t('showcaseAssistant.apiKeyGemini')} />
-        <RememberKeyOption checked={remember} onChange={onRemember} />
-        <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="w-full">{t('showcaseAssistant.luuKeyVaBatDau')}</Button>
+        <KeyStorageChoice value={storage} accountAvailable={accountAvailable} disabled={saving} onChange={onStorage} />
+        <div className="flex gap-2">
+          {changing && <Button type="button" size="md" variant="ghost" disabled={saving} onClick={onCancel}>{t('common:actions.cancel')}</Button>}
+          <Button type="submit" size="md" icon={KeyRound} isLoading={saving} disabled={!draft.trim()} className="flex-1">
+            {changing ? t('showcaseAssistant.saveKey') : t('showcaseAssistant.luuKeyVaBatDau')}
+          </Button>
+        </div>
       </div>
     </form>
   );
@@ -154,28 +207,28 @@ function KeyField({ draft, notice, inputRef, onDraft, label }: {
   );
 }
 
-/** Shown under a restored conversation when the key was not remembered, so it is asked for again to carry on. */
-function ResumeKeyForm({ draft, notice, inputRef, remember, onDraft, onRemember, onSubmit }: {
-  draft: string;
-  notice: string;
-  inputRef: React.Ref<HTMLInputElement>;
-  remember: boolean;
-  onDraft: (value: string) => void;
-  onRemember: (value: boolean) => void;
-  onSubmit: (event: FormEvent) => void;
-}) {
+/**
+ * Shown under a conversation when there is no key to carry on with (after a reload, or when the key was refused), and when the
+ * user chooses to change the key. The conversation stays visible above it.
+ */
+function ResumeKeyForm({ draft, notice, info, lookupError, inputRef, storage, accountAvailable, saving, changing, current, onDraft, onStorage, onSubmit, onCancel, onRetryLookup }: KeyFormProps) {
   const { t } = useTranslation('showcase');
   return (
-    <form onSubmit={onSubmit} aria-label={t('showcaseAssistant.reenterGeminiKey')} className="space-y-2 border-t border-slate-200 p-3 dark:border-slate-600">
+    <form onSubmit={onSubmit} aria-label={changing ? t('showcaseAssistant.changeKeyTitle') : t('showcaseAssistant.reenterGeminiKey')} className="max-h-[60%] space-y-2 overflow-y-auto border-t border-slate-200 p-3 dark:border-slate-600">
+      <KeyMessages info={info} lookupError={lookupError} onRetryLookup={onRetryLookup} />
+      {current}
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
-          <KeyField draft={draft} notice={notice} inputRef={inputRef} onDraft={onDraft} label={t('showcaseAssistant.pasteKeyToContinue')} />
+          <KeyField draft={draft} notice={notice} inputRef={inputRef} onDraft={onDraft} label={changing ? t('showcaseAssistant.apiKeyGemini') : t('showcaseAssistant.pasteKeyToContinue')} />
         </div>
-        <Button type="submit" size="md" icon={KeyRound} disabled={!draft.trim()} className="shrink-0">{t('showcaseAssistant.resumeConversation')}</Button>
+        {changing && <Button type="button" size="md" variant="ghost" disabled={saving} className="shrink-0" onClick={onCancel}>{t('common:actions.cancel')}</Button>}
+        <Button type="submit" size="md" icon={KeyRound} isLoading={saving} disabled={!draft.trim()} className="shrink-0">
+          {changing ? t('showcaseAssistant.saveKey') : t('showcaseAssistant.resumeConversation')}
+        </Button>
       </div>
-      <RememberKeyOption checked={remember} onChange={onRemember} />
+      <KeyStorageChoice value={storage} accountAvailable={accountAvailable} disabled={saving} onChange={onStorage} />
       <p className="text-caption text-slate-500 dark:text-slate-400">
-        {t('showcaseAssistant.conversationRestored')}{' '}
+        {!changing && <>{t('showcaseAssistant.conversationRestored')}{' '}</>}
         <a href={ASSISTANT_KEY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300">
           {t('showcaseAssistant.layKeyTaiGoogleAiStudio')}<span className="sr-only"> {t('showcaseAssistant.moTrongTabMoi')}</span>
         </a>
@@ -210,15 +263,32 @@ export default function ShowcaseAssistant(): React.ReactElement {
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(false);
   const [greeting, setGreeting] = useState(false);
-  // The user's own Gemini key. It lives in this component's memory, and the server keeps none. Only when the user ticks "remember"
-  // is it also kept in this tab's storage under their own account, until they close the tab, sign out or change the key.
+  // The user's own Gemini key. It lives in this component's memory; only when the user chooses is it also kept in this tab's
+  // storage under their own account (until they close the tab, sign out or change it), or saved to their account on the server,
+  // where it is encrypted and this page never sees it again. A key kept here is sent with each question and the server keeps none.
   const [apiKey, setApiKey] = useState(() => recallAssistantKey(getBrowserStorage(), accountId));
   const [keyRemembered, setKeyRemembered] = useState(() => recallAssistantKey(getBrowserStorage(), accountId) !== '');
-  // The "remember" tick starts off every time a key is typed.
-  const [rememberKey, setRememberKey] = useState(false);
+  // Where the next key typed is kept. It starts at "this page only" every time, so keeping it anywhere is always a choice.
+  const [keyStorage, setKeyStorage] = useState<AssistantKeyStorage>('session');
   const [keyDraft, setKeyDraft] = useState('');
   const [keyNotice, setKeyNotice] = useState('');
+  const [keyInfo, setKeyInfo] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
+  // A ref as well, so two quick presses cannot both pass before React re-renders the disabled button.
+  const saving = useRef(false);
+  // A key that already works is being changed: the form is shown on request and can be cancelled.
+  const [changingKey, setChangingKey] = useState(false);
+  // The key saved to the account was just refused. It stays there (a refusal can be a quota that passes) but is not offered
+  // again until the user acts or reopens the assistant.
+  const [savedRefused, setSavedRefused] = useState(false);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
+  const savedKey = useAssistantServerKey(accountId, open);
+  const { reload: reloadSavedKey } = savedKey;
+  const saved = savedKey.status?.hasKey ? savedKey.status : null;
+  const keySource = assistantKeySource(apiKey, savedKey.status, savedRefused);
+  // The first look at the account's key is still running and nothing else can be used: wait for it instead of asking for a key.
+  const checkingSaved = keySource === 'none' && !changingKey && !savedKey.checked;
+  const askForKey = !checkingSaved && (keySource === 'none' || changingKey);
 
   // Hubby waves hello once per browser session, then stays quiet.
   useEffect(() => {
@@ -244,6 +314,12 @@ export default function ShowcaseAssistant(): React.ReactElement {
     const remembered = recallAssistantKey(getBrowserStorage(), accountId);
     setApiKey(remembered);
     setKeyRemembered(remembered !== '');
+    setKeyStorage('session');
+    setKeyDraft('');
+    setKeyNotice('');
+    setKeyInfo('');
+    setChangingKey(false);
+    setSavedRefused(false);
   }, [chat.owner, accountId]);
 
   // Keep the conversation up to date for the next reload. It is saved under the account it was loaded for.
@@ -252,16 +328,21 @@ export default function ShowcaseAssistant(): React.ReactElement {
   }, [chat]);
 
   useEffect(() => {
-    // With no key yet the first thing to do is paste one, so focus goes there; afterwards it goes to the question box.
-    if (open) (apiKey ? inputRef : keyInputRef).current?.focus();
-    else {
+    // When a key is being asked for the first thing to do is paste it, so focus goes there; afterwards it goes to the question box.
+    if (open) {
+      if (!checkingSaved) (askForKey ? keyInputRef : inputRef).current?.focus();
+    } else {
       if (wasOpen.current) launcherRef.current?.focus();
-      // A half-typed key does not wait around in memory once the panel is closed.
+      // A half-typed key does not wait around in memory once the panel is closed, and nothing from this visit carries over.
       setKeyDraft('');
-      setRememberKey(false);
+      setKeyStorage('session');
+      setKeyNotice('');
+      setKeyInfo('');
+      setChangingKey(false);
+      setSavedRefused(false);
     }
     wasOpen.current = open;
-  }, [open, apiKey]);
+  }, [open, askForKey, checkingSaved]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -275,10 +356,12 @@ export default function ShowcaseAssistant(): React.ReactElement {
     const question = rawQuestion.trim();
     // inFlight is a ref so two quick clicks cannot both pass before React re-renders the disabled state.
     if (!question || question.length > ASSISTANT_MAX_MESSAGE_LENGTH || inFlight.current) return;
-    if (!apiKey) {
+    if (keySource === 'none') {
       setKeyNotice(t('showcaseAssistant.hayNhapApiKeyGeminiCua'));
       return;
     }
+    setKeyNotice('');
+    setKeyInfo('');
     inFlight.current = true;
     const userId = nextId();
     const history = buildAssistantHistory(messages, replace);
@@ -288,7 +371,8 @@ export default function ShowcaseAssistant(): React.ReactElement {
     const request = new AbortController();
     controller.current = request;
     try {
-      const reply = await showcaseApi.askAssistant({ message: question, history }, apiKey, request.signal);
+      // A key kept on this page or in this tab is sent with the question; without one the server uses the one saved to the account.
+      const reply = await showcaseApi.askAssistant({ message: question, history }, apiKey || null, request.signal);
       if (request.signal.aborted) return;
       setMessages(current => [...current, {
         id: nextId(), role: 'assistant', content: reply.answer, projects: reply.projects, suggestions: reply.suggestions,
@@ -297,13 +381,20 @@ export default function ShowcaseAssistant(): React.ReactElement {
       if (request.signal.aborted) return;
       const message = assistantErrorMessage(error, parseApiError(error, '').message || undefined);
       if (isAssistantKeyError(error)) {
-        // The key is the problem, not the question: forget it, hand the question back and ask for a key that works.
+        // The key is the problem, not the question: hand the question back and stop using that key.
         setMessages(current => current.filter(item => item.id !== userId));
         setDraft(question);
-        setApiKey('');
-        // A refused key is not worth remembering: drop the copy kept in this tab as well.
-        forgetAssistantKey(getBrowserStorage(), accountId);
-        setKeyRemembered(false);
+        if (apiKey) {
+          // The key kept here was refused: forget it, also from this tab's storage, so nothing is retried with it.
+          setApiKey('');
+          forgetAssistantKey(getBrowserStorage(), accountId);
+          setKeyRemembered(false);
+        } else {
+          // The key saved to the account was refused. It stays there (a refusal can be a quota that passes) but is not offered again
+          // until the user acts. When the server has none at all (any more), look again so the screen says so.
+          setSavedRefused(true);
+          if (isAssistantKeyMissing(error)) reloadSavedKey();
+        }
         setKeyNotice(message);
         return;
       }
@@ -312,43 +403,96 @@ export default function ShowcaseAssistant(): React.ReactElement {
       inFlight.current = false;
       if (!request.signal.aborted) setPending(false);
     }
-  }, [messages, apiKey, setMessages, accountId, t]);
+  }, [messages, apiKey, keySource, reloadSavedKey, setMessages, accountId, t]);
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     void send(draft);
   };
 
-  const saveKey = (event: FormEvent) => {
+  const saveKey = async (event: FormEvent) => {
     event.preventDefault();
+    // A second press while the first is still being saved does nothing.
+    if (saving.current) return;
     const problem = assistantKeyProblem(keyDraft);
     if (problem) {
       setKeyNotice(problem);
       return;
     }
     const key = cleanAssistantKey(keyDraft);
-    setApiKey(key);
-    // Keeping the key is the user's choice. Without the tick, any copy kept earlier is dropped so the tick always means what it says.
-    if (rememberKey) setKeyRemembered(rememberAssistantKey(getBrowserStorage(), accountId, key));
-    else {
+    setKeyInfo('');
+    if (keyStorage === 'account') {
+      saving.current = true;
+      setSavingKey(true);
+      try {
+        await savedKey.save(key);
+      } catch (error) {
+        // Nothing is lost: the key stays in the box, so it can be tried again or kept somewhere else.
+        setKeyNotice(assistantKeyRequestError(error, 'save'));
+        return;
+      } finally {
+        saving.current = false;
+        setSavingKey(false);
+      }
+      // The server holds the key now, so this page keeps no copy: the one typed here is dropped, also from this tab's storage.
+      setApiKey('');
       forgetAssistantKey(getBrowserStorage(), accountId);
       setKeyRemembered(false);
+      setSavedRefused(false);
+      setKeyInfo(t('showcaseAssistant.savedToAccount'));
+    } else {
+      setApiKey(key);
+      // Keeping the key in this tab is the user's choice. Without it, any copy kept earlier is dropped so the choice always means what it says.
+      if (keyStorage === 'tab') setKeyRemembered(rememberAssistantKey(getBrowserStorage(), accountId, key));
+      else {
+        forgetAssistantKey(getBrowserStorage(), accountId);
+        setKeyRemembered(false);
+      }
     }
     setKeyDraft('');
-    setRememberKey(false);
+    setKeyStorage('session');
     setKeyNotice('');
+    setChangingKey(false);
   };
 
-  const forgetKey = () => {
+  /** Lets go of the key kept on this page or in this tab (the one saved to the account is only removed by its own button). */
+  const forgetTypedKey = () => {
     controller.current?.abort();
     inFlight.current = false;
     setPending(false);
     setApiKey('');
     forgetAssistantKey(getBrowserStorage(), accountId);
     setKeyRemembered(false);
-    setKeyDraft('');
-    setRememberKey(false);
     setKeyNotice('');
+    setKeyInfo('');
+  };
+
+  /** Removes the key saved to the account. Resolves true once the server has removed it. */
+  const removeSavedKey = async (): Promise<boolean> => {
+    setKeyNotice('');
+    try {
+      await savedKey.remove();
+    } catch (error) {
+      setKeyNotice(assistantKeyRequestError(error, 'remove'));
+      return false;
+    }
+    setSavedRefused(false);
+    setKeyInfo(t('showcaseAssistant.savedKeyRemoved'));
+    return true;
+  };
+
+  const changeKey = () => {
+    setChangingKey(true);
+    setKeyNotice('');
+    setKeyInfo('');
+  };
+
+  const cancelChange = () => {
+    setChangingKey(false);
+    setKeyDraft('');
+    setKeyStorage('session');
+    setKeyNotice('');
+    setKeyInfo('');
   };
 
   const clearConversation = () => {
@@ -368,6 +512,36 @@ export default function ShowcaseAssistant(): React.ReactElement {
 
   const last = messages[messages.length - 1];
   const suggestions = last?.role === 'assistant' ? last.suggestions : [];
+
+  const keyFormProps: KeyFormProps = {
+    draft: keyDraft,
+    notice: keyNotice,
+    info: keyInfo,
+    lookupError: savedKey.phase === 'error' ? savedKey.error : '',
+    inputRef: keyInputRef,
+    storage: keyStorage,
+    accountAvailable: savedKey.status?.storageAvailable === true,
+    saving: savingKey,
+    changing: changingKey,
+    current: (
+      <CurrentKeys
+        typedLast4={apiKey ? assistantKeyLast4(apiKey) : ''}
+        typedRemembered={keyRemembered}
+        savedLast4={saved ? (saved.last4 ?? '') : null}
+        savedRefused={savedRefused}
+        onForgetTyped={forgetTypedKey}
+        onRemoveSaved={removeSavedKey}
+      />
+    ),
+    onDraft: value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); },
+    onStorage: setKeyStorage,
+    onSubmit: event => { void saveKey(event); },
+    onCancel: cancelChange,
+    onRetryLookup: reloadSavedKey,
+  };
+  const keyButtonLabel = keySource === 'saved'
+    ? t('showcaseAssistant.savedKeyButton', { last4: saved?.last4 ?? '' })
+    : t(keyRemembered ? 'showcaseAssistant.changeRememberedKey' : 'showcaseAssistant.doiApiKey');
 
   if (!open) {
     return (
@@ -408,7 +582,7 @@ export default function ShowcaseAssistant(): React.ReactElement {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-50 dark:bg-secondary-800"><HubbyMascot mood={pending ? 'thinking' : 'idle'} className="h-9 w-auto" /></span>
           <div className="min-w-0">
             <h2 id={titleId} className="text-subheading font-bold text-secondary dark:text-white">{t('showcaseAssistant.hubbyTroLyShowcase')}</h2>
-            <p className="text-caption text-slate-500 dark:text-slate-400">{apiKey ? t('showcaseAssistant.hoiVeCacDuAnDa') : t('showcaseAssistant.canApiKeyGeminiCuaBan')}</p>
+            <p className="text-caption text-slate-500 dark:text-slate-400">{keySource !== 'none' || checkingSaved ? t('showcaseAssistant.hoiVeCacDuAnDa') : t('showcaseAssistant.canApiKeyGeminiCuaBan')}</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -439,8 +613,8 @@ export default function ShowcaseAssistant(): React.ReactElement {
         </div>
       )}
 
-      {!apiKey && messages.length === 0 ? (
-        <KeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} remember={rememberKey} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onRemember={setRememberKey} onSubmit={saveKey} />
+      {messages.length === 0 && (checkingSaved || askForKey) ? (
+        checkingSaved ? <CheckingSavedKey compact={false} /> : <KeyForm {...keyFormProps} />
       ) : (
       <>
       <div ref={listRef} role="log" aria-live="polite" aria-label={t('showcaseAssistant.cuocTroChuyen')} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -491,8 +665,14 @@ export default function ShowcaseAssistant(): React.ReactElement {
         )}
       </div>
 
-      {apiKey ? (
+      {checkingSaved ? (
+        <CheckingSavedKey compact />
+      ) : askForKey ? (
+        <ResumeKeyForm {...keyFormProps} />
+      ) : (
       <form onSubmit={submit} className="border-t border-slate-200 p-3 dark:border-slate-600">
+        {keyNotice && <p role="alert" className="mb-2 text-body-sm text-danger-dark">{keyNotice}</p>}
+        {keyInfo && !keyNotice && <p role="status" className="mb-2 rounded-lg border border-success-light bg-success-50 px-3 py-2 text-body-sm text-success-dark">{keyInfo}</p>}
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
             <label htmlFor={`${titleId}-input`} className="sr-only">{t('showcaseAssistant.cauHoiCuaBan')}</label>
@@ -514,15 +694,13 @@ export default function ShowcaseAssistant(): React.ReactElement {
           <span>{t('showcaseAssistant.troLyAiCoTheNham')}</span>
           <button
             type="button"
-            onClick={forgetKey}
+            onClick={changeKey}
             className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-primary-300"
           >
-            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />{t(keyRemembered ? 'showcaseAssistant.changeRememberedKey' : 'showcaseAssistant.doiApiKey')}
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />{keyButtonLabel}
           </button>
         </p>
       </form>
-      ) : (
-        <ResumeKeyForm draft={keyDraft} notice={keyNotice} inputRef={keyInputRef} remember={rememberKey} onDraft={value => { setKeyDraft(value); if (keyNotice) setKeyNotice(''); }} onRemember={setRememberKey} onSubmit={saveKey} />
       )}
       </>
       )}
