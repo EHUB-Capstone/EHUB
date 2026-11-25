@@ -51,10 +51,13 @@ public sealed class ShowcaseReportHandler(
         if (await HasReportAsync(showcaseId, request.CommentId, userId, cancellationToken))
             return Duplicate();
         var hasOpenReport = await HasOpenReportAsync(showcaseId, request.CommentId, cancellationToken);
+        var reason = Enum.Parse<ShowcaseReportReason>(request.Reason, true);
         var report = new ShowcaseReport
         {
             ShowcaseProjectId = showcaseId, CommentId = request.CommentId, ReporterUserId = userId,
-            Reason = Enum.Parse<ShowcaseReportReason>(request.Reason, true),
+            Reason = reason,
+            Category = request.Category is not null ? Enum.Parse<ShowcaseViolationCategory>(request.Category)
+                : reason is ShowcaseReportReason.CopyrightViolation or ShowcaseReportReason.Other ? null : ShowcaseViolationCategories.FromReason(reason),
             Note = Clean(request.Note), CreatedAt = time.UtcNow
         };
         context.ShowcaseReports.Add(report);
@@ -113,7 +116,15 @@ public sealed class ShowcaseReportHandler(
         var statuses = await context.ShowcaseProjects.AsNoTracking().Where(x => pageIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, x => x.Status, cancellationToken);
         var items = reports.Select(item => ToDto(item.Report, item.All)).ToArray();
-        foreach (var item in items) item.ShowcaseStatus = statuses.GetValueOrDefault(item.ShowcaseProjectId).ToString();
+        var commentIds = items.Where(x => x.CommentId.HasValue).Select(x => x.CommentId!.Value).ToArray();
+        // These targets have already passed the lecturer/admin report scope above. Include soft-deleted text only here.
+        var comments = await context.ShowcaseComments.IgnoreQueryFilters().AsNoTracking().Where(x => commentIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Content, cancellationToken);
+        foreach (var item in items)
+        {
+            item.ShowcaseStatus = statuses.GetValueOrDefault(item.ShowcaseProjectId).ToString();
+            item.CommentContent = item.CommentId is { } commentId ? comments.GetValueOrDefault(commentId) : null;
+        }
         return Result.Success(new PagedResponse<ShowcaseReportDto>
         {
             Items = items, TotalItems = total, PageIndex = page,
@@ -291,7 +302,7 @@ public sealed class ShowcaseReportHandler(
         UserReportCount = (reports ?? new[] { report }).Count(x => x.Source == ShowcaseReportSource.User),
         SystemReportCount = (reports ?? new[] { report }).Count(x => x.Source == ShowcaseReportSource.System),
         Id = report.Id, ShowcaseProjectId = report.ShowcaseProjectId, CommentId = report.CommentId,
-        Reason = report.Reason.ToString(), Note = report.Note, Status = report.Status.ToString(),
+        Reason = report.Reason.ToString(), Category = report.Category?.ToString(), Note = report.Note, Status = report.Status.ToString(),
         CreatedAt = report.CreatedAt, ResolvedAt = report.ResolvedAt, ResolvedByUserId = report.ResolvedByUserId,
         ResolutionNote = report.ResolutionNote, ReportCount = reports?.Count ?? 1
     };

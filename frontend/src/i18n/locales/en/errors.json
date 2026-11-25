@@ -171,6 +171,9 @@
     "SHOWCASE_LANGUAGE_BLOCKED_DEFAMATION": "Abusive accusations and defamatory language are not allowed.",
     "SHOWCASE_LANGUAGE_BLOCKED_RACISM": "Racist and racially derogatory language is not allowed.",
     "SHOWCASE_LANGUAGE_BLOCKED_ADULTCONTENT": "Sexually explicit or inappropriate adult content is not allowed.",
-    "SHOWCASE_LANGUAGE_BLOCKED_SPAM": "Spam and prohibited promotional content are not allowed."
+    "SHOWCASE_LANGUAGE_BLOCKED_SPAM": "Spam and prohibited promotional content are not allowed.",
+    "SHOWCASE_RULE_PROPOSAL_NOT_FOUND": "The rule proposal was not found.",
+    "SHOWCASE_RULE_PROPOSAL_ALREADY_EXISTS": "This word or phrase already exists or is awaiting review.",
+    "SHOWCASE_RULE_PROPOSAL_INVALID_PHRASE": "Choose a complete word or phrase from the original comment, preserving Vietnamese accents."
   }
 }

@@ -474,5 +474,36 @@
       "AdultContent": "Adult content",
       "Spam": "Spam and prohibited promotions"
     }
+  },
+  "ruleProposals": {
+    "propose": "Propose a blocked word or phrase",
+    "comment": "Reported comment",
+    "phrase": "Violating word or phrase",
+    "placeholder": "Retype the word or phrase that violates the rules",
+    "chooseCategory": "Choose a violation category",
+    "invalidPhrase": "Enter a complete word or phrase from the original comment, preserving Vietnamese accents.",
+    "pendingHelp": "Prefer a specific phrase to avoid false positives. This sends a proposal to administrators and does not activate blocking yet.",
+    "confirm": "Confirm",
+    "submitted": "Proposal sent for administrator review.",
+    "submitFailed": "Could not submit the proposal. Check and try again.",
+    "sourceUnavailable": "The original comment is no longer available.",
+    "queueTitle": "Pending language rule proposals",
+    "reviewHelp": "Review the context before approving. Approved rules apply across all showcases.",
+    "empty": "No proposals are awaiting review.",
+    "approve": "Approve and activate rule",
+    "reject": "Reject proposal",
+    "approveHelp": "This word or phrase will be added to the shared blocklist. Check that it will not block ordinary content.",
+    "rejectHelp": "The proposal will be declined without creating a blocking rule.",
+    "reviewed": "Proposal reviewed.",
+    "reviewFailed": "Could not review the proposal. Reload and try again.",
+    "loadFailed": "Could not load proposals.",
+    "pages": "Proposal pages",
+    "addAndActivate": "Add and activate a blocked word or phrase",
+    "adminHelp": "Prefer a specific phrase to avoid false positives. Administrator confirmation immediately approves and activates this rule across all showcases.",
+    "activated": "Blocking rule added and activated."
+  },
+  "violationCategories": {
+    "loading": "Loading violation categories…",
+    "loadFailed": "Could not load violation categories. Please retry."
   }
 }

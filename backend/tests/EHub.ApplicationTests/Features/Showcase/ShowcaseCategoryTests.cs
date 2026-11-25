@@ -19,7 +19,7 @@ public sealed class ShowcaseCategoryTests
         counts.Should().BeEquivalentTo(new Dictionary<ShowcaseViolationCategory, int>
         {
             [ShowcaseViolationCategory.Profanity] = 16,
-            [ShowcaseViolationCategory.Insult] = 14,
+            [ShowcaseViolationCategory.Insult] = 16,
             [ShowcaseViolationCategory.Threat] = 9,
             [ShowcaseViolationCategory.Defamation] = 4,
             [ShowcaseViolationCategory.Racism] = 6,

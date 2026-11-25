@@ -100,6 +100,8 @@ public interface IApplicationDbContext
     DbSet<ShowcaseComment> ShowcaseComments { get; }
     DbSet<ShowcaseReport> ShowcaseReports { get; }
     DbSet<ShowcaseModerationRule> ShowcaseModerationRules { get; }
+    DbSet<ShowcaseViolationCategoryDefinition> ShowcaseViolationCategories { get; }
+    DbSet<ShowcaseModerationRuleProposal> ShowcaseModerationRuleProposals { get; }
     DbSet<ShowcaseModerationScan> ShowcaseModerationScans { get; }
     DbSet<ShowcaseUpvote> ShowcaseUpvotes { get; }
     DbSet<ShowcaseViewDaily> ShowcaseViewsDaily { get; }

@@ -66,6 +66,7 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
                 ShowcaseProjectId = showcase.Id, CommentId = commentId, Source = ShowcaseReportSource.System,
                 ContentFingerprint = contentHash, DetectionKey = fingerprint,
                 Reason = findings[0].Reason,
+                Category = findings[0].Category,
                 Note = note[..Math.Min(1000, note.Length)],
                 CreatedAt = time.UtcNow
             });

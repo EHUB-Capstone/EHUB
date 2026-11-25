@@ -75,12 +75,16 @@ public sealed class ShowcaseAutoReportTests
     [InlineData("cai\nlồn")]
     [InlineData("con\tcặc")]
     [InlineData("cặcccc")]
+    [InlineData("lợn")]
+    [InlineData("heo")]
+    [InlineData("LỢN!")]
+    [InlineData("đồ heo")]
     public async Task DefaultCatalog_RecognizesRequestedPhrases_InCommentsAndShowcases(string text)
     {
         await using var db = ShowcaseTestData.NewContext();
         await db.Database.EnsureCreatedAsync();
         var rules = await db.ShowcaseModerationRules.AsNoTracking().ToListAsync();
-        rules.Should().HaveCount(57);
+        rules.Should().HaveCount(59);
         ShowcaseContentFilter.Evaluate([text], rules, true).Should().NotBeEmpty();
         ShowcaseContentFilter.Evaluate([text], rules, false).Should().NotBeEmpty();
     }
@@ -88,6 +92,9 @@ public sealed class ShowcaseAutoReportTests
     [Theory]
     [InlineData("classroom")]
     [InlineData("clmfoo")]
+    [InlineData("lớn")]
+    [InlineData("lộn")]
+    [InlineData("nghèo")]
     [InlineData("dumedata")]
     [InlineData("chó đen")]
     [InlineData("Ốc lớn và đồ ngủ đẹp")]

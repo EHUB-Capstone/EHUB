@@ -18,6 +18,7 @@ public sealed class ShowcaseModerationRuleConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.Reason).HasColumnName("reason").HasConversion<string>().HasMaxLength(30);
         // Keep Category explicit: a generated default would omit zero-valued Profanity from seed data.
         builder.Property(x => x.Category).HasColumnName("category").HasConversion<string>().HasMaxLength(32);
+        builder.HasOne<ShowcaseViolationCategoryDefinition>().WithMany().HasForeignKey(x => x.Category).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.IsEnabled).HasColumnName("is_enabled");
         builder.Property(x => x.Version).IsRowVersion().HasColumnName("xmin");
         builder.HasData(
@@ -77,6 +78,8 @@ public sealed class ShowcaseModerationRuleConfiguration : IEntityTypeConfigurati
             new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000054"), Phrase = "vô học", Description = "Personal abuse / Công kích cá nhân", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Insult, IsEnabled = true },
             new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000055"), Phrase = "cặc", Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Profanity, IsEnabled = true },
             new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000056"), Phrase = "loz", Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Profanity, IsEnabled = true },
-            new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000057"), Phrase = "lồn", Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Profanity, IsEnabled = true });
+            new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000057"), Phrase = "lồn", Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Profanity, IsEnabled = true },
+            new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000058"), Phrase = "lợn", Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Insult, IsEnabled = true },
+            new { Id = Guid.Parse("946a4c91-263f-4cea-a3aa-000000000059"), Phrase = "heo", Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng", Reason = ShowcaseReportReason.Harassment, Category = ShowcaseViolationCategory.Insult, IsEnabled = true });
     }
 }

@@ -24,6 +24,8 @@ public sealed class ShowcaseReportConfiguration : IEntityTypeConfiguration<Showc
         builder.HasIndex(report => new { report.CommentId, report.DetectionKey })
             .IsUnique().HasFilter("source = 'System' AND comment_id IS NOT NULL");
         builder.Property(report => report.Reason).HasColumnName("reason").HasConversion<string>().HasMaxLength(30);
+        builder.Property(report => report.Category).HasColumnName("category").HasConversion<string>().HasMaxLength(32);
+        builder.HasOne<ShowcaseViolationCategoryDefinition>().WithMany().HasForeignKey(report => report.Category).OnDelete(DeleteBehavior.Restrict);
         builder.Property(report => report.Note).HasColumnName("note").HasMaxLength(1000);
         builder.Property(report => report.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
         builder.Property(report => report.CreatedAt).HasColumnName("created_at");

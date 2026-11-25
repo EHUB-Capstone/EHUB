@@ -30,6 +30,11 @@ import type {
   ShowcaseReportStatus,
   ShowcaseModerationRuleDto,
   SaveShowcaseModerationRuleRequest,
+  CreateShowcaseRuleProposalRequest,
+  ReviewShowcaseRuleProposalRequest,
+  ShowcaseRuleProposalDto,
+  ShowcaseRuleProposalPageDto,
+  ShowcaseViolationCategoryDto,
   ShowcaseAssistantChatRequest,
   ShowcaseAssistantKeyStatusDto,
   ShowcaseAssistantReplyDto,
@@ -50,6 +55,14 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
+  getViolationCategories: (signal?: AbortSignal) =>
+    unwrap<ShowcaseViolationCategoryDto[]>(axiosClient.get('/showcase/violation-categories', { signal })),
+  proposeRule: (reportId: string, body: CreateShowcaseRuleProposalRequest) =>
+    unwrap<ShowcaseRuleProposalDto>(axiosClient.post(`/showcase/reports/${reportId}/rule-proposals`, body)),
+  getRuleProposals: (params: { page?: number; pageSize?: number; status?: string }, signal?: AbortSignal) =>
+    unwrap<ShowcaseRuleProposalPageDto>(axiosClient.get('/showcase/moderation-rule-proposals', { params, signal })),
+  reviewRuleProposal: (id: string, body: ReviewShowcaseRuleProposalRequest) =>
+    unwrap<ShowcaseRuleProposalDto>(axiosClient.post(`/showcase/moderation-rule-proposals/${id}/review`, body)),
   getModerationRules: (signal?: AbortSignal) =>
     unwrap<ShowcaseModerationRuleDto[]>(axiosClient.get('/showcase/moderation-rules', { signal })),
   saveModerationRule: (id: string | null, body: SaveShowcaseModerationRuleRequest) =>

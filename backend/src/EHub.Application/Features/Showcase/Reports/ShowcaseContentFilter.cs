@@ -51,7 +51,7 @@ public static partial class ShowcaseContentFilter
             // Rules may be a single word ("ngu") or a phrase. Match complete words at any position,
             // including the start/end of a field; never split a phrase into unrelated blocked words.
             var phrase = Normalize(rule.Phrase);
-            if (phrase.Length >= 3 && normalized.Where((value, index) => value.Contains(" " + phrase + " ", StringComparison.Ordinal)
+            if (phrase.Any(char.IsLetter) && normalized.Where((value, index) => value.Contains(" " + phrase + " ", StringComparison.Ordinal)
                     && ContainsPhrase(exact[index], Normalize(rule.Phrase, true).Split(' ', StringSplitOptions.RemoveEmptyEntries))).Any())
                 results.Add(new ContentFinding(rule.Reason, $"Phrase / Cụm từ: {rule.Phrase}. {rule.Description}", rule.Category));
             if (!allMatches && results.Count >= 5) break;

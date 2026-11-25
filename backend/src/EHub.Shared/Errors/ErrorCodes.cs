@@ -174,6 +174,9 @@ public static class ErrorCodes
     public const string ShowcaseCommentNotFound = "SHOWCASE_COMMENT_NOT_FOUND";
     public const string ShowcaseReportNotFound = "SHOWCASE_REPORT_NOT_FOUND";
     public const string ShowcaseReportAlreadyExists = "SHOWCASE_REPORT_ALREADY_EXISTS";
+    public const string ShowcaseRuleProposalNotFound = "SHOWCASE_RULE_PROPOSAL_NOT_FOUND";
+    public const string ShowcaseRuleProposalAlreadyExists = "SHOWCASE_RULE_PROPOSAL_ALREADY_EXISTS";
+    public const string ShowcaseRuleProposalInvalidPhrase = "SHOWCASE_RULE_PROPOSAL_INVALID_PHRASE";
     public const string ShowcaseCommentInvalid = "SHOWCASE_COMMENT_INVALID";
     public const string ShowcaseCommentDuplicate = "SHOWCASE_COMMENT_DUPLICATE";
     public const string ShowcaseLanguageBlocked = "SHOWCASE_LANGUAGE_BLOCKED";

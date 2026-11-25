@@ -58,7 +58,7 @@ public sealed class ShowcaseAutoReportMigrationTests(CustomWebApplicationFactory
             await db.Database.MigrateAsync();
             db.ChangeTracker.Clear();
             (await db.ShowcaseReports.SingleAsync()).Source.Should().Be(ShowcaseReportSource.User);
-            (await db.ShowcaseModerationRules.CountAsync()).Should().Be(57);
+            (await db.ShowcaseModerationRules.CountAsync()).Should().Be(59);
         }
         finally
         {

@@ -1,6 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import ShowcaseModerationRules from './ShowcaseModerationRules';
+import ShowcaseRuleProposalForm from './ShowcaseRuleProposalForm';
+import ShowcaseRuleProposals from './ShowcaseRuleProposals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
@@ -77,7 +79,7 @@ export default function ShowcaseReports() {
 
   return (
     <section aria-label={t('showcaseReports.contentReports')}>
-      {user?.role === 'ADMIN' && <ShowcaseModerationRules />}
+      {user?.role === 'ADMIN' && <><ShowcaseRuleProposals /><ShowcaseModerationRules /></>}
       <Card hover={false} className="mb-5 overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -100,10 +102,11 @@ export default function ShowcaseReports() {
           {reports.isSuccess && reports.data.items.length > 0 && <>
             <ul className="space-y-4">
         {reports.data.items.map((report) => (
-          <li key={report.id}><Card hover={false}>
+          <li key={report.commentId ?? report.showcaseProjectId}><Card hover={false}>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-between"><div>
               <div className="flex flex-wrap items-center gap-2"><Badge variant={report.commentId ? 'warning' : 'danger'} size="sm">{report.commentId ? t('showcaseReports.comment') : t('showcaseReports.showcase')}</Badge><Badge variant="brand" size="sm">{report.reason}</Badge><Badge variant="neutral" size="sm">{t('autoModeration.counts', { users: report.userReportCount ?? report.reportCount, system: report.systemReportCount ?? 0 })}</Badge></div>
               <p className="mt-2 text-caption text-slate-600">{t('autoModeration.source')}: {(report.sources ?? ['User']).map(source => t(source === 'System' ? 'autoModeration.system' : 'autoModeration.user')).join(' · ')}</p>
+              {report.category && <p className="mt-2 text-caption font-medium text-secondary">{t('autoModeration.category')}: {t(`autoModeration.categories.${report.category}`)}</p>}
               {report.sources?.includes('System') && <p className="mt-2 text-body-sm font-semibold text-secondary">{t('autoModeration.reviewOnly')}</p>}
               <p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-slate-700">{report.note || t('showcaseReports.noAdditionalNote')}</p>
               {report.systemNote && report.systemNote !== report.note && <p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-slate-600">{report.systemNote}</p>}
@@ -115,6 +118,7 @@ export default function ShowcaseReports() {
               {report.status !== 'Open' && <Button size="sm" variant="ghost" icon={Trash2} className="h-8 w-8 px-0 text-slate-500 hover:bg-danger-50 hover:text-danger-dark" aria-label={t('showcaseReports.deleteReportHistory')} title={t('showcaseReports.deleteReportHistory')} onClick={() => setDeleteTarget(report)} />}
             </div>
             </div>
+            <ShowcaseRuleProposalForm report={report} isAdmin={user?.role === 'ADMIN'} />
           </Card></li>
         ))}
             </ul>
