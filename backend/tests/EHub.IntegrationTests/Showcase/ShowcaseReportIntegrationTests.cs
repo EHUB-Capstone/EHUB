@@ -298,7 +298,7 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
     }
 
     [Fact]
-    public async Task LegacySystemFlags_AreHiddenFromTheTeacherQueue_AndCannotBeResolved()
+    public async Task SystemFlags_AppearInTheTeacherQueue_AndCanBeResolvedByTheResponsibleLecturer()
     {
         await using var scenario = await SeedAsync();
         scenario.Page.Highlights = "đồ ngu";
@@ -313,20 +313,24 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         report.Source.Should().Be(ShowcaseReportSource.System);
         report.ReporterUserId.Should().BeNull();
         (await scenario.Db.ShowcaseModerationScans.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().Be(1);
+        using var openQueue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports", scenario.Lecturer, SystemRoles.Lecturer);
+        var queued = (await openQueue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items
+            .Single(item => item.Id == report.Id);
+        queued.Sources.Should().Contain("System");
         using var otherClass = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Reporter,
             SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
         otherClass.StatusCode.Should().Be(HttpStatusCode.NotFound);
         using var resolved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Lecturer,
             SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
-        resolved.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        resolved.StatusCode.Should().Be(HttpStatusCode.OK);
         using var queue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports", scenario.Lecturer, SystemRoles.Lecturer);
         (await queue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Should().NotContain(x => x.Id == report.Id);
         scenario.Db.ChangeTracker.Clear();
-        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Published);
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Hidden);
     }
 
     [Fact]
-    public async Task LegacySystemFlags_RemainNonActionable_AfterContentChanges()
+    public async Task SystemFlags_RejectStaleContent_AndCanBeActionedAfterRescan()
     {
         await using var scenario = await SeedAsync();
         scenario.Page.Status = ShowcaseStatus.PendingReview;
@@ -339,14 +343,14 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         await scenario.Db.SaveChangesAsync();
         using var stale = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Lecturer,
             SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
-        stale.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
         await scanner.ScanPageAsync(scenario.Page.Id);
         var current = await scenario.Db.ShowcaseReports.SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id && x.Status == ShowcaseReportStatus.Open);
         using var resolved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{current.Id}/resolve", scenario.Lecturer,
             SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
-        resolved.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        resolved.StatusCode.Should().Be(HttpStatusCode.OK);
         scenario.Db.ChangeTracker.Clear();
-        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.PendingReview);
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Draft);
     }
 
     [Fact]
