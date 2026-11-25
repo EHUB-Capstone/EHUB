@@ -531,8 +531,11 @@ test('moderation helper validates bounded groups and maps the legacy report reas
   assert.equal(showcaseCategoryFromReason('Spam'), 'Spam');
   assert.equal(showcaseCategoryFromReason('InappropriateContent'), 'AdultContent');
   assert.equal(showcaseCategoryFromReason('Harassment'), 'Insult');
-  assert.equal(showcaseReasonFromCategory('Threat'), 'Harassment');
-  assert.equal(showcaseReasonFromCategory('AdultContent'), 'InappropriateContent');
+  for (const [category, reason] of [
+    ['Profanity', 'Harassment'], ['Insult', 'Harassment'], ['Threat', 'Harassment'],
+    ['Defamation', 'Harassment'], ['Racism', 'Harassment'],
+    ['AdultContent', 'InappropriateContent'], ['Spam', 'Spam'],
+  ] as const) assert.equal(showcaseReasonFromCategory(category), reason);
 });
 
 test('moderation category travels through the existing rules API client', async () => {
@@ -546,4 +549,51 @@ test('moderation category travels through the existing rules API client', async 
     const saved = await showcaseApi.saveModerationRule(null, { phrase: 'test phrase', description: 'Test', category: 'Threat', reason: 'Harassment', isEnabled: true });
     assert.equal(saved.category, 'Threat');
   } finally { mock.restore(); }
+});
+
+test('proposal word selection preserves accents, canonical Unicode and whole words', async () => {
+  const { canonicalShowcasePhrase, isShowcasePhraseInComment } = await import('../src/utils/showcaseModeration.ts');
+  assert.equal(canonicalShowcasePhrase('  CHÓ! '), 'chó');
+  assert.equal(canonicalShowcasePhrase('đần độn'.normalize('NFD')), 'đần độn');
+  for (const phrase of ['chó', 'CHÓ', 'chó!']) assert.equal(isShowcasePhraseInComment('Bạn là chó!', phrase), true);
+  for (const phrase of ['cho', 'chò', 'chỏ', 'ch', '']) assert.equal(isShowcasePhraseInComment('Bạn là chó!', phrase), false);
+  assert.equal(isShowcasePhraseInComment('Nguyễn dùng nguyên liệu', 'ngu'), false);
+  assert.equal(isShowcasePhraseInComment('Số 12345', '12345'), false);
+});
+
+test('proposal clients submit, page and review without replacing moderation APIs', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const proposal = { id: 'p1', phrase: 'test phrase', category: 'Insult', status: 'Pending', rowVersion: 4 };
+  mock.onPost('/showcase/reports/r1/rule-proposals', { phrase: 'test phrase', category: 'Insult' }).reply(200, { data: proposal });
+  mock.onGet('/showcase/moderation-rule-proposals').reply(200, { data: { items: [proposal], totalItems: 1, totalPages: 1, pageIndex: 1, pageSize: 20 } });
+  mock.onPost('/showcase/moderation-rule-proposals/p1/review', { status: 'Approved', rowVersion: 4 }).reply(200, { data: { ...proposal, status: 'Approved' } });
+  try {
+    assert.equal((await showcaseApi.proposeRule('r1', { phrase: 'test phrase', category: 'Insult' })).status, 'Pending');
+    assert.equal((await showcaseApi.getRuleProposals({ page: 1, pageSize: 20 })).items[0].id, 'p1');
+    assert.equal((await showcaseApi.reviewRuleProposal('p1', { status: 'Approved', rowVersion: 4 })).status, 'Approved');
+  } finally { mock.restore(); }
+});
+
+
+test('short accented proposal words keep their exact spelling and word boundaries', async () => {
+ const { isShowcasePhraseInComment, showcaseCategoryLabel } = await import('../src/utils/showcaseModeration.ts');
+ assert.equal(isShowcasePhraseInComment('Đó là bò!', 'bò'), true);
+ for (const phrase of ['bo', 'bỏ', 'bờ']) assert.equal(isShowcasePhraseInComment('Đó là bò!', phrase), false);
+ assert.equal(isShowcasePhraseInComment('Quả bóng', 'bò'), false);
+ const category = {code: 'Insult' as const, nameVi: 'Xúc phạm', nameEn: 'Insult', sortOrder: 2};
+ assert.equal(showcaseCategoryLabel(category, 'vi-VN'), 'Xúc phạm');
+ assert.equal(showcaseCategoryLabel(category, 'en'), 'Insult');
+});
+
+test('catalog client and admin activation retain existing category codes and response states', async () => {
+ const mock = new MockAdapter(axiosClient);
+ const categories = [{code: 'Insult', nameVi: 'Xúc phạm', nameEn: 'Insult', sortOrder: 2}];
+ mock.onGet('/showcase/violation-categories').reply(200, {data: categories});
+ mock.onPost('/showcase/reports/r-admin/rule-proposals', {phrase: 'bò', category: 'Insult'}).reply(200, {data: {id: 'a1', phrase: 'bò', category: 'Insult', status: 'Approved', createdRuleId: 'enabled-rule'}});
+ try {
+  assert.deepEqual(await showcaseApi.getViolationCategories(), categories);
+  const activated = await showcaseApi.proposeRule('r-admin', {phrase: 'bò', category: 'Insult'});
+  assert.equal(activated.status, 'Approved');
+  assert.equal(activated.createdRuleId, 'enabled-rule');
+ } finally {mock.restore();}
 });

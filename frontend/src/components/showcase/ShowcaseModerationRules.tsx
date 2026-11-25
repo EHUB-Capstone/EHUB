@@ -6,16 +6,18 @@ import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
-import { SHOWCASE_VIOLATION_CATEGORIES, showcaseCategoryFromReason, showcaseReasonFromCategory } from '../../utils/showcaseModeration';
+import { showcaseCategoryLabel, showcaseCategoryFromReason, showcaseReasonFromCategory } from '../../utils/showcaseModeration';
+import { useShowcaseViolationCategories } from '../../hooks/useShowcaseViolationCategories';
 import type { SaveShowcaseModerationRuleRequest, ShowcaseModerationRuleDto } from '../../types/showcase';
 
 const emptyRule: SaveShowcaseModerationRuleRequest = { phrase: '', description: '', reason: 'Harassment', category: 'Insult', isEnabled: true };
 
 export default function ShowcaseModerationRules() {
-  const { t } = useTranslation('showcase');
+  const { t, i18n } = useTranslation('showcase');
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<{ id: string | null; body: SaveShowcaseModerationRuleRequest } | null>(null);
+  const categories = useShowcaseViolationCategories(editing !== null);
   const rules = useQuery({ queryKey: ['showcase', 'moderation-rules'], queryFn: ({ signal }) => showcaseApi.getModerationRules(signal), enabled: expanded });
   const save = useMutation({
     mutationFn: ({ id, body }: NonNullable<typeof editing>) => showcaseApi.saveModerationRule(id, body),
@@ -36,16 +38,18 @@ export default function ShowcaseModerationRules() {
       </li>)}</ul>}
     </div>}
     <Modal isOpen={editing !== null} onClose={() => { if (!save.isPending) setEditing(null); }} title={t('autoModeration.rulesTitle')} submitText={t('autoModeration.save')} isSubmitting={save.isPending}
-      submitDisabled={!editing?.body.phrase.trim() || !editing?.body.description.trim()} onSubmit={() => { if (editing) save.mutate(editing); }}>
+      submitDisabled={!editing?.body.phrase.trim() || !editing?.body.description.trim() || !categories.isSuccess} onSubmit={() => { if (editing && categories.isSuccess) save.mutate(editing); }}>
       {editing && <div className="space-y-4">
         <label className="block text-body-sm">{t('autoModeration.phrase')}<input className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-secondary" value={editing.body.phrase} maxLength={120} onChange={e => setEditing({ ...editing, body: { ...editing.body, phrase: e.target.value } })} /></label>
         <label className="block text-body-sm">{t('autoModeration.description')}<input className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-secondary" value={editing.body.description} maxLength={300} onChange={e => setEditing({ ...editing, body: { ...editing.body, description: e.target.value } })} /></label>
-        <label className="block text-body-sm">{t('autoModeration.category')}<select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-secondary" value={editing.body.category ?? showcaseCategoryFromReason(editing.body.reason)} onChange={e => {
-          const category = SHOWCASE_VIOLATION_CATEGORIES.find(item => item === e.target.value);
+        <label className="block text-body-sm">{t('autoModeration.category')}<select disabled={!categories.isSuccess || save.isPending} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-secondary" value={editing.body.category ?? showcaseCategoryFromReason(editing.body.reason)} onChange={e => {
+          const category = categories.data?.find(item => item.code === e.target.value)?.code;
           if (category) setEditing({ ...editing, body: { ...editing.body, category, reason: showcaseReasonFromCategory(category) } });
         }}>
-          {SHOWCASE_VIOLATION_CATEGORIES.map(category => <option key={category} value={category}>{t(`autoModeration.categories.${category}`)}</option>)}
+          {categories.data?.map(category => <option key={category.code} value={category.code}>{showcaseCategoryLabel(category, i18n.resolvedLanguage ?? i18n.language)}</option>)}
         </select></label>
+        {categories.isPending && <p role="status">{t('violationCategories.loading')}</p>}
+        {categories.isError && <div role="alert"><p>{t('violationCategories.loadFailed')}</p><Button size="sm" variant="outline" onClick={() => { void categories.refetch(); }}>{t('showcaseComments.retry')}</Button></div>}
         <label className="flex min-h-9 items-center gap-2 text-body-sm"><input type="checkbox" checked={editing.body.isEnabled} onChange={e => setEditing({ ...editing, body: { ...editing.body, isEnabled: e.target.checked } })} />{t('autoModeration.enabled')}</label>
       </div>}
     </Modal>

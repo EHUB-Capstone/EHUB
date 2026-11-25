@@ -116,6 +116,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ShowcaseComment> ShowcaseComments => Set<ShowcaseComment>();
     public DbSet<ShowcaseReport> ShowcaseReports => Set<ShowcaseReport>();
     public DbSet<ShowcaseModerationRule> ShowcaseModerationRules => Set<ShowcaseModerationRule>();
+    public DbSet<ShowcaseViolationCategoryDefinition> ShowcaseViolationCategories => Set<ShowcaseViolationCategoryDefinition>();
+    public DbSet<ShowcaseModerationRuleProposal> ShowcaseModerationRuleProposals => Set<ShowcaseModerationRuleProposal>();
     public DbSet<ShowcaseModerationScan> ShowcaseModerationScans => Set<ShowcaseModerationScan>();
     public DbSet<ShowcaseUpvote> ShowcaseUpvotes => Set<ShowcaseUpvote>();
     public DbSet<ShowcaseViewDaily> ShowcaseViewsDaily => Set<ShowcaseViewDaily>();

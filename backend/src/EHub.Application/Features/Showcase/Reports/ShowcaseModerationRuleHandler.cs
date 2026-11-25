@@ -13,8 +13,9 @@ public sealed class SaveShowcaseModerationRuleRequestValidator : AbstractValidat
 {
     public SaveShowcaseModerationRuleRequestValidator()
     {
-        RuleFor(x => x.Phrase).NotEmpty().MaximumLength(120)
-            .Must(x => x is not null && ShowcaseContentFilter.Normalize(x).Length >= 3);
+        RuleFor(x => x.Phrase).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(120)
+            .Must(x => ShowcaseProposalText.Canonical(x).Any(char.IsLetter))
+            .WithMessage("Enter a word or phrase containing at least one letter.");
         RuleFor(x => x.Category).Must(x => x is null || Enum.GetNames<ShowcaseViolationCategory>().Contains(x))
             .WithMessage("Select a valid violation category.");
         RuleFor(x => x.Description).NotEmpty().MaximumLength(300);

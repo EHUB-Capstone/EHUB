@@ -5710,6 +5710,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Category");
+
                     b.ToTable("showcase_moderation_rules", null, t =>
                         {
                             t.HasCheckConstraint("ck_showcase_moderation_rules_category", "category IN ('Profanity', 'Insult', 'Threat', 'Defamation', 'Racism', 'AdultContent', 'Spam')");
@@ -6228,6 +6230,123 @@ namespace EHub.Infrastructure.Persistence.Migrations
                             IsEnabled = true,
                             Phrase = "lồn",
                             Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000058"),
+                            Category = "Insult",
+                            Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng",
+                            IsEnabled = true,
+                            Phrase = "lợn",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000059"),
+                            Category = "Insult",
+                            Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng",
+                            IsEnabled = true,
+                            Phrase = "heo",
+                            Reason = "Harassment"
+                        });
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRuleProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("category");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<Guid?>("CreatedRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_rule_id");
+
+                    b.Property<string>("Phrase")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("phrase");
+
+                    b.Property<string>("PhraseKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("phrase_key");
+
+                    b.Property<DateTime>("ProposedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proposed_at_utc");
+
+                    b.Property<Guid?>("ProposedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by_user_id");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<Guid?>("SourceReportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_report_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("CreatedRuleId");
+
+                    b.HasIndex("PhraseKey")
+                        .IsUnique()
+                        .HasFilter("status = 'Pending'");
+
+                    b.HasIndex("ProposedByUserId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ShowcaseProjectId");
+
+                    b.HasIndex("SourceReportId");
+
+                    b.HasIndex("Status", "ProposedAtUtc");
+
+                    b.ToTable("showcase_moderation_rule_proposals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_showcase_rule_proposals_category", "category IN ('Profanity', 'Insult', 'Threat', 'Defamation', 'Racism', 'AdultContent', 'Spam')");
+
+                            t.HasCheckConstraint("ck_showcase_rule_proposals_status", "status IN ('Pending', 'Approved', 'Rejected')");
                         });
                 });
 
@@ -6407,6 +6526,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("category");
+
                     b.Property<Guid?>("CommentId")
                         .HasColumnType("uuid")
                         .HasColumnName("comment_id");
@@ -6478,6 +6602,8 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Category");
 
                     b.HasIndex("CommentId");
 
@@ -6594,6 +6720,85 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("showcase_view_daily", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name_en");
+
+                    b.Property<string>("NameVi")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name_vi");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("showcase_violation_categories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "Profanity",
+                            NameEn = "Profanity",
+                            NameVi = "Tục tĩu",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Code = "Insult",
+                            NameEn = "Insults and personal attacks",
+                            NameVi = "Xúc phạm, công kích cá nhân",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Code = "Threat",
+                            NameEn = "Threats and incitement to violence",
+                            NameVi = "Đe dọa, kích động bạo lực",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Code = "Defamation",
+                            NameEn = "Abusive accusations and defamation",
+                            NameVi = "Cáo buộc công kích, bôi nhọ",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Code = "Racism",
+                            NameEn = "Racism and racial abuse",
+                            NameVi = "Miệt thị chủng tộc",
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Code = "AdultContent",
+                            NameEn = "Explicit adult content",
+                            NameVi = "Nội dung người lớn",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Code = "Spam",
+                            NameEn = "Spam and prohibited promotions",
+                            NameVi = "Spam, quảng cáo bị cấm",
+                            SortOrder = 7
+                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
@@ -10306,6 +10511,55 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ShowcaseProject");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRule", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRuleProposal", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseModerationRule", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedRuleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseReport", null)
+                        .WithMany()
+                        .HasForeignKey("SourceReportId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationScan", b =>
                 {
                     b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
@@ -10322,6 +10576,11 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReport", b =>
                 {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
                         .WithMany()
                         .HasForeignKey("CommentId")

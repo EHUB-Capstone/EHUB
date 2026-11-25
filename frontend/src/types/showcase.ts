@@ -122,6 +122,7 @@ export interface CreateShowcaseCommentRequest {
 export interface CreateShowcaseReportRequest {
   commentId?: string | null;
   reason: ShowcaseReportReason;
+  category?: ShowcaseViolationCategory | null;
   note?: string | null;
 }
 
@@ -144,6 +145,8 @@ export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
   userReportCount: number;
   systemReportCount: number;
   showcaseStatus: ShowcaseStatus | null;
+  commentContent?: string | null;
+  category?: ShowcaseViolationCategory | null;
   reason: ShowcaseReportReason;
   note: string | null;
   resolvedByUserId: string | null;
@@ -153,6 +156,13 @@ export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
 }
 
 export type ShowcaseViolationCategory = 'Profanity' | 'Insult' | 'Threat' | 'Defamation' | 'Racism' | 'AdultContent' | 'Spam';
+
+export interface ShowcaseViolationCategoryDto {
+  code: ShowcaseViolationCategory;
+  nameVi: string;
+  nameEn: string;
+  sortOrder: number;
+}
 
 export interface ShowcaseModerationRuleDto {
   id: string;
@@ -393,4 +403,29 @@ export interface SaveShowcaseRequest {
   showTeamMembers: boolean;
   links: ShowcaseLinkRequest[];
   rowVersion?: number;
+}
+
+export type ShowcaseRuleProposalStatus = 'Pending' | 'Approved' | 'Rejected';
+export interface CreateShowcaseRuleProposalRequest { phrase: string; category: ShowcaseViolationCategory; }
+export interface ReviewShowcaseRuleProposalRequest { status: 'Approved' | 'Rejected'; rowVersion: number; }
+export interface ShowcaseRuleProposalDto {
+  id: string;
+  showcaseProjectId: string;
+  sourceReportId: string | null;
+  commentId: string | null;
+  commentContent: string | null;
+  phrase: string;
+  category: ShowcaseViolationCategory;
+  status: ShowcaseRuleProposalStatus;
+  proposedAtUtc: string;
+  reviewedAtUtc: string | null;
+  createdRuleId: string | null;
+  rowVersion: number;
+}
+export interface ShowcaseRuleProposalPageDto {
+  items: ShowcaseRuleProposalDto[];
+  totalItems: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
 }

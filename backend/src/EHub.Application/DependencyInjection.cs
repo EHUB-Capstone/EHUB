@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
         services.AddScoped<EHub.Application.Features.Showcase.Reports.IShowcaseAutoReportScanner, EHub.Application.Features.Showcase.Reports.ShowcaseAutoReportScanner>();
         services.AddScoped<EHub.Application.Features.Showcase.Reports.ShowcaseModerationRuleHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Reports.ShowcaseRuleProposalHandler>();
+        services.AddScoped<EHub.Application.Features.Showcase.Reports.ShowcaseViolationCategoryQueryHandler>();
 
         services.AddScoped<IRegisterCommandHandler, RegisterCommandHandler>();
         services.AddScoped<IUpdateProfileCommandHandler, UpdateProfileCommandHandler>();
