@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Button from '../ui/Button';
 import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
-import { isShowcasePhraseInComment, showcaseCategoryLabel } from '../../utils/showcaseModeration';
+import { isShowcasePhraseInComment, showcaseCategoryLabel, supportsShowcasePhraseBlocking } from '../../utils/showcaseModeration';
 import { useShowcaseViolationCategories } from '../../hooks/useShowcaseViolationCategories';
 import type { ShowcaseReportDto, ShowcaseViolationCategory } from '../../types/showcase';
 
@@ -17,6 +17,7 @@ export default function ShowcaseRuleProposalForm({ report, isAdmin = false }: { 
   const [phrase, setPhrase] = useState('');
   const [category, setCategory] = useState<ShowcaseViolationCategory | ''>('');
   const categories = useShowcaseViolationCategories(expanded);
+  const blockingCategories = categories.data?.filter(supportsShowcasePhraseBlocking) ?? [];
   const submit = useMutation({
     mutationFn: (body: { phrase: string; category: ShowcaseViolationCategory }) => showcaseApi.proposeRule(report.id, body),
     onSuccess: async result => {
@@ -48,9 +49,9 @@ export default function ShowcaseRuleProposalForm({ report, isAdmin = false }: { 
       {phrase.trim() && !validPhrase && <p role="alert" className="text-body-sm text-danger-dark">{t('ruleProposals.invalidPhrase')}</p>}
       <label className="block text-body-sm font-semibold text-secondary">{t('autoModeration.category')}
         <select value={category} aria-required="true" disabled={submit.isPending || !categories.isSuccess} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-body font-normal text-secondary"
-          onChange={event => setCategory(categories.data?.find(item => item.code === event.target.value)?.code ?? '')}>
+          onChange={event => setCategory(blockingCategories.find(item => item.code === event.target.value)?.code ?? '')}>
           <option value="">{t('ruleProposals.chooseCategory')}</option>
-          {categories.data?.map(item => <option key={item.code} value={item.code}>{showcaseCategoryLabel(item, i18n.resolvedLanguage ?? i18n.language)}</option>)}
+          {blockingCategories.map(item => <option key={item.code} value={item.code}>{showcaseCategoryLabel(item, i18n.resolvedLanguage ?? i18n.language)}</option>)}
         </select>
       </label>
       {categories.isPending && <p role="status" className="text-body-sm text-slate-600">{t('violationCategories.loading')}</p>}

@@ -7,7 +7,7 @@ import { showcaseApi } from '../../api/showcaseApi';
 import { parseApiError } from '../../utils/apiError';
 import type { ShowcaseReportReason, ShowcaseViolationCategory } from '../../types/showcase';
 import { useShowcaseViolationCategories } from '../../hooks/useShowcaseViolationCategories';
-import { showcaseCategoryLabel, showcaseReasonFromCategory } from '../../utils/showcaseModeration';
+import { showcaseCategoryLabel, showcaseReportReasonFromCategory } from '../../utils/showcaseModeration';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 
@@ -25,8 +25,8 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ShowcaseReportReason>('InappropriateContent');
   const [category, setCategory] = useState<ShowcaseViolationCategory | ''>('');
-  const categories = useShowcaseViolationCategories(open && (isComment || reason === 'Harassment'));
-  const categoryOptions = categories.data?.filter(item => isComment || showcaseReasonFromCategory(item.code) === reason) ?? [];
+  const categories = useShowcaseViolationCategories(open);
+  const categoryOptions = categories.data?.filter(item => isComment || showcaseReportReasonFromCategory(item.code) === reason) ?? [];
   const selectedCategory = categoryOptions.find(item => item.code === category)?.code ?? '';
   const canSubmit = !isComment || (categories.isSuccess && !!selectedCategory);
   const [note, setNote] = useState('');
@@ -39,7 +39,7 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
     try {
       await showcaseApi.createReport(showcaseId, {
         commentId: commentId ?? null,
-        reason: isComment && selectedCategory ? showcaseReasonFromCategory(selectedCategory) : reason,
+        reason: isComment && selectedCategory ? showcaseReportReasonFromCategory(selectedCategory) : reason,
         category: selectedCategory || null,
         note: note.trim() || null,
       });
@@ -67,7 +67,7 @@ export default function ShowcaseReportButton({ showcaseId, commentId }: { showca
               {REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>}
-          {(isComment || reason === 'Harassment') && <div>
+          {(isComment || reason !== 'CopyrightViolation') && <div>
             <label className="block text-body-sm font-semibold text-secondary">{t('autoModeration.category')} {!isComment && <span className="font-normal text-slate-500">{t('showcaseReportButton.optional')}</span>}
               <select value={selectedCategory} required={isComment} aria-required={isComment} disabled={!categories.isSuccess || submitting} onChange={event => setCategory(categoryOptions.find(item => item.code === event.target.value)?.code ?? '')}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-body">

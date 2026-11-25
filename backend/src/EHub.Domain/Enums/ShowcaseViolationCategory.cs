@@ -8,5 +8,8 @@ public enum ShowcaseViolationCategory
     Defamation,
     Racism,
     AdultContent,
-    Spam
+    Spam,
+    ProhibitedContent,
+    Misinformation,
+    OffTopic
 }

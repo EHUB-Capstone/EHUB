@@ -14,6 +14,7 @@ import { classFeatureFlags } from './config/classFeatureFlags';
 import { classRouteAccess } from './config/classAccessPolicy';
 import { releaseFeatureFlags } from './config/releaseFeatureFlags';
 import { evaluationRankingRoles } from './utils/evaluationGrading';
+import { showcaseViolationManagementRoles } from './utils/showcaseModeration';
 
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/auth/Login'));
@@ -27,6 +28,7 @@ const SubjectDetail = lazy(() => import('./pages/admin/SubjectDetail'));
 const MentorProfileDetail = lazy(() => import('./pages/admin/MentorProfileDetail'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const AccountApprovals = lazy(() => import('./pages/admin/AccountApprovals'));
+const ViolationManagement = lazy(() => import('./pages/admin/ViolationManagement'));
 const LecturerDashboard = lazy(() => import('./pages/lecturer/LecturerDashboard'));
 const LecturerClasses = lazy(() => import('./pages/lecturer/LecturerClasses'));
 const MentorDashboard = lazy(() => import('./pages/mentor/MentorOverview'));
@@ -158,6 +160,7 @@ function App(): React.ReactElement {
                       <Route path="/showcase/manage" element={<ProtectedRoute allowedRoles={['STUDENT']}><MyShowcase /></ProtectedRoute>} />
                       <Route path="/showcase/manage/:lineageId" element={<ProtectedRoute allowedRoles={['STUDENT']}><ShowcaseEditor /></ProtectedRoute>} />
                       <Route path="/showcase/moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'LECTURER']}><ShowcaseModeration /></ProtectedRoute>} />
+                      <Route path="/admin/violation-management" element={<ProtectedRoute allowedRoles={[...showcaseViolationManagementRoles]}><ViolationManagement /></ProtectedRoute>} />
                       <Route path="/showcase/:id" element={<ShowcaseDetail />} />
                     </>
                   )}

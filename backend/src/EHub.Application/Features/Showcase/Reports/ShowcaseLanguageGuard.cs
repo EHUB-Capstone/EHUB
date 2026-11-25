@@ -1,6 +1,7 @@
 using EHub.Application.Common.Interfaces.Persistence;
 using EHub.Contracts.Showcase;
 using EHub.Domain.Entities;
+using EHub.Domain.Enums;
 using EHub.Shared.Errors;
 using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,9 @@ public static class ShowcaseLanguageGuard
 {
     public static async Task<Result> ValidateAsync(IApplicationDbContext context, IEnumerable<string?> fields, CancellationToken token)
     {
-        var rules = await context.ShowcaseModerationRules.AsNoTracking().Where(x => x.IsEnabled).ToListAsync(token);
+        var rules = await context.ShowcaseModerationRules.AsNoTracking()
+            .Where(x => x.Status == ShowcaseModerationRuleStatus.Active && ShowcaseViolationCategories.PhraseBlockingCategories.Contains(x.Category))
+            .ToListAsync(token);
         // Only explicit phrase rules block submissions. The old link-count signal never blocks a legitimate demo URL.
         var findings = ShowcaseContentFilter.Evaluate(fields.Select(x => x ?? ""), rules, isComment: false, allMatches: true);
         return findings.Count == 0

@@ -24,7 +24,7 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
         if (project is null) return;
         var fields = new[] { project.ProjectName, project.Description, project.Problem ?? "", project.Solution ?? "", project.TargetUsers ?? "", showcase.Highlights ?? "" }
             .Concat(showcase.Links.SelectMany(x => new[] { x.Label, x.Url })).ToArray();
-        await ScanAsync(showcase, null, ShowcaseContentFilter.PageText(project, showcase), fields, project.LecturerUserIds, cancellationToken);
+        await ScanAsync(showcase, null, ShowcaseContentFilter.PageText(project, showcase), fields, cancellationToken);
     }
 
     public async Task ScanCommentAsync(Guid commentId, CancellationToken cancellationToken = default)
@@ -35,14 +35,14 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
         if (showcase is null) return;
         var project = await ShowcaseAccess.LatestProjectAsync(context, showcase.ProjectLineageId, cancellationToken);
         if (project is null) return;
-        var reviewers = await ShowcaseAccess.ResponsibleLecturerUserIdsForStudentAsync(
-            context, comment.AuthorUserId, project.LecturerUserIds, cancellationToken);
-        await ScanAsync(showcase, comment.Id, comment.Content, [comment.Content], reviewers, cancellationToken);
+        await ScanAsync(showcase, comment.Id, comment.Content, [comment.Content], cancellationToken);
     }
 
-    private async Task ScanAsync(ShowcaseProject showcase, Guid? commentId, string text, string[] fields, IReadOnlyCollection<Guid> reviewers, CancellationToken token)
+    private async Task ScanAsync(ShowcaseProject showcase, Guid? commentId, string text, string[] fields, CancellationToken token)
     {
-        var rules = await context.ShowcaseModerationRules.AsNoTracking().Where(x => x.IsEnabled).OrderBy(x => x.Id).ToListAsync(token);
+        var rules = await context.ShowcaseModerationRules.AsNoTracking()
+            .Where(x => x.Status == ShowcaseModerationRuleStatus.Active && ShowcaseViolationCategories.PhraseBlockingCategories.Contains(x.Category))
+            .OrderBy(x => x.Id).ToListAsync(token);
         var contentHash = ShowcaseContentFilter.Hash(text);
         var fingerprint = ShowcaseContentFilter.Hash(contentHash + JsonSerializer.Serialize(rules.Select(x => new { x.Id, x.Phrase, x.Reason, x.Description })) + "filter-v2");
         var scan = await context.ShowcaseModerationScans.SingleOrDefaultAsync(x => x.ShowcaseProjectId == showcase.Id && x.CommentId == commentId, token);
@@ -66,14 +66,14 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
             context.ShowcaseReports.Add(new ShowcaseReport
             {
                 ShowcaseProjectId = showcase.Id, CommentId = commentId, Source = ShowcaseReportSource.System,
-                ContentFingerprint = contentHash, DetectionKey = fingerprint,
+                ContentFingerprint = contentHash, DetectionKey = fingerprint, ContentSnapshot = text,
                 Reason = findings[0].Reason,
                 Category = findings[0].Category,
                 Note = note[..Math.Min(1000, note.Length)],
                 CreatedAt = time.UtcNow
             });
-            ShowcaseOutbox.EnqueueNotification(context, showcase.Id, reviewers, "Automatic content flag",
-                "Content matched a review rule / Nội dung khớp quy tắc và cần kiểm tra.", "/showcase/moderation?tab=reports", time.UtcNow, notifyAdministrators: true);
+            // Internal scan records are not review requests. Only a user's report notifies moderators;
+            // prohibited language is rejected synchronously by ShowcaseLanguageGuard before saving.
         }
         if (scan is null)
         {
@@ -84,7 +84,7 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
         scan.ScannedAt = time.UtcNow;
         try
         {
-            // Report, scan marker, superseded flags and notification commit together. The unique indexes and
+            // Internal report, scan marker and superseded flags commit together. The unique indexes and
             // xmin token also protect concurrent scans by multiple API instances.
             await context.SaveChangesAsync(token);
         }

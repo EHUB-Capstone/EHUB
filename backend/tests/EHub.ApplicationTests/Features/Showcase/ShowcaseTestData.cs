@@ -1,7 +1,12 @@
+using EHub.Application.Features.Showcase.Reports;
+using EHub.Application.Common.Interfaces.Services;
+using EHub.Contracts.Showcase;
+using EHub.Shared.Results;
 using EHub.Domain.Entities;
 using EHub.Domain.Enums;
 using EHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace EHub.ApplicationTests.Features.Showcase;
 
@@ -10,6 +15,20 @@ internal sealed record SeededShowcase(
 
 internal static class ShowcaseTestData
 {
+    public static IDateTimeProvider RuleClock()
+    {
+        var clock = Substitute.For<IDateTimeProvider>();
+        clock.UtcNow.Returns(new DateTime(2026, 11, 26, 8, 0, 0, DateTimeKind.Utc));
+        return clock;
+    }
+    public static IShowcaseRuleProposalTransaction RuleTransaction()
+    {
+        var transaction = Substitute.For<IShowcaseRuleProposalTransaction>();
+        transaction.ExecuteAsync(Arg.Any<Func<CancellationToken, Task<Result<ShowcaseModerationRuleDto>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result<ShowcaseModerationRuleDto>>>>()!(call.Arg<CancellationToken>()));
+        return transaction;
+    }
+
     public static AppDbContext NewContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 

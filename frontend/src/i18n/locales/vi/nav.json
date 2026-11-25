@@ -34,6 +34,7 @@
   "header": {
     "settings": "Cài đặt",
     "profile": "Hồ sơ",
+    "violationManagement": "Quản lý vi phạm",
     "user": "Người dùng",
     "avatarAlt": "Ảnh đại diện",
     "classCodeAlert": {

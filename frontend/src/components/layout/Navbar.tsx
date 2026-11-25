@@ -1,5 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
-import { ChevronDown, User, LogOut, Menu, Settings, Moon, Sun, AlertTriangle } from 'lucide-react';
+import { ChevronDown, User, LogOut, Menu, Settings, Moon, Sun, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
@@ -8,6 +8,8 @@ import LanguageSwitcher from '../ui/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getNotificationId, normalizeNotification, notificationApi } from '../../api/notificationApi';
+import { canManageShowcaseViolations } from '../../utils/showcaseModeration';
+import { releaseFeatureFlags } from '../../config/releaseFeatureFlags';
 
 const Navbar = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
@@ -156,6 +158,13 @@ const Navbar = ({ onMenuClick }) => {
               >
                 <User className="w-4 h-4" /> {t('header.profile')}
               </button>
+              {releaseFeatureFlags.showcase && canManageShowcaseViolations(role) && <button
+                type="button"
+                className="flex min-h-9 w-full items-center gap-2.5 px-4 py-2.5 text-left text-body-sm text-slate-700 transition-colors hover:bg-slate-50 hover:text-primary-700"
+                onClick={() => { setShowProfileMenu(false); navigate('/admin/violation-management'); }}
+              >
+                <ShieldAlert className="h-4 w-4" /> {t('header.violationManagement')}
+              </button>}
               <div className="h-px w-full bg-slate-100 my-1" />
               <button
                 className="w-full text-left px-4 py-2.5 text-sm text-danger-dark hover:bg-danger-50 transition-colors flex items-center gap-2.5 font-medium"

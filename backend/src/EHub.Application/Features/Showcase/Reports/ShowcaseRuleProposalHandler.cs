@@ -18,7 +18,9 @@ public sealed class CreateShowcaseRuleProposalValidator : AbstractValidator<Crea
     {
         RuleFor(x => x.Phrase).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(120)
             .Must(x => ShowcaseProposalText.Canonical(x).Any(char.IsLetter));
-        RuleFor(x => x.Category).Must(x => Enum.GetNames<ShowcaseViolationCategory>().Contains(x));
+        RuleFor(x => x.Category).Must(x => Enum.GetNames<ShowcaseViolationCategory>().Contains(x)
+            && ShowcaseViolationCategories.SupportsPhraseBlocking(Enum.Parse<ShowcaseViolationCategory>(x)))
+            .WithMessage("This category requires human review and cannot be used for keyword blocking.");
     }
 }
 
@@ -63,7 +65,7 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
         if (isAdmin)
         {
             var category = Enum.Parse<ShowcaseViolationCategory>(request.Category);
-            var approval = await AddApprovedRuleAsync(proposal, category, token);
+            var approval = await AddApprovedRuleAsync(proposal, category, userId, token);
             if (approval.IsFailure) return Result.Failure<ShowcaseRuleProposalDto>(approval.Error);
             proposal.Category = category;
             MarkReviewed(proposal, ShowcaseRuleProposalStatus.Approved, userId);
@@ -109,6 +111,8 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
         if (!ShowcaseAccess.IsAdmin(role)) return Denied<ShowcaseRuleProposalDto>();
         if (request.Status is not ("Approved" or "Rejected"))
             return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseValidationError, "Choose Approved or Rejected.");
+        if (request.ReviewNote?.Length > 1000)
+            return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseValidationError, "Review notes must be at most 1000 characters.");
         var proposal = await VisibleProposals().SingleOrDefaultAsync(x => x.Id == id, token);
         if (proposal is null) return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseRuleProposalNotFound, "The proposal was not found.");
         var current = await context.ShowcaseModerationRuleProposals.AsNoTracking().Where(x => x.Id == id).Select(x => new { x.Status, x.Version }).SingleAsync(token);
@@ -118,15 +122,16 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
             return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseConcurrencyConflict, "Reload the proposals before reviewing.");
         if (request.Status == "Approved")
         {
-            var approval = await AddApprovedRuleAsync(proposal, proposal.Category, token);
+            var approval = await AddApprovedRuleAsync(proposal, proposal.Category, userId, token);
             if (approval.IsFailure) return Result.Failure<ShowcaseRuleProposalDto>(approval.Error);
         }
+        proposal.ReviewNote = string.IsNullOrWhiteSpace(request.ReviewNote) ? null : request.ReviewNote.Trim();
         MarkReviewed(proposal, Enum.Parse<ShowcaseRuleProposalStatus>(request.Status), userId);
         await context.SaveChangesAsync(token);
         return Result.Success(ToDto(proposal));
     }
 
-    private async Task<Result> AddApprovedRuleAsync(ShowcaseModerationRuleProposal proposal, ShowcaseViolationCategory category, CancellationToken token)
+    private async Task<Result> AddApprovedRuleAsync(ShowcaseModerationRuleProposal proposal, ShowcaseViolationCategory category, Guid userId, CancellationToken token)
     {
         var content = await context.ShowcaseComments.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.Id == proposal.CommentId && x.ShowcaseProjectId == proposal.ShowcaseProjectId).Select(x => x.Content).SingleOrDefaultAsync(token);
@@ -136,8 +141,10 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
             return Result.Failure(ErrorCodes.ShowcaseRuleProposalAlreadyExists, "This word or phrase already exists.");
         if (await context.ShowcaseModerationRules.CountAsync(token) >= 200)
             return Result.Failure(ErrorCodes.ShowcaseValidationError, "At most 200 moderation rules are supported.");
+        var now = time.UtcNow;
         var rule = new ShowcaseModerationRule { Phrase = proposal.Phrase, Category = category,
-            Reason = ShowcaseViolationCategories.ToReason(category), IsEnabled = true,
+            Reason = ShowcaseViolationCategories.ToReason(category), Status = ShowcaseModerationRuleStatus.Active,
+            CreatedByUserId = userId, CreatedAtUtc = now, UpdatedByUserId = userId, UpdatedAtUtc = now,
             Description = "Approved from a reported comment / Đã duyệt từ báo cáo bình luận." };
         context.ShowcaseModerationRules.Add(rule);
         proposal.CreatedRuleId = rule.Id;
@@ -187,5 +194,5 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
     private static Result<T> Denied<T>() => Result.Failure<T>(ErrorCodes.ShowcaseAccessDenied, "You do not have permission to manage these proposals.");
     private static ShowcaseRuleProposalDto ToDto(ShowcaseModerationRuleProposal x) => new() { Id = x.Id, ShowcaseProjectId = x.ShowcaseProjectId,
         SourceReportId = x.SourceReportId, CommentId = x.CommentId, Phrase = x.Phrase, Category = x.Category.ToString(), Status = x.Status.ToString(),
-        ProposedAtUtc = x.ProposedAtUtc, ReviewedAtUtc = x.ReviewedAtUtc, CreatedRuleId = x.CreatedRuleId, RowVersion = x.Version };
+        ProposedAtUtc = x.ProposedAtUtc, ReviewedAtUtc = x.ReviewedAtUtc, ReviewNote = x.ReviewNote, CreatedRuleId = x.CreatedRuleId, RowVersion = x.Version };
 }

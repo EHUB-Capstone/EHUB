@@ -10,6 +10,7 @@ public sealed class ReviewShowcaseRuleProposalRequest
 {
     public string Status { get; init; } = string.Empty;
     public uint? RowVersion { get; init; }
+    public string? ReviewNote { get; init; }
 }
 
 public sealed class ShowcaseRuleProposalDto
@@ -24,6 +25,7 @@ public sealed class ShowcaseRuleProposalDto
     public string Status { get; init; } = string.Empty;
     public DateTime ProposedAtUtc { get; init; }
     public DateTime? ReviewedAtUtc { get; init; }
+    public string? ReviewNote { get; init; }
     public Guid? CreatedRuleId { get; init; }
     public uint RowVersion { get; init; }
 }

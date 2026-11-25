@@ -5,6 +5,15 @@ namespace EHub.Application.Features.Showcase.Reports;
 
 internal static class ShowcaseViolationCategories
 {
+    public static readonly ShowcaseViolationCategory[] PhraseBlockingCategories =
+    [
+        ShowcaseViolationCategory.Profanity, ShowcaseViolationCategory.Insult, ShowcaseViolationCategory.Threat,
+        ShowcaseViolationCategory.Defamation, ShowcaseViolationCategory.Racism, ShowcaseViolationCategory.AdultContent,
+        ShowcaseViolationCategory.Spam
+    ];
+
+    public static bool SupportsPhraseBlocking(ShowcaseViolationCategory category) => PhraseBlockingCategories.Contains(category);
+
     public static ShowcaseViolationCategory FromReason(ShowcaseReportReason reason) => reason switch
     {
         ShowcaseReportReason.Spam => ShowcaseViolationCategory.Spam,
@@ -15,7 +24,8 @@ internal static class ShowcaseViolationCategories
     public static ShowcaseReportReason ToReason(ShowcaseViolationCategory category) => category switch
     {
         ShowcaseViolationCategory.Spam => ShowcaseReportReason.Spam,
-        ShowcaseViolationCategory.AdultContent => ShowcaseReportReason.InappropriateContent,
+        ShowcaseViolationCategory.AdultContent or ShowcaseViolationCategory.ProhibitedContent => ShowcaseReportReason.InappropriateContent,
+        ShowcaseViolationCategory.Misinformation or ShowcaseViolationCategory.OffTopic => ShowcaseReportReason.Other,
         _ => ShowcaseReportReason.Harassment
     };
 

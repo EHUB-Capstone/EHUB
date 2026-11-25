@@ -27,6 +27,7 @@ public sealed class ShowcaseReportConfiguration : IEntityTypeConfiguration<Showc
         builder.Property(report => report.Category).HasColumnName("category").HasConversion<string>().HasMaxLength(32);
         builder.HasOne<ShowcaseViolationCategoryDefinition>().WithMany().HasForeignKey(report => report.Category).OnDelete(DeleteBehavior.Restrict);
         builder.Property(report => report.Note).HasColumnName("note").HasMaxLength(1000);
+        builder.Property(report => report.ContentSnapshot).HasColumnName("content_snapshot").HasColumnType("text");
         builder.Property(report => report.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
         builder.Property(report => report.CreatedAt).HasColumnName("created_at");
         builder.Property(report => report.ResolvedByUserId).HasColumnName("resolved_by_user_id");

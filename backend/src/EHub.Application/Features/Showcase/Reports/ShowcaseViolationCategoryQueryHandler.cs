@@ -10,7 +10,11 @@ public sealed class ShowcaseViolationCategoryQueryHandler(IApplicationDbContext 
     public async Task<Result<IReadOnlyCollection<ShowcaseViolationCategoryDto>>> ListAsync(CancellationToken token = default)
     {
         var rows = await context.ShowcaseViolationCategories.AsNoTracking().OrderBy(x => x.SortOrder).ThenBy(x => x.Code)
-            .Select(x => new ShowcaseViolationCategoryDto { Code = x.Code.ToString(), NameVi = x.NameVi, NameEn = x.NameEn, SortOrder = x.SortOrder })
+            .Select(x => new ShowcaseViolationCategoryDto
+            {
+                Code = x.Code.ToString(), NameVi = x.NameVi, NameEn = x.NameEn, SortOrder = x.SortOrder,
+                DescriptionVi = x.DescriptionVi, DescriptionEn = x.DescriptionEn, SupportsPhraseBlocking = x.SupportsPhraseBlocking
+            })
             .ToArrayAsync(token);
         return Result.Success<IReadOnlyCollection<ShowcaseViolationCategoryDto>>(rows);
     }

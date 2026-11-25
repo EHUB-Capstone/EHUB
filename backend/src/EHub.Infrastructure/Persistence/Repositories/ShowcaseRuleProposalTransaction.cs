@@ -2,7 +2,6 @@ using System.Data;
 using System.Data.Common;
 using EHub.Application.Common.Exceptions;
 using EHub.Application.Features.Showcase.Reports;
-using EHub.Contracts.Showcase;
 using EHub.Shared.Results;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -14,8 +13,8 @@ namespace EHub.Infrastructure.Persistence.Repositories;
 public sealed class ShowcaseRuleProposalTransaction(AppDbContext context, ILogger<ShowcaseRuleProposalTransaction> logger)
     : IShowcaseRuleProposalTransaction
 {
-    public async Task<Result<ShowcaseRuleProposalDto>> ExecuteAsync(
-        Func<CancellationToken, Task<Result<ShowcaseRuleProposalDto>>> operation, CancellationToken token = default)
+    public async Task<Result<T>> ExecuteAsync<T>(
+        Func<CancellationToken, Task<Result<T>>> operation, CancellationToken token = default)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
         try

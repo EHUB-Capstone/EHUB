@@ -34,6 +34,7 @@
   "header": {
     "settings": "Settings",
     "profile": "Profile",
+    "violationManagement": "Violation Management",
     "user": "User",
     "avatarAlt": "Avatar",
     "classCodeAlert": {

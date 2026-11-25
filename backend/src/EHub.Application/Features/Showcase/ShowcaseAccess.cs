@@ -48,45 +48,15 @@ internal static class ShowcaseAccess
     }
 
     /// <summary>
-    /// Reports a staff member may review. A showcase-page report belongs to the class that owns the page. For a
-    /// comment report, the lecturer of the comment author's active class may also review it: commenters can be
-    /// students from a different class than the team that owns the page.
+    /// Human reports follow the same class scope as showcase moderation, including reports on comments.
+    /// The parent query filter excludes soft-deleted pages for administrators as well as lecturers.
     /// </summary>
     public static IQueryable<ShowcaseReport> ModeratableReports(IApplicationDbContext context, Guid userId, string role)
     {
-        if (IsAdmin(role)) return context.ShowcaseReports;
-        if (!IsLecturer(role)) return context.ShowcaseReports.Where(_ => false);
-
         var showcases = ModeratableShowcases(context, userId, role);
         return context.ShowcaseReports.Where(report =>
-            showcases.Any(showcase => showcase.Id == report.ShowcaseProjectId) ||
-            (report.CommentId.HasValue && context.ShowcaseComments.IgnoreQueryFilters().Any(comment =>
-                comment.Id == report.CommentId && context.ClassStudents.Any(enrollment =>
-                    enrollment.Student.UserId == comment.AuthorUserId
-                    && enrollment.EnrollmentStatus == EnrollmentStatus.Active
-                    && (enrollment.Class.PrimaryLecturerId == userId
-                        || enrollment.Class.ClassLecturers.Any(assignment => assignment.LecturerId == userId))))));
-    }
-
-    /// <summary>
-    /// Gets the lecturer(s) responsible for a student's active class. The fallback maintains a review path for
-    /// users without a student enrollment, such as mentors and alumni.
-    /// </summary>
-    public static async Task<IReadOnlyCollection<Guid>> ResponsibleLecturerUserIdsForStudentAsync(
-        IApplicationDbContext context, Guid studentUserId, IReadOnlyCollection<Guid> fallback, CancellationToken cancellationToken)
-    {
-        var classIds = context.ClassStudents.AsNoTracking()
-            .Where(enrollment => enrollment.Student.UserId == studentUserId
-                && enrollment.EnrollmentStatus == EnrollmentStatus.Active)
-            .Select(enrollment => enrollment.ClassId);
-        var primaryLecturerIds = context.Classes.AsNoTracking()
-            .Where(@class => classIds.Contains(@class.Id) && @class.PrimaryLecturerId.HasValue)
-            .Select(@class => @class.PrimaryLecturerId!.Value);
-        var assignedLecturerIds = context.ClassLecturers.AsNoTracking()
-            .Where(assignment => classIds.Contains(assignment.ClassId))
-            .Select(assignment => assignment.LecturerId);
-        var lecturerIds = await primaryLecturerIds.Concat(assignedLecturerIds).Distinct().ToArrayAsync(cancellationToken);
-        return lecturerIds.Length == 0 ? fallback : lecturerIds;
+            report.Source == ShowcaseReportSource.User &&
+            showcases.Any(showcase => showcase.Id == report.ShowcaseProjectId));
     }
 
     /// <summary>Newest project of a lineage with the team, class and people around it.</summary>

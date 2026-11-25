@@ -429,7 +429,27 @@
     },
     "failedToLoadShowcasePages": "Không thể tải các trang showcase."
   },
+  "violationManagement": {
+    "title": "Quản lý vi phạm",
+    "subtitle": "Quản lý từ và cụm từ đã được Admin phê duyệt trong Project Showcase.",
+    "reviewProposals": "Duyệt nội dung bị báo cáo và các đề xuất đang chờ",
+    "search": "Tìm trong danh sách chặn",
+    "searchPlaceholder": "Tìm từ, cụm từ hoặc mô tả...",
+    "allStatuses": "Tất cả trạng thái",
+    "allCategories": "Tất cả nhóm chặn từ",
+    "count": "Hiển thị {{count}} / {{total}} quy tắc",
+    "empty": "Không có quy tắc phù hợp với bộ lọc.",
+    "actions": "Thao tác",
+    "categoryGuide": "Các nhóm vi phạm và hướng dẫn duyệt",
+    "contextHelp": "Report phụ thuộc ngữ cảnh cần staff đánh giá. Hệ thống không tự xác minh sự thật hoặc kết luận vi phạm pháp luật.",
+    "keywordBlocking": "Hỗ trợ quy tắc chặn từ đã duyệt",
+    "manualReview": "Chỉ duyệt thủ công",
+    "confirmStatusTitle": "Xác nhận đổi trạng thái quy tắc",
+    "confirmStatusHelp": "Chuyển {{phrase}} sang {{status}}? Thay đổi áp dụng cho mọi Showcase."
+  },
   "autoModeration": {
+    "status": "Trạng thái",
+    "statuses": { "Active": "Đang áp dụng", "Inactive": "Ngừng áp dụng" },
     "rulesTitle": "Từ ngữ bị chặn",
     "rulesHelp": "Nội dung khớp cụm từ đang bật sẽ bị từ chối khi gửi. Thông báo nêu rõ từng nhóm vi phạm; một nội dung có thể vi phạm nhiều nhóm. Chỉ report do người dùng gửi mới chuyển đến người duyệt.",
     "addRule": "Thêm quy tắc",
@@ -468,7 +488,10 @@
       "Defamation": "Cáo buộc công kích, bôi nhọ",
       "Racism": "Miệt thị chủng tộc",
       "AdultContent": "Nội dung người lớn",
-      "Spam": "Spam, quảng cáo bị cấm"
+      "Spam": "Spam, quảng cáo bị cấm",
+      "ProhibitedContent": "Nội dung cấm",
+      "Misinformation": "Thông tin sai lệch",
+      "OffTopic": "Lạc chủ đề"
     }
   },
   "ruleProposals": {
@@ -483,7 +506,7 @@
     "submitted": "Đã gửi đề xuất. Đang chờ Admin duyệt.",
     "submitFailed": "Không thể gửi đề xuất. Hãy kiểm tra và thử lại.",
     "sourceUnavailable": "Bình luận gốc không còn khả dụng.",
-    "queueTitle": "Đề xuất từ/cụm từ chờ duyệt",
+    "queueTitle": "Đề xuất từ/cụm từ chặn",
     "reviewHelp": "Kiểm tra ngữ cảnh trước khi duyệt. Quy tắc được duyệt sẽ áp dụng cho toàn bộ Showcase.",
     "empty": "Chưa có đề xuất chờ duyệt.",
     "approve": "Duyệt và bật quy tắc",
@@ -497,6 +520,23 @@
     "addAndActivate": "Thêm và bật từ/cụm từ bị chặn",
     "adminHelp": "Ưu tiên cụm từ rõ nghĩa để tránh chặn nhầm. Khi Admin xác nhận, quy tắc được duyệt và bật ngay trên toàn bộ Showcase.",
     "activated": "Đã thêm và bật quy tắc chặn."
+  },
+  "reportAudit": {
+    "ruleHistory": "Lịch sử cập nhật quy tắc",
+    "createdBy": "Người tạo: {{name}} · {{date}}",
+    "updatedBy": "Sửa gần nhất: {{name}} · {{date}}",
+    "unknownActor": "Chưa ghi nhận",
+    "unknownTime": "Chưa ghi nhận thời gian",
+    "reviewNote": "Ghi chú duyệt",
+    "reviewNoteOptional": "Ghi chú duyệt (không bắt buộc)",
+    "noteLimit": "{{count}}/1.000 ký tự. Hiển thị trong lịch sử duyệt của Admin.",
+    "reviewedAt": "Thời điểm duyệt: {{date}}",
+    "emptyProposals": "Không có đề xuất ở trạng thái này.",
+    "proposalStatuses": { "Pending": "Chờ duyệt", "Approved": "Đã duyệt", "Rejected": "Đã từ chối" },
+    "snapshotTitle": "Nội dung tại thời điểm báo cáo",
+    "snapshotHelp": "Được lưu khi báo cáo này được gửi. Nội dung hiện tại có thể đã thay đổi.",
+    "snapshotUnavailable": "Báo cáo cũ này chưa có bản lưu nội dung.",
+    "fields": { "Comment": "Bình luận", "Content": "Nội dung", "ProjectName": "Tên dự án", "Description": "Mô tả", "Problem": "Vấn đề", "Solution": "Giải pháp", "TargetUsers": "Người dùng mục tiêu", "Highlights": "Điểm nổi bật", "Links": "Liên kết" }
   },
   "violationCategories": {
     "loading": "Đang tải nhóm vi phạm…",

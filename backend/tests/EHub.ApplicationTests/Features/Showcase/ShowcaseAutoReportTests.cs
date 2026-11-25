@@ -152,9 +152,9 @@ public sealed class ShowcaseAutoReportTests
     [Fact]
     public void Filter_HonorsDisabledRules_AndDoesNotJoinSeparateFields()
     {
-        var rule = Rule(); rule.IsEnabled = false;
+        var rule = Rule(); rule.Status = ShowcaseModerationRuleStatus.Inactive;
         ShowcaseContentFilter.Evaluate(["đồ ngu"], [rule], true).Should().BeEmpty();
-        rule.IsEnabled = true;
+        rule.Status = ShowcaseModerationRuleStatus.Active;
         ShowcaseContentFilter.Evaluate(["đồ", "ngu"], [rule], false).Should().BeEmpty();
     }
 
@@ -171,7 +171,7 @@ public sealed class ShowcaseAutoReportTests
         ShowcaseContentFilter.NormalizeComment("Bộ đồ ngủ đẹp").Should().NotBe(ShowcaseContentFilter.NormalizeComment("Bộ đồ ngu đẹp"));
 
     [Fact]
-    public async Task SystemFlags_AppearInTheTeacherQueue_AndResolveTogetherWithUserReports()
+    public async Task OnlyUserReports_EnterTheTeacherQueue_AndSystemFlagsRemainInternal()
     {
         await using var db = ShowcaseTestData.NewContext();
         var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
@@ -182,26 +182,26 @@ public sealed class ShowcaseAutoReportTests
         var reports = new ShowcaseReportHandler(db, Clock(), new ShowcaseModerationHandler(db, Clock()),
             new CreateShowcaseReportRequestValidator(), new ResolveShowcaseReportRequestValidator());
         var automaticQueue = await reports.ListAsync("Open", 1, 20, seed.LecturerUserId, SystemRoles.Lecturer);
-        var automaticItem = automaticQueue.Value.Items.Should().ContainSingle().Which;
-        automaticItem.Sources.Should().BeEquivalentTo(new[] { "System" });
-        automaticItem.SystemReportCount.Should().Be(1);
+        automaticQueue.Value.Items.Should().BeEmpty();
+        db.OutboxMessages.Should().BeEmpty();
         var reporter = await ShowcaseTestData.AddUserAsync(db, "Reporter");
         (await reports.CreateAsync(seed.ShowcaseId, new() { Reason = "Harassment" }, reporter.Id)).IsSuccess.Should().BeTrue();
         var queue = await reports.ListAsync("Open", 1, 20, seed.LecturerUserId, SystemRoles.Lecturer);
         var item = queue.Value.Items.Should().ContainSingle().Which;
-        item.ReportCount.Should().Be(2); item.UserReportCount.Should().Be(1); item.SystemReportCount.Should().Be(1);
-        item.Sources.Should().BeEquivalentTo(new[] { "User", "System" });
+        item.ReportCount.Should().Be(1); item.UserReportCount.Should().Be(1); item.SystemReportCount.Should().Be(0);
+        item.Sources.Should().BeEquivalentTo(new[] { "User" });
         var system = await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.System);
-        automaticItem.Id.Should().Be(system.Id);
-        item.Id.Should().NotBe(system.Id, "the UI must use the human report id when it offers a phrase proposal");
-        (await reports.ResolveAsync(system.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
-        (await db.ShowcaseReports.Select(x => x.Status).ToListAsync()).Should().OnlyContain(x => x == ShowcaseReportStatus.Dismissed);
+        item.Id.Should().NotBe(system.Id);
+        (await reports.ResolveAsync(system.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsFailure.Should().BeTrue();
+        (await reports.ResolveAsync(item.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
+        (await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.User)).Status.Should().Be(ShowcaseReportStatus.Dismissed);
+        (await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.System)).Status.Should().Be(ShowcaseReportStatus.Open);
     }
 
     [Theory]
     [InlineData(ShowcaseStatus.Published)]
     [InlineData(ShowcaseStatus.PendingReview)]
-    public async Task Scanner_FlagsOnceWithoutChangingVisibility_AndNotifiesReviewers(ShowcaseStatus status)
+    public async Task Scanner_RecordsOnceWithoutChangingVisibilityOrNotifyingReviewers(ShowcaseStatus status)
     {
         await using var db = ShowcaseTestData.NewContext();
         var seed = await ShowcaseTestData.SeedAsync(db, status);
@@ -215,7 +215,7 @@ public sealed class ShowcaseAutoReportTests
         report.ContentFingerprint.Should().HaveLength(64); report.DetectionKey.Should().HaveLength(64);
         page.Status.Should().Be(status); report.CreatedAt.Should().Be(Now);
         (await db.ShowcaseModerationScans.SingleAsync()).ScannedAt.Should().Be(Now);
-        (await db.OutboxMessages.CountAsync()).Should().Be(1);
+        (await db.OutboxMessages.CountAsync()).Should().Be(0);
     }
 
     [Fact]
@@ -276,17 +276,17 @@ public sealed class ShowcaseAutoReportTests
         var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
         var page = await db.ShowcaseProjects.SingleAsync(); page.Highlights = "đồ ngu"; await db.SaveChangesAsync();
         var scanner = new ShowcaseAutoReportScanner(db, Clock()); await scanner.ScanPageAsync(seed.ShowcaseId);
-        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator());
+        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator(), ShowcaseTestData.RuleTransaction(), ShowcaseTestData.RuleClock());
         foreach (var role in new[] { SystemRoles.Student, SystemRoles.Mentor, SystemRoles.Lecturer })
         {
             (await handler.ListAsync(role, default)).IsFailure.Should().BeTrue();
-            (await handler.SaveAsync(null, new() { Phrase = "đồ ngu", Description = "Test" }, role, default)).IsFailure.Should().BeTrue();
+            (await handler.SaveAsync(null, new() { Phrase = "đồ ngu", Description = "Test" }, Guid.Empty, role, default)).IsFailure.Should().BeTrue();
         }
-        var rule = await handler.SaveAsync(null, new() { Phrase = "đồ ngu", Description = "Test" }, SystemRoles.Admin, default);
+        var rule = await handler.SaveAsync(null, new() { Phrase = "đồ ngu", Description = "Test" }, (await ShowcaseTestData.AddUserAsync(db, "Admin")).Id, SystemRoles.Admin, default);
         rule.IsSuccess.Should().BeTrue();
         await scanner.ScanPageAsync(seed.ShowcaseId);
         (await db.ShowcaseReports.CountAsync()).Should().Be(1);
-        (await handler.SaveAsync(rule.Value.Id, new() { Phrase = "đồ ngu", Description = "Test", IsEnabled = false, RowVersion = rule.Value.RowVersion }, SystemRoles.Admin, default)).IsSuccess.Should().BeTrue();
+        (await handler.SaveAsync(rule.Value.Id, new() { Phrase = "đồ ngu", Description = "Test", IsEnabled = false, RowVersion = rule.Value.RowVersion }, (await ShowcaseTestData.AddUserAsync(db, "Admin")).Id, SystemRoles.Admin, default)).IsSuccess.Should().BeTrue();
         await scanner.ScanPageAsync(seed.ShowcaseId);
         (await db.ShowcaseReports.SingleAsync()).Status.Should().Be(ShowcaseReportStatus.Dismissed);
     }

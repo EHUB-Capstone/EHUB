@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient.ts';
+import { normalizeShowcaseModerationRule, showcaseRuleStatus } from '../utils/showcaseModeration.ts';
 import { ASSISTANT_KEY_HEADER } from '../utils/showcaseAssistant.ts';
 import type { ApiEnvelope } from '../types/workspaceTools.ts';
 import type {
@@ -63,12 +64,16 @@ export const showcaseApi = {
     unwrap<ShowcaseRuleProposalPageDto>(axiosClient.get('/showcase/moderation-rule-proposals', { params, signal })),
   reviewRuleProposal: (id: string, body: ReviewShowcaseRuleProposalRequest) =>
     unwrap<ShowcaseRuleProposalDto>(axiosClient.post(`/showcase/moderation-rule-proposals/${id}/review`, body)),
-  getModerationRules: (signal?: AbortSignal) =>
-    unwrap<ShowcaseModerationRuleDto[]>(axiosClient.get('/showcase/moderation-rules', { signal })),
-  saveModerationRule: (id: string | null, body: SaveShowcaseModerationRuleRequest) =>
-    unwrap<ShowcaseModerationRuleDto>(id
-      ? axiosClient.put(`/showcase/moderation-rules/${id}`, body)
-      : axiosClient.post('/showcase/moderation-rules', body)),
+  getModerationRules: async (signal?: AbortSignal) =>
+    (await unwrap<ShowcaseModerationRuleDto[]>(axiosClient.get('/showcase/moderation-rules', { signal }))).map(normalizeShowcaseModerationRule),
+  saveModerationRule: async (id: string | null, body: SaveShowcaseModerationRuleRequest) => {
+    const status = showcaseRuleStatus(body);
+    const payload = { phrase: body.phrase, description: body.description, reason: body.reason, category: body.category,
+      rowVersion: body.rowVersion, status, isEnabled: status === 'Active' };
+    return normalizeShowcaseModerationRule(await unwrap<ShowcaseModerationRuleDto>(id
+      ? axiosClient.put(`/showcase/moderation-rules/${id}`, payload)
+      : axiosClient.post('/showcase/moderation-rules', payload)));
+  },
   // A key given here is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is
   // not kept. Without one (null) the server uses the key this user saved to their account, and answers that a key is needed if none.
   askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string | null, signal?: AbortSignal) =>

@@ -91,7 +91,7 @@ public sealed class ShowcaseReportHandlerTests
     }
 
     [Fact]
-    public async Task CommentReport_NotifiesTheCommentAuthorsActiveClassLecturer()
+    public async Task CommentReport_UsesTheShowcaseClass_NotTheCommentAuthorsClass()
     {
         await using var db = ShowcaseTestData.NewContext();
         var showcase = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
@@ -120,9 +120,13 @@ public sealed class ShowcaseReportHandlerTests
         receipt.IsSuccess.Should().BeTrue();
 
         var notification = db.OutboxMessages.Should().ContainSingle().Subject;
-        notification.PayloadJson.Should().Contain(authorLecturer.Id.ToString());
-        notification.PayloadJson.Should().NotContain(showcase.LecturerUserId.ToString());
-        var queue = await handler.ListAsync("Open", 1, 20, authorLecturer.Id, SystemRoles.Lecturer);
+        notification.PayloadJson.Should().Contain(showcase.LecturerUserId.ToString());
+        notification.PayloadJson.Should().NotContain(authorLecturer.Id.ToString());
+        var outsideQueue = await handler.ListAsync("Open", 1, 20, authorLecturer.Id, SystemRoles.Lecturer);
+        outsideQueue.Value.Items.Should().BeEmpty();
+        (await handler.ResolveAsync(receipt.Value.Id, new() { Status = "Dismissed" }, authorLecturer.Id, SystemRoles.Lecturer))
+            .Error.Code.Should().Be(ErrorCodes.ShowcaseReportNotFound);
+        var queue = await handler.ListAsync("Open", 1, 20, showcase.LecturerUserId, SystemRoles.Lecturer);
         queue.Value.Items.Should().ContainSingle().Which.Id.Should().Be(receipt.Value.Id);
     }
 

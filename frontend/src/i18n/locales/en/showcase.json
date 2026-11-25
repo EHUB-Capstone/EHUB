@@ -433,7 +433,27 @@
     },
     "failedToLoadShowcasePages": "Failed to load showcase pages."
   },
+  "violationManagement": {
+    "title": "Violation Management",
+    "subtitle": "Manage administrator-approved words and phrases used across Project Showcase.",
+    "reviewProposals": "Review reported content and pending proposals",
+    "search": "Search the blocklist",
+    "searchPlaceholder": "Search by word, phrase or description...",
+    "allStatuses": "All statuses",
+    "allCategories": "All blocking categories",
+    "count": "Showing {{count}} of {{total}} rules",
+    "empty": "No rules match these filters.",
+    "actions": "Actions",
+    "categoryGuide": "Violation categories and review guidance",
+    "contextHelp": "Context-dependent reports require staff judgment. The system does not automatically fact-check content or determine legal violations.",
+    "keywordBlocking": "Supports approved phrase rules",
+    "manualReview": "Human review only",
+    "confirmStatusTitle": "Confirm rule status change",
+    "confirmStatusHelp": "Set {{phrase}} to {{status}}? This changes blocking for all showcases."
+  },
   "autoModeration": {
+    "status": "Status",
+    "statuses": { "Active": "Active", "Inactive": "Inactive" },
     "rulesTitle": "Blocked language",
     "rulesHelp": "Enabled phrases block content when submitted. The message identifies every matched violation category. Only user reports enter the review queue.",
     "addRule": "Add rule",
@@ -472,7 +492,10 @@
       "Defamation": "Abusive accusations and defamation",
       "Racism": "Racist language",
       "AdultContent": "Adult content",
-      "Spam": "Spam and prohibited promotions"
+      "Spam": "Spam and prohibited promotions",
+      "ProhibitedContent": "Prohibited content",
+      "Misinformation": "Misinformation",
+      "OffTopic": "Off-topic"
     }
   },
   "ruleProposals": {
@@ -487,7 +510,7 @@
     "submitted": "Proposal sent for administrator review.",
     "submitFailed": "Could not submit the proposal. Check and try again.",
     "sourceUnavailable": "The original comment is no longer available.",
-    "queueTitle": "Pending language rule proposals",
+    "queueTitle": "Language rule proposals",
     "reviewHelp": "Review the context before approving. Approved rules apply across all showcases.",
     "empty": "No proposals are awaiting review.",
     "approve": "Approve and activate rule",
@@ -501,6 +524,23 @@
     "addAndActivate": "Add and activate a blocked word or phrase",
     "adminHelp": "Prefer a specific phrase to avoid false positives. Administrator confirmation immediately approves and activates this rule across all showcases.",
     "activated": "Blocking rule added and activated."
+  },
+  "reportAudit": {
+    "ruleHistory": "Rule activity",
+    "createdBy": "Created by {{name}} · {{date}}",
+    "updatedBy": "Last updated by {{name}} · {{date}}",
+    "unknownActor": "Not recorded",
+    "unknownTime": "Time not recorded",
+    "reviewNote": "Review note",
+    "reviewNoteOptional": "Review note (optional)",
+    "noteLimit": "{{count}}/1,000 characters. Visible in administrator review history.",
+    "reviewedAt": "Reviewed: {{date}}",
+    "emptyProposals": "No proposals with this status.",
+    "proposalStatuses": { "Pending": "Pending", "Approved": "Approved", "Rejected": "Rejected" },
+    "snapshotTitle": "Content when reported",
+    "snapshotHelp": "Captured when this report was submitted. The current content may have changed.",
+    "snapshotUnavailable": "No snapshot was recorded for this older report.",
+    "fields": { "Comment": "Comment", "Content": "Content", "ProjectName": "Project name", "Description": "Description", "Problem": "Problem", "Solution": "Solution", "TargetUsers": "Target users", "Highlights": "Highlights", "Links": "Links" }
   },
   "violationCategories": {
     "loading": "Loading violation categories…",

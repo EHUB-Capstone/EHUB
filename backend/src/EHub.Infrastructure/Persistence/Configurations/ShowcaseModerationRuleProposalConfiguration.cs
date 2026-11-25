@@ -27,6 +27,7 @@ public sealed class ShowcaseModerationRuleProposalConfiguration : IEntityTypeCon
         builder.Property(x => x.ProposedAtUtc).HasColumnName("proposed_at_utc");
         builder.Property(x => x.ReviewedByUserId).HasColumnName("reviewed_by_user_id");
         builder.Property(x => x.ReviewedAtUtc).HasColumnName("reviewed_at_utc");
+        builder.Property(x => x.ReviewNote).HasColumnName("review_note").HasMaxLength(1000);
         builder.Property(x => x.CreatedRuleId).HasColumnName("created_rule_id");
         builder.Property(x => x.Version).IsRowVersion().HasColumnName("xmin");
         builder.HasIndex(x => x.PhraseKey).IsUnique().HasFilter("status = 'Pending'");

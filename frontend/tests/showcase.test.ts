@@ -6,6 +6,44 @@ import { showcaseApi } from '../src/api/showcaseApi.ts';
 import { discoveryRequest, discoveryPages, isNewlyPublished, mergeShowcasePages, updateShowcaseDiscoveryUpvote } from '../src/utils/showcaseDiscovery.ts';
 import type { ShowcaseCardDto, ShowcaseDiscoveryPageDto } from '../src/types/showcase.ts';
 
+test('report snapshots preserve literal comments and tolerate absent or older snapshots', async () => {
+  const { showcaseReportSnapshotFields } = await import('../src/utils/showcaseModeration.ts');
+  assert.deepEqual(showcaseReportSnapshotFields(null, true), []);
+  const literal = '{"ProjectName":"this is still a comment"}\n<script>example</script>';
+  assert.deepEqual(showcaseReportSnapshotFields(literal, true), [{ key: 'Comment', value: literal }]);
+  assert.deepEqual(showcaseReportSnapshotFields('older plain text', false), [{ key: 'Content', value: 'older plain text' }]);
+});
+
+test('page snapshot display selects public project fields without rendering private metadata', async () => {
+  const { showcaseReportSnapshotFields } = await import('../src/utils/showcaseModeration.ts');
+  const snapshot = JSON.stringify({ ProjectName: 'Original project', Description: 'Original description', ReviewNote: 'Private note',
+    Links: [{ Label: 'Demo', Url: 'https://example.test' }, null, { Label: 'Invalid' }] });
+  assert.deepEqual(showcaseReportSnapshotFields(snapshot, false), [
+    { key: 'ProjectName', value: 'Original project' }, { key: 'Description', value: 'Original description' }, { key: 'Links', value: 'Demo: https://example.test' },
+  ]);
+});
+
+test('rule client keeps server audit metadata out of write requests', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const rule = { id: 'audited-rule', phrase: 'example phrase', description: 'Context', reason: 'Harassment' as const, category: 'Insult' as const,
+    status: 'Active' as const, rowVersion: 3, createdByUserId: 'trusted-admin', createdAtUtc: '2026-11-26T08:00:00Z' };
+  mock.onPut('/showcase/moderation-rules/audited-rule').reply(config => {
+    const payload = JSON.parse(config.data);
+    assert.equal(payload.createdByUserId, undefined); assert.equal(payload.createdAtUtc, undefined); assert.equal(payload.id, undefined);
+    return [200, { data: rule }];
+  });
+  try { assert.equal((await showcaseApi.saveModerationRule(rule.id, rule)).createdByUserId, 'trusted-admin'); }
+  finally { mock.restore(); }
+});
+
+test('proposal review client sends and returns the private review note', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const body = { status: 'Rejected' as const, rowVersion: 8, reviewNote: 'Too broad for automatic blocking' };
+  mock.onPost('/showcase/moderation-rule-proposals/proposal-audit/review', body).reply(200, { data: { id: 'proposal-audit', ...body } });
+  try { assert.equal((await showcaseApi.reviewRuleProposal('proposal-audit', body)).reviewNote, body.reviewNote); }
+  finally { mock.restore(); }
+});
+
 test('showcase view client returns the current counter and accepts an abort signal', async () => {
   const mock = new MockAdapter(axiosClient);
   const controller = new AbortController();
@@ -536,6 +574,50 @@ test('moderation helper validates bounded groups and maps the legacy report reas
     ['Defamation', 'Harassment'], ['Racism', 'Harassment'],
     ['AdultContent', 'InappropriateContent'], ['Spam', 'Spam'],
   ] as const) assert.equal(showcaseReasonFromCategory(category), reason);
+});
+
+test('violation management is available only to administrators', async () => {
+  const { canManageShowcaseViolations, showcaseViolationManagementRoles } = await import('../src/utils/showcaseModeration.ts');
+  assert.deepEqual(showcaseViolationManagementRoles, ['ADMIN']);
+  for (const role of ['ADMIN', 'admin', ' Admin ']) assert.equal(canManageShowcaseViolations(role), true);
+  for (const role of ['LECTURER', 'MENTOR', 'STUDENT', 'USER', '', null, undefined]) assert.equal(canManageShowcaseViolations(role), false);
+});
+
+test('context-dependent categories are report choices rather than phrase-blocking choices', async () => {
+  const { supportsShowcasePhraseBlocking, showcaseReportReasonFromCategory, showcaseLanguageErrorCodes } = await import('../src/utils/showcaseModeration.ts');
+  for (const [code, reason] of [['ProhibitedContent', 'InappropriateContent'], ['Misinformation', 'Other'], ['OffTopic', 'Other']] as const) {
+    assert.equal(showcaseReportReasonFromCategory(code), reason);
+    assert.equal(supportsShowcasePhraseBlocking({ code, nameVi: code, nameEn: code, sortOrder: 8, supportsPhraseBlocking: true }), false);
+    assert.deepEqual(showcaseLanguageErrorCodes('SHOWCASE_LANGUAGE_BLOCKED_' + code.toUpperCase()), []);
+  }
+  assert.equal(supportsShowcasePhraseBlocking({ code: 'Insult', nameVi: 'Xúc phạm', nameEn: 'Insult', sortOrder: 2 }), true);
+  assert.equal(supportsShowcasePhraseBlocking({ code: 'Insult', nameVi: 'Xúc phạm', nameEn: 'Insult', sortOrder: 2, supportsPhraseBlocking: false }), false);
+});
+
+test('moderation statuses normalize legacy responses without accepting an unknown status', async () => {
+  const { showcaseRuleStatus } = await import('../src/utils/showcaseModeration.ts');
+  assert.equal(showcaseRuleStatus({ status: 'Active' }), 'Active');
+  assert.equal(showcaseRuleStatus({ status: 'Inactive' }), 'Inactive');
+  assert.equal(showcaseRuleStatus({ isEnabled: false }), 'Inactive');
+  assert.equal(showcaseRuleStatus({ isEnabled: true }), 'Active');
+  assert.throws(() => showcaseRuleStatus({ status: 'Unknown' }));
+});
+
+test('rule status travels through the existing client alongside the compatible enabled flag', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const rule = { id: 'status-rule', phrase: 'managed phrase', description: 'Test', category: 'Insult', reason: 'Harassment', status: 'Inactive', rowVersion: 4 };
+  mock.onPut('/showcase/moderation-rules/status-rule').reply(config => {
+    const body = JSON.parse(config.data);
+    assert.equal(body.status, 'Inactive');
+    assert.equal(body.isEnabled, false);
+    assert.equal(body.rowVersion, 3);
+    return [200, { data: rule }];
+  });
+  try {
+    const saved = await showcaseApi.saveModerationRule(rule.id, { phrase: rule.phrase, description: rule.description, reason: 'Harassment', category: 'Insult', status: 'Inactive', rowVersion: 3 });
+    assert.equal(saved.status, 'Inactive');
+    assert.equal(saved.isEnabled, false);
+  } finally { mock.restore(); }
 });
 
 test('moderation category travels through the existing rules API client', async () => {
