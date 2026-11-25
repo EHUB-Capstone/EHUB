@@ -14,6 +14,8 @@ public sealed class ShowcaseReport : BaseEntity
     public ShowcaseReportReason Reason { get; set; }
     public ShowcaseViolationCategory? Category { get; set; }
     public string? Note { get; set; }
+    // Captured at submission; never reconstructed from content that may have changed later.
+    public string? ContentSnapshot { get; set; }
     public ShowcaseReportStatus Status { get; set; } = ShowcaseReportStatus.Open;
     public DateTime CreatedAt { get; set; }
     public Guid? ResolvedByUserId { get; set; }

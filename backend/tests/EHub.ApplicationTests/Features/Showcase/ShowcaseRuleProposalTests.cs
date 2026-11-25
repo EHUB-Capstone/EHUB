@@ -137,7 +137,7 @@ public sealed class ShowcaseRuleProposalTests
     }
 
     [Fact]
-    public async Task CategoryCatalog_ContainsSevenNamedGroups_AndReportValidationPreservesLegacyReasons()
+    public async Task CategoryCatalog_ContainsNamedGroups_AndReportValidationPreservesLegacyReasons()
     {
         await using var db = ShowcaseTestData.NewContext(); await db.Database.EnsureCreatedAsync();
         var catalog = (await new ShowcaseViolationCategoryQueryHandler(db).ListAsync()).Value;

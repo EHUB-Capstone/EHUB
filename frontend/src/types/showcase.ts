@@ -146,6 +146,7 @@ export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
   systemReportCount: number;
   showcaseStatus: ShowcaseStatus | null;
   commentContent?: string | null;
+  contentSnapshot?: string | null;
   category?: ShowcaseViolationCategory | null;
   reason: ShowcaseReportReason;
   note: string | null;
@@ -155,13 +156,18 @@ export interface ShowcaseReportDto extends ShowcaseReportReceiptDto {
   reportCount: number;
 }
 
-export type ShowcaseViolationCategory = 'Profanity' | 'Insult' | 'Threat' | 'Defamation' | 'Racism' | 'AdultContent' | 'Spam';
+export type ShowcaseViolationCategory = 'Profanity' | 'Insult' | 'Threat' | 'Defamation' | 'Racism' | 'AdultContent' | 'Spam'
+  | 'ProhibitedContent' | 'Misinformation' | 'OffTopic';
+export type ShowcaseModerationRuleStatus = 'Active' | 'Inactive';
 
 export interface ShowcaseViolationCategoryDto {
   code: ShowcaseViolationCategory;
   nameVi: string;
   nameEn: string;
   sortOrder: number;
+  descriptionVi?: string;
+  descriptionEn?: string;
+  supportsPhraseBlocking?: boolean;
 }
 
 export interface ShowcaseModerationRuleDto {
@@ -170,11 +176,23 @@ export interface ShowcaseModerationRuleDto {
   description: string;
   reason: 'Spam' | 'Harassment' | 'InappropriateContent';
   category: ShowcaseViolationCategory;
-  isEnabled: boolean;
+  status: ShowcaseModerationRuleStatus;
+  /** Compatibility with clients and servers deployed before the status contract. */
+  isEnabled?: boolean;
   rowVersion: number;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
+  createdAtUtc?: string | null;
+  updatedByUserId?: string | null;
+  updatedByName?: string | null;
+  updatedAtUtc?: string | null;
 }
 
-export type SaveShowcaseModerationRuleRequest = Omit<ShowcaseModerationRuleDto, 'id' | 'rowVersion' | 'category'> & { category?: ShowcaseViolationCategory; rowVersion?: number };
+export type SaveShowcaseModerationRuleRequest = Pick<ShowcaseModerationRuleDto, 'phrase' | 'description' | 'reason' | 'isEnabled'> & {
+  status?: ShowcaseModerationRuleStatus;
+  category?: ShowcaseViolationCategory;
+  rowVersion?: number;
+};
 
 export interface ShowcaseReportPageDto {
   items: ShowcaseReportDto[];
@@ -407,7 +425,7 @@ export interface SaveShowcaseRequest {
 
 export type ShowcaseRuleProposalStatus = 'Pending' | 'Approved' | 'Rejected';
 export interface CreateShowcaseRuleProposalRequest { phrase: string; category: ShowcaseViolationCategory; }
-export interface ReviewShowcaseRuleProposalRequest { status: 'Approved' | 'Rejected'; rowVersion: number; }
+export interface ReviewShowcaseRuleProposalRequest { status: 'Approved' | 'Rejected'; rowVersion: number; reviewNote?: string | null; }
 export interface ShowcaseRuleProposalDto {
   id: string;
   showcaseProjectId: string;
@@ -419,6 +437,7 @@ export interface ShowcaseRuleProposalDto {
   status: ShowcaseRuleProposalStatus;
   proposedAtUtc: string;
   reviewedAtUtc: string | null;
+  reviewNote?: string | null;
   createdRuleId: string | null;
   rowVersion: number;
 }

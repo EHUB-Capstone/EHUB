@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import ShowcaseModerationRules from './ShowcaseModerationRules';
 import ShowcaseRuleProposalForm from './ShowcaseRuleProposalForm';
+import ShowcaseReportSnapshot from './ShowcaseReportSnapshot';
 import ShowcaseRuleProposals from './ShowcaseRuleProposals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -79,7 +79,7 @@ export default function ShowcaseReports() {
 
   return (
     <section aria-label={t('showcaseReports.contentReports')}>
-      {user?.role === 'ADMIN' && <><ShowcaseRuleProposals /><ShowcaseModerationRules /></>}
+      {user?.role === 'ADMIN' && <><ShowcaseRuleProposals /><div className="mb-5"><Link className="inline-flex min-h-9 items-center font-semibold text-primary-700 hover:underline" to="/admin/violation-management">{t('violationManagement.title')}</Link></div></>}
       <Card hover={false} className="mb-5 overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -118,6 +118,7 @@ export default function ShowcaseReports() {
               {report.status !== 'Open' && <Button size="sm" variant="ghost" icon={Trash2} className="h-8 w-8 px-0 text-slate-500 hover:bg-danger-50 hover:text-danger-dark" aria-label={t('showcaseReports.deleteReportHistory')} title={t('showcaseReports.deleteReportHistory')} onClick={() => setDeleteTarget(report)} />}
             </div>
             </div>
+            <ShowcaseReportSnapshot report={report} />
             <ShowcaseRuleProposalForm report={report} isAdmin={user?.role === 'ADMIN'} />
           </Card></li>
         ))}

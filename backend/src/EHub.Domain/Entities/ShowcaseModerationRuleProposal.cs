@@ -16,6 +16,7 @@ public sealed class ShowcaseModerationRuleProposal : BaseEntity
     public DateTime ProposedAtUtc { get; set; }
     public Guid? ReviewedByUserId { get; set; }
     public DateTime? ReviewedAtUtc { get; set; }
+    public string? ReviewNote { get; set; }
     public Guid? CreatedRuleId { get; set; }
     public uint Version { get; set; }
 }

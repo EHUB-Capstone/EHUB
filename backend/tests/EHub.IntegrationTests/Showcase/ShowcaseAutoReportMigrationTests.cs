@@ -36,7 +36,7 @@ public sealed class ShowcaseAutoReportMigrationTests(CustomWebApplicationFactory
             await db.Database.MigrateAsync();
             var migratedSpam = await db.ShowcaseModerationRules.SingleAsync(x => x.Id == customSpam);
             migratedSpam.Category.Should().Be(ShowcaseViolationCategory.Spam);
-            migratedSpam.IsEnabled.Should().BeFalse();
+            migratedSpam.Status.Should().Be(ShowcaseModerationRuleStatus.Inactive);
             migratedSpam.Description.Should().Be("Keep custom description");
             (await db.ShowcaseModerationRules.SingleAsync(x => x.Id == customAdult)).Category.Should().Be(ShowcaseViolationCategory.AdultContent);
             (await db.ShowcaseModerationRules.SingleAsync(x => x.Phrase == "cặc")).Category.Should().Be(ShowcaseViolationCategory.Profanity);

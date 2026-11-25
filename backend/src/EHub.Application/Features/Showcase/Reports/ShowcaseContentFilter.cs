@@ -46,7 +46,8 @@ public static partial class ShowcaseContentFilter
         var normalized = values.Select(value => " " + Normalize(value) + " ").ToArray();
         var exact = values.Select(value => Normalize(value, true).Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToArray();
         var results = new List<ContentFinding>();
-        foreach (var rule in rules.Where(x => x.IsEnabled).OrderBy(x => x.Id))
+        foreach (var rule in rules.Where(x => x.Status == ShowcaseModerationRuleStatus.Active
+                     && ShowcaseViolationCategories.SupportsPhraseBlocking(x.Category)).OrderBy(x => x.Id))
         {
             // Rules may be a single word ("ngu") or a phrase. Match complete words at any position,
             // including the start/end of a field; never split a phrase into unrelated blocked words.

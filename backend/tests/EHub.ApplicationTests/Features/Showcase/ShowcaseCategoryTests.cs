@@ -70,12 +70,12 @@ public sealed class ShowcaseCategoryTests
     public async Task AdminCanSelectCategory_AndLegacyUpdatesPreserveIt(string category, string reason)
     {
         await using var db = ShowcaseTestData.NewContext();
-        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator());
-        var created = await handler.SaveAsync(null, new() { Phrase = "category example", Description = "Test", Category = category }, SystemRoles.Admin, default);
+        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator(), ShowcaseTestData.RuleTransaction(), ShowcaseTestData.RuleClock());
+        var created = await handler.SaveAsync(null, new() { Phrase = "category example", Description = "Test", Category = category }, (await ShowcaseTestData.AddUserAsync(db, "Admin")).Id, SystemRoles.Admin, default);
         created.IsSuccess.Should().BeTrue();
         created.Value.Category.Should().Be(category);
         created.Value.Reason.Should().Be(reason);
-        var updated = await handler.SaveAsync(created.Value.Id, new() { Phrase = "updated example", Description = "Updated", Reason = reason, RowVersion = created.Value.RowVersion }, SystemRoles.Admin, default);
+        var updated = await handler.SaveAsync(created.Value.Id, new() { Phrase = "updated example", Description = "Updated", Reason = reason, RowVersion = created.Value.RowVersion }, (await ShowcaseTestData.AddUserAsync(db, "Admin")).Id, SystemRoles.Admin, default);
         updated.IsSuccess.Should().BeTrue();
         updated.Value.Category.Should().Be(category);
         (await handler.ListAsync(SystemRoles.Admin, default)).Value.Single().Category.Should().Be(category);
@@ -88,8 +88,8 @@ public sealed class ShowcaseCategoryTests
     public async Task UnknownCategory_IsRejectedWithoutSaving(string category)
     {
         await using var db = ShowcaseTestData.NewContext();
-        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator());
-        (await handler.SaveAsync(null, new() { Phrase = "test phrase", Description = "Test", Category = category }, SystemRoles.Admin, default)).IsFailure.Should().BeTrue();
+        var handler = new ShowcaseModerationRuleHandler(db, new SaveShowcaseModerationRuleRequestValidator(), ShowcaseTestData.RuleTransaction(), ShowcaseTestData.RuleClock());
+        (await handler.SaveAsync(null, new() { Phrase = "test phrase", Description = "Test", Category = category }, (await ShowcaseTestData.AddUserAsync(db, "Admin")).Id, SystemRoles.Admin, default)).IsFailure.Should().BeTrue();
         (await db.ShowcaseModerationRules.CountAsync()).Should().Be(0);
     }
 
@@ -97,7 +97,7 @@ public sealed class ShowcaseCategoryTests
     public async Task DisabledRule_DoesNotProduceACategoryError()
     {
         await using var db = ShowcaseTestData.NewContext();
-        db.ShowcaseModerationRules.Add(new ShowcaseModerationRule { Phrase = "test phrase", Category = ShowcaseViolationCategory.Threat, IsEnabled = false });
+        db.ShowcaseModerationRules.Add(new ShowcaseModerationRule { Phrase = "test phrase", Category = ShowcaseViolationCategory.Threat, Status = ShowcaseModerationRuleStatus.Inactive });
         await db.SaveChangesAsync();
         (await ShowcaseLanguageGuard.ValidateAsync(db, ["test phrase"], default)).IsSuccess.Should().BeTrue();
     }

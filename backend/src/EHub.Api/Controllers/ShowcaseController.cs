@@ -172,13 +172,13 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> CreateModerationRule([FromBody] SaveShowcaseModerationRuleRequest request,
         [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.SaveAsync(null, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+        ToResponse(await handler.SaveAsync(null, request, UserId, FeaturedRole, cancellationToken), "Moderation rule saved.");
 
     [HttpPut("moderation-rules/{ruleId:guid}")]
     [Authorize(Policy = SystemPolicies.AdminOnly)]
     public async Task<IActionResult> UpdateModerationRule(Guid ruleId, [FromBody] SaveShowcaseModerationRuleRequest request,
         [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
-        ToResponse(await handler.SaveAsync(ruleId, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+        ToResponse(await handler.SaveAsync(ruleId, request, UserId, FeaturedRole, cancellationToken), "Moderation rule saved.");
 
     [HttpPost("reports/{reportId:guid}/rule-proposals")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
