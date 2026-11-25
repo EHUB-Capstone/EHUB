@@ -171,7 +171,7 @@ public sealed class ShowcaseAutoReportTests
         ShowcaseContentFilter.NormalizeComment("Bộ đồ ngủ đẹp").Should().NotBe(ShowcaseContentFilter.NormalizeComment("Bộ đồ ngu đẹp"));
 
     [Fact]
-    public async Task OnlyUserReports_AppearInTheTeacherQueue_AndLegacySystemFlagsCannotBeResolved()
+    public async Task SystemFlags_AppearInTheTeacherQueue_AndResolveTogetherWithUserReports()
     {
         await using var db = ShowcaseTestData.NewContext();
         var seed = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
@@ -179,19 +179,23 @@ public sealed class ShowcaseAutoReportTests
         (await db.ShowcaseProjects.SingleAsync()).Highlights = "đồ ngu";
         await db.SaveChangesAsync();
         await new ShowcaseAutoReportScanner(db, Clock()).ScanPageAsync(seed.ShowcaseId);
-        var reporter = await ShowcaseTestData.AddUserAsync(db, "Reporter");
         var reports = new ShowcaseReportHandler(db, Clock(), new ShowcaseModerationHandler(db, Clock()),
             new CreateShowcaseReportRequestValidator(), new ResolveShowcaseReportRequestValidator());
+        var automaticQueue = await reports.ListAsync("Open", 1, 20, seed.LecturerUserId, SystemRoles.Lecturer);
+        var automaticItem = automaticQueue.Value.Items.Should().ContainSingle().Which;
+        automaticItem.Sources.Should().BeEquivalentTo(new[] { "System" });
+        automaticItem.SystemReportCount.Should().Be(1);
+        var reporter = await ShowcaseTestData.AddUserAsync(db, "Reporter");
         (await reports.CreateAsync(seed.ShowcaseId, new() { Reason = "Harassment" }, reporter.Id)).IsSuccess.Should().BeTrue();
         var queue = await reports.ListAsync("Open", 1, 20, seed.LecturerUserId, SystemRoles.Lecturer);
         var item = queue.Value.Items.Should().ContainSingle().Which;
-        item.ReportCount.Should().Be(1); item.UserReportCount.Should().Be(1); item.SystemReportCount.Should().Be(0);
-        item.Sources.Should().BeEquivalentTo(new[] { "User" });
+        item.ReportCount.Should().Be(2); item.UserReportCount.Should().Be(1); item.SystemReportCount.Should().Be(1);
+        item.Sources.Should().BeEquivalentTo(new[] { "User", "System" });
         var system = await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.System);
-        (await reports.ResolveAsync(system.Id, new() { Status = "ActionTaken" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsFailure.Should().BeTrue();
-        (await reports.ResolveAsync(item.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
-        (await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.User)).Status.Should().Be(ShowcaseReportStatus.Dismissed);
-        (await db.ShowcaseReports.SingleAsync(x => x.Source == ShowcaseReportSource.System)).Status.Should().Be(ShowcaseReportStatus.Open);
+        automaticItem.Id.Should().Be(system.Id);
+        item.Id.Should().NotBe(system.Id, "the UI must use the human report id when it offers a phrase proposal");
+        (await reports.ResolveAsync(system.Id, new() { Status = "Dismissed" }, seed.LecturerUserId, SystemRoles.Lecturer)).IsSuccess.Should().BeTrue();
+        (await db.ShowcaseReports.Select(x => x.Status).ToListAsync()).Should().OnlyContain(x => x == ShowcaseReportStatus.Dismissed);
     }
 
     [Theory]

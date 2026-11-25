@@ -36,9 +36,8 @@ public sealed class ShowcaseRuleProposalHandler(IApplicationDbContext context, I
         if (!ShowcaseAccess.IsModerator(role)) return Denied<ShowcaseRuleProposalDto>();
         var validation = await validator.ValidateAsync(request, token);
         if (!validation.IsValid) return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseValidationError, validation.Errors[0].ErrorMessage);
-        var scope = ShowcaseAccess.ModeratableShowcases(context, userId, role);
-        var report = await context.ShowcaseReports.AsNoTracking().SingleOrDefaultAsync(x => x.Id == reportId
-            && x.Source == ShowcaseReportSource.User && scope.Any(page => page.Id == x.ShowcaseProjectId), token);
+        var report = await ShowcaseAccess.ModeratableReports(context, userId, role).AsNoTracking().SingleOrDefaultAsync(x => x.Id == reportId
+            && x.Source == ShowcaseReportSource.User, token);
         if (report is null) return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseReportNotFound, "The report was not found.");
         if (report.CommentId is not { } commentId || report.Status == ShowcaseReportStatus.Dismissed)
             return Result.Failure<ShowcaseRuleProposalDto>(ErrorCodes.ShowcaseInvalidState, "Only a reported comment that has not been dismissed can be used.");

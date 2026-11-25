@@ -35,7 +35,9 @@ public sealed class ShowcaseAutoReportScanner(IApplicationDbContext context, IDa
         if (showcase is null) return;
         var project = await ShowcaseAccess.LatestProjectAsync(context, showcase.ProjectLineageId, cancellationToken);
         if (project is null) return;
-        await ScanAsync(showcase, comment.Id, comment.Content, [comment.Content], project.LecturerUserIds, cancellationToken);
+        var reviewers = await ShowcaseAccess.ResponsibleLecturerUserIdsForStudentAsync(
+            context, comment.AuthorUserId, project.LecturerUserIds, cancellationToken);
+        await ScanAsync(showcase, comment.Id, comment.Content, [comment.Content], reviewers, cancellationToken);
     }
 
     private async Task ScanAsync(ShowcaseProject showcase, Guid? commentId, string text, string[] fields, IReadOnlyCollection<Guid> reviewers, CancellationToken token)

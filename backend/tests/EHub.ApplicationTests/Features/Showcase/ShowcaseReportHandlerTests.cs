@@ -91,6 +91,42 @@ public sealed class ShowcaseReportHandlerTests
     }
 
     [Fact]
+    public async Task CommentReport_NotifiesTheCommentAuthorsActiveClassLecturer()
+    {
+        await using var db = ShowcaseTestData.NewContext();
+        var showcase = await ShowcaseTestData.SeedAsync(db, ShowcaseStatus.Published);
+        var reporter = await ShowcaseTestData.AddUserAsync(db, "Reporter");
+        var author = await ShowcaseTestData.AddUserAsync(db, "Comment author");
+        var authorLecturer = await ShowcaseTestData.AddUserAsync(db, "Author lecturer");
+        var authorClass = new Class
+        {
+            ClassCode = "SE-COMMENT", Slug = "se-comment", PrimaryLecturerId = authorLecturer.Id
+        };
+        var authorStudent = new Student { FullName = "Comment author", UserId = author.Id };
+        db.ClassStudents.Add(new ClassStudent
+        {
+            Class = authorClass, Student = authorStudent, EnrollmentStatus = EnrollmentStatus.Active
+        });
+        var comment = new ShowcaseComment
+        {
+            ShowcaseProjectId = showcase.ShowcaseId, AuthorUserId = author.Id, Content = "Reported comment"
+        };
+        db.ShowcaseComments.Add(comment);
+        await db.SaveChangesAsync();
+
+        var handler = Handler(db);
+        var receipt = await handler.CreateAsync(showcase.ShowcaseId,
+            new CreateShowcaseReportRequest { CommentId = comment.Id, Reason = "Harassment" }, reporter.Id);
+        receipt.IsSuccess.Should().BeTrue();
+
+        var notification = db.OutboxMessages.Should().ContainSingle().Subject;
+        notification.PayloadJson.Should().Contain(authorLecturer.Id.ToString());
+        notification.PayloadJson.Should().NotContain(showcase.LecturerUserId.ToString());
+        var queue = await handler.ListAsync("Open", 1, 20, authorLecturer.Id, SystemRoles.Lecturer);
+        queue.Value.Items.Should().ContainSingle().Which.Id.Should().Be(receipt.Value.Id);
+    }
+
+    [Fact]
     public async Task CommentReports_AreGroupedAndOneDecisionClosesEveryOpenReportForTheComment()
     {
         await using var db = ShowcaseTestData.NewContext();

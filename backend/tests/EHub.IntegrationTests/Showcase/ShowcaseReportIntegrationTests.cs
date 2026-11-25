@@ -625,7 +625,7 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
     }
 
     [Fact]
-    public async Task Proposal_UsesOnlyUserReports_WhenLegacySystemFlagsExist()
+    public async Task Proposal_UsesTheHumanReportId_WhenSystemFlagsAlsoExist()
     {
         await using var scenario = await SeedAsync();
         var reportId = await SeedProposalCommentAsync(scenario);
@@ -641,7 +641,7 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         var item = (await queue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Single(x => x.CommentId == userReport.CommentId);
         item.Id.Should().Be(reportId);
         item.Sources.Should().Contain("User");
-        item.Sources.Should().NotContain("System");
+        item.Sources.Should().Contain("System");
         using var invalidSource = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{systemReport.Id}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
             new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
         invalidSource.StatusCode.Should().Be(HttpStatusCode.NotFound);
