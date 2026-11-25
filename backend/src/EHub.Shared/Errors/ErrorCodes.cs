@@ -175,6 +175,15 @@ public static class ErrorCodes
     public const string ShowcaseReportNotFound = "SHOWCASE_REPORT_NOT_FOUND";
     public const string ShowcaseReportAlreadyExists = "SHOWCASE_REPORT_ALREADY_EXISTS";
     public const string ShowcaseCommentInvalid = "SHOWCASE_COMMENT_INVALID";
+    public const string ShowcaseCommentDuplicate = "SHOWCASE_COMMENT_DUPLICATE";
+    public const string ShowcaseLanguageBlocked = "SHOWCASE_LANGUAGE_BLOCKED";
+    public const string ShowcaseLanguageProfanity = "SHOWCASE_LANGUAGE_BLOCKED_PROFANITY";
+    public const string ShowcaseLanguageInsult = "SHOWCASE_LANGUAGE_BLOCKED_INSULT";
+    public const string ShowcaseLanguageThreat = "SHOWCASE_LANGUAGE_BLOCKED_THREAT";
+    public const string ShowcaseLanguageDefamation = "SHOWCASE_LANGUAGE_BLOCKED_DEFAMATION";
+    public const string ShowcaseLanguageRacism = "SHOWCASE_LANGUAGE_BLOCKED_RACISM";
+    public const string ShowcaseLanguageAdultContent = "SHOWCASE_LANGUAGE_BLOCKED_ADULTCONTENT";
+    public const string ShowcaseLanguageSpam = "SHOWCASE_LANGUAGE_BLOCKED_SPAM";
     public const string ShowcaseConcurrencyConflict = "SHOWCASE_CONCURRENCY_CONFLICT";
     public const string ShowcaseImageUploadFailed = "SHOWCASE_IMAGE_UPLOAD_FAILED";
     public const string ShowcaseAssistantUnavailable = "SHOWCASE_ASSISTANT_UNAVAILABLE";

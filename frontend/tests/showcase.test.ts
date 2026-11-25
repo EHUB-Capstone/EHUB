@@ -522,3 +522,28 @@ test('bulk feature client posts ids and the featured flag and exposes candidates
     assert.equal((await showcaseApi.getFeatureCandidates()).length, 1);
   } finally { mock.restore(); }
 });
+
+// Grouped moderation errors must survive the shared API error localizer.
+test('moderation helper validates bounded groups and maps the legacy report reason', async () => {
+  const { showcaseLanguageErrorCodes, showcaseCategoryFromReason, showcaseReasonFromCategory } = await import('../src/utils/showcaseModeration.ts');
+  assert.deepEqual(showcaseLanguageErrorCodes('SHOWCASE_LANGUAGE_BLOCKED_PROFANITY_THREAT_PROFANITY'), ['SHOWCASE_LANGUAGE_BLOCKED_PROFANITY', 'SHOWCASE_LANGUAGE_BLOCKED_THREAT']);
+  for (const code of [null, '', 'OTHER_ERROR', 'SHOWCASE_LANGUAGE_BLOCKED', 'SHOWCASE_LANGUAGE_BLOCKED_UNKNOWN', 'SHOWCASE_LANGUAGE_BLOCKED_PROFANITY_UNKNOWN']) assert.deepEqual(showcaseLanguageErrorCodes(code), []);
+  assert.equal(showcaseCategoryFromReason('Spam'), 'Spam');
+  assert.equal(showcaseCategoryFromReason('InappropriateContent'), 'AdultContent');
+  assert.equal(showcaseCategoryFromReason('Harassment'), 'Insult');
+  assert.equal(showcaseReasonFromCategory('Threat'), 'Harassment');
+  assert.equal(showcaseReasonFromCategory('AdultContent'), 'InappropriateContent');
+});
+
+test('moderation category travels through the existing rules API client', async () => {
+  const mock = new MockAdapter(axiosClient);
+  const rule = { id: 'rule-category', phrase: 'test phrase', description: 'Test', category: 'Threat', reason: 'Harassment', isEnabled: true, rowVersion: 3 };
+  mock.onPost('/showcase/moderation-rules').reply(config => {
+    assert.equal(JSON.parse(config.data).category, 'Threat');
+    return [200, { data: rule }];
+  });
+  try {
+    const saved = await showcaseApi.saveModerationRule(null, { phrase: 'test phrase', description: 'Test', category: 'Threat', reason: 'Harassment', isEnabled: true });
+    assert.equal(saved.category, 'Threat');
+  } finally { mock.restore(); }
+});

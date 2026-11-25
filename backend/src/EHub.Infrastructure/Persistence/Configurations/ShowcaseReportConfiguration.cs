@@ -14,6 +14,15 @@ public sealed class ShowcaseReportConfiguration : IEntityTypeConfiguration<Showc
         builder.Property(report => report.ShowcaseProjectId).HasColumnName("showcase_project_id");
         builder.Property(report => report.CommentId).HasColumnName("comment_id");
         builder.Property(report => report.ReporterUserId).HasColumnName("reporter_user_id");
+        builder.Property(report => report.Source).HasColumnName("source").HasConversion<string>().HasMaxLength(20).HasDefaultValue(EHub.Domain.Enums.ShowcaseReportSource.User);
+        builder.Property(report => report.ContentFingerprint).HasColumnName("content_fingerprint").HasMaxLength(64);
+        builder.Property(report => report.DetectionKey).HasColumnName("detection_key").HasMaxLength(64);
+        builder.ToTable(table => table.HasCheckConstraint("ck_showcase_reports_source",
+            "(source = 'User' AND reporter_user_id IS NOT NULL AND detection_key IS NULL AND content_fingerprint IS NULL) OR (source = 'System' AND reporter_user_id IS NULL AND detection_key IS NOT NULL AND content_fingerprint IS NOT NULL)"));
+        builder.HasIndex(report => new { report.ShowcaseProjectId, report.DetectionKey })
+            .IsUnique().HasFilter("source = 'System' AND comment_id IS NULL");
+        builder.HasIndex(report => new { report.CommentId, report.DetectionKey })
+            .IsUnique().HasFilter("source = 'System' AND comment_id IS NOT NULL");
         builder.Property(report => report.Reason).HasColumnName("reason").HasConversion<string>().HasMaxLength(30);
         builder.Property(report => report.Note).HasColumnName("note").HasMaxLength(1000);
         builder.Property(report => report.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);

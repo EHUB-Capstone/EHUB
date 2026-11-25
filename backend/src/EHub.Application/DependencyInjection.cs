@@ -57,6 +57,8 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+        services.AddScoped<EHub.Application.Features.Showcase.Reports.IShowcaseAutoReportScanner, EHub.Application.Features.Showcase.Reports.ShowcaseAutoReportScanner>();
+        services.AddScoped<EHub.Application.Features.Showcase.Reports.ShowcaseModerationRuleHandler>();
 
         services.AddScoped<IRegisterCommandHandler, RegisterCommandHandler>();
         services.AddScoped<IUpdateProfileCommandHandler, UpdateProfileCommandHandler>();

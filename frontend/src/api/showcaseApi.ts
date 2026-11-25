@@ -28,6 +28,8 @@ import type {
   ShowcaseReportReceiptDto,
   ShowcaseReportDto,
   ShowcaseReportStatus,
+  ShowcaseModerationRuleDto,
+  SaveShowcaseModerationRuleRequest,
   ShowcaseAssistantChatRequest,
   ShowcaseAssistantKeyStatusDto,
   ShowcaseAssistantReplyDto,
@@ -48,6 +50,12 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
+  getModerationRules: (signal?: AbortSignal) =>
+    unwrap<ShowcaseModerationRuleDto[]>(axiosClient.get('/showcase/moderation-rules', { signal })),
+  saveModerationRule: (id: string | null, body: SaveShowcaseModerationRuleRequest) =>
+    unwrap<ShowcaseModerationRuleDto>(id
+      ? axiosClient.put(`/showcase/moderation-rules/${id}`, body)
+      : axiosClient.post('/showcase/moderation-rules', body)),
   // A key given here is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is
   // not kept. Without one (null) the server uses the key this user saved to their account, and answers that a key is needed if none.
   askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string | null, signal?: AbortSignal) =>

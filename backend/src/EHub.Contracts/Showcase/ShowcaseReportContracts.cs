@@ -26,6 +26,11 @@ public sealed class ShowcaseReportReceiptDto
 // Returned only by the staff report queue and resolve endpoints.
 public sealed class ShowcaseReportDto
 {
+    public IReadOnlyCollection<string> Sources { get; init; } = new[] { "User" };
+    public string? SystemNote { get; init; }
+    public int UserReportCount { get; init; }
+    public int SystemReportCount { get; init; }
+    public string? ShowcaseStatus { get; set; }
     public Guid Id { get; init; }
     public Guid ShowcaseProjectId { get; init; }
     public Guid? CommentId { get; init; }

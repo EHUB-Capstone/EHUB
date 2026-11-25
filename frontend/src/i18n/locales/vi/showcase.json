@@ -428,5 +428,47 @@
       "Draft": "Không có trang nào ở dạng bản nháp."
     },
     "failedToLoadShowcasePages": "Không thể tải các trang showcase."
+  },
+  "autoModeration": {
+    "rulesTitle": "Từ ngữ bị chặn",
+    "rulesHelp": "Nội dung khớp cụm từ đang bật sẽ bị từ chối khi gửi. Thông báo nêu rõ từng nhóm vi phạm; một nội dung có thể vi phạm nhiều nhóm. Chỉ report do người dùng gửi mới chuyển đến người duyệt.",
+    "addRule": "Thêm quy tắc",
+    "saved": "Đã lưu quy tắc.",
+    "saveFailed": "Không lưu được quy tắc. Hãy tải lại và thử lại.",
+    "loading": "Đang tải quy tắc…",
+    "loadFailed": "Không tải được quy tắc.",
+    "edit": "Chỉnh sửa",
+    "save": "Lưu quy tắc",
+    "phrase": "Cụm từ không được phép",
+    "description": "Mô tả quy tắc",
+    "reason": "Nhóm vi phạm",
+    "enabled": "Đang bật",
+    "disabled": "Đã tắt",
+    "source": "Nguồn",
+    "system": "Phát hiện tự động",
+    "user": "Người dùng báo cáo",
+    "reviewOnly": "Có dấu hiệu vi phạm — cần người có quyền xác nhận.",
+    "counts": "{{users}} báo cáo người dùng",
+    "returnDraft": "Trả showcase về bản nháp",
+    "returnDraftHelp": "Showcase đang chờ duyệt sẽ bị từ chối và trả về bản nháp. Nhóm sẽ nhận được thông báo.",
+    "reasons": {
+      "Harassment": "Quấy rối hoặc xúc phạm",
+      "Spam": "Spam",
+      "InappropriateContent": "Nội dung không phù hợp"
+    },
+    "pagination": "Các trang báo cáo",
+    "previous": "Trang trước",
+    "next": "Trang sau",
+    "page": "Trang {{page}} / {{total}}",
+    "category": "Nhóm vi phạm",
+    "categories": {
+      "Profanity": "Tục tĩu",
+      "Insult": "Xúc phạm, công kích cá nhân",
+      "Threat": "Đe dọa, kích động bạo lực",
+      "Defamation": "Cáo buộc công kích, bôi nhọ",
+      "Racism": "Miệt thị chủng tộc",
+      "AdultContent": "Nội dung người lớn",
+      "Spam": "Spam, quảng cáo bị cấm"
+    }
   }
 }

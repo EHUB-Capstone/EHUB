@@ -432,5 +432,47 @@
       "Draft": "No pages are in draft."
     },
     "failedToLoadShowcasePages": "Failed to load showcase pages."
+  },
+  "autoModeration": {
+    "rulesTitle": "Blocked language",
+    "rulesHelp": "Enabled phrases block content when submitted. The message identifies every matched violation category. Only user reports enter the review queue.",
+    "addRule": "Add rule",
+    "saved": "Rule saved.",
+    "saveFailed": "Could not save the rule. Reload and try again.",
+    "loading": "Loading rules…",
+    "loadFailed": "Could not load rules.",
+    "edit": "Edit",
+    "save": "Save rule",
+    "phrase": "Prohibited phrase",
+    "description": "Rule description",
+    "reason": "Category",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "source": "Source",
+    "system": "Automatic detection",
+    "user": "User report",
+    "reviewOnly": "Potential violation — requires human review.",
+    "counts": "{{users}} user reports",
+    "returnDraft": "Return showcase to draft",
+    "returnDraftHelp": "The pending showcase will be rejected and returned to draft. The team will be notified.",
+    "reasons": {
+      "Harassment": "Harassment",
+      "Spam": "Spam",
+      "InappropriateContent": "Inappropriate content"
+    },
+    "pagination": "Report pages",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}} of {{total}}",
+    "category": "Violation category",
+    "categories": {
+      "Profanity": "Profanity",
+      "Insult": "Insults and personal attacks",
+      "Threat": "Threats and incitement to violence",
+      "Defamation": "Abusive accusations and defamation",
+      "Racism": "Racist language",
+      "AdultContent": "Adult content",
+      "Spam": "Spam and prohibited promotions"
+    }
   }
 }
