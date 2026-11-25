@@ -163,6 +163,48 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
         return ToResponse(await handler.CreateAsync(id, request, UserId, cancellationToken), "Report submitted.");
     }
 
+    [HttpGet("moderation-rules")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ModerationRules([FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(FeaturedRole, cancellationToken), "Moderation rules retrieved.");
+
+    [HttpPost("moderation-rules")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> CreateModerationRule([FromBody] SaveShowcaseModerationRuleRequest request,
+        [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SaveAsync(null, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+
+    [HttpPut("moderation-rules/{ruleId:guid}")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> UpdateModerationRule(Guid ruleId, [FromBody] SaveShowcaseModerationRuleRequest request,
+        [FromServices] ShowcaseModerationRuleHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.SaveAsync(ruleId, request, FeaturedRole, cancellationToken), "Moderation rule saved.");
+
+    [HttpPost("reports/{reportId:guid}/rule-proposals")]
+    [Authorize(Policy = SystemPolicies.StaffOnly)]
+    [EnableRateLimiting(ShowcaseReportRateLimitPolicies.Create)]
+    public async Task<IActionResult> ProposeRule(Guid reportId, [FromBody] CreateShowcaseRuleProposalRequest request,
+        [FromServices] ShowcaseRuleProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.CreateAsync(reportId, request, UserId, FeaturedRole, cancellationToken), "Language rule request processed.");
+
+    [HttpGet("violation-categories")]
+    public async Task<IActionResult> ViolationCategories(
+        [FromServices] ShowcaseViolationCategoryQueryHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(cancellationToken), "Violation categories retrieved.");
+
+    [HttpGet("moderation-rule-proposals")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> RuleProposals([FromQuery] string? status, [FromQuery] int page, [FromQuery] int pageSize,
+        [FromServices] ShowcaseRuleProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ListAsync(status, page, pageSize, UserId, FeaturedRole, cancellationToken), "Rule proposals retrieved.");
+
+    [HttpPost("moderation-rule-proposals/{id:guid}/review")]
+    [Authorize(Policy = SystemPolicies.AdminOnly)]
+    public async Task<IActionResult> ReviewRuleProposal(Guid id, [FromBody] ReviewShowcaseRuleProposalRequest request,
+        [FromServices] ShowcaseRuleProposalHandler handler, CancellationToken cancellationToken) =>
+        ToResponse(await handler.ReviewAsync(id, request, UserId, FeaturedRole, cancellationToken), "Rule proposal reviewed.");
+
     [HttpGet("reports")]
     [Authorize(Policy = SystemPolicies.StaffOnly)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -365,9 +407,11 @@ public sealed class ShowcaseController(ICurrentUserService currentUser) : Contro
             ErrorCodes.ShowcaseNotFound => NotFound(body),
             ErrorCodes.ShowcaseCommentNotFound => NotFound(body),
             ErrorCodes.ShowcaseReportNotFound => NotFound(body),
+            ErrorCodes.ShowcaseRuleProposalNotFound => NotFound(body),
             ErrorCodes.ShowcaseAccessDenied => StatusCode(StatusCodes.Status403Forbidden, body),
             ErrorCodes.ShowcaseAlreadyExists or
             ErrorCodes.ShowcaseReportAlreadyExists or
+            ErrorCodes.ShowcaseRuleProposalAlreadyExists or
             ErrorCodes.ShowcaseInvalidState or
             ErrorCodes.ShowcaseConcurrencyConflict => Conflict(body),
             ErrorCodes.ShowcaseImageUploadFailed => StatusCode(StatusCodes.Status502BadGateway, body),

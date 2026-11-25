@@ -115,3 +115,16 @@ test('every lazy namespace resolves a loader for each supported language', () =>
     }
   }
 });
+
+test('showcase language errors name every matched group in Vietnamese and English', async () => {
+  const { localizeApiMessage } = await import('../src/i18n/messages.ts');
+  await i18n.changeLanguage('vi');
+  assert.equal(localizeApiMessage('SHOWCASE_LANGUAGE_BLOCKED_PROFANITY', 'server', 'fallback'), 'Không được sử dụng ngôn từ tục tĩu.');
+  const mixed = localizeApiMessage('SHOWCASE_LANGUAGE_BLOCKED_PROFANITY_THREAT', 'server', 'fallback');
+  assert.match(mixed, /tục tĩu/);
+  assert.match(mixed, /đe dọa/);
+  assert.doesNotMatch(mixed, /chủng tộc/);
+  await i18n.changeLanguage('en');
+  assert.equal(localizeApiMessage('SHOWCASE_LANGUAGE_BLOCKED_RACISM', 'server', 'fallback'), 'Racist and racially derogatory language is not allowed.');
+  assert.equal(localizeApiMessage('UNRELATED_ERROR', 'specific server message', 'fallback'), 'specific server message');
+});

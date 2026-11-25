@@ -28,6 +28,13 @@ import type {
   ShowcaseReportReceiptDto,
   ShowcaseReportDto,
   ShowcaseReportStatus,
+  ShowcaseModerationRuleDto,
+  SaveShowcaseModerationRuleRequest,
+  CreateShowcaseRuleProposalRequest,
+  ReviewShowcaseRuleProposalRequest,
+  ShowcaseRuleProposalDto,
+  ShowcaseRuleProposalPageDto,
+  ShowcaseViolationCategoryDto,
   ShowcaseAssistantChatRequest,
   ShowcaseAssistantKeyStatusDto,
   ShowcaseAssistantReplyDto,
@@ -48,6 +55,20 @@ const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
 const assistantRequestTimeout = 90_000;
 
 export const showcaseApi = {
+  getViolationCategories: (signal?: AbortSignal) =>
+    unwrap<ShowcaseViolationCategoryDto[]>(axiosClient.get('/showcase/violation-categories', { signal })),
+  proposeRule: (reportId: string, body: CreateShowcaseRuleProposalRequest) =>
+    unwrap<ShowcaseRuleProposalDto>(axiosClient.post(`/showcase/reports/${reportId}/rule-proposals`, body)),
+  getRuleProposals: (params: { page?: number; pageSize?: number; status?: string }, signal?: AbortSignal) =>
+    unwrap<ShowcaseRuleProposalPageDto>(axiosClient.get('/showcase/moderation-rule-proposals', { params, signal })),
+  reviewRuleProposal: (id: string, body: ReviewShowcaseRuleProposalRequest) =>
+    unwrap<ShowcaseRuleProposalDto>(axiosClient.post(`/showcase/moderation-rule-proposals/${id}/review`, body)),
+  getModerationRules: (signal?: AbortSignal) =>
+    unwrap<ShowcaseModerationRuleDto[]>(axiosClient.get('/showcase/moderation-rules', { signal })),
+  saveModerationRule: (id: string | null, body: SaveShowcaseModerationRuleRequest) =>
+    unwrap<ShowcaseModerationRuleDto>(id
+      ? axiosClient.put(`/showcase/moderation-rules/${id}`, body)
+      : axiosClient.post('/showcase/moderation-rules', body)),
   // A key given here is the user's own Gemini key. It travels in a header for this one request, never in the URL or the body, and is
   // not kept. Without one (null) the server uses the key this user saved to their account, and answers that a key is needed if none.
   askAssistant: (body: ShowcaseAssistantChatRequest, apiKey: string | null, signal?: AbortSignal) =>

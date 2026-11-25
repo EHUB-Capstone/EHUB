@@ -17,7 +17,10 @@ using EHub.Shared.Errors;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Pgvector.EntityFrameworkCore;
 
 namespace EHub.IntegrationTests.Showcase;
@@ -294,6 +297,544 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         (await scenario.Db.ShowcaseReports.CountAsync()).Should().Be(0);
     }
 
+    [Fact]
+    public async Task SystemFlags_AppearInTheTeacherQueue_AndCanBeResolvedByTheResponsibleLecturer()
+    {
+        await using var scenario = await SeedAsync();
+        scenario.Page.Highlights = "đồ ngu";
+        await scenario.Db.SaveChangesAsync();
+        async Task ScanAsync()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<IShowcaseAutoReportScanner>().ScanPageAsync(scenario.Page.Id);
+        }
+        await Task.WhenAll(ScanAsync(), ScanAsync());
+        var report = await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id);
+        report.Source.Should().Be(ShowcaseReportSource.System);
+        report.ReporterUserId.Should().BeNull();
+        (await scenario.Db.ShowcaseModerationScans.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().Be(1);
+        using var openQueue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports", scenario.Lecturer, SystemRoles.Lecturer);
+        var queued = (await openQueue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items
+            .Single(item => item.Id == report.Id);
+        queued.Sources.Should().Contain("System");
+        using var otherClass = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Reporter,
+            SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
+        otherClass.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        using var resolved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Lecturer,
+            SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
+        resolved.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var queue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports", scenario.Lecturer, SystemRoles.Lecturer);
+        (await queue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Should().NotContain(x => x.Id == report.Id);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Hidden);
+    }
+
+    [Fact]
+    public async Task SystemFlags_RejectStaleContent_AndCanBeActionedAfterRescan()
+    {
+        await using var scenario = await SeedAsync();
+        scenario.Page.Status = ShowcaseStatus.PendingReview;
+        scenario.Page.Highlights = "đồ ngu";
+        await scenario.Db.SaveChangesAsync();
+        var scanner = scenario.Scope.ServiceProvider.GetRequiredService<IShowcaseAutoReportScanner>();
+        await scanner.ScanPageAsync(scenario.Page.Id);
+        var report = await scenario.Db.ShowcaseReports.SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id);
+        scenario.Project.Description = "Changed after the scan";
+        await scenario.Db.SaveChangesAsync();
+        using var stale = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{report.Id}/resolve", scenario.Lecturer,
+            SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        await scanner.ScanPageAsync(scenario.Page.Id);
+        var current = await scenario.Db.ShowcaseReports.SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id && x.Status == ShowcaseReportStatus.Open);
+        using var resolved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{current.Id}/resolve", scenario.Lecturer,
+            SystemRoles.Lecturer, new ResolveShowcaseReportRequest { Status = "ActionTaken" });
+        resolved.StatusCode.Should().Be(HttpStatusCode.OK);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).Status.Should().Be(ShowcaseStatus.Draft);
+    }
+
+    [Fact]
+    public async Task RuleEndpoints_RequireAuthenticationAndAdmin_AndRejectMissingRowVersion()
+    {
+        await using var scenario = await SeedAsync();
+        using var anonymous = await scenario.Client.GetAsync("/api/showcase/moderation-rules");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        foreach (var role in new[] { SystemRoles.Student, SystemRoles.Mentor, SystemRoles.Lecturer })
+        {
+            using var denied = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/moderation-rules", scenario.Reporter, role);
+            denied.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            using var deniedWrite = await scenario.SendAsync(HttpMethod.Post, "/api/showcase/moderation-rules", scenario.Reporter, role,
+                new SaveShowcaseModerationRuleRequest { Phrase = "test phrase", Description = "Test rule" });
+            deniedWrite.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+        using var created = await scenario.SendAsync(HttpMethod.Post, "/api/showcase/moderation-rules", scenario.Reporter, SystemRoles.Admin,
+            new SaveShowcaseModerationRuleRequest { Phrase = "test phrase", Description = "Test rule", Category = "Threat" });
+        created.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rule = (await created.Content.ReadFromJsonAsync<ApiResponse<ShowcaseModerationRuleDto>>())!.Data!;
+        rule.Category.Should().Be("Threat");
+        try
+        {
+            using var conflict = await scenario.SendAsync(HttpMethod.Put, $"/api/showcase/moderation-rules/{rule.Id}", scenario.Reporter, SystemRoles.Admin,
+                new SaveShowcaseModerationRuleRequest { Phrase = "test phrase", Description = "Changed" });
+            conflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            using var updated = await scenario.SendAsync(HttpMethod.Put, $"/api/showcase/moderation-rules/{rule.Id}", scenario.Reporter, SystemRoles.Admin,
+                new SaveShowcaseModerationRuleRequest { Phrase = "test phrase", Description = "Changed", IsEnabled = false, RowVersion = rule.RowVersion });
+            updated.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await updated.Content.ReadFromJsonAsync<ApiResponse<ShowcaseModerationRuleDto>>())!.Data!.Category.Should().Be("Threat");
+            using var invalidCategory = await scenario.SendAsync(HttpMethod.Post, "/api/showcase/moderation-rules", scenario.Reporter, SystemRoles.Admin,
+                new SaveShowcaseModerationRuleRequest { Phrase = "invalid category phrase", Description = "Test rule", Category = "Unknown" });
+            invalidCategory.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+        finally { await scenario.Db.ShowcaseModerationRules.Where(x => x.Id == rule.Id).ExecuteDeleteAsync(); }
+    }
+
+    [Fact]
+    public async Task DuplicateComments_AreRejected_WithoutChangingCounters()
+    {
+        await using var scenario = await SeedAsync();
+        var path = $"/api/showcase/{scenario.Page.Id}/comments";
+        using var first = await scenario.SendAsync(HttpMethod.Post, path, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseCommentRequest { Content = "This is a repeated substantive comment" });
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var repeated = await scenario.SendAsync(HttpMethod.Post, path, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseCommentRequest { Content = "THIS IS A REPEATED SUBSTANTIVE COMMENT" });
+        repeated.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).CommentCount.Should().Be(1);
+        (await scenario.Db.ShowcaseComments.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("cdmm")]
+    [InlineData("clm")]
+    [InlineData("clgt")]
+    [InlineData("óc cặc")]
+    [InlineData("óc loz")]
+    [InlineData("oc lon")]
+    [InlineData("fuck")]
+    [InlineData("chó đẻ")]
+    [InlineData("dume")]
+    [InlineData("duma")]
+    [InlineData("đỉ mẹ")]
+    [InlineData("địt mẹ")]
+    [InlineData("tao sẽ giết mày")]
+    [InlineData("đồ súc sinh")]
+    [InlineData("đồ lừa đảo")]
+    [InlineData("lũ da đen")]
+    [InlineData("phim sex")]
+    [InlineData("ngu")]
+    [InlineData("ngu ghê")]
+    [InlineData("bạn ngu")]
+    [InlineData("NGU!")]
+    [InlineData("Góp ý:\nngu ghê")]
+    [InlineData("bạn\tngu\tghê")]
+    [InlineData("óc bò")]
+    [InlineData("thật khốn nạn")]
+    [InlineData("con cặc")]
+    [InlineData("cái loz")]
+    [InlineData("cai lồn")]
+    [InlineData("cặc")]
+    [InlineData("loz")]
+    [InlineData("lồn")]
+    [InlineData("CON CẶC!")]
+    [InlineData("cái (loz)")]
+    [InlineData("Bạn nói cái lồn gì")]
+    [InlineData("lợn")]
+    [InlineData("heo")]
+    [InlineData("đồ lợn")]
+    [InlineData("HEO!")]
+    public async Task ProhibitedComment_IsRejectedWithoutSavingReportingNotifyingOrCounting(string content)
+    {
+        await using var scenario = await SeedAsync();
+        using var posted = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Reporter,
+            SystemRoles.Student, new CreateShowcaseCommentRequest { Content = content });
+        posted.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await posted.Content.ReadAsStringAsync()).Should().Contain(ErrorCodes.ShowcaseLanguageBlocked);
+        scenario.Db.ChangeTracker.Clear();
+        var page = await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id);
+        page.Status.Should().Be(ShowcaseStatus.Published); page.CommentCount.Should().Be(0);
+        (await scenario.Db.ShowcaseComments.AnyAsync(x => x.ShowcaseProjectId == page.Id)).Should().BeFalse();
+        (await scenario.Db.ShowcaseReports.AnyAsync(x => x.ShowcaseProjectId == page.Id)).Should().BeFalse();
+        (await scenario.Db.OutboxMessages.AnyAsync(x => x.AggregateId == page.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ProhibitedReply_DoesNotChangeTheExistingThreadOrCounters()
+    {
+        await using var scenario = await SeedAsync();
+        var root = new ShowcaseComment { ShowcaseProjectId = scenario.Page.Id, AuthorUserId = scenario.Reporter.Id, Content = "How does your product work?" };
+        scenario.Db.ShowcaseComments.Add(root);
+        scenario.Page.CommentCount = 1;
+        await scenario.Db.SaveChangesAsync();
+        using var response = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Owner,
+            SystemRoles.Student, new CreateShowcaseCommentRequest { Content = "chủng tộc hạ đẳng", ParentCommentId = root.Id });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain(ErrorCodes.ShowcaseLanguageBlocked);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).CommentCount.Should().Be(1);
+        (await scenario.Db.ShowcaseComments.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().Be(1);
+        (await scenario.Db.ShowcaseReports.AnyAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
+        (await scenario.Db.OutboxMessages.AnyAsync(x => x.AggregateId == scenario.Page.Id)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Ứng dụng giáo dục giới tính")]
+    [InlineData("Dự án tìm hiểu và phòng chống phân biệt chủng tộc")]
+    [InlineData("Ứng dụng giúp ngủ ngon")]
+    [InlineData("Nguyễn nghiên cứu nguồn nước và nguyên liệu")]
+    [InlineData("Các bạn cùng tham gia")]
+    [InlineData("cac ban cung tham gia")]
+    [InlineData("Ứng dụng cho dự án lớn")]
+    [InlineData("Tái chế vỏ lon")]
+    [InlineData("cái lon")]
+    [InlineData("cai lon")]
+    [InlineData("lớn")]
+    [InlineData("lộn")]
+    [InlineData("nghèo")]
+    public async Task NeutralEducationalComment_IsAccepted(string content)
+    {
+        await using var scenario = await SeedAsync();
+        using var response = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Reporter,
+            SystemRoles.Student, new CreateShowcaseCommentRequest { Content = content });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).CommentCount.Should().Be(1);
+        (await scenario.Db.ShowcaseComments.SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Content.Should().Be(content);
+        (await scenario.Db.ShowcaseReports.AnyAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("con cặc", "PROFANITY")]
+    [InlineData("ngu ghê", "INSULT")]
+    [InlineData("tao giết mày", "THREAT")]
+    [InlineData("đồ lừa đảo", "DEFAMATION")]
+    [InlineData("lũ da đen", "RACISM")]
+    [InlineData("phim sex", "ADULTCONTENT")]
+    [InlineData("ngu con cặc", "PROFANITY_INSULT")]
+    [InlineData("cdmm clm clgt óc cặc óc loz oc lon fuck dume duma phim sex", "PROFANITY_ADULTCONTENT")]
+    [InlineData("lợn heo", "INSULT")]
+    public async Task BlockedComment_ReturnsOnlyTheMatchedCategories(string content, string suffix)
+    {
+        await using var scenario = await SeedAsync();
+        using var response = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Reporter,
+            SystemRoles.Student, new CreateShowcaseCommentRequest { Content = content });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        body!.Code.Should().Be(ErrorCodes.ShowcaseLanguageBlocked + "_" + suffix);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseComments.AnyAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
+        (await scenario.Db.ShowcaseReports.AnyAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
+        (await scenario.Db.ShowcaseProjects.SingleAsync(x => x.Id == scenario.Page.Id)).CommentCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("Profanity", "Harassment")]
+    [InlineData("Insult", "Harassment")]
+    [InlineData("Threat", "Harassment")]
+    [InlineData("Defamation", "Harassment")]
+    [InlineData("Racism", "Harassment")]
+    [InlineData("AdultContent", "InappropriateContent")]
+    [InlineData("Spam", "Spam")]
+    public async Task RuleCategory_RoundTripsThroughPostgresAndDto(string category, string reason)
+    {
+        await using var scenario = await SeedAsync();
+        using var response = await scenario.SendAsync(HttpMethod.Post, "/api/showcase/moderation-rules", scenario.Reporter, SystemRoles.Admin,
+            new SaveShowcaseModerationRuleRequest { Phrase = "unique rule " + Guid.NewGuid().ToString("N"), Description = "Category round trip", Category = category });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rule = (await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseModerationRuleDto>>())!.Data!;
+        try
+        {
+            rule.Category.Should().Be(category);
+            rule.Reason.Should().Be(reason);
+            var stored = await scenario.Db.ShowcaseModerationRules.AsNoTracking().SingleAsync(x => x.Id == rule.Id);
+            stored.Category.ToString().Should().Be(category);
+            using var listed = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/moderation-rules", scenario.Reporter, SystemRoles.Admin);
+            var rules = (await listed.Content.ReadFromJsonAsync<ApiResponse<ShowcaseModerationRuleDto[]>>())!.Data!;
+            rules.Single(x => x.Id == rule.Id).Category.Should().Be(category);
+        }
+        finally { await scenario.Db.ShowcaseModerationRules.Where(x => x.Id == rule.Id).ExecuteDeleteAsync(); }
+    }
+
+    private static async Task<Guid> SeedProposalCommentAsync(Scenario scenario)
+    {
+        var comment = new ShowcaseComment { ShowcaseProjectId = scenario.Page.Id, AuthorUserId = scenario.Owner.Id, Content = "Bạn là đồ đần độn!" };
+        scenario.Db.ShowcaseComments.Add(comment); scenario.Page.CommentCount = 1; await scenario.Db.SaveChangesAsync();
+        using var posted = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseReportRequest { CommentId = comment.Id, Reason = "Harassment", Note = "This note is not the comment" });
+        posted.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await posted.Content.ReadFromJsonAsync<ApiResponse<ShowcaseReportReceiptDto>>())!.Data!.Id;
+    }
+
+    [Fact]
+    public async Task Proposal_WaitsForAdminApproval_AndSurvivesReportHistoryDeletion()
+    {
+        await using var scenario = await SeedAsync();
+        var reportId = await SeedProposalCommentAsync(scenario);
+        using var queueResponse = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports?status=Open", scenario.Lecturer, SystemRoles.Lecturer);
+        var queued = (await queueResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Single(x => x.Id == reportId);
+        queued.CommentContent.Should().Be("Bạn là đồ đần độn!"); queued.CommentContent.Should().NotBe(queued.Note);
+        var count = await scenario.Db.ShowcaseModerationRules.CountAsync();
+        using var created = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
+            new CreateShowcaseRuleProposalRequest { Phrase = "ĐẦN ĐỘN", Category = "Insult" });
+        created.StatusCode.Should().Be(HttpStatusCode.OK);
+        var proposal = (await created.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        proposal.Status.Should().Be("Pending");
+        (await scenario.Db.ShowcaseModerationRules.CountAsync()).Should().Be(count);
+        (await scenario.Db.ShowcaseProjects.AsNoTracking().SingleAsync(x => x.Id == scenario.Page.Id)).CommentCount.Should().Be(1);
+        using var teacherReview = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/moderation-rule-proposals/{proposal.Id}/review", scenario.Lecturer, SystemRoles.Lecturer,
+            new ReviewShowcaseRuleProposalRequest { Status = "Approved", RowVersion = proposal.RowVersion });
+        teacherReview.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var stale = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/moderation-rule-proposals/{proposal.Id}/review", scenario.Lecturer, SystemRoles.Admin,
+            new ReviewShowcaseRuleProposalRequest { Status = "Approved", RowVersion = proposal.RowVersion + 1 });
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var hidden = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/resolve", scenario.Lecturer, SystemRoles.Lecturer,
+            new ResolveShowcaseReportRequest { Status = "ActionTaken" });
+        hidden.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var deletedHistory = await scenario.SendAsync(HttpMethod.Delete, $"/api/showcase/reports/{reportId}", scenario.Lecturer, SystemRoles.Lecturer);
+        deletedHistory.StatusCode.Should().Be(HttpStatusCode.OK);
+        scenario.Db.ChangeTracker.Clear();
+        (await scenario.Db.ShowcaseModerationRuleProposals.SingleAsync(x => x.Id == proposal.Id)).SourceReportId.Should().BeNull();
+        using var refreshedQueue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/moderation-rule-proposals", scenario.Lecturer, SystemRoles.Admin);
+        var refreshed = (await refreshedQueue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseRuleProposalDto>>>())!.Data!.Items.Single(x => x.Id == proposal.Id);
+        using var approved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/moderation-rule-proposals/{proposal.Id}/review", scenario.Lecturer, SystemRoles.Admin,
+            new ReviewShowcaseRuleProposalRequest { Status = "Approved", RowVersion = refreshed.RowVersion });
+        approved.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = (await approved.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        result.Status.Should().Be("Approved");
+        var rule = await scenario.Db.ShowcaseModerationRules.AsNoTracking().SingleAsync(x => x.Id == result.CreatedRuleId);
+        rule.IsEnabled.Should().BeTrue(); rule.Category.Should().Be(ShowcaseViolationCategory.Insult);
+        using var blocked = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseCommentRequest { Content = "đần độn" });
+        blocked.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await blocked.Content.ReadAsStringAsync()).Should().Contain(ErrorCodes.ShowcaseLanguageInsult);
+    }
+
+    [Fact]
+    public async Task Proposal_ValidatesAuthenticationScopeAndLiteralText()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        var path = $"/api/showcase/reports/{reportId}/rule-proposals";
+        using var anonymous = await scenario.Client.PostAsJsonAsync(path, new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var student = await scenario.SendAsync(HttpMethod.Post, path, scenario.Reporter, SystemRoles.Student, new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        student.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        using var outside = await scenario.SendAsync(HttpMethod.Post, path, scenario.Reporter, SystemRoles.Lecturer, new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        outside.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        using var invalidPhrase = await scenario.SendAsync(HttpMethod.Post, path, scenario.Lecturer, SystemRoles.Lecturer, new CreateShowcaseRuleProposalRequest { Phrase = "dan don", Category = "Insult" });
+        invalidPhrase.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await invalidPhrase.Content.ReadAsStringAsync()).Should().Contain(ErrorCodes.ShowcaseRuleProposalInvalidPhrase);
+        using var teacherQueue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/moderation-rule-proposals", scenario.Lecturer, SystemRoles.Lecturer);
+        teacherQueue.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await scenario.Db.ShowcaseModerationRuleProposals.AnyAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Proposal_UsesTheHumanReportId_WhenSystemFlagsAlsoExist()
+    {
+        await using var scenario = await SeedAsync();
+        var reportId = await SeedProposalCommentAsync(scenario);
+        var userReport = await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(x => x.Id == reportId);
+        var systemReport = new ShowcaseReport
+        {
+            ShowcaseProjectId = scenario.Page.Id, CommentId = userReport.CommentId,
+            Source = ShowcaseReportSource.System, Reason = ShowcaseReportReason.Harassment,
+            DetectionKey = Guid.NewGuid().ToString("N"), ContentFingerprint = "proposal-mixed-report-test", CreatedAt = DateTime.UtcNow
+        };
+        scenario.Db.ShowcaseReports.Add(systemReport); await scenario.Db.SaveChangesAsync();
+        using var queue = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports?status=Open", scenario.Lecturer, SystemRoles.Lecturer);
+        var item = (await queue.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Single(x => x.CommentId == userReport.CommentId);
+        item.Id.Should().Be(reportId);
+        item.Sources.Should().Contain("User");
+        item.Sources.Should().Contain("System");
+        using var invalidSource = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{systemReport.Id}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        invalidSource.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        using var response = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{item.Id}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var proposal = (await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        proposal.SourceReportId.Should().Be(reportId);
+        proposal.Status.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task ConcurrentProposals_CountOnce_AndConcurrentReviews_CreateAtMostOneRule()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" })));
+        foreach (var response in results) response.Dispose();
+        results.Count(x => x.StatusCode == HttpStatusCode.OK).Should().Be(1);
+        results.Count(x => x.StatusCode == HttpStatusCode.Conflict).Should().Be(1);
+        var proposal = await scenario.Db.ShowcaseModerationRuleProposals.AsNoTracking().SingleAsync(x => x.ShowcaseProjectId == scenario.Page.Id);
+        var reviews = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => scenario.SendAsync(HttpMethod.Post, $"/api/showcase/moderation-rule-proposals/{proposal.Id}/review", scenario.Lecturer, SystemRoles.Admin,
+            new ReviewShowcaseRuleProposalRequest { Status = "Approved", RowVersion = proposal.Version })));
+        foreach (var response in reviews) response.Dispose();
+        reviews.Count(x => x.StatusCode == HttpStatusCode.OK).Should().Be(1);
+        reviews.Count(x => x.StatusCode == HttpStatusCode.Conflict).Should().Be(1);
+        (await scenario.Db.ShowcaseModerationRules.CountAsync(x => x.Phrase == "đần độn")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AdminConfirmation_ActivatesImmediately_AndNextCommentIsBlocked()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        using var response = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Admin,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = (await response.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        result.Status.Should().Be("Approved"); result.CreatedRuleId.Should().NotBeNull(); result.ReviewedAtUtc.Should().NotBeNull();
+        (await scenario.Db.ShowcaseModerationRuleProposals.AsNoTracking().SingleAsync(x => x.Id == result.Id)).ReviewedByUserId.Should().Be(scenario.Lecturer.Id);
+        (await scenario.Db.ShowcaseModerationRuleProposals.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id && x.Status == ShowcaseRuleProposalStatus.Pending)).Should().Be(0);
+        using var blocked = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/{scenario.Page.Id}/comments", scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseCommentRequest { Content = "đần độn" });
+        blocked.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await blocked.Content.ReadAsStringAsync()).Should().Contain(ErrorCodes.ShowcaseLanguageInsult);
+    }
+
+    [Fact]
+    public async Task AdminConfirmation_ApprovesExistingTeacherProposal_WithoutCreatingADuplicate()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        using var proposed = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Lecturer,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" });
+        proposed.StatusCode.Should().Be(HttpStatusCode.OK);
+        var pending = (await proposed.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        pending.Status.Should().Be("Pending");
+        using var approved = await scenario.SendAsync(HttpMethod.Post, $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Reporter, SystemRoles.Admin,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Defamation" });
+        approved.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = (await approved.Content.ReadFromJsonAsync<ApiResponse<ShowcaseRuleProposalDto>>())!.Data!;
+        result.Id.Should().Be(pending.Id); result.Status.Should().Be("Approved"); result.Category.Should().Be("Defamation");
+        var audit = await scenario.Db.ShowcaseModerationRuleProposals.AsNoTracking().SingleAsync(x => x.Id == result.Id);
+        audit.ProposedByUserId.Should().Be(scenario.Lecturer.Id); audit.ReviewedByUserId.Should().Be(scenario.Reporter.Id);
+        (await scenario.Db.ShowcaseModerationRules.CountAsync(x => x.Phrase == "đần độn")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ConcurrentAdminConfirmations_CreateOneEnabledRuleAndOneApprovedAudit()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => scenario.SendAsync(HttpMethod.Post,
+            $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Admin,
+            new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" })));
+        try
+        {
+            var diagnostic = string.Join("; ", await Task.WhenAll(results.Select(async response => $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}")));
+            results.Count(x => x.StatusCode == HttpStatusCode.OK).Should().Be(1);
+            results.Count(x => x.StatusCode == HttpStatusCode.Conflict).Should().Be(1, diagnostic);
+            (await scenario.Db.ShowcaseModerationRuleProposals.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id)).Should().Be(1);
+            (await scenario.Db.ShowcaseModerationRules.CountAsync(x => x.Phrase == "đần độn" && x.IsEnabled)).Should().Be(1);
+        }
+        finally { foreach (var response in results) response.Dispose(); }
+    }
+
+    [Fact]
+    public async Task Catalog_IsAuthenticated_AndSpecificReportCategoryRoundTrips()
+    {
+        await using var scenario = await SeedAsync();
+        using var anonymous = await scenario.Client.GetAsync("/api/showcase/violation-categories");
+        anonymous.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var catalogResponse = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/violation-categories", scenario.Reporter, SystemRoles.Student);
+        catalogResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var catalog = (await catalogResponse.Content.ReadFromJsonAsync<ApiResponse<ShowcaseViolationCategoryDto[]>>())!.Data!;
+        catalog.Select(x => x.Code).Should().BeEquivalentTo(Enum.GetNames<ShowcaseViolationCategory>());
+        catalog.Select(x => x.SortOrder).Should().BeInAscendingOrder();
+        using var invalid = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseReportRequest { Reason = "Harassment", Category = "Spam" });
+        invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var created = await scenario.SendAsync(HttpMethod.Post, scenario.CreatePath, scenario.Reporter, SystemRoles.Student,
+            new CreateShowcaseReportRequest { Reason = "Harassment", Category = "Threat" });
+        created.StatusCode.Should().Be(HttpStatusCode.OK);
+        var receipt = (await created.Content.ReadFromJsonAsync<ApiResponse<ShowcaseReportReceiptDto>>())!.Data!;
+        (await scenario.Db.ShowcaseReports.AsNoTracking().SingleAsync(x => x.Id == receipt.Id)).Category.Should().Be(ShowcaseViolationCategory.Threat);
+        using var queueResponse = await scenario.SendAsync(HttpMethod.Get, "/api/showcase/reports", scenario.Lecturer, SystemRoles.Lecturer);
+        var row = (await queueResponse.Content.ReadFromJsonAsync<ApiResponse<PagedResponse<ShowcaseReportDto>>>())!.Data!.Items.Single(x => x.Id == receipt.Id);
+        row.Category.Should().Be("Threat");
+    }
+
+    [Fact]
+    public async Task CategoryMigration_BackfillsLegacyReports_EnforcesForeignKeys_AndRollsBackWithoutDeletingReports()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var schema = "category_upgrade_" + Guid.NewGuid().ToString("N");
+        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
+        await db.Database.OpenConnectionAsync();
+        await using (var create = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", connection)) await create.ExecuteNonQueryAsync();
+        try
+        {
+            await using (var selectSchema = new NpgsqlCommand($"SET search_path TO \"{schema}\"", connection)) await selectSchema.ExecuteNonQueryAsync();
+            async Task Execute(string sql) { await using var command = new NpgsqlCommand(sql, connection); await command.ExecuteNonQueryAsync(); }
+            async Task<object?> Scalar(string sql) { await using var command = new NpgsqlCommand(sql, connection); return await command.ExecuteScalarAsync(); }
+            // Minimal legacy fixtures isolate the actual migration's Up/Down scripts from the shared API-test schema.
+            await Execute("""
+                CREATE TABLE "__EFMigrationsHistory" ("MigrationId" varchar(150) PRIMARY KEY, "ProductVersion" varchar(32) NOT NULL);
+                CREATE TABLE showcase_reports (id integer PRIMARY KEY, reason varchar(30) NOT NULL);
+                CREATE TABLE showcase_moderation_rules (id integer PRIMARY KEY, category varchar(32) NOT NULL);
+                CREATE TABLE showcase_moderation_rule_proposals (id integer PRIMARY KEY, category varchar(32) NOT NULL);
+                INSERT INTO showcase_reports VALUES (1,'Spam'),(2,'Harassment'),(3,'InappropriateContent'),(4,'CopyrightViolation'),(5,'Other');
+                INSERT INTO showcase_moderation_rules VALUES (1,'Profanity');
+                INSERT INTO showcase_moderation_rule_proposals VALUES (1,'Threat');
+                """);
+            var migrator = db.GetService<IMigrator>();
+            const string previous = "20261124194224_AddShowcaseRuleProposals";
+            const string current = "20261124210923_AddShowcaseViolationCategoryCatalog";
+            await Execute(migrator.GenerateScript(previous, current));
+            (await Scalar("SELECT count(*) FROM showcase_violation_categories")).Should().Be(7L);
+            (await Scalar("SELECT string_agg(COALESCE(category,'unclassified'),',' ORDER BY id) FROM showcase_reports"))
+                .Should().Be("Spam,Insult,AdultContent,unclassified,unclassified");
+            var violation = await Assert.ThrowsAsync<PostgresException>(() => Execute("DELETE FROM showcase_violation_categories WHERE code='Insult'"));
+            violation.SqlState.Should().Be(PostgresErrorCodes.ForeignKeyViolation);
+            await Execute(migrator.GenerateScript(current, previous));
+            (await Scalar("SELECT count(*) FROM showcase_reports")).Should().Be(5L);
+            (await Scalar("SELECT to_regclass('showcase_violation_categories') IS NULL")).Should().Be(true);
+        }
+        catch
+        {
+            await using var rollback = new NpgsqlCommand("ROLLBACK", connection);
+            await rollback.ExecuteNonQueryAsync();
+            throw;
+        }
+        finally
+        {
+            await using var cleanup = new NpgsqlCommand($"RESET search_path; DROP SCHEMA \"{schema}\" CASCADE", connection);
+            await cleanup.ExecuteNonQueryAsync();
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentAdminHandlers_ReturnBusinessConflictWithoutThrowing()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        await using var firstScope = factory.Services.CreateAsyncScope();
+        await using var secondScope = factory.Services.CreateAsyncScope();
+        var request = new CreateShowcaseRuleProposalRequest { Phrase = "đần độn", Category = "Insult" };
+        var results = await Task.WhenAll(
+            firstScope.ServiceProvider.GetRequiredService<ShowcaseRuleProposalHandler>().CreateAsync(reportId, request, scenario.Lecturer.Id, SystemRoles.Admin),
+            secondScope.ServiceProvider.GetRequiredService<ShowcaseRuleProposalHandler>().CreateAsync(reportId, request, scenario.Lecturer.Id, SystemRoles.Admin));
+        results.Count(x => x.IsSuccess).Should().Be(1);
+        results.Where(x => x.IsFailure).Should().OnlyContain(x => x.Error.Code == ErrorCodes.ShowcaseConcurrencyConflict || x.Error.Code == ErrorCodes.ShowcaseRuleProposalAlreadyExists);
+    }
+
+    [Fact]
+    public async Task ConcurrentAdminConfirmations_ForDifferentPhrases_DoNotReturnServerErrors()
+    {
+        await using var scenario = await SeedAsync(); var reportId = await SeedProposalCommentAsync(scenario);
+        var results = await Task.WhenAll(new[] { "đần độn", "đần" }.Select(phrase => scenario.SendAsync(HttpMethod.Post,
+            $"/api/showcase/reports/{reportId}/rule-proposals", scenario.Lecturer, SystemRoles.Admin,
+            new CreateShowcaseRuleProposalRequest { Phrase = phrase, Category = "Insult" })));
+        try
+        {
+            results.Should().OnlyContain(x => x.StatusCode == HttpStatusCode.OK || x.StatusCode == HttpStatusCode.Conflict);
+            results.Count(x => x.StatusCode == HttpStatusCode.OK).Should().BeGreaterThan(0);
+            (await scenario.Db.ShowcaseModerationRuleProposals.CountAsync(x => x.ShowcaseProjectId == scenario.Page.Id))
+                .Should().Be(results.Count(x => x.StatusCode == HttpStatusCode.OK));
+        }
+        finally { foreach (var response in results) response.Dispose(); }
+    }
+
     private async Task<Scenario> SeedAsync()
     {
         var scope = factory.Services.CreateAsyncScope();
@@ -367,6 +908,9 @@ public sealed class ShowcaseReportIntegrationTests(CustomWebApplicationFactory f
         public async ValueTask DisposeAsync()
         {
             Db.ChangeTracker.Clear();
+            var createdRuleIds = await Db.ShowcaseModerationRuleProposals.Where(x => x.ShowcaseProjectId == Page.Id && x.CreatedRuleId != null).Select(x => x.CreatedRuleId!.Value).ToListAsync();
+            await Db.ShowcaseModerationRuleProposals.Where(x => x.ShowcaseProjectId == Page.Id).ExecuteDeleteAsync();
+            await Db.ShowcaseModerationRules.Where(x => createdRuleIds.Contains(x.Id)).ExecuteDeleteAsync();
             await Db.ShowcaseReports.Where(item => item.ShowcaseProjectId == Page.Id).ExecuteDeleteAsync();
             await Db.ShowcaseComments.IgnoreQueryFilters().Where(item => item.ShowcaseProjectId == Page.Id).ExecuteDeleteAsync();
             await Db.OutboxMessages.Where(item => item.AggregateId == Page.Id && item.AggregateType == "Showcase").ExecuteDeleteAsync();

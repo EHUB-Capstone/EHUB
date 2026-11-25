@@ -5667,6 +5667,733 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.ToTable("showcase_media", (string)null);
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Phrase")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("phrase");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("reason");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.ToTable("showcase_moderation_rules", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_showcase_moderation_rules_category", "category IN ('Profanity', 'Insult', 'Threat', 'Defamation', 'Racism', 'AdultContent', 'Spam')");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000001"),
+                            Category = "Insult",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ ngu",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000002"),
+                            Category = "Insult",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "óc chó",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000003"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "fuck you",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000004"),
+                            Category = "Threat",
+                            Description = "Possible threatening content / Có dấu hiệu đe dọa",
+                            IsEnabled = true,
+                            Phrase = "kill yourself",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000005"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "cdmm",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000006"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "clm",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000007"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "clgt",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000008"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "óc cặc",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000009"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "óc loz",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000010"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "oc lon",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000011"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "fuck",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000012"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "chó đẻ",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000013"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "dume",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000014"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "duma",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000015"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đỉ mẹ",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000016"),
+                            Category = "Profanity",
+                            Description = "Possible personal insult / Có dấu hiệu công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "địt mẹ",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000017"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "tao sẽ giết mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000018"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "tao giết mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000019"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "giết cả nhà mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000020"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "tao sẽ đánh mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000021"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "đập chết mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000022"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "tao sẽ đốt nhà mày",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000023"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "i will kill you",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000024"),
+                            Category = "Threat",
+                            Description = "Threat / Đe dọa trực tiếp",
+                            IsEnabled = true,
+                            Phrase = "i will hurt you",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000025"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ súc sinh",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000026"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ khốn nạn",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000027"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ rác rưởi",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000028"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ vô học",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000029"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "đồ mất dạy",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000030"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "mày là rác rưởi",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000031"),
+                            Category = "Defamation",
+                            Description = "Abusive accusation / Cáo buộc mang tính công kích",
+                            IsEnabled = true,
+                            Phrase = "đồ lừa đảo",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000032"),
+                            Category = "Defamation",
+                            Description = "Abusive accusation / Cáo buộc mang tính công kích",
+                            IsEnabled = true,
+                            Phrase = "lũ lừa đảo",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000033"),
+                            Category = "Defamation",
+                            Description = "Abusive accusation / Cáo buộc mang tính công kích",
+                            IsEnabled = true,
+                            Phrase = "mày là đồ ăn cắp",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000034"),
+                            Category = "Defamation",
+                            Description = "Abusive accusation / Cáo buộc mang tính công kích",
+                            IsEnabled = true,
+                            Phrase = "lũ ăn cắp",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000035"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "lũ da đen",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000036"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "lũ da trắng",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000037"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "đồ mọi rợ",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000038"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "lũ mọi",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000039"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "chủng tộc hạ đẳng",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000040"),
+                            Category = "Racism",
+                            Description = "Racial abuse / Miệt thị chủng tộc",
+                            IsEnabled = true,
+                            Phrase = "racially inferior",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000041"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "phim sex",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000042"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "video sex",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000043"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "ảnh khiêu dâm",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000044"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "ảnh khỏa thân",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000045"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "mua dâm",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000046"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "bán dâm",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000047"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "dịch vụ mại dâm",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000048"),
+                            Category = "AdultContent",
+                            Description = "Explicit adult content / Nội dung người lớn không phù hợp",
+                            IsEnabled = true,
+                            Phrase = "gái gọi",
+                            Reason = "InappropriateContent"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000049"),
+                            Category = "Insult",
+                            Description = "Standalone insult / Từ công kích đứng độc lập trong câu",
+                            IsEnabled = true,
+                            Phrase = "ngu",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000050"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "óc bò",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000051"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "súc sinh",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000052"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "khốn nạn",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000053"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "mất dạy",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000054"),
+                            Category = "Insult",
+                            Description = "Personal abuse / Công kích cá nhân",
+                            IsEnabled = true,
+                            Phrase = "vô học",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000055"),
+                            Category = "Profanity",
+                            Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu",
+                            IsEnabled = true,
+                            Phrase = "cặc",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000056"),
+                            Category = "Profanity",
+                            Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu",
+                            IsEnabled = true,
+                            Phrase = "loz",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000057"),
+                            Category = "Profanity",
+                            Description = "Standalone profanity / Từ tục tĩu đứng độc lập trong câu",
+                            IsEnabled = true,
+                            Phrase = "lồn",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000058"),
+                            Category = "Insult",
+                            Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng",
+                            IsEnabled = true,
+                            Phrase = "lợn",
+                            Reason = "Harassment"
+                        },
+                        new
+                        {
+                            Id = new Guid("946a4c91-263f-4cea-a3aa-000000000059"),
+                            Category = "Insult",
+                            Description = "Standalone insult / Từ bị chặn theo quy tắc cộng đồng",
+                            IsEnabled = true,
+                            Phrase = "heo",
+                            Reason = "Harassment"
+                        });
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRuleProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("category");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<Guid?>("CreatedRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_rule_id");
+
+                    b.Property<string>("Phrase")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("phrase");
+
+                    b.Property<string>("PhraseKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("phrase_key");
+
+                    b.Property<DateTime>("ProposedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proposed_at_utc");
+
+                    b.Property<Guid?>("ProposedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposed_by_user_id");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<Guid?>("SourceReportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_report_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("CreatedRuleId");
+
+                    b.HasIndex("PhraseKey")
+                        .IsUnique()
+                        .HasFilter("status = 'Pending'");
+
+                    b.HasIndex("ProposedByUserId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("ShowcaseProjectId");
+
+                    b.HasIndex("SourceReportId");
+
+                    b.HasIndex("Status", "ProposedAtUtc");
+
+                    b.ToTable("showcase_moderation_rule_proposals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_showcase_rule_proposals_category", "category IN ('Profanity', 'Insult', 'Threat', 'Defamation', 'Racism', 'AdultContent', 'Spam')");
+
+                            t.HasCheckConstraint("ck_showcase_rule_proposals_status", "status IN ('Pending', 'Approved', 'Rejected')");
+                        });
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationScan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("fingerprint");
+
+                    b.Property<DateTime>("ScannedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scanned_at");
+
+                    b.Property<Guid>("ShowcaseProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("showcase_project_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommentId")
+                        .IsUnique()
+                        .HasFilter("comment_id IS NOT NULL");
+
+                    b.HasIndex("ShowcaseProjectId")
+                        .IsUnique()
+                        .HasFilter("comment_id IS NULL");
+
+                    b.ToTable("showcase_moderation_scans", (string)null);
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5799,13 +6526,28 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Category")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("category");
+
                     b.Property<Guid?>("CommentId")
                         .HasColumnType("uuid")
                         .HasColumnName("comment_id");
 
+                    b.Property<string>("ContentFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_fingerprint");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("DetectionKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("detection_key");
 
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
@@ -5818,7 +6560,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("reason");
 
-                    b.Property<Guid>("ReporterUserId")
+                    b.Property<Guid?>("ReporterUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("reporter_user_id");
 
@@ -5839,6 +6581,14 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("showcase_project_id");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("User")
+                        .HasColumnName("source");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -5853,11 +6603,17 @@ namespace EHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Category");
+
                     b.HasIndex("CommentId");
 
                     b.HasIndex("ResolvedByUserId");
 
                     b.HasIndex("ShowcaseProjectId");
+
+                    b.HasIndex("CommentId", "DetectionKey")
+                        .IsUnique()
+                        .HasFilter("source = 'System' AND comment_id IS NOT NULL");
 
                     b.HasIndex("ReporterUserId", "CommentId")
                         .IsUnique()
@@ -5867,9 +6623,16 @@ namespace EHub.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("comment_id IS NULL");
 
+                    b.HasIndex("ShowcaseProjectId", "DetectionKey")
+                        .IsUnique()
+                        .HasFilter("source = 'System' AND comment_id IS NULL");
+
                     b.HasIndex("Status", "CreatedAt");
 
-                    b.ToTable("showcase_reports", (string)null);
+                    b.ToTable("showcase_reports", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_showcase_reports_source", "(source = 'User' AND reporter_user_id IS NOT NULL AND detection_key IS NULL AND content_fingerprint IS NULL) OR (source = 'System' AND reporter_user_id IS NULL AND detection_key IS NOT NULL AND content_fingerprint IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReviewHistory", b =>
@@ -5957,6 +6720,85 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("showcase_view_daily", (string)null);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name_en");
+
+                    b.Property<string>("NameVi")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name_vi");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("showcase_violation_categories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "Profanity",
+                            NameEn = "Profanity",
+                            NameVi = "Tục tĩu",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Code = "Insult",
+                            NameEn = "Insults and personal attacks",
+                            NameVi = "Xúc phạm, công kích cá nhân",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Code = "Threat",
+                            NameEn = "Threats and incitement to violence",
+                            NameVi = "Đe dọa, kích động bạo lực",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Code = "Defamation",
+                            NameEn = "Abusive accusations and defamation",
+                            NameVi = "Cáo buộc công kích, bôi nhọ",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Code = "Racism",
+                            NameEn = "Racism and racial abuse",
+                            NameVi = "Miệt thị chủng tộc",
+                            SortOrder = 5
+                        },
+                        new
+                        {
+                            Code = "AdultContent",
+                            NameEn = "Explicit adult content",
+                            NameVi = "Nội dung người lớn",
+                            SortOrder = 6
+                        },
+                        new
+                        {
+                            Code = "Spam",
+                            NameEn = "Spam and prohibited promotions",
+                            NameVi = "Spam, quảng cáo bị cấm",
+                            SortOrder = 7
+                        });
                 });
 
             modelBuilder.Entity("EHub.Domain.Entities.SprintTask", b =>
@@ -9669,8 +10511,76 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ShowcaseProject");
                 });
 
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRule", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationRuleProposal", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseModerationRule", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedRuleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseReport", null)
+                        .WithMany()
+                        .HasForeignKey("SourceReportId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("EHub.Domain.Entities.ShowcaseModerationScan", b =>
+                {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("EHub.Domain.Entities.ShowcaseProject", null)
+                        .WithMany()
+                        .HasForeignKey("ShowcaseProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("EHub.Domain.Entities.ShowcaseReport", b =>
                 {
+                    b.HasOne("EHub.Domain.Entities.ShowcaseViolationCategoryDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("Category")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("EHub.Domain.Entities.ShowcaseComment", null)
                         .WithMany()
                         .HasForeignKey("CommentId")
@@ -9679,8 +10589,7 @@ namespace EHub.Infrastructure.Persistence.Migrations
                     b.HasOne("EHub.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("ReporterUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EHub.Domain.Entities.User", null)
                         .WithMany()

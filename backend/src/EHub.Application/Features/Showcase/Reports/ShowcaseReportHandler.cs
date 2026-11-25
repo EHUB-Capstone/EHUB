@@ -33,6 +33,7 @@ public sealed class ShowcaseReportHandler(
             .Select(page => new { page.ProjectLineageId }).SingleOrDefaultAsync(cancellationToken);
         if (showcase is null)
             return Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseNotFound, "The showcase page was not found.");
+        Guid? reportedCommentAuthorId = null;
         if (request.CommentId is { } commentId)
         {
             var comment = await context.ShowcaseComments.AsNoTracking()
@@ -42,6 +43,7 @@ public sealed class ShowcaseReportHandler(
                 return Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseCommentNotFound, "The comment was not found.");
             if (comment.AuthorUserId == userId)
                 return Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseAccessDenied, "You cannot report your own comment.");
+            reportedCommentAuthorId = comment.AuthorUserId;
         }
         else if (await ShowcaseAccess.OwnsLineageAsync(context, showcase.ProjectLineageId, userId, cancellationToken))
         {
@@ -51,19 +53,28 @@ public sealed class ShowcaseReportHandler(
         if (await HasReportAsync(showcaseId, request.CommentId, userId, cancellationToken))
             return Duplicate();
         var hasOpenReport = await HasOpenReportAsync(showcaseId, request.CommentId, cancellationToken);
+        var reason = Enum.Parse<ShowcaseReportReason>(request.Reason, true);
         var report = new ShowcaseReport
         {
             ShowcaseProjectId = showcaseId, CommentId = request.CommentId, ReporterUserId = userId,
-            Reason = Enum.Parse<ShowcaseReportReason>(request.Reason, true),
+            Reason = reason,
+            Category = request.Category is not null ? Enum.Parse<ShowcaseViolationCategory>(request.Category)
+                : reason is ShowcaseReportReason.CopyrightViolation or ShowcaseReportReason.Other ? null : ShowcaseViolationCategories.FromReason(reason),
             Note = Clean(request.Note), CreatedAt = time.UtcNow
         };
         context.ShowcaseReports.Add(report);
         var project = await ShowcaseAccess.LatestProjectAsync(context, showcase.ProjectLineageId, cancellationToken);
         if (!hasOpenReport && project is not null)
         {
+            // For a reported comment, notify the lecturers assigned to the comment author's active class. A
+            // commenter may belong to a different class than the team that owns the showcase. Fall back to the
+            // project's class reviewers when the author has no active student enrollment (for example, a mentor).
+            var reviewerIds = reportedCommentAuthorId is { } authorId
+                ? await ShowcaseAccess.ResponsibleLecturerUserIdsForStudentAsync(context, authorId, project.LecturerUserIds, cancellationToken)
+                : project.LecturerUserIds;
             // Report details and reporter identity stay in the moderation queue. The notification only asks staff
-            // to review the item, and reaches both the class reviewers and administrators.
-            ShowcaseOutbox.EnqueueNotification(context, showcaseId, project.LecturerUserIds,
+            // to review the item, and reaches the responsible class reviewers and administrators.
+            ShowcaseOutbox.EnqueueNotification(context, showcaseId, reviewerIds,
                 "New showcase report", request.CommentId.HasValue
                     ? "A comment has been reported and needs review."
                     : "A showcase page has been reported and needs review.",
@@ -106,12 +117,28 @@ public sealed class ShowcaseReportHandler(
         // A moderator reviews content targets, not each individual submission. Keep one representative report and
         // expose the number of reporters so a burst of reports does not fill the queue with duplicate tickets.
         var grouped = rows.GroupBy(report => new { report.ShowcaseProjectId, report.CommentId })
-            .Select(group => new { Report = group.First(), Count = group.Count() }).ToList();
+            // Prefer a human report as the queue id when both sources flag the same target. That id is required
+            // when a lecturer proposes a blocked phrase from the reported comment; system-only flags still use
+            // their own id and remain fully actionable.
+            .Select(group => new { Report = group.OrderByDescending(x => x.Source == ShowcaseReportSource.User).ThenByDescending(x => x.CreatedAt).First(), All = group.ToArray() }).ToList();
         var total = grouped.Count;
         var reports = grouped.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageIds = reports.Select(x => x.Report.ShowcaseProjectId).ToArray();
+        var statuses = await context.ShowcaseProjects.AsNoTracking().Where(x => pageIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Status, cancellationToken);
+        var items = reports.Select(item => ToDto(item.Report, item.All)).ToArray();
+        var commentIds = items.Where(x => x.CommentId.HasValue).Select(x => x.CommentId!.Value).ToArray();
+        // These targets have already passed the lecturer/admin report scope above. Include soft-deleted text only here.
+        var comments = await context.ShowcaseComments.IgnoreQueryFilters().AsNoTracking().Where(x => commentIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Content, cancellationToken);
+        foreach (var item in items)
+        {
+            item.ShowcaseStatus = statuses.GetValueOrDefault(item.ShowcaseProjectId).ToString();
+            item.CommentContent = item.CommentId is { } commentId ? comments.GetValueOrDefault(commentId) : null;
+        }
         return Result.Success(new PagedResponse<ShowcaseReportDto>
         {
-            Items = reports.Select(item => ToDto(item.Report, item.Count)).ToArray(), TotalItems = total, PageIndex = page,
+            Items = items, TotalItems = total, PageIndex = page,
             PageSize = pageSize, TotalPages = (int)Math.Ceiling(total / (double)pageSize)
         });
     }
@@ -135,8 +162,18 @@ public sealed class ShowcaseReportHandler(
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseInvalidState, "This report has already been resolved.");
         var targetStatus = Enum.Parse<ShowcaseReportStatus>(request.Status, true);
         var showcase = await context.ShowcaseProjects.SingleAsync(item => item.Id == report.ShowcaseProjectId, cancellationToken);
+        if (report.Source == ShowcaseReportSource.System && targetStatus == ShowcaseReportStatus.ActionTaken)
+        {
+            var project = await ShowcaseAccess.LatestProjectAsync(context, showcase.ProjectLineageId, cancellationToken);
+            var text = report.CommentId is { } cid
+                ? await context.ShowcaseComments.AsNoTracking().Where(x => x.Id == cid).Select(x => x.Content).SingleOrDefaultAsync(cancellationToken)
+                : project is null ? null : ShowcaseContentFilter.PageText(project, await context.ShowcaseProjects.AsNoTracking().Include(x => x.Links).SingleAsync(x => x.Id == showcase.Id, cancellationToken));
+            if (text is null || ShowcaseContentFilter.Hash(text) != report.ContentFingerprint)
+                return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict, "The flagged content changed. Wait for a new scan and reload before taking action.");
+        }
         if (targetStatus == ShowcaseReportStatus.ActionTaken && report.CommentId is null
-            && showcase.Status is not (ShowcaseStatus.Published or ShowcaseStatus.Hidden))
+            && showcase.Status is not (ShowcaseStatus.Published or ShowcaseStatus.Hidden)
+            && !(report.Source == ShowcaseReportSource.System && showcase.Status == ShowcaseStatus.PendingReview))
             return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseInvalidState, "Only a published or already hidden showcase can be actioned.");
 
         var matchingOpenReports = await context.ShowcaseReports
@@ -188,11 +225,11 @@ public sealed class ShowcaseReportHandler(
                 return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict, "The report was changed by another reviewer. Reload and try again.");
             }
         }
-        else if (targetStatus == ShowcaseReportStatus.ActionTaken && showcase.Status == ShowcaseStatus.Published)
+        else if (targetStatus == ShowcaseReportStatus.ActionTaken && showcase.Status is ShowcaseStatus.Published or ShowcaseStatus.PendingReview)
         {
             // The moderation handler saves this tracked report, the hide, audit history and outbox together.
             // Private report text never reaches the team's ReviewNote, history or notification.
-            var hidden = await moderation.DecideAsync(showcase.Id, ShowcaseModerationAction.Hide,
+            var hidden = await moderation.DecideAsync(showcase.Id, showcase.Status == ShowcaseStatus.PendingReview ? ShowcaseModerationAction.Reject : ShowcaseModerationAction.Hide,
                 "Hidden after a content report was reviewed.", userId, role, cancellationToken);
             if (hidden.IsFailure)
             {
@@ -212,7 +249,7 @@ public sealed class ShowcaseReportHandler(
                 return Result.Failure<ShowcaseReportDto>(ErrorCodes.ShowcaseConcurrencyConflict, "The report was changed by another reviewer. Reload and try again.");
             }
         }
-        return Result.Success(ToDto(report, matchingOpenReports.Count));
+        return Result.Success(ToDto(report, matchingOpenReports));
     }
 
     public async Task<Result> DeleteHistoryAsync(Guid reportId, Guid userId, string role, CancellationToken cancellationToken = default)
@@ -242,19 +279,15 @@ public sealed class ShowcaseReportHandler(
             || state == ShowcaseReportStatus.Open)
             return Result.Failure(ErrorCodes.ShowcaseValidationError, "Only Dismissed or ActionTaken history can be deleted.");
 
-        var scope = ShowcaseAccess.ModeratableShowcases(context, userId, role);
-        var history = await context.ShowcaseReports.Where(report => report.Status == state
-            && scope.Any(showcase => showcase.Id == report.ShowcaseProjectId)).ToListAsync(cancellationToken);
+        var history = await ShowcaseAccess.ModeratableReports(context, userId, role)
+            .Where(report => report.Status == state).ToListAsync(cancellationToken);
         context.ShowcaseReports.RemoveRange(history);
         await context.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
 
     private IQueryable<ShowcaseReport> ScopedReports(Guid userId, string role)
-    {
-        var showcases = ShowcaseAccess.ModeratableShowcases(context, userId, role);
-        return context.ShowcaseReports.Where(report => showcases.Any(showcase => showcase.Id == report.ShowcaseProjectId));
-    }
+        => ShowcaseAccess.ModeratableReports(context, userId, role);
 
     private Task<bool> HasReportAsync(Guid showcaseId, Guid? commentId, Guid userId, CancellationToken cancellationToken) =>
         context.ShowcaseReports.AsNoTracking().AnyAsync(report => report.ShowcaseProjectId == showcaseId
@@ -262,18 +295,22 @@ public sealed class ShowcaseReportHandler(
 
     private Task<bool> HasOpenReportAsync(Guid showcaseId, Guid? commentId, CancellationToken cancellationToken) =>
         context.ShowcaseReports.AsNoTracking().AnyAsync(report => report.ShowcaseProjectId == showcaseId
-            && report.CommentId == commentId && report.Status == ShowcaseReportStatus.Open, cancellationToken);
+            && report.CommentId == commentId && report.Status == ShowcaseReportStatus.Open && report.Source == ShowcaseReportSource.User, cancellationToken);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static Result<ShowcaseReportReceiptDto> Duplicate() =>
         Result.Failure<ShowcaseReportReceiptDto>(ErrorCodes.ShowcaseReportAlreadyExists, "You have already reported this content.");
 
-    private static ShowcaseReportDto ToDto(ShowcaseReport report, int reportCount = 1) => new()
+    private static ShowcaseReportDto ToDto(ShowcaseReport report, IReadOnlyCollection<ShowcaseReport>? reports = null) => new()
     {
+        Sources = (reports ?? new[] { report }).Select(x => x.Source.ToString()).Distinct().ToArray(),
+        SystemNote = (reports ?? new[] { report }).FirstOrDefault(x => x.Source == ShowcaseReportSource.System)?.Note,
+        UserReportCount = (reports ?? new[] { report }).Count(x => x.Source == ShowcaseReportSource.User),
+        SystemReportCount = (reports ?? new[] { report }).Count(x => x.Source == ShowcaseReportSource.System),
         Id = report.Id, ShowcaseProjectId = report.ShowcaseProjectId, CommentId = report.CommentId,
-        Reason = report.Reason.ToString(), Note = report.Note, Status = report.Status.ToString(),
+        Reason = report.Reason.ToString(), Category = report.Category?.ToString(), Note = report.Note, Status = report.Status.ToString(),
         CreatedAt = report.CreatedAt, ResolvedAt = report.ResolvedAt, ResolvedByUserId = report.ResolvedByUserId,
-        ResolutionNote = report.ResolutionNote, ReportCount = reportCount
+        ResolutionNote = report.ResolutionNote, ReportCount = reports?.Count ?? 1
     };
 }

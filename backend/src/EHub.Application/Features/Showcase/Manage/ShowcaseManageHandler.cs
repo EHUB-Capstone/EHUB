@@ -104,6 +104,9 @@ public sealed class ShowcaseManageHandler(
         if (await context.ShowcaseProjects.AnyAsync(item => item.ProjectLineageId == lineageId, cancellationToken))
             return Result.Failure<ShowcaseDto>(ErrorCodes.ShowcaseAlreadyExists, "This project already has a showcase page.");
 
+        var language = await Reports.ShowcaseLanguageGuard.ValidatePageAsync(context, lineageId, request.Highlights, request.Links, cancellationToken);
+        if (language.IsFailure) return Result.Failure<ShowcaseDto>(language.Error);
+
         var showcase = new ShowcaseProject
         {
             ProjectLineageId = lineageId,
@@ -141,6 +144,9 @@ public sealed class ShowcaseManageHandler(
 
         if (request.RowVersion.HasValue && request.RowVersion.Value != showcase.Version)
             return Changed<ShowcaseDto>();
+
+        var language = await Reports.ShowcaseLanguageGuard.ValidatePageAsync(context, showcase.ProjectLineageId, request.Highlights, request.Links, cancellationToken);
+        if (language.IsFailure) return Result.Failure<ShowcaseDto>(language.Error);
 
         ApplyContent(showcase, request);
         var previousLinks = showcase.Links.ToList();

@@ -130,6 +130,8 @@
     "SHOWCASE_COMMENT_NOT_FOUND": "The comment could not be found.",
     "SHOWCASE_REPORT_NOT_FOUND": "The report could not be found.",
     "SHOWCASE_REPORT_ALREADY_EXISTS": "You have already reported this content.",
+    "SHOWCASE_LANGUAGE_BLOCKED": "Profanity, insults, threats, racial abuse and explicit adult content are not allowed.",
+    "SHOWCASE_COMMENT_DUPLICATE": "You recently posted this comment. Please wait before posting it again.",
     "SHOWCASE_COMMENT_INVALID": "The comment is invalid.",
     "SHOWCASE_CONCURRENCY_CONFLICT": "This page was changed by someone else. Load the latest version and try again.",
     "SHOWCASE_IMAGE_UPLOAD_FAILED": "The image could not be uploaded.",
@@ -162,6 +164,16 @@
     "WEEKLY_TASK_NOT_FOUND": "The task could not be found.",
     "WEEKLY_TASK_DUPLICATED": "A task with the same details already exists.",
     "SHORTCUT_NOT_FOUND": "The shortcut could not be found.",
-    "SHORTCUT_DUPLICATED": "This shortcut already exists."
+    "SHORTCUT_DUPLICATED": "This shortcut already exists.",
+    "SHOWCASE_LANGUAGE_BLOCKED_PROFANITY": "Profane language is not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_INSULT": "Insults and personal attacks are not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_THREAT": "Threats and incitement to violence are not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_DEFAMATION": "Abusive accusations and defamatory language are not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_RACISM": "Racist and racially derogatory language is not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_ADULTCONTENT": "Sexually explicit or inappropriate adult content is not allowed.",
+    "SHOWCASE_LANGUAGE_BLOCKED_SPAM": "Spam and prohibited promotional content are not allowed.",
+    "SHOWCASE_RULE_PROPOSAL_NOT_FOUND": "The rule proposal was not found.",
+    "SHOWCASE_RULE_PROPOSAL_ALREADY_EXISTS": "This word or phrase already exists or is awaiting review.",
+    "SHOWCASE_RULE_PROPOSAL_INVALID_PHRASE": "Choose a complete word or phrase from the original comment, preserving Vietnamese accents."
   }
 }

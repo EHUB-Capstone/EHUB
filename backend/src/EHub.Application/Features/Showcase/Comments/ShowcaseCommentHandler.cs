@@ -73,6 +73,16 @@ public sealed class ShowcaseCommentHandler(IApplicationDbContext context, IUnitO
                 .Select(item => new { item.ProjectLineageId })
                 .FirstOrDefaultAsync(token);
             if (showcase is null) return NotFound<ShowcaseCommentDto>();
+            var language = await Reports.ShowcaseLanguageGuard.ValidateAsync(context, [content], token);
+            if (language.IsFailure) return Result.Failure<ShowcaseCommentDto>(language.Error);
+            var recentCutoff = time.UtcNow.AddMinutes(-2);
+            var recent = await context.ShowcaseComments.AsNoTracking()
+                .Where(item => item.ShowcaseProjectId == showcaseId && item.AuthorUserId == userId && item.CreatedAt >= recentCutoff)
+                .OrderByDescending(item => item.CreatedAt).Take(50).Select(item => item.Content).ToListAsync(token);
+            var normalized = Reports.ShowcaseContentFilter.NormalizeComment(content);
+            // Allow short acknowledgements; catch repeated substantive comments, including case/spacing changes.
+            if (normalized.Length >= 12 && recent.Any(item => Reports.ShowcaseContentFilter.NormalizeComment(item) == normalized))
+                return Result.Failure<ShowcaseCommentDto>(ErrorCodes.ShowcaseCommentDuplicate, "You recently posted this comment. Please wait before posting it again.");
             // Replies stay one level deep: answering a reply joins the same thread as its parent.
             Guid? threadStartId = null;
             if (request.ParentCommentId is { } parentId)

@@ -4,6 +4,7 @@ public sealed class CreateShowcaseReportRequest
 {
     public Guid? CommentId { get; init; }
     public string Reason { get; init; } = string.Empty;
+    public string? Category { get; init; }
     public string? Note { get; init; }
 }
 
@@ -26,6 +27,13 @@ public sealed class ShowcaseReportReceiptDto
 // Returned only by the staff report queue and resolve endpoints.
 public sealed class ShowcaseReportDto
 {
+    public IReadOnlyCollection<string> Sources { get; init; } = new[] { "User" };
+    public string? SystemNote { get; init; }
+    public int UserReportCount { get; init; }
+    public int SystemReportCount { get; init; }
+    public string? ShowcaseStatus { get; set; }
+    public string? CommentContent { get; set; }
+    public string? Category { get; init; }
     public Guid Id { get; init; }
     public Guid ShowcaseProjectId { get; init; }
     public Guid? CommentId { get; init; }

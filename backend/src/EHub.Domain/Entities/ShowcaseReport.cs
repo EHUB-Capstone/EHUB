@@ -7,8 +7,12 @@ public sealed class ShowcaseReport : BaseEntity
 {
     public Guid ShowcaseProjectId { get; set; }
     public Guid? CommentId { get; set; }
-    public Guid ReporterUserId { get; set; }
+    public Guid? ReporterUserId { get; set; }
+    public ShowcaseReportSource Source { get; set; } = ShowcaseReportSource.User;
+    public string? ContentFingerprint { get; set; }
+    public string? DetectionKey { get; set; }
     public ShowcaseReportReason Reason { get; set; }
+    public ShowcaseViolationCategory? Category { get; set; }
     public string? Note { get; set; }
     public ShowcaseReportStatus Status { get; set; } = ShowcaseReportStatus.Open;
     public DateTime CreatedAt { get; set; }

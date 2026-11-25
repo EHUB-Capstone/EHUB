@@ -334,6 +334,9 @@ public sealed class ProjectWorkspaceHandler : IProjectWorkspaceHandler
                 var nextSolution = (request.Solution ?? string.Empty).Trim();
                 var nextTargetUsers = (request.TargetUsers ?? string.Empty).Trim();
                 var nextZaloGroupUrl = (request.ZaloGroupUrl ?? string.Empty).Trim();
+                var showcaseLanguage = await EHub.Application.Features.Showcase.Reports.ShowcaseLanguageGuard.ValidateProfileIfShowcasedAsync(
+                    _context, project, [nextName, nextDescription, nextProblem, nextSolution, nextTargetUsers], transactionCancellationToken);
+                if (showcaseLanguage.IsFailure) return Result.Failure<ProjectWorkspaceDto>(showcaseLanguage.Error);
                 var now = DateTime.UtcNow;
                 var proposedFields = new List<string>();
                 if (!string.Equals(project.Name, nextName, StringComparison.Ordinal)) proposedFields.Add("projectName");
