@@ -191,7 +191,9 @@
     "unnamedTeam": "Unnamed team",
     "none": "None",
     "team": "team",
-    "teamSelection": "Team selection: {{industries}} · Choose 1–3 industries to change it before approving.",
+    "startupIndustriesOptional": "(optional)",
+    "startupIndustriesHint": "Pre-filled with the team's choice. Only change it if the team picked the wrong industries (1–3). Clear it to keep the team's choice.",
+    "teamSelectionUnavailable": "The team's choice ({{industries}}) is not in the active industry list. Leave this empty to keep it, or pick 1–3 industries to replace it.",
     "collapseApproved": "Collapse approved proposal for {{name}}",
     "expandApproved": "Expand approved proposal for {{name}}",
     "status": {

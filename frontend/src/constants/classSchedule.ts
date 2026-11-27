@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import i18n from '../i18n/index.ts';
 // @ts-nocheck
 export const TEACHING_DAYS = [
@@ -27,13 +26,10 @@ export const SLOT_TIMES = {
   4: { startTime: '15:00', endTime: '17:15' },
 };
 
-export const SLOT_OPTIONS = Object.entries(SLOT_TIMES).map(([slot, time]) => {
-                                                             const { t } = useTranslation('utils');
-                                                             return ({
+export const SLOT_OPTIONS = Object.entries(SLOT_TIMES).map(([slot, time]) => ({
   val: Number(slot),
   label: `Slot ${slot} (${time.startTime} - ${time.endTime})`,
-});
-                                                           });
+}));
 
 export const formatSlotTime = (slot) => {
   const time = SLOT_TIMES[slot];
