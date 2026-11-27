@@ -188,7 +188,9 @@
     "unnamedTeam": "Nhóm chưa đặt tên",
     "none": "Không có",
     "team": "nhóm",
-    "teamSelection": "Lựa chọn của nhóm: {{industries}} · Hãy chọn 1–3 ngành để thay đổi trước khi duyệt.",
+    "startupIndustriesOptional": "(không bắt buộc)",
+    "startupIndustriesHint": "Đã điền sẵn theo lựa chọn của nhóm. Chỉ đổi khi nhóm chọn sai ngành (1–3 ngành). Bỏ chọn hết để giữ lựa chọn của nhóm.",
+    "teamSelectionUnavailable": "Lựa chọn của nhóm ({{industries}}) không nằm trong danh sách ngành đang hoạt động. Để trống để giữ nguyên, hoặc chọn 1–3 ngành để thay thế.",
     "collapseApproved": "Thu gọn đề xuất đã duyệt của {{name}}",
     "expandApproved": "Mở rộng đề xuất đã duyệt của {{name}}",
     "status": {

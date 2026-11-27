@@ -257,12 +257,13 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
 
   const review = async (teamId, decision) => {
     const comment = (comments[teamId] || '').trim();
-    const lecturerIndustryIds = lecturerIndustrySelections[teamId];
+    // Changing industries is optional: an empty selection means "keep the team's choice".
+    const lecturerIndustryIds = lecturerIndustrySelections[teamId]?.length ? lecturerIndustrySelections[teamId] : undefined;
     if (comment.length > 0 && comment.length < 3) {
       toast.error(t('classDirectionOverview.reviewCommentMustBeAtLeast'));
       return false;
     }
-    if (decision === 'APPROVED' && lecturerIndustryIds && (lecturerIndustryIds.length < 1 || lecturerIndustryIds.length > 3)) {
+    if (decision === 'APPROVED' && lecturerIndustryIds && lecturerIndustryIds.length > 3) {
       toast.error(t('classDirectionOverview.selectBetween1And3Startup'));
       return false;
     }
@@ -380,8 +381,14 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
               ? team.projectDirectionProposedStartupIndustries
               : null;
             const submittedIndustries = proposedIndustries || startupIndustries;
+            const normalizeIndustryName = (name) => String(name ?? '').trim().toLowerCase();
+            const submittedIndustryKeys = new Set(submittedIndustries.map(normalizeIndustryName));
             const selectedLecturerIndustryIds = lecturerIndustrySelections[team._id]
-              ?? industries.filter((industry) => submittedIndustries.includes(industry.name)).map((industry) => industry.id);
+              ?? industries.filter((industry) => submittedIndustryKeys.has(normalizeIndustryName(industry.name))).map((industry) => industry.id);
+            const activeIndustryKeys = new Set(industries.map((industry) => normalizeIndustryName(industry.name)));
+            const unmatchedSubmittedIndustries = industriesLoading || industriesError
+              ? []
+              : submittedIndustries.filter((name) => !activeIndustryKeys.has(normalizeIndustryName(name)));
             const busy = reviewingTeamId === team._id;
             const isApproved = status === 'APPROVED';
             const approvedExpanded = !isApproved || expandedApprovedTeamIds.has(team._id) || team._id === focusTeamId;
@@ -453,7 +460,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     ) : (
                       <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{team.projectDirection}</p>
                     )}
-                    {startupIndustries.length > 0 && !(isProfileChangeProposal && proposedIndustries) && (
+                    {status !== 'PENDING' && startupIndustries.length > 0 && !(isProfileChangeProposal && proposedIndustries) && (
                       <div className="mt-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('classDirectionOverview.startupIndustry')}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -476,7 +483,7 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                     )}
                     {status === 'PENDING' && (
                       <div className="mt-4">
-                        <label id={`lecturer-startup-industries-${team._id}`} className="text-sm font-semibold text-slate-700">{t('classDirectionOverview.startupIndustries')} <span className="text-red-500">*</span></label>
+                        <label id={`lecturer-startup-industries-${team._id}`} className="text-sm font-semibold text-slate-700">{t('classDirectionOverview.startupIndustries')} <span className="font-normal text-slate-400">{t('classDirectionOverview.startupIndustriesOptional')}</span></label>
                         <div className="mt-1.5">
                           <StartupIndustryPicker
                             industries={industries}
@@ -490,7 +497,9 @@ export default function ClassDirectionOverview({ semester, year, initialClassId 
                             disabled={busy}
                           />
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">{t('classDirectionOverview.teamSelection', { industries: submittedIndustries.length > 0 ? submittedIndustries.join(', ') : t('classDirectionOverview.none') })}</p>
+                        <p className="mt-1 text-xs text-slate-500">{unmatchedSubmittedIndustries.length > 0
+                          ? t('classDirectionOverview.teamSelectionUnavailable', { industries: unmatchedSubmittedIndustries.join(', ') })
+                          : t('classDirectionOverview.startupIndustriesHint')}</p>
                       </div>
                     )}
                     {status === 'PENDING' && <div className="mt-4">
