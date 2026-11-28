@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +48,7 @@ type NavigationRole = 'ADMIN' | 'LECTURER' | 'MENTOR' | 'STUDENT';
 const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
   const { t } = useTranslation('nav');
   const { user, logout } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -142,28 +143,36 @@ const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
 
   const renderNavItem = (item: NavItem) => {
     const IconComp = iconMap[item.icon] || LayoutDashboard;
+    const isProjectShowcaseRoute = item.path === '/showcase' &&
+      (location.pathname === '/showcase' || /^\/showcase\/[^/]+$/.test(location.pathname));
     return (
       <NavLink
         key={item.path}
         to={item.path}
-        end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student'}
+        end={item.path === '/admin' || item.path === '/lecturer' || item.path === '/mentor' || item.path === '/student' || item.path === '/showcase'}
         onClick={handleNavClick}
-        className={({ isActive }) => cn(
-          'flex items-center gap-3 rounded-lg transition-colors duration-200 group relative px-3 py-2.5',
-          isActive
-            ? 'bg-white/10 text-white font-semibold'
-            : 'text-white/70 hover:text-white hover:bg-white/10'
-        )}
+        className={({ isActive }) => {
+          const active = isActive || isProjectShowcaseRoute;
+          return cn(
+            'flex items-center gap-3 rounded-lg transition-colors duration-200 group relative px-3 py-2.5',
+            active
+              ? 'bg-white/10 text-white font-semibold'
+              : 'text-white/70 hover:text-white hover:bg-white/10'
+          );
+        }}
       >
-        {({ isActive }) => (
-          <>
-            {isActive && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
-            )}
-            <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', isActive ? 'text-primary-400' : 'text-white/50 group-hover:text-white/80')} />
-            <span className="text-[13px] truncate">{t(`items.${item.labelKey}`)}</span>
-          </>
-        )}
+        {({ isActive }) => {
+          const active = isActive || isProjectShowcaseRoute;
+          return (
+            <>
+              {active && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
+              )}
+              <IconComp className={cn('w-[18px] h-[18px] shrink-0 transition-colors', active ? 'text-primary-400' : 'text-white/50 group-hover:text-white/80')} />
+              <span className="text-[13px] truncate">{t(`items.${item.labelKey}`)}</span>
+            </>
+          );
+        }}
       </NavLink>
     );
   };
