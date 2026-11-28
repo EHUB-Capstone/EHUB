@@ -1195,7 +1195,7 @@ public sealed class MentorAssignmentExportIntegrationTests(CustomWebApplicationF
             };
             for (var index = 0; index < students; index++)
             {
-                // Do not derive a database-unique roll number from GetHashCode(): its low byte can collide
+                // Do not derive a databasXe-unique roll number from GetHashCode(): its low byte can collide
                 // for different team names (and string hashes are randomized between processes). Keep the
                 // deterministic key compact because Student.RollNumber is capped at 20 characters.
                 var teamOrdinal = Context.Teams.Local.Count + 1;
